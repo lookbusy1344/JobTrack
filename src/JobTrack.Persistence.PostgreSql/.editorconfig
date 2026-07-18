@@ -1,0 +1,8 @@
+# Reusable-library-only rule (impl plan §5.1 item 18, CLAUDE.md "Public API
+# discipline"): this project may run under any host, including one with a
+# captured SynchronizationContext (WPF/WinForms/classic ASP.NET/Blazor
+# Server), so every awaited Task must call ConfigureAwait explicitly. Not
+# set in the shared root .editorconfig (CLAUDE.md: don't edit it) — this
+# file only adds the one rule and inherits everything else.
+[*.cs]
+dotnet_diagnostic.VSTHRD111.severity = warning

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <PackageId>JobTrack.Web</PackageId>
+        <Description>Server-rendered ASP.NET Core Razor Pages application: browser workflows and the initial HTTP API. No direct provider or SQL access.</Description>
+        <IsPackable>false</IsPackable>
+        <!-- Application host, not a consumed library surface — no public API doc requirement. -->
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi"/>
+        <!-- ADR 0037: offline QR image rendering for the two-factor enrolment page. -->
+        <PackageReference Include="QRCoder"/>
+        <ProjectReference Include="..\JobTrack.Application\JobTrack.Application.csproj"/>
+        <ProjectReference Include="..\JobTrack.Identity\JobTrack.Identity.csproj"/>
+        <ProjectReference Include="..\JobTrack.Persistence.PostgreSql\JobTrack.Persistence.PostgreSql.csproj"/>
+        <ProjectReference Include="..\JobTrack.Persistence.Sqlite\JobTrack.Persistence.Sqlite.csproj"/>
+    </ItemGroup>
+
+</Project>

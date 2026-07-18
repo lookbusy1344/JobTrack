@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>JobTrack.Application</PackageId>
+        <Description>JobTrack application layer: IJobTrackClient facade, command/query handlers, authorization, and auditing. Depends on the domain and abstractions only; persistence providers implement its internal ports.</Description>
+        <EnablePublicApiAnalyzers>true</EnablePublicApiAnalyzers>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\JobTrack.Abstractions\JobTrack.Abstractions.csproj"/>
+        <ProjectReference Include="..\JobTrack.Domain\JobTrack.Domain.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="NodaTime"/>
+        <PackageReference Include="Microsoft.Extensions.Identity.Core"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="JobTrack.Persistence.PostgreSql"/>
+        <InternalsVisibleTo Include="JobTrack.Persistence.Sqlite"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+</Project>

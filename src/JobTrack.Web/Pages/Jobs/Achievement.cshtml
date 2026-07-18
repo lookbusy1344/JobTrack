@@ -1,0 +1,39 @@
+@page
+@using JobTrack.Abstractions
+@model AchievementModel
+@{
+	ViewData["Title"] = "Update achievement";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">Leaf work</p>
+		<h1>Update achievement</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+	@if (Model.LeafWork is not null) {
+		<p class="jt-context"><span>Current achievement</span><strong>@EnumDisplay.Label(Model.LeafWork.Achievement)</strong></p>
+
+		<form method="post" class="jt-form-card">
+			<input type="hidden" asp-for="JobNodeId"/>
+			<input type="hidden" asp-for="OriginalVersion"/>
+			<div class="form-group">
+				<label asp-for="Input.NewAchievement"></label>
+				<select asp-for="Input.NewAchievement" class="form-control" asp-items="EnumDisplay.BuildOptions<Achievement>()"></select>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.Reason">Reason for this change</label>
+				<input asp-for="Input.Reason" class="form-control"/>
+				<span asp-validation-for="Input.Reason" class="text-danger"></span>
+			</div>
+			<div class="jt-toolbar jt-toolbar--flush">
+				<button type="submit" class="btn btn-primary">Save</button>
+				<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.JobNodeId">Cancel</a>
+			</div>
+		</form>
+	}
+</div>

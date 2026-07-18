@@ -1,0 +1,69 @@
+@model LeafWorkSessionsPanelModel
+
+<form method="get" class="jt-form-card">
+	@foreach (var field in Model.ExtraHiddenFields) {
+		<input type="hidden" name="@field.Key" value="@field.Value"/>
+	}
+	<div class="form-group">
+		<label for="WorkedByUserId">Filter by worker</label>
+		<select id="WorkedByUserId" name="WorkedByUserId" class="form-control" asp-items="Model.WorkedByOptions"></select>
+	</div>
+	<button type="submit" class="btn btn-secondary">Apply filter</button>
+</form>
+
+@if (Model.DisplayedWorkedByName is { } displayedWorkedByName) {
+	<h2>Sessions worked by @displayedWorkedByName</h2>
+} else {
+	<h2>Sessions</h2>
+}
+@if (Model.Sessions.Count == 0) {
+	<p class="jt-empty">No sessions yet.</p>
+} else {
+	<div class="jt-table-scroll">
+		<table class="table">
+			<thead>
+			<tr>
+				<th>Worked by</th>
+				<th>Started</th>
+				<th>Finished</th>
+				<th>Actions</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var session in Model.Sessions) {
+				<tr>
+					<td>@Model.DescribeWorker(session.WorkedByUserId)</td>
+					<td>@session.StartedAt</td>
+					<td>
+						@if (session.FinishedAt is { } finishedAt) {
+							@finishedAt
+						} else {
+							<span class="status-pill status-pill-ready">Active</span>
+						}
+					</td>
+					<td>
+						<div class="jt-toolbar jt-toolbar--flush">
+							@if (session.FinishedAt is null) {
+								<form method="post" asp-page-handler="Finish" class="inline-form">
+									@foreach (var field in Model.ExtraHiddenFields) {
+										<input type="hidden" name="@field.Key" value="@field.Value"/>
+									}
+									<input type="hidden" name="sessionId" value="@session.Id.Value"/>
+									<input type="hidden" name="version" value="@session.Version"/>
+									<button type="submit" class="btn btn-secondary">Finish / pause</button>
+								</form>
+							}
+							@* The list can span several workers, so each row corrects its own worker's
+							   session, not whoever the panel happens to be filtered to. *@
+							<a asp-page="/Jobs/CorrectSession"
+							   asp-route-leafNodeId="@Model.LeafNodeId"
+							   asp-route-workedByUserId="@session.WorkedByUserId.Value"
+							   asp-route-sessionId="@session.Id.Value">Correct</a>
+						</div>
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Test method names use underscores by convention (Method_does_thing); CA1707 covers
+             that. IDE0058 is suppressed only here: AwesomeAssertions .Should()... chains are
+             expression statements whose value is intentionally discarded. Source projects do not
+             suppress IDE0058 — they use explicit discards instead. -->
+        <NoWarn>$(NoWarn);CA1707;IDE0058</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AwesomeAssertions"/>
+        <PackageReference Include="coverlet.collector">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Deque.AxeCore.Playwright"/>
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+        <PackageReference Include="Microsoft.Playwright"/>
+        <PackageReference Include="xunit"/>
+        <PackageReference Include="xunit.runner.visualstudio">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\samples\JobTrack.ExternalApiClient\JobTrack.ExternalApiClient.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Web\JobTrack.Web.csproj"/>
+        <ProjectReference Include="..\JobTrack.TestSupport\JobTrack.TestSupport.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,86 @@
+@page "/Requests/{id:long}"
+@model DetailsModel
+@{
+	ViewData["Title"] = "Request detail";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Requests</p>
+	<h1 class="jt-preserve-whitespace">@(Model.Detail is { } headingDetail ? JobNodeDisplay.Title(headingDetail.Description, headingDetail.JobNodeId.Value) : null)</h1>
+</div>
+
+<p><a asp-page="Index">&larr; Back to your requests</a></p>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+@if (Model.Detail is { } detail) {
+	<dl class="row">
+		<dt class="col-sm-3">Status</dt>
+		<dd class="col-sm-9">@EnumDisplay.Label(detail.Status)</dd>
+		<dt class="col-sm-3">Submitted</dt>
+		<dd class="col-sm-9">@detail.SubmittedAt.ToDateTimeOffset()</dd>
+		@if (detail.AcknowledgedAt is { } acknowledgedAt) {
+			<dt class="col-sm-3">Acknowledged</dt>
+			<dd class="col-sm-9">@acknowledgedAt.ToDateTimeOffset()</dd>
+		}
+	</dl>
+
+	@if (Model.CanAcknowledge && detail.AcknowledgedAt is null) {
+		<form method="post" asp-page-handler="Acknowledge">
+			<input type="hidden" name="version" value="@detail.Version"/>
+			<button type="submit" class="btn btn-secondary">Acknowledge request</button>
+		</form>
+	}
+
+	<h2>Progress</h2>
+	<div class="jt-table-scroll">
+		<table class="table">
+			<thead>
+			<tr>
+				<th>Description</th>
+				<th>Status</th>
+				<th>Last updated</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var row in Model.OrderedSubtree) {
+				<tr>
+					<td class="jt-tree-row jt-preserve-whitespace"
+					    data-tree-depth="@row.Depth">@JobNodeDisplay.Title(row.Node.Description, row.Node.JobNodeId.Value)</td>
+					<td>@EnumDisplay.Label(row.Node.Status)</td>
+					<td>@row.Node.LastUpdatedAt.ToDateTimeOffset()</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+
+	<h2>Notes</h2>
+	@if (detail.Notes.Count == 0) {
+		<p>No notes yet.</p>
+	} else {
+		<ul class="list-unstyled">
+			@foreach (var note in detail.Notes) {
+				<li class="jt-form-card">
+					<p class="jt-preserve-whitespace">@note.Content</p>
+					<p class="text-muted">@note.CreatedAt.ToDateTimeOffset()</p>
+				</li>
+			}
+		</ul>
+	}
+
+	<form method="post" asp-page-handler="AddNote" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="NoteInput.Content"></label>
+			<textarea asp-for="NoteInput.Content" class="form-control" placeholder="Add a note or ask a question"></textarea>
+			<span asp-validation-for="NoteInput.Content" class="text-danger"></span>
+		</div>
+		@if (Model.CanAcknowledge) {
+			<div class="form-check">
+				<input asp-for="NoteInput.VisibleToRequester" class="form-check-input"/>
+				<label asp-for="NoteInput.VisibleToRequester" class="form-check-label">Visible to requester</label>
+			</div>
+		}
+		<button type="submit" class="btn btn-primary">Add note</button>
+	</form>
+}

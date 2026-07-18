@@ -1,0 +1,59 @@
+@page
+@using JobTrack.Abstractions
+@model DecomposeModel
+@{
+	ViewData["Title"] = "Decompose worked leaf";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">Restructure</p>
+		<h1>Decompose worked leaf</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	@if (Model.CurrentNode is not null) {
+		<p class="jt-context"><span>Decomposing</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong>
+		</p>
+
+		<form method="post" class="jt-form-card">
+			<input type="hidden" asp-for="LeafNodeId"/>
+			<input type="hidden" asp-for="OriginalVersion"/>
+			<div class="form-group">
+				<label asp-for="Input.BranchDescription">New branch description (what this node becomes)</label>
+				<input asp-for="Input.BranchDescription" class="form-control"/>
+				<span asp-validation-for="Input.BranchDescription" class="text-danger"></span>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.ExistingWorkDescription">Existing-work child description (inherits the current work unchanged)</label>
+				<input asp-for="Input.ExistingWorkDescription" class="form-control"/>
+				<span asp-validation-for="Input.ExistingWorkDescription" class="text-danger"></span>
+			</div>
+
+			<h2>Newly identified children (leave a slot's description blank to skip it)</h2>
+			@for (var i = 0; i < Model.Input.NewChildren.Count; i++) {
+				<fieldset>
+					<legend>New child @(i + 1)</legend>
+					<div class="form-group">
+						<label asp-for="Input.NewChildren[i].Description"></label>
+						<input asp-for="Input.NewChildren[i].Description" class="form-control"/>
+					</div>
+					<div class="form-group">
+						<label asp-for="Input.NewChildren[i].OwnerUserId"></label>
+						<select asp-for="Input.NewChildren[i].OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
+					</div>
+					<div class="form-group">
+						<label asp-for="Input.NewChildren[i].Priority"></label>
+						<select asp-for="Input.NewChildren[i].Priority" class="form-control"
+						        asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
+					</div>
+				</fieldset>
+			}
+			<div class="jt-toolbar jt-toolbar--flush">
+				<button type="submit" class="btn btn-primary">Save</button>
+				<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Cancel</a>
+			</div>
+		</form>
+	}
+</div>

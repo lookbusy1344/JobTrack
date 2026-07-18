@@ -1,0 +1,169 @@
+@page
+@using JobTrack.Domain.Schedules
+@using NodaTime
+@model IndexModel
+@{
+	ViewData["Title"] = "My rota";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Working time</p>
+	<h1>Rota for @Model.DisplayedUserName</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+<form method="get" asp-page="/Rota/Index" class="jt-form-card">
+	<div class="form-group">
+		<label asp-for="UserId">Viewing rota for</label>
+		<select asp-for="UserId" class="form-control" asp-items="Model.UserOptions"></select>
+	</div>
+	<button type="submit" class="btn btn-secondary">View</button>
+</form>
+
+@if (Model.Snapshot is not null) {
+	<h2>Rota versions</h2>
+	@if (Model.Snapshot.Versions.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<div class="jt-table-scroll">
+			<table class="table">
+				<thead>
+				<tr>
+					<th>Effective start</th>
+					<th>Effective end</th>
+					<th>Zone</th>
+					<th>Weekly intervals</th>
+					<th></th>
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var version in Model.Snapshot.Versions) {
+					<tr>
+						<td>@version.Schedule.EffectiveStart</td>
+						<td>@(version.Schedule.EffectiveEnd?.ToString() ?? "current")</td>
+						<td>@version.Schedule.Zone.Id</td>
+						<td>
+							@foreach (var interval in version.Schedule.WeeklyIntervals) {
+								<div>@interval.Day @interval.Start to @interval.End</div>
+							}
+						</td>
+						<td>
+							<a asp-page="/Rota/CorrectVersion" asp-route-userId="@Model.DisplayedUserId"
+							   asp-route-versionId="@version.Id.Value">Correct</a>
+						</td>
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+
+	<h3>Add a rota version</h3>
+	<form method="post" asp-page-handler="AddVersion" class="jt-form-card">
+		<input type="hidden" asp-for="UserId"/>
+		<div class="form-group">
+			<label asp-for="VersionInput.EffectiveStart"></label>
+			<input asp-for="VersionInput.EffectiveStart" type="date" class="form-control"/>
+			<span asp-validation-for="VersionInput.EffectiveStart" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="VersionInput.EffectiveEnd">Effective end (leave blank if still current)</label>
+			<input asp-for="VersionInput.EffectiveEnd" type="date" class="form-control"/>
+		</div>
+		<div class="form-group">
+			<label asp-for="VersionInput.IanaTimeZone"></label>
+			<input asp-for="VersionInput.IanaTimeZone" class="form-control"/>
+			<span asp-validation-for="VersionInput.IanaTimeZone" class="text-danger"></span>
+		</div>
+
+		<h4>Weekly working intervals (leave a slot's day blank to skip it)</h4>
+		@for (var i = 0; i < Model.VersionInput.WeeklyIntervals.Count; i++) {
+			<fieldset>
+				<legend>Interval @(i + 1)</legend>
+				<div class="form-group">
+					<label asp-for="VersionInput.WeeklyIntervals[i].Day"></label>
+					<select asp-for="VersionInput.WeeklyIntervals[i].Day" class="form-control"
+					        asp-items="Html.GetEnumSelectList<IsoDayOfWeek>()">
+						<option value="">-- none --</option>
+					</select>
+				</div>
+				<div class="form-group">
+					<label asp-for="VersionInput.WeeklyIntervals[i].Start"></label>
+					<input asp-for="VersionInput.WeeklyIntervals[i].Start" class="form-control"/>
+				</div>
+				<div class="form-group">
+					<label asp-for="VersionInput.WeeklyIntervals[i].End"></label>
+					<input asp-for="VersionInput.WeeklyIntervals[i].End" class="form-control"/>
+				</div>
+			</fieldset>
+		}
+		<button type="submit" class="btn btn-primary">Add rota version</button>
+	</form>
+
+	<h2>Rota exceptions</h2>
+	@if (Model.Snapshot.Exceptions.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<div class="jt-table-scroll">
+			<table class="table">
+				<thead>
+				<tr>
+					<th>Effect</th>
+					<th>Start</th>
+					<th>End</th>
+					<th>Rate override</th>
+					<th>Reason</th>
+					<th></th>
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var exception in Model.Snapshot.Exceptions) {
+					<tr>
+						<td>@EnumDisplay.Label(exception.Entry.Effect)</td>
+						<td>@exception.Entry.Interval.Start</td>
+						<td>@exception.Entry.Interval.End</td>
+						<td>@(exception.Entry.RateOverride?.AmountPerHour.ToString() ?? "-")</td>
+						<td>@exception.Reason</td>
+						<td>
+							<a asp-page="/Rota/CorrectException" asp-route-userId="@Model.DisplayedUserId"
+							   asp-route-exceptionId="@exception.Id.Value">Correct</a>
+						</td>
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+
+	<h3>Add a rota exception</h3>
+	<form method="post" asp-page-handler="AddException" class="jt-form-card">
+		<input type="hidden" asp-for="UserId"/>
+		<div class="form-group">
+			<label asp-for="ExceptionInput.Effect"></label>
+			<select asp-for="ExceptionInput.Effect" class="form-control" asp-items="EnumDisplay.BuildOptions<ScheduleExceptionEffect>()"></select>
+		</div>
+		<div class="form-group">
+			<label asp-for="ExceptionInput.Start"></label>
+			<input asp-for="ExceptionInput.Start" class="form-control"/>
+			<span asp-validation-for="ExceptionInput.Start" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="ExceptionInput.End"></label>
+			<input asp-for="ExceptionInput.End" class="form-control"/>
+			<span asp-validation-for="ExceptionInput.End" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="ExceptionInput.RateOverride">Rate override (only valid for AddWorkingTime)</label>
+			<input asp-for="ExceptionInput.RateOverride" class="form-control"/>
+		</div>
+		<div class="form-group">
+			<label asp-for="ExceptionInput.Reason"></label>
+			<input asp-for="ExceptionInput.Reason" class="form-control"/>
+			<span asp-validation-for="ExceptionInput.Reason" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Add rota exception</button>
+	</form>
+}

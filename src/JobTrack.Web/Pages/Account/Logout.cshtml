@@ -1,0 +1,22 @@
+@page
+@model LogoutModel
+@{
+	ViewData["Title"] = "Sign out";
+}
+
+<div class="jt-auth">
+	<span class="jt-auth-emblem" aria-hidden="true">
+		<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+		     stroke-linejoin="round">
+			<path
+				d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+		</svg>
+	</span>
+	<p class="jt-eyebrow">Account</p>
+	<h1>Sign out</h1>
+	<p class="jt-lede">End your session on this device.</p>
+
+	<form method="post" class="jt-form-card" data-jt-clear-history-on-submit>
+		<button type="submit" class="btn btn-primary w-100">Sign out</button>
+	</form>
+</div>

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>JobTrack.Persistence.Shared</PackageId>
+        <Description>Internal EF Core model configuration (entity mappings, strongly typed identifier converters, concurrency-token setup) shared by JobTrack.Persistence.PostgreSql and JobTrack.Persistence.Sqlite, so the two providers cannot drift independently of each other or of the reviewed SQL schema (impl plan §7.4, ADR 0010). Every type is internal; nothing here is part of the public library surface.</Description>
+        <!-- CA1716 flags the "Shared" namespace segment as a cross-language keyword collision
+             (VB.NET's Shared modifier). This solution is C#-only (impl plan/CLAUDE.md); the
+             project name itself was a reviewed, user-approved decision (impl plan §7.4 step 1),
+             so the fix is a targeted suppression, not a project rename. -->
+        <NoWarn>$(NoWarn);CA1716</NoWarn>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational"/>
+        <PackageReference Include="NodaTime"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\JobTrack.Abstractions\JobTrack.Abstractions.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="JobTrack.Persistence.PostgreSql"/>
+        <InternalsVisibleTo Include="JobTrack.Persistence.Sqlite"/>
+        <InternalsVisibleTo Include="JobTrack.Persistence.Shared.Tests"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+</Project>

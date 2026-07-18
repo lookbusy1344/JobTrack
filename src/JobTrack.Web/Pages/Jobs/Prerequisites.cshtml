@@ -1,0 +1,151 @@
+@page
+@using JobTrack.Abstractions
+@model PrerequisitesModel
+@{
+	ViewData["Title"] = "Dependencies";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Job node</p>
+	<h1>Dependencies</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+@if (Model.CurrentNode is not null) {
+	<p class="jt-context"><span>Job</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+
+	<div class="jt-toolbar">
+		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Back to Browse</a>
+		@if (Model.CurrentNode.Node.Kind != NodeKind.Leaf) {
+			<a class="btn btn-secondary" asp-page="/Jobs/AwaitingProgress" asp-route-subtreeRootId="@Model.NodeId">Back to subtree job list</a>
+		}
+	</div>
+
+	<h2>This job requires (must succeed first)</h2>
+	@if (Model.Requires.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<ul class="jt-list">
+			@foreach (var edge in Model.Requires) {
+				<li>
+					@if (Model.NodeSummariesById.TryGetValue(edge.RequiredJobId, out var requiredNode)) {
+						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+						   asp-route-nodeId="@edge.RequiredJobId.Value">@JobNodeDisplay.Title(requiredNode)</a>
+						<span class="jt-tag">@EnumDisplay.Label(requiredNode.Kind)</span>
+						@if (requiredNode.Cost is { } cost) {
+							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
+						}
+					} else {
+						<span class="jt-tag">Job @edge.RequiredJobId.Value</span>
+					}
+					<form method="post" asp-page-handler="Remove" class="inline-form">
+						<input type="hidden" asp-for="NodeId"/>
+						<input type="hidden" name="requiredJobId" value="@edge.RequiredJobId.Value"/>
+						<input type="hidden" name="dependentJobId" value="@edge.DependentJobId.Value"/>
+						<button type="submit" class="btn btn-secondary">Remove</button>
+					</form>
+				</li>
+			}
+		</ul>
+	}
+
+	<h2>Jobs that require this one</h2>
+	@if (Model.RequiredBy.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<ul class="jt-list">
+			@foreach (var edge in Model.RequiredBy) {
+				<li>
+					@if (Model.NodeSummariesById.TryGetValue(edge.DependentJobId, out var dependentNode)) {
+						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+						   asp-route-nodeId="@edge.DependentJobId.Value">@JobNodeDisplay.Title(dependentNode)</a>
+						<span class="jt-tag">@EnumDisplay.Label(dependentNode.Kind)</span>
+						@if (dependentNode.Cost is { } cost) {
+							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
+						}
+					} else {
+						<span class="jt-tag">Job @edge.DependentJobId.Value</span>
+					}
+					<form method="post" asp-page-handler="Remove" class="inline-form">
+						<input type="hidden" asp-for="NodeId"/>
+						<input type="hidden" name="requiredJobId" value="@edge.RequiredJobId.Value"/>
+						<input type="hidden" name="dependentJobId" value="@edge.DependentJobId.Value"/>
+						<button type="submit" class="btn btn-secondary">Remove</button>
+					</form>
+				</li>
+			}
+		</ul>
+	}
+
+	<h2>Add a dependency</h2>
+	<form method="get" asp-page="/Jobs/Prerequisites" class="jt-form-card">
+		<input type="hidden" name="NodeId" value="@Model.NodeId"/>
+		<div class="form-group">
+			<label asp-for="SearchText">Search job titles</label>
+			<input asp-for="SearchText" class="form-control"/>
+		</div>
+		<button type="submit" class="btn btn-primary">Search</button>
+	</form>
+
+	@if (Model.IsSearch) {
+		<h3>Matches for "@Model.SearchText"</h3>
+		@if (Model.SearchResults.Count == 0) {
+			<p class="jt-empty">No jobs match that search.</p>
+		} else {
+			<form method="post" asp-page-handler="AddSelected">
+				<input type="hidden" asp-for="NodeId"/>
+				<input type="hidden" asp-for="SearchText"/>
+				<div class="jt-table-scroll">
+					<table class="table">
+						<thead>
+						<tr>
+							<th>Description</th>
+							<th>Kind</th>
+							<th>Cost</th>
+							<th>Archived</th>
+							<th>Dependency</th>
+						</tr>
+						</thead>
+						<tbody>
+						@foreach (var node in Model.SearchResults) {
+							<tr>
+								<td>
+									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
+								</td>
+								<td>@EnumDisplay.Label(node.Kind)</td>
+								<td>@(node.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
+								<td>@(node.ArchivedAt is not null ? "yes" : "no")</td>
+								<td>
+									@if (Model.ExistingRequiresIds.Contains(node.Id) || Model.ExistingRequiredByIds.Contains(node.Id)) {
+										<span class="jt-tag">Linked</span>
+									} else {
+										<div role="radiogroup" aria-label="Dependency for @JobNodeDisplay.Title(node)">
+											<label>
+												<input type="radio" name="Input.Selections[@node.Id.Value]" value="None" checked/>
+												No dependency
+											</label>
+											<label>
+												<input type="radio" name="Input.Selections[@node.Id.Value]" value="Requires"/>
+												Prerequisite for current
+											</label>
+											<label>
+												<input type="radio" name="Input.Selections[@node.Id.Value]" value="RequiredBy"/>
+												Current required by
+											</label>
+										</div>
+									}
+								</td>
+							</tr>
+						}
+						</tbody>
+					</table>
+				</div>
+				<button type="submit" class="btn btn-primary">Add selected</button>
+			</form>
+		}
+	}
+}

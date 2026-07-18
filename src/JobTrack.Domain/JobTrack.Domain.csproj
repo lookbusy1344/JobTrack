@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>JobTrack.Domain</PackageId>
+        <Description>Pure, immutable domain model: interval algebra, hierarchy/achievement, schedule and rate resolution, and the cost engine. No I/O, no persistence, no ASP.NET Core dependency.</Description>
+        <EnablePublicApiAnalyzers>true</EnablePublicApiAnalyzers>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="NodaTime"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\JobTrack.Abstractions\JobTrack.Abstractions.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+</Project>

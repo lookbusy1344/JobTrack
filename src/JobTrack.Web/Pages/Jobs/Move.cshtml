@@ -1,0 +1,37 @@
+@page
+@model MoveModel
+@{
+	ViewData["Title"] = "Move job node";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">Restructure</p>
+		<h1>Move job node</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	@if (Model.CurrentNode is not null) {
+		<p class="jt-context"><span>Moving</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong><span>and its subtree</span>
+		</p>
+		<p class="jt-context">
+			<span>Current parent</span><strong
+				class="jt-preserve-whitespace">@(Model.CurrentNode.Ancestors.Count > 0 ? JobNodeDisplay.Title(Model.CurrentNode.Ancestors[^1]) : "none (this is the root)")</strong>
+		</p>
+
+		<form method="post" class="jt-form-card">
+			<input type="hidden" asp-for="NodeId"/>
+			<input type="hidden" asp-for="OriginalVersion"/>
+			<div class="form-group">
+				<label asp-for="Input.NewParentId">Destination parent's job node id</label>
+				<input asp-for="Input.NewParentId" class="form-control"/>
+				<span asp-validation-for="Input.NewParentId" class="text-danger"></span>
+			</div>
+			<div class="jt-toolbar jt-toolbar--flush">
+				<button type="submit" class="btn btn-primary">Save</button>
+				<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Cancel</a>
+			</div>
+		</form>
+	}
+</div>

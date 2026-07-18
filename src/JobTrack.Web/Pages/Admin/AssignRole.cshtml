@@ -1,0 +1,35 @@
+@page
+@using JobTrack.Abstractions
+@model AssignRoleModel
+@{
+	ViewData["Title"] = "Assign employee role";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">Administration</p>
+		<h1>Assign employee role</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+	<form method="post" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Input.TargetUserId"></label>
+			<select asp-for="Input.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<span asp-validation-for="Input.TargetUserId" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="Input.Role"></label>
+			<select asp-for="Input.Role" asp-items="EnumDisplay.BuildOptions<EmployeeRole>()" class="form-control"></select>
+			<span asp-validation-for="Input.Role" class="text-danger"></span>
+		</div>
+		<div class="form-group form-check">
+			<input asp-for="Input.Revoke" class="form-check-input"/>
+			<label asp-for="Input.Revoke" class="form-check-label"></label>
+		</div>
+		<button type="submit" class="btn btn-primary">Save</button>
+	</form>
+</div>

@@ -1,0 +1,1667 @@
+/*
+ * JobTrack design system — "Console".
+ *
+ * Visual language: a modern, faintly futuristic operations console for tracked labour and cost.
+ * A light working canvas of layered white cards over a warm neutral paper ground, driven by a single
+ * burnt-orange accent, sits beneath a deep, softly-lit command header. Data is the hero:
+ * money and identifiers render in tabular monospace, and the cost metric is treated as an
+ * instrument read-out rather than body text.
+ *
+ * These tokens override Bootstrap 5.3's CSS custom-property layer (--bs-*) rather than forking
+ * Bootstrap's Sass, so the pinned vendor CSS in wwwroot/lib/bootstrap stays untouched and
+ * upgradeable. The page markup composes a small vocabulary of primitives styled here — the
+ * console header, record/stat cards, the metric read-out, the action toolbar, ledger tables,
+ * status pills, and calm single-column forms — so the look lives in one place.
+ */
+/*
+ * Self-hosted display face — "Mulish" (SIL OFL), the open geometric-humanist twin of Avenir Next.
+ * Avenir Next itself is a Monotype commercial face bundled by macOS/iOS for system use only and may
+ * not be redistributed, so it is never shipped here — the --jt-font-display stack simply lists it
+ * first, letting Apple platforms render it natively while every other platform (and CI) falls back
+ * to this pinned Mulish for an identical voice. Files pinned via libman.json (wwwroot/lib/mulish),
+ * latin subset only; weights kept to those the display scale actually uses (see --jt-font-display).
+ */
+@font-face {
+    font-family: "Mulish";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../lib/mulish/files/mulish-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Mulish";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../lib/mulish/files/mulish-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Mulish";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../lib/mulish/files/mulish-latin-700-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Mulish";
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url("../lib/mulish/files/mulish-latin-800-normal.woff2") format("woff2");
+}
+
+:root {
+    color-scheme: light;
+
+    /* Typography — a disciplined system-font scale; no webfonts. */
+    --bs-font-sans-serif: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --bs-font-monospace: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    /* Display face for titles and the brand — a rounded, youthful voice with real character where
+       the platform offers it (Apple's rounded system face, Quicksand if installed), degrading to the
+       body sans elsewhere. Keeps the no-webfont rule while giving headings a distinct, modern feel. */
+    /* Display face — Avenir Next where the OS bundles it (macOS/iOS); the self-hosted OFL twin
+       "Mulish" guarantees the same geometric-humanist voice everywhere else (Linux/Windows/CI); the
+       rounded system stack stays a last-resort fallback while the webfont loads (font-display: swap). */
+    --jt-font-display: "Avenir Next", "Mulish", ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
+    --bs-body-font-size: 0.9375rem;
+    --bs-body-line-height: 1.6;
+
+    /* Colour — burnt orange over warm neutral paper. */
+    --jt-ink: #241c14;
+    --jt-ink-soft: #3d3226;
+    --jt-muted: #6a5c4b;
+    /* Kept dark enough to clear WCAG AA (4.5:1) as small 11px label text on white surfaces — the
+       <dt> record labels, metric sub-text, and breadcrumb separators all use it and are axe-scanned. */
+    --jt-faint: #7c6c57;
+
+    /* Bright-orange accent ramp. -600 is the text/link/fill workhorse — pushed as bright as WCAG AA
+       allows on white (4.7:1, verified) for pop; -500/-400 are the vivid fills used behind white
+       text, on the dark console, or in gradients/glows; -700 is hover/active. */
+    --jt-orange-50: #fff4ec;
+    --jt-orange-100: #ffe3d0;
+    --jt-orange-200: #ffc59b;
+    --jt-orange-400: #ff8a3d;
+    --jt-orange-500: #f9640f;
+    --jt-orange-600: #cf4409;
+    --jt-orange-700: #b23808;
+    /* Secondary accent — bright amber-gold for the metric baseline, section ticks, and the user dot. */
+    --jt-gold-400: #fbbf24;
+
+    --jt-surface: #ffffff;
+    --jt-surface-2: #faf6f1;
+    --jt-canvas: #f1ece5;
+    --jt-line: #e7ded2;
+    --jt-line-strong: #d6cabb;
+
+    /* Structural slate — a second, cool accent leg reserved for hierarchy scaffolding: node-kind
+       chips now, and (Phase B) the multi-level tree's trunk/branch rails and nested-set span bars.
+       Keeps the warm burnt-orange reserved for cost and action, so structure never competes with it.
+       Text-bearing weights (-600) are AA-verified on their chip backgrounds; lighter slates are
+       non-text rails/fills only. */
+    --jt-slate-600: #47586a;
+    --jt-slate-500: #5f7285;
+    --jt-slate-300: #a9b6c2;
+    --jt-slate-100: #e4e9ee;
+    --jt-slate-50: #f1f4f6;
+
+    /* Command header — warm espresso-black with a burnt-orange underlight. */
+    --jt-console-900: #1a1109;
+    --jt-console-800: #241812;
+    --jt-console-line: #45321f;
+    --jt-console-text: #e2d5c4;
+
+    /* Status */
+    /* Container blue — the folder glyphs in the Browse tree, and nothing else. Deliberately not a
+       status or accent colour: it is the one hue in the palette that means "this holds things",
+       borrowed from the file-manager convention the tree rows imitate. Warmed slightly off a pure
+       azure so it sits with the warm neutral ground rather than fighting it. */
+    --jt-folder-600: #2d64b8;
+    --jt-folder-400: #6d9bdd;
+
+    --jt-green-700: #16704a;
+    --jt-green-100: #e2f3ea;
+    --jt-amber-700: #8a5606;
+    --jt-amber-100: #fbeed3;
+    --jt-red-700: #b3261e;
+    --jt-red-100: #fbe6e5;
+
+    --bs-primary: var(--jt-orange-600);
+    --bs-primary-rgb: 194, 65, 12;
+    --bs-link-color: var(--jt-orange-600);
+    --bs-link-hover-color: var(--jt-orange-700);
+    --bs-body-color: var(--jt-ink);
+    --bs-body-bg: var(--jt-canvas);
+    --bs-secondary-color: var(--jt-muted);
+    --bs-border-color: var(--jt-line);
+    --bs-emphasis-color: var(--jt-ink);
+
+    /* Spacing scale (multiples of 0.25rem, matching Bootstrap's spacer unit). */
+    --jt-space-1: 0.25rem;
+    --jt-space-2: 0.5rem;
+    --jt-space-3: 0.875rem;
+    --jt-space-4: 1.25rem;
+    --jt-space-5: 1.75rem;
+    --jt-space-6: 2.5rem;
+
+    /* One layer of tree nesting, in the Browse subtree's description column. Sized so a rail and
+       its elbow read as a distinct step at a glance without pushing a depth-5 row (the hard depth
+       cap, JobSubtreeLimits.HardMaxDepth) off the right of a narrow viewport. */
+    --jt-tree-indent: 1.5rem;
+
+    /* Shape — generously rounded for a younger, more dynamic feel. */
+    --bs-border-radius: 0.875rem;
+    --bs-border-radius-sm: 0.625rem;
+    --jt-radius-lg: 1.375rem;
+
+    /* Elevation — soft, layered, warm-tinted shadows. */
+    --jt-shadow-sm: 0 1px 2px rgb(40 28 16 / 7%), 0 1px 3px rgb(40 28 16 / 6%);
+    --jt-shadow-md: 0 6px 16px -6px rgb(40 28 16 / 14%), 0 2px 6px -2px rgb(40 28 16 / 9%);
+    --jt-shadow-lg: 0 18px 40px -12px rgb(40 28 16 / 24%);
+    --jt-glow: 0 0 0 1px rgb(207 68 9 / 12%), 0 10px 30px -10px rgb(249 100 15 / 48%);
+
+    /* Focus ring — a bright-orange ring, visible on light chrome and the dark console. */
+    --jt-focus-ring: 0 0 0 0.1875rem rgb(249 100 15 / 50%);
+
+    --jt-transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --jt-transition: 0ms;
+    }
+}
+
+html {
+    font-size: 14px;
+    position: relative;
+    min-height: 100%;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+/* Desktop density — from xl up only. Tablet (768–1199) keeps the 16px scale exercised in the
+   end-to-end viewport matrix; phones stay on the 14px base above. */
+@media (min-width: 1200px) {
+    html {
+        font-size: 14px;
+    }
+
+    :root {
+        --bs-body-font-size: 1rem;
+        --bs-body-line-height: 1.5;
+        --jt-space-3: 0.75rem;
+        --jt-space-4: 1rem;
+        --jt-space-5: 1.375rem;
+        --jt-space-6: 2rem;
+        --bs-border-radius: 0.75rem;
+        --bs-border-radius-sm: 0.5rem;
+        --jt-radius-lg: 1.125rem;
+    }
+
+    h1 {
+        font-size: 1.9rem;
+        margin-bottom: var(--jt-space-3);
+    }
+
+    h2 {
+        font-size: 1.3rem;
+    }
+
+    h3,
+    h4 {
+        margin-top: var(--jt-space-4);
+    }
+
+    .app-header .navbar {
+        padding-top: var(--jt-space-2);
+        padding-bottom: var(--jt-space-2);
+    }
+
+    .app-header .navbar-brand {
+        font-size: 1.05rem;
+    }
+
+    .jt-brand-mark {
+        width: 1.75rem;
+        height: 1.75rem;
+    }
+
+    .btn {
+        --bs-btn-padding-y: 0.375rem;
+        --bs-btn-padding-x: 0.875rem;
+        font-size: 0.875rem;
+    }
+
+    .table thead th,
+    .table tbody td {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .jt-metric-value {
+        font-size: 2rem;
+    }
+
+    dl {
+        row-gap: var(--jt-space-2);
+        padding: var(--jt-space-3);
+    }
+}
+
+body {
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 78% -12%, rgb(249 100 15 / 10%), transparent 60%),
+    var(--jt-canvas);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Content column: capped for line-length discipline on the forms-and-ledgers pages, but wide
+   enough for the dashboard card grids. */
+.container {
+    max-width: 70rem;
+}
+
+/* Removes the ~300ms tap delay and stops the double-tap-to-zoom gesture from firing on
+   interactive elements, now that pinch-zoom is disabled at the viewport. */
+a, button, [role="button"], input, select, textarea, .form-control, .form-select, .btn {
+    touch-action: manipulation;
+}
+
+/* ---- Type scale --------------------------------------------------------------------------- */
+
+h1,
+h2,
+h3,
+h4 {
+    color: var(--jt-ink);
+    font-weight: 700;
+    text-wrap: balance;
+    /* Break an over-long unbreakable token (a user name, email, or identifier interpolated into a
+       heading) rather than letting it force horizontal overflow — WCAG 1.4.10 reflow must hold at
+       320 CSS px whatever the display face's metrics. */
+    overflow-wrap: break-word;
+}
+
+h1 {
+    margin: var(--jt-space-2) 0 var(--jt-space-4);
+    font-family: var(--jt-font-display);
+    font-size: 2.15rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+}
+
+h2 {
+    margin: var(--jt-space-4) 0 var(--jt-space-3);
+    font-family: var(--jt-font-display);
+    font-size: 1.45rem;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+}
+
+/* h3/h4 mark subsections — a quiet uppercase console label with a short accent tick, not a
+   full heading weight, so they read as section breaks rather than competing with h1/h2. */
+h3,
+h4 {
+    display: flex;
+    align-items: center;
+    gap: var(--jt-space-2);
+    margin: var(--jt-space-4) 0 var(--jt-space-3);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--jt-muted);
+}
+
+h3::before,
+h4::before {
+    content: "";
+    width: 0.75rem;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--jt-orange-600), var(--jt-gold-400));
+}
+
+h4 {
+    font-size: 0.75rem;
+    margin-top: var(--jt-space-4);
+}
+
+p {
+    max-width: 52rem;
+}
+
+/* The eyebrow: a small mono/uppercase kicker above a page title or on a card. */
+.jt-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--jt-space-2);
+    margin-bottom: var(--jt-space-2);
+    font-family: var(--bs-font-monospace);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--jt-orange-600);
+}
+
+/* Bootstrap 5.3 bakes the base `a` colour in as a literal hex at compile time rather than
+   referencing --bs-link-color, so the :root override never reaches plain anchors. This explicit
+   rule is what actually applies the token (originally caught by the axe-core colour-contrast
+   scan on a footer link). -600 is only verified at 4.7:1 against white `.jt-card`
+   surfaces; unwrapped body content (a `<table>` sitting straight on `--jt-canvas`, not inside a
+   card) drops to 3.98:1, short of WCAG AA's 4.5:1 -- so the resting link colour uses -700
+   (~5.16:1 against canvas, higher still against white) instead, with hover/focus (not itself
+   subject to the AA text-contrast rule) keeping the brighter -600. */
+a {
+    color: var(--jt-orange-700);
+    text-decoration-color: rgb(178 56 8 / 35%);
+    text-underline-offset: 0.15em;
+    transition: color var(--jt-transition);
+}
+
+a:hover,
+a:focus-visible {
+    color: var(--jt-orange-600);
+    text-decoration-color: currentColor;
+}
+
+/* Focus visibility: a consistent burnt-orange ring on every interactive control. */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.form-check-input:focus-visible,
+summary:focus-visible {
+    outline: none;
+    box-shadow: var(--jt-focus-ring);
+    border-radius: var(--bs-border-radius-sm);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--jt-orange-500);
+    box-shadow: var(--jt-focus-ring);
+}
+
+/* ---- Command header ----------------------------------------------------------------------- */
+
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    background: radial-gradient(120% 180% at 88% -40%, rgb(249 100 15 / 42%), transparent 55%),
+    linear-gradient(180deg, var(--jt-console-800), var(--jt-console-900));
+    border-bottom: 1px solid var(--jt-console-line);
+    box-shadow: 0 1px 0 0 rgb(249 100 15 / 68%), 0 10px 30px -18px rgb(0 0 0 / 80%);
+}
+
+.app-header .navbar {
+    padding-top: var(--jt-space-3);
+    padding-bottom: var(--jt-space-3);
+}
+
+.app-header .navbar-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--jt-font-display);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    font-size: 1.15rem;
+    color: #fff;
+}
+
+/* Brand emblem — a geometric bright-orange chip with a luminous edge. */
+.jt-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.625rem;
+    background: linear-gradient(140deg, var(--jt-orange-400), var(--jt-orange-600));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 40%), 0 4px 14px -2px rgb(249 100 15 / 65%);
+    color: #fff;
+}
+
+.app-header .nav-link {
+    position: relative;
+    color: var(--jt-console-text);
+    font-weight: 500;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+    transition: color var(--jt-transition);
+}
+
+.app-header .nav-link:hover,
+.app-header .nav-link:focus-visible {
+    color: #fff;
+}
+
+/* Active-page underlight on the nav. */
+.app-header .nav-link.active {
+    color: #fff;
+}
+
+.app-header .nav-link.active::after {
+    content: "";
+    position: absolute;
+    left: 0.9rem;
+    right: 0.9rem;
+    bottom: -0.35rem;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--jt-orange-400), var(--jt-gold-400));
+}
+
+.app-header .navbar-text,
+.app-header .jt-user {
+    color: var(--jt-console-text);
+}
+
+.app-header .jt-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.app-header .jt-user::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--jt-gold-400);
+    box-shadow: 0 0 0 3px rgb(245 158 11 / 25%);
+}
+
+/* Sign-out / link buttons in the header read as quiet links, not filled buttons. */
+.app-header .btn-link {
+    color: var(--jt-console-text);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.5rem 0.9rem;
+}
+
+.app-header .btn-link:hover {
+    color: #fff;
+}
+
+.app-header .navbar-toggler {
+    border-color: var(--jt-console-line);
+    color: var(--jt-console-text);
+}
+
+/* Draw the hamburger with three CSS bars rather than an SVG data URI — robust and crisp on the
+   dark console header. */
+.app-header .navbar-toggler-icon {
+    background-image: linear-gradient(#fff, #fff),
+    linear-gradient(#fff, #fff),
+    linear-gradient(#fff, #fff);
+    background-size: 100% 2px;
+    background-position: center top 4px, center center, center bottom 4px;
+    background-repeat: no-repeat;
+}
+
+/* ---- Main shell --------------------------------------------------------------------------- */
+
+main[role="main"] {
+    padding-top: var(--jt-space-4);
+    padding-bottom: var(--jt-space-5);
+    animation: jt-rise var(--jt-transition);
+}
+
+/* Transform-only entrance — deliberately NOT an opacity fade. A mid-flight opacity < 1 makes every
+   descendant's text semi-transparent, which the end-to-end axe scan captures as a colour-contrast
+   failure (it snapshots before the animation settles). Translating without fading avoids that
+   while still giving a subtle rise. */
+@keyframes jt-rise {
+    from {
+        transform: translateY(6px);
+    }
+
+    to {
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    main[role="main"] {
+        animation: none;
+    }
+}
+
+/* ---- Cards -------------------------------------------------------------------------------- */
+
+.jt-card {
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: var(--jt-radius-lg);
+    padding: var(--jt-space-4);
+    box-shadow: var(--jt-shadow-sm);
+}
+
+/* A dashboard grid for stat/record cards — collapses to one column on phones automatically. */
+.jt-grid {
+    display: grid;
+    gap: var(--jt-space-3);
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    margin-bottom: var(--jt-space-4);
+}
+
+/* Metric read-out — the signature element. A large tabular number under a console eyebrow,
+   with a hairline orange→gold baseline. Used for cost and headline figures. */
+.jt-metrics {
+    display: grid;
+    gap: var(--jt-space-3);
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    margin: 0 0 var(--jt-space-4);
+    padding: 0;
+    max-width: none;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+
+/* Single-card variant that sits beside a heading instead of spanning the full row —
+   the auto-fit/1fr grid above stretches to fill whatever width it's given. */
+.jt-metrics--compact {
+    grid-template-columns: minmax(13rem, 18rem);
+    margin: 0;
+}
+
+/* Lets a heading and a compact metric card share one line, wrapping on narrow viewports. */
+.jt-subtree-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--jt-space-3);
+    margin-bottom: var(--jt-space-4);
+}
+
+.jt-subtree-head h2 {
+    margin: 0;
+}
+
+.jt-metrics > div,
+.jt-metric {
+    position: relative;
+    overflow: hidden;
+    padding: var(--jt-space-4);
+    background: linear-gradient(180deg, var(--jt-surface), var(--jt-surface-2));
+    border: 1px solid var(--jt-line);
+    border-radius: var(--jt-radius-lg);
+    box-shadow: var(--jt-shadow-sm);
+}
+
+.jt-metrics > div::after,
+.jt-metric::after {
+    content: "";
+    position: absolute;
+    left: var(--jt-space-4);
+    bottom: 0;
+    width: 3rem;
+    height: 3px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--jt-orange-600), var(--jt-gold-400));
+}
+
+.jt-metric-label {
+    display: block;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--jt-muted);
+    margin-bottom: var(--jt-space-2);
+}
+
+.jt-metric-value {
+    display: block;
+    font-size: 2.35rem;
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+    color: var(--jt-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.jt-metric-value.jt-amount {
+    font-family: var(--bs-font-monospace);
+    letter-spacing: -0.02em;
+}
+
+.jt-metric-sub {
+    display: block;
+    margin-top: var(--jt-space-1);
+    font-size: 0.8125rem;
+    color: var(--jt-faint);
+}
+
+/* ---- Record cards (<dl>) ------------------------------------------------------------------ */
+
+/* Every detail view renders a <dl> of one record's fields. Styled as a spec card: a label/value
+   grid on a white surface with a burnt-orange spine, collapsing to a single stacked column on phones. */
+dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: var(--jt-space-4);
+    row-gap: var(--jt-space-3);
+    margin: 0 0 var(--jt-space-4);
+    padding: var(--jt-space-4) var(--jt-space-4) var(--jt-space-4) calc(var(--jt-space-4) + 3px);
+    max-width: 44rem;
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-left: 3px solid var(--jt-orange-600);
+    border-radius: var(--jt-radius-lg);
+    box-shadow: var(--jt-shadow-sm);
+}
+
+dt {
+    grid-column: 1;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--jt-faint);
+    align-self: center;
+    white-space: nowrap;
+}
+
+dd {
+    grid-column: 2;
+    margin: 0;
+    align-self: center;
+    font-variant-numeric: tabular-nums;
+    color: var(--jt-ink);
+}
+
+@media (max-width: 30em) {
+    dl {
+        grid-template-columns: 1fr;
+        row-gap: var(--jt-space-1);
+    }
+
+    dt {
+        margin-top: var(--jt-space-2);
+    }
+
+    dt:first-of-type {
+        margin-top: 0;
+    }
+}
+
+/* ---- Action toolbar ----------------------------------------------------------------------- */
+
+/* Pages expose a row of navigation/action buttons. Group them into a wrapping toolbar so they
+   read as a control cluster rather than a stray paragraph of links. */
+.jt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--jt-space-2);
+    align-items: center;
+    margin-bottom: var(--jt-space-4);
+    max-width: none;
+}
+
+.jt-toolbar form {
+    max-width: none;
+    margin: 0;
+}
+
+/* Separates lead actions (Work/Delete on Browse) from the rest of the toolbar cluster. */
+.jt-toolbar-divider {
+    align-self: stretch;
+    width: 1px;
+    background: var(--jt-line-strong);
+    margin-inline: var(--jt-space-1);
+}
+
+/* ---- Forms -------------------------------------------------------------------------------- */
+
+/* One column, comfortably narrow. `.form-group` is a Bootstrap 4 holdover the markup still uses;
+   it is styled here rather than renamed at every call site. */
+form {
+    max-width: 40rem;
+}
+
+form.inline-form {
+    max-width: none;
+    display: inline;
+    margin: 0;
+}
+
+/* A framed card for the primary form on a page (login, create, edit…). */
+.jt-form-card {
+    padding: var(--jt-space-4);
+    margin-bottom: var(--jt-space-4);
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: var(--jt-radius-lg);
+    box-shadow: var(--jt-shadow-md);
+}
+
+.form-group {
+    margin-bottom: var(--jt-space-3);
+}
+
+.form-group label,
+.form-label {
+    display: block;
+    margin-bottom: var(--jt-space-1);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--jt-ink-soft);
+}
+
+.form-control,
+.form-select {
+    padding: 0.5rem 0.75rem;
+    background-color: var(--jt-surface);
+    border: 1px solid var(--jt-line-strong);
+    border-radius: var(--bs-border-radius-sm);
+    color: var(--jt-ink);
+    transition: border-color var(--jt-transition), box-shadow var(--jt-transition);
+}
+
+.form-control::placeholder {
+    color: var(--jt-faint);
+}
+
+/* Below the tablet breakpoint the root font-size drops to 14px, which would leave
+   .form-control/.form-select at a 14px computed size (Bootstrap's font-size: 1rem) — under
+   iOS Safari's 16px auto-zoom threshold. With pinch-zoom disabled at the viewport, a forced
+   zoom-on-focus there could no longer be manually undone, so pin form fields to the 16px floor
+   on phones specifically rather than letting them track the root scale. */
+@media (max-width: 767.98px) {
+    .form-control,
+    .form-select {
+        font-size: 16px;
+    }
+}
+
+fieldset {
+    margin-bottom: var(--jt-space-4);
+    padding: var(--jt-space-3) var(--jt-space-4) var(--jt-space-2);
+    /* White (not surface-2): the bright-orange <legend> needs a pure-white backdrop to clear WCAG
+       AA at 11px — on the off-white surface-2 it dips to 4.35:1. */
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: var(--bs-border-radius);
+}
+
+fieldset legend {
+    width: auto;
+    padding: 0 var(--jt-space-2);
+    margin-bottom: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--jt-orange-600);
+}
+
+.text-danger,
+.field-validation-error {
+    display: inline-block;
+    margin-top: var(--jt-space-1);
+    color: var(--jt-red-700) !important;
+    font-size: 0.8125rem;
+}
+
+/* ---- Buttons ------------------------------------------------------------------------------ */
+
+.btn {
+    --bs-btn-padding-y: 0.5rem;
+    --bs-btn-padding-x: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    border-radius: var(--bs-border-radius-sm);
+    transition: transform var(--jt-transition), background-color var(--jt-transition),
+    border-color var(--jt-transition), color var(--jt-transition), box-shadow var(--jt-transition);
+}
+
+.btn:active {
+    transform: translateY(1px);
+}
+
+/* Bootstrap 5.3 compiles .btn-primary's own --bs-btn-* custom properties to literal hex values at
+   build time rather than referencing --bs-primary (the same issue documented for `a`), so the
+   :root override never reaches the button. Set them explicitly. */
+.btn-primary {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--jt-orange-600);
+    --bs-btn-border-color: var(--jt-orange-600);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--jt-orange-700);
+    --bs-btn-hover-border-color: var(--jt-orange-700);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--jt-orange-700);
+    --bs-btn-active-border-color: var(--jt-orange-700);
+    --bs-btn-disabled-bg: var(--jt-orange-400);
+    --bs-btn-disabled-border-color: var(--jt-orange-400);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 16%), rgb(255 255 255 / 0%));
+    box-shadow: 0 1px 0 rgb(255 255 255 / 25%) inset, 0 6px 18px -8px rgb(249 100 15 / 75%);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 1px 0 rgb(255 255 255 / 25%) inset, 0 12px 26px -8px rgb(249 100 15 / 90%);
+}
+
+.btn-secondary {
+    --bs-btn-color: var(--jt-ink-soft);
+    --bs-btn-bg: var(--jt-surface);
+    --bs-btn-border-color: var(--jt-line-strong);
+    --bs-btn-hover-color: var(--jt-orange-700);
+    --bs-btn-hover-bg: var(--jt-orange-50);
+    --bs-btn-hover-border-color: var(--jt-orange-200);
+    --bs-btn-active-color: var(--jt-orange-700);
+    --bs-btn-active-bg: var(--jt-orange-100);
+    --bs-btn-active-border-color: var(--jt-orange-200);
+    box-shadow: var(--jt-shadow-sm);
+}
+
+.btn-danger {
+    --bs-btn-bg: var(--jt-red-700);
+    --bs-btn-border-color: var(--jt-red-700);
+    --bs-btn-hover-bg: #93201a;
+    --bs-btn-hover-border-color: #93201a;
+}
+
+/* ---- Alerts ------------------------------------------------------------------------------- */
+
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--jt-space-2);
+    max-width: 52rem;
+    border: 1px solid transparent;
+    border-left-width: 3px;
+    border-radius: var(--bs-border-radius-sm);
+    box-shadow: var(--jt-shadow-sm);
+}
+
+.alert::before {
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.alert-danger {
+    --bs-alert-color: var(--jt-red-700);
+    --bs-alert-bg: var(--jt-red-100);
+    --bs-alert-border-color: rgb(179 38 30 / 30%);
+}
+
+.alert-danger::before {
+    content: "!";
+    color: var(--jt-red-700);
+}
+
+.alert-success {
+    --bs-alert-color: var(--jt-green-700);
+    --bs-alert-bg: var(--jt-green-100);
+    --bs-alert-border-color: rgb(23 115 74 / 30%);
+}
+
+.alert-success::before {
+    content: "\2713";
+    color: var(--jt-green-700);
+}
+
+/* ---- Status pills ------------------------------------------------------------------------- */
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--jt-space-2);
+    padding: var(--jt-space-2) var(--jt-space-3);
+    border-radius: 2rem;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    border: 1px solid transparent;
+}
+
+/* The default lead is a plain dot, for pills that report something other than readiness ("Active
+   since…"). A readiness pill replaces it with a drawn sign — see `.status-pill-glyph`. */
+.status-pill::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px rgb(255 255 255 / 45%);
+}
+
+.status-pill-glyph {
+    flex: 0 0 auto;
+    width: 0.9375rem;
+    height: 0.9375rem;
+    fill: currentcolor;
+}
+
+/* A drawn sign replaces the dot rather than sitting next to it. */
+.status-pill:has(> .status-pill-glyph)::before {
+    content: none;
+}
+
+/* Icon-only: the sign alone, its name carried by a visually-hidden span. For a marker repeated
+   once per row or list item, where a word of state per row would cost more width than the fact is
+   worth — the record card keeps the worded pill. */
+.status-pill--icon {
+    padding: var(--jt-space-1);
+    gap: 0;
+}
+
+.status-pill-ready {
+    background-color: var(--jt-green-100);
+    color: var(--jt-green-700);
+    border-color: rgb(23 115 74 / 25%);
+}
+
+/* Blocked is red, not the amber it used to be: the pill now carries a raised-palm stop sign, and a
+   red hand on an amber ground reads as two states at once. Red is otherwise this palette's error
+   colour, but a blocked job is the nearest thing to a stop the domain has, and `.jt-notice--error`
+   /`.jt-eyebrow--error` are separate components that never sit beside a status pill. */
+.status-pill-blocked {
+    background-color: var(--jt-red-100);
+    color: var(--jt-red-700);
+    border-color: rgb(179 38 30 / 25%);
+}
+
+/* ---- Node-kind chip (Root / Branch / Leaf) ------------------------------------------------- */
+
+/* The structural counterpart to .status-pill: names a node's derived hierarchy classification
+   (ADR 0035) in the cool slate leg, kept deliberately distinct from status (green/amber) and cost
+   (orange) so the three vocabularies never blur. Differentiated by slate depth, not hue. Carries
+   forward unchanged into the Phase B multi-level tree. */
+.jt-kind {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem var(--jt-space-2);
+    border-radius: 2rem;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+}
+
+.jt-kind--root {
+    background-color: var(--jt-slate-600);
+    color: #fff;
+}
+
+.jt-kind--branch {
+    background-color: var(--jt-slate-100);
+    color: var(--jt-slate-600);
+    border-color: var(--jt-slate-300);
+}
+
+.jt-kind--leaf {
+    background-color: var(--jt-slate-50);
+    color: var(--jt-slate-600);
+    border-color: var(--jt-slate-100);
+}
+
+/* ---- Multi-level Browse tree (ADR 0039) --------------------------------------------------- */
+
+/* The subtree reads like a file manager's list view: indentation for the level, an └ elbow drawn
+   into it for the step down from the parent, and a kind icon naming what the row is (opened
+   container / closed container / terminal leaf). Depth is therefore stated three ways — position,
+   connector, glyph — none of which a screen reader can see, so each row also carries a
+   visually-hidden "Level N, <kind>." label; the guide and the icon are both `aria-hidden`.
+
+   The guide is absolutely positioned so its rails span the full row height and meet the rails of
+   the rows above and below, making an unbroken line down each ancestor level. That needs the cell
+   to be the containing block and to reserve the indent as padding — hence the per-depth padding
+   rules below, bounded by JobSubtreeLimits.HardMaxDepth. Rails, elbows, and icons sit in the slate
+   leg (the reserved hierarchy-scaffolding colour) and are non-text decoration, so no contrast floor
+   applies to them; the row's own link carries the text contrast. */
+/* Top-aligned, outranking `.table tbody td`'s middle: a row is as tall as its work controls, and a
+   name floating in the middle of that band would break the stepped silhouette the indent draws.
+   The elbow below is anchored to the same top edge, so the two stay locked together. */
+.table tbody td.jt-tree-cell {
+    vertical-align: top;
+}
+
+.jt-tree-cell {
+    position: relative;
+
+    /* Names are the reason to look at this table: give them room to sit on one line at the depths
+       that matter, and let `.jt-table-scroll` take the overflow rather than wrapping every row into
+       three lines and destroying the stepped silhouette. */
+    min-width: 20rem;
+    vertical-align: top;
+}
+
+/* Two flex items — the icon, then everything textual — so a wrapped name aligns under itself
+   rather than running back under the icon (the hanging indent a file manager's list view has),
+   and the "more below" marker stays inline with the name's last word instead of being flexed to
+   the far edge of the block. */
+.jt-tree-label {
+    display: flex;
+    align-items: baseline;
+    gap: var(--jt-space-2);
+}
+
+.jt-tree-text {
+    min-width: 0;
+}
+
+.jt-tree-cell[data-jt-depth="1"] {
+    padding-left: calc(1 * var(--jt-tree-indent));
+}
+
+.jt-tree-cell[data-jt-depth="2"] {
+    padding-left: calc(2 * var(--jt-tree-indent));
+}
+
+.jt-tree-cell[data-jt-depth="3"] {
+    padding-left: calc(3 * var(--jt-tree-indent));
+}
+
+.jt-tree-cell[data-jt-depth="4"] {
+    padding-left: calc(4 * var(--jt-tree-indent));
+}
+
+.jt-tree-cell[data-jt-depth="5"] {
+    padding-left: calc(5 * var(--jt-tree-indent));
+}
+
+.jt-tree-guide {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+}
+
+.jt-tree-rail,
+.jt-tree-elbow {
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--jt-tree-indent);
+}
+
+/* A full-height vertical rail — marks an ancestor level this row sits beneath. */
+.jt-tree-rail::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--jt-slate-100);
+}
+
+/* The └ elbow at the row's own level: stem down from the parent, rounded corner, arm out to the
+   icon. Its arm stops on the first text line's centre — the cell's top padding plus half a line —
+   rather than at the row's vertical midpoint, so it still points at the icon on a row whose name
+   wrapped to two or three lines. */
+.jt-tree-elbow::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    right: 0;
+    top: 0;
+    height: calc(0.75rem + 0.6rem);
+    border-left: 1px solid var(--jt-slate-300);
+    border-bottom: 1px solid var(--jt-slate-300);
+    border-bottom-left-radius: 0.375rem;
+}
+
+/* ---- Tree row icons ------------------------------------------------------------------------ */
+
+/* Defined once per page and drawn by <use>; never rendered itself. */
+.jt-icon-sprite {
+    display: none;
+}
+
+.jt-tree-icon {
+    flex: 0 0 auto;
+    width: 1.75rem;
+    height: 1.75rem;
+
+    /* Sits on the first line, optically centred on it, and stays there when the name wraps. The
+       glyph is taller than the line box, so it is pulled up by the overhang rather than pushed
+       down as a shorter one would be. */
+    align-self: flex-start;
+    margin-top: -0.15rem;
+}
+
+/* Containers are blue and leaves green, taking the metaphor literally so structure and terminal
+   work separate at a glance. Neither is a state: both are glyphs beside a name, and the row's
+   status pill remains the only thing that reports state. `fill` is set on the host <svg> because
+   it is inherited, and inheritance is the only way paint reaches a <use> clone — which is also why
+   the two-tone plates are an `opacity` on the back path rather than a second colour. */
+.jt-tree-icon--root,
+.jt-tree-icon--branch {
+    fill: var(--jt-folder-600);
+    color: var(--jt-folder-600);
+}
+
+.jt-tree-icon--leaf {
+    fill: var(--jt-green-700);
+    color: var(--jt-green-700);
+}
+
+/* An in-row state flag beside the name (currently: archived). Smaller than the kind glyph, muted,
+   and always paired with visually-hidden text, since it carries a fact rather than decoration. */
+.jt-tree-flag {
+    width: 0.9375rem;
+    height: 0.9375rem;
+    margin-left: var(--jt-space-1);
+    vertical-align: -0.15em;
+    fill: var(--jt-muted);
+    color: var(--jt-muted);
+}
+
+/* ---- Icon-only disclosure (Backdate) -------------------------------------------------------- */
+
+/* Backdating a session is a rare correction sitting next to the action people actually take, so it
+   is a small square glyph rather than a labelled control competing with Start / Finish. Its name
+   is carried by visually-hidden text (and a `title` for a pointer tooltip), never by the glyph
+   alone, and the whole square is the hit target so it stays comfortably tappable. */
+.jt-icon-summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--jt-line);
+    border-radius: 0.625rem;
+    background: var(--jt-surface);
+    color: var(--jt-muted);
+    cursor: pointer;
+    list-style: none;
+    transition: color var(--jt-transition), border-color var(--jt-transition);
+}
+
+.jt-icon-summary::-webkit-details-marker {
+    display: none;
+}
+
+.jt-icon-summary:hover,
+details[open] > .jt-icon-summary {
+    color: var(--jt-orange-600);
+    border-color: var(--jt-orange-600);
+}
+
+.jt-icon-summary-glyph {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* ---- Tree table reflow --------------------------------------------------------------------- */
+
+/* Below 992px the subtree keeps only what navigating a tree needs — where a row sits, what it is
+   called, and how to start work on it — and drops owner, priority, cost, and the span bar. Six
+   columns at phone width would squeeze the name to a couple of characters per line and push the
+   page into a horizontal scroll, which WCAG 1.4.10 Reflow forbids; every dropped column is one tap
+   away on the row's own page. The cut is at 992px rather than the 768px tablet breakpoint because
+   the name column alone reserves 20rem: at 768 the six columns still overflowed, which the viewport
+   matrix in JobBrowseBrowserTests catches. `display: none` is deliberate over a visually-hidden
+   treatment: this is redundant-at-this-size content, not content withheld from assistive tech. */
+@media (max-width: 991.98px) {
+    .jt-col-secondary {
+        display: none;
+    }
+
+    /* The name no longer competes with five other columns, so it can give the indent back. */
+    .jt-tree-cell {
+        min-width: 0;
+    }
+
+    .jt-tree-icon {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+}
+
+/* A blocked row's stop palm takes the same red as the readiness pill it echoes, so the two never
+   read as different facts (ADR 0043). It overrides `.jt-tree-flag`'s muted default. */
+.jt-tree-blocked {
+    fill: var(--jt-red-700);
+    color: var(--jt-red-700);
+}
+
+/* Marks a container holding more than this fetch expanded — the row's own name links into it. */
+.jt-tree-more {
+    margin-left: var(--jt-space-1);
+    color: var(--jt-faint);
+}
+
+/* Nested-set span bar (ADR 0039 decision 3): purely structural/decorative -- the row's own text
+   (kind chip, depth label, ordering) already conveys the same containment fact accessibly, so this
+   is `aria-hidden` and carries no contrast requirement of its own (plan §6). */
+.jt-tree-span-track {
+    position: relative;
+    display: block;
+    height: 0.375rem;
+    min-width: 4rem;
+    background-color: var(--jt-slate-50);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+/* The bar is an <svg> whose viewBox is 100 units wide, so the row's percentages are written
+   straight onto the rect as `x`/`width` attributes. Presentation attributes, not a `style`
+   attribute: `style-src 'self'` drops inline styles, which is what silently collapsed the
+   previous version of this bar to zero width. The track keeps the pill shape and clips the rect,
+   so the rect itself needs no radius (which non-uniform scaling would distort anyway). */
+.jt-tree-span {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.jt-tree-span-fill {
+    fill: var(--jt-slate-300);
+}
+
+/* ---- Breadcrumb (Jobs/Browse lineage trail) ----------------------------------------------- */
+
+/* Pairs the breadcrumb with the collapsed "Filter & search" pill on one row so the two don't
+   each claim their own vertical band; wraps to two lines only when the viewport is too narrow. */
+.jt-browse-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--jt-space-3);
+    margin-bottom: var(--jt-space-3);
+}
+
+.jt-browse-toolbar nav[aria-label="breadcrumb"] {
+    min-width: 0;
+}
+
+.jt-browse-toolbar .jt-card--filter {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+nav[aria-label="breadcrumb"] ol {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    list-style: none;
+    padding: var(--jt-space-2) var(--jt-space-3);
+    margin: 0;
+    font-size: 0.8125rem;
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: 2rem;
+    box-shadow: var(--jt-shadow-sm);
+    color: var(--jt-muted);
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+nav[aria-label="breadcrumb"] li {
+    white-space: nowrap;
+}
+
+nav[aria-label="breadcrumb"] li:last-child {
+    color: var(--jt-ink);
+    font-weight: 600;
+}
+
+nav[aria-label="breadcrumb"] li + li::before {
+    content: "\203a";
+    margin: 0 var(--jt-space-2);
+    color: var(--jt-faint);
+}
+
+/* ---- Tables (ledger) ---------------------------------------------------------------------- */
+
+/* Horizontal scroll lives on `.jt-table-scroll` so the table itself keeps `display: table` and
+   columns expand to the full content width on wide viewports. */
+.jt-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    margin-bottom: var(--jt-space-4);
+}
+
+/* Identifiers and money render in monospace for scan-ability. Ledger styling — a firm header
+   rule, hairline rows, a warm orange hover wash. */
+.table {
+    width: 100%;
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: var(--jt-radius-lg);
+    box-shadow: var(--jt-shadow-sm);
+    color: var(--jt-ink);
+}
+
+.table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--jt-surface-2);
+    border-bottom: 1px solid var(--jt-line-strong);
+    padding: 0.75rem 1rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--jt-muted);
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--jt-line);
+    vertical-align: middle;
+}
+
+.table tbody tr {
+    transition: background-color var(--jt-transition);
+}
+
+.table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table tbody tr:hover {
+    background-color: var(--jt-orange-50);
+}
+
+.table td.jt-id,
+.table td.jt-amount,
+.jt-amount {
+    font-family: var(--bs-font-monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Utility: preserve line breaks/spacing in free-form text (titles, writeups, notes) that would
+   otherwise be whitespace-collapsed by normal HTML flow. overflow-wrap keeps this safe inside
+   narrow table columns, where an unbroken long word/line could otherwise force horizontal scroll. */
+.jt-preserve-whitespace {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+/* Utility: a subtle inline mono chip for identifiers rendered outside tables. */
+.jt-tag {
+    display: inline-block;
+    padding: 0.05rem 0.4rem;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.85em;
+    background: var(--jt-orange-50);
+    border: 1px solid var(--jt-orange-100);
+    border-radius: 0.375rem;
+    color: var(--jt-orange-700);
+}
+
+.jt-muted {
+    color: var(--jt-muted);
+}
+
+/* ---- Page head + lede --------------------------------------------------------------------- */
+
+.jt-page-head {
+    margin-bottom: var(--jt-space-4);
+}
+
+.jt-page-head h1 {
+    margin-bottom: var(--jt-space-2);
+}
+
+.jt-lede {
+    font-size: 1.05rem;
+    color: var(--jt-muted);
+    margin-bottom: var(--jt-space-4);
+}
+
+/* A quiet subtitle line naming the record/context a page is acting on. */
+.jt-context {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--jt-space-2);
+    margin-bottom: var(--jt-space-4);
+    color: var(--jt-muted);
+    font-size: 0.9375rem;
+}
+
+.jt-context strong {
+    color: var(--jt-ink);
+    font-weight: 650;
+}
+
+/* Bare <ul> lists used for prerequisites, siblings, blockers — render as a tidy stack of chips
+   rather than default browser bullets. */
+.jt-list {
+    list-style: none;
+    margin: 0 0 var(--jt-space-4);
+    padding: 0;
+    max-width: 44rem;
+}
+
+.jt-list > li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--jt-space-3);
+    padding: 0.75rem 1rem;
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: var(--bs-border-radius-sm);
+    box-shadow: var(--jt-shadow-sm);
+    margin-bottom: var(--jt-space-2);
+}
+
+/* A single-purpose, one-action page (create/edit/move/decompose a node, change a password,
+   assign a role…): centers the page head and its form/confirmation content as one narrow column
+   instead of letting it hug the left edge of the wide .container on large screens. 44rem matches
+   the narrow-content convention already used by dl/.jt-list/.jt-notice, so nothing inside needs
+   its own width override. Not for dashboard-style pages that mix a form with a wide table or
+   list (Browse, Work, AwaitingProgress, Prerequisites…) — those stay full width. */
+.jt-page-narrow {
+    max-width: 44rem;
+    margin-inline: auto;
+}
+
+/* ---- Auth screens ------------------------------------------------------------------------- */
+
+.jt-auth {
+    max-width: 26rem;
+    margin: var(--jt-space-5) auto;
+}
+
+.jt-auth .jt-form-card {
+    box-shadow: var(--jt-shadow-lg);
+}
+
+.jt-auth-emblem {
+    display: grid;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    margin-bottom: var(--jt-space-3);
+    border-radius: 1rem;
+    background: linear-gradient(140deg, var(--jt-orange-400), var(--jt-orange-600));
+    box-shadow: var(--jt-glow);
+    color: #fff;
+    font-weight: 700;
+}
+
+.jt-auth form {
+    max-width: none;
+}
+
+/* A framed notice panel for empty/denied/informational states. */
+.jt-notice {
+    max-width: 40rem;
+    padding: var(--jt-space-4);
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-left: 3px solid var(--jt-orange-600);
+    border-radius: var(--jt-radius-lg);
+    box-shadow: var(--jt-shadow-sm);
+}
+
+/* Empty-state line used across list/table pages ("None.", "No jobs to show."). */
+.jt-empty {
+    padding: var(--jt-space-4);
+    color: var(--jt-muted);
+    background: var(--jt-surface-2);
+    border: 1px dashed var(--jt-line-strong);
+    border-radius: var(--bs-border-radius);
+    max-width: 44rem;
+}
+
+/* Collapsed to a small pill by default; only takes on the full jt-card padding/border/shadow
+   once the disclosure is opened, so "Filter & search" doesn't dominate the page at rest. */
+.jt-card--filter {
+    max-width: 44rem;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+}
+
+.jt-card--filter[open] {
+    padding: var(--jt-space-4);
+    border: 1px solid var(--jt-line);
+    border-radius: var(--jt-radius-lg);
+    box-shadow: var(--jt-shadow-sm);
+    background: var(--jt-surface);
+}
+
+.jt-card--filter .jt-disclosure-summary {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--jt-space-1) var(--jt-space-3);
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: var(--jt-radius-lg);
+    box-shadow: var(--jt-shadow-sm);
+    font-size: 0.875rem;
+}
+
+.jt-card--filter[open] .jt-disclosure-summary {
+    padding: 0;
+    margin-bottom: var(--jt-space-3);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Compact client-side browse history — links only, sits below the children table. */
+.jt-history {
+    margin-top: var(--jt-space-4);
+    max-width: 44rem;
+}
+
+.jt-history-label {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--jt-faint);
+    margin: 0 0 var(--jt-space-2);
+}
+
+.jt-history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.125rem var(--jt-space-3);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+.jt-history-list > li {
+    margin: 0;
+}
+
+.jt-history-empty {
+    color: var(--jt-faint);
+    font-size: 0.8125rem;
+}
+
+.jt-disclosure-summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.jt-disclosure-body {
+    margin-top: var(--jt-space-3);
+}
+
+.jt-toolbar--flush {
+    margin-bottom: 0;
+}
+
+.jt-eyebrow--error {
+    color: var(--jt-red-700);
+}
+
+.jt-notice--error {
+    border-left-color: var(--jt-red-700);
+}
+
+.jt-tree-row[data-tree-depth="0"] {
+    padding-left: 1rem;
+}
+
+.jt-tree-row[data-tree-depth="1"] {
+    padding-left: 2.5rem;
+}
+
+.jt-tree-row[data-tree-depth="2"] {
+    padding-left: 4rem;
+}
+
+.jt-tree-row[data-tree-depth="3"] {
+    padding-left: 5.5rem;
+}
+
+.jt-tree-row[data-tree-depth="4"] {
+    padding-left: 7rem;
+}
+
+.jt-tree-row[data-tree-depth="5"] {
+    padding-left: 8.5rem;
+}
+
+.jt-tree-row[data-tree-depth="6"] {
+    padding-left: 10rem;
+}
+
+.jt-tree-row[data-tree-depth="7"] {
+    padding-left: 11.5rem;
+}
+
+.jt-tree-row[data-tree-depth="8"] {
+    padding-left: 13rem;
+}
+
+.jt-tree-row[data-tree-depth="9"] {
+    padding-left: 14.5rem;
+}
+
+.jt-tree-row[data-tree-depth="10"] {
+    padding-left: 16rem;
+}

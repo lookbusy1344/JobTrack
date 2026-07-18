@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Test method names use underscores by convention (Method_does_thing); CA1707 covers
+             that. IDE0058 is suppressed only here: AwesomeAssertions .Should()... chains are
+             expression statements whose value is intentionally discarded. Source projects do not
+             suppress IDE0058 — they use explicit discards instead. CA1716: "Shared" collides with
+             VB.NET's Shared modifier; this solution is C#-only and the project name was a
+             reviewed decision (impl plan §7.4 step 1), not a rename candidate. -->
+        <NoWarn>$(NoWarn);CA1707;IDE0058;CA1716</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AwesomeAssertions"/>
+        <PackageReference Include="coverlet.collector">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime"/>
+        <PackageReference Include="xunit"/>
+        <PackageReference Include="xunit.runner.visualstudio">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\JobTrack.Persistence.Shared\JobTrack.Persistence.Shared.csproj"/>
+    </ItemGroup>
+
+</Project>

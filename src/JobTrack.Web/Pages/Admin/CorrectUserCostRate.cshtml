@@ -1,0 +1,44 @@
+@page
+@model CorrectUserCostRateModel
+@{
+	ViewData["Title"] = "Correct user cost rate";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">Rates</p>
+		<h1>Correct user cost rate</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	@if (Model.Rate is not null) {
+		<form method="post" class="jt-form-card">
+			<input type="hidden" asp-for="UserId"/>
+			<input type="hidden" asp-for="RateId"/>
+			<div class="form-group">
+				<label asp-for="Input.EffectiveStart"></label>
+				<input asp-for="Input.EffectiveStart" class="form-control"/>
+				<span asp-validation-for="Input.EffectiveStart" class="text-danger"></span>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.EffectiveEnd">Effective end (leave blank if still current)</label>
+				<input asp-for="Input.EffectiveEnd" class="form-control"/>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.AmountPerHour"></label>
+				<input asp-for="Input.AmountPerHour" class="form-control"/>
+				<span asp-validation-for="Input.AmountPerHour" class="text-danger"></span>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.Reason">Reason for this correction</label>
+				<input asp-for="Input.Reason" class="form-control"/>
+				<span asp-validation-for="Input.Reason" class="text-danger"></span>
+			</div>
+			<div class="jt-toolbar jt-toolbar--flush">
+				<button type="submit" class="btn btn-primary">Save</button>
+				<a class="btn btn-secondary" asp-page="/Admin/Rates" asp-route-userId="@Model.UserId">Cancel</a>
+			</div>
+		</form>
+	}
+</div>

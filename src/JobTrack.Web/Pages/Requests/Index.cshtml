@@ -1,0 +1,63 @@
+@page
+@model IndexModel
+@{
+	ViewData["Title"] = "My requests";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Requests</p>
+	<h1>My requests</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+<h2>New request</h2>
+@if (Model.EligibleHoldingAreas.Count == 0) {
+	<p>There is no holding area you are currently eligible to submit a request into. Contact an administrator.</p>
+} else {
+	<form method="post" asp-page-handler="Submit" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Submit.Description"></label>
+			<textarea asp-for="Submit.Description" class="form-control" placeholder="Describe the problem"></textarea>
+			<span asp-validation-for="Submit.Description" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="Submit.HoldingAreaId"></label>
+			<select asp-for="Submit.HoldingAreaId" class="form-control">
+				<option value="">Choose where to send this</option>
+				@foreach (var holdingArea in Model.EligibleHoldingAreas) {
+					<option value="@holdingArea.Id.Value">@holdingArea.Name</option>
+				}
+			</select>
+			<span asp-validation-for="Submit.HoldingAreaId" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Submit request</button>
+	</form>
+}
+
+<h2>Your requests</h2>
+@if (Model.MyRequests.Count == 0) {
+	<p>You have not submitted any requests yet.</p>
+} else {
+	<div class="jt-table-scroll">
+		<table class="table">
+			<thead>
+			<tr>
+				<th>Description</th>
+				<th>Submitted</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var request in Model.MyRequests) {
+				<tr>
+					<td><a class="jt-preserve-whitespace" asp-page="Details"
+					       asp-route-id="@request.JobNodeId.Value">@JobNodeDisplay.Title(request.Description, request.JobNodeId.Value)</a></td>
+					<td>@request.SubmittedAt.ToDateTimeOffset()</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

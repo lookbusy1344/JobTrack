@@ -1,0 +1,44 @@
+@page
+@model WorkModel
+@{
+	ViewData["Title"] = "Leaf work";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Work sessions</p>
+	<h1>Leaf work</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+@if (Model.CurrentNode is not null) {
+	<p class="jt-context"><span>Leaf</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+
+	var activeSession = Model.Panel?.Sessions.FirstOrDefault(session => session.FinishedAt is null);
+	<div class="jt-toolbar">
+		@if (activeSession is not null) {
+			<span class="status-pill status-pill-ready">Active since @activeSession.StartedAt</span>
+			<form method="post" asp-page-handler="Finish" class="inline-form">
+				@foreach (var field in Model.Panel!.ExtraHiddenFields) {
+					<input type="hidden" name="@field.Key" value="@field.Value"/>
+				}
+				<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
+				<input type="hidden" name="version" value="@activeSession.Version"/>
+				<button type="submit" class="btn btn-secondary">Finish work</button>
+			</form>
+		} else {
+			<form method="post" asp-page-handler="Start">
+				<input type="hidden" asp-for="LeafNodeId"/>
+				<input type="hidden" name="WorkedByUserId" value="@Model.Panel?.DisplayedWorkedByUserId"/>
+				<button type="submit" class="btn btn-primary">Start work</button>
+			</form>
+		}
+		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Back to Browse</a>
+	</div>
+
+	@if (Model.Panel is { } panel) {
+		<partial name="_LeafWorkSessions" model="panel"/>
+	}
+}

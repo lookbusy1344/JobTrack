@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>JobTrack.Abstractions</PackageId>
+        <Description>Strongly typed identifiers, small shared value types, and public exception hierarchy for JobTrack. No provider or framework dependency.</Description>
+        <EnablePublicApiAnalyzers>true</EnablePublicApiAnalyzers>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+</Project>

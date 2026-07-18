@@ -1,0 +1,14 @@
+<Project>
+
+    <!-- Spike code is throwaway proof (plan §5.3): it does not pass through
+         delivery gates, so it is deliberately isolated from the repo's
+         strict Directory.Build.props/Directory.Packages.props (no central
+         package management, no warnings-as-errors, no analyzer set). -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+
+</Project>

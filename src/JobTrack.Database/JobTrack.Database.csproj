@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <PackageId>JobTrack.Database</PackageId>
+        <Description>Explicit schema deployment tool: applies ordered forward-only schema-version scripts, validates checksums, and performs startup compatibility checks. No EF Core or domain dependency.</Description>
+        <!-- Application host, not a consumed library surface — no public API doc requirement. -->
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Npgsql"/>
+        <PackageReference Include="Microsoft.Data.Sqlite"/>
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="JobTrack.Database.ContractTests"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,99 @@
+@page
+@model AwaitingProgressModel
+@{
+	ViewData["Title"] = "Jobs awaiting progress";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Dashboard</p>
+	<h1>Jobs awaiting progress</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+@if (Model.SubtreeRoot is { } subtreeRoot) {
+	<p class="jt-context">
+		<span>Scoped to <strong><a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+		                           asp-route-nodeId="@subtreeRoot.Node.Id.Value">@JobNodeDisplay.Title(subtreeRoot.Node)</a></strong></span>
+		<a asp-page="/Jobs/AwaitingProgress" asp-route-ownerUserId="@Model.OwnerUserId">Show the whole tree</a>
+	</p>
+}
+
+<form method="get" asp-page="/Jobs/AwaitingProgress" class="jt-form-card">
+	<input type="hidden" asp-for="SubtreeRootId"/>
+	<div class="form-group">
+		<label asp-for="OwnerUserId">Owner</label>
+		<select asp-for="OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
+	</div>
+	<div class="form-group">
+		<label asp-for="UnassignedOnly">
+			<input asp-for="UnassignedOnly"/>
+			Unassigned only (the pickup pool)
+		</label>
+	</div>
+	<button type="submit" class="btn btn-primary">Apply</button>
+	<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.SubtreeRootId">Browse</a>
+</form>
+
+@if (Model.Entries.Count == 0) {
+	<p class="jt-empty">No jobs are awaiting progress.</p>
+} else {
+	<div class="jt-table-scroll">
+		<table class="table">
+			<thead>
+			<tr>
+				<th>Description</th>
+				<th>Owner</th>
+				<th>Priority</th>
+				<th>Cost</th>
+				<th>Achievement</th>
+				<th>Deadline</th>
+				<th>Actions</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var entry in Model.Entries) {
+				<tr>
+					<td><a class="jt-preserve-whitespace" asp-page="/Jobs/Browse" asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry)</a>
+					</td>
+					<td>@Model.DescribeOwner(entry.OwnerUserId)</td>
+					<td>@EnumDisplay.Label(entry.Priority)</td>
+					<td>@(entry.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
+					<td>
+						@(entry.Achievement is { } achievement ? EnumDisplay.Label(achievement) : "No work attached")
+						@if (!entry.IsReady) {
+							<span class="status-pill status-pill--icon status-pill-blocked"><svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocked</span></span>
+						}
+					</td>
+					<td>@(entry.NeededFinish ?? entry.NeededStart)</td>
+					<td>
+						@if (Model.ActiveSessionByLeaf.TryGetValue(entry.Id, out var activeSession)) {
+							<div class="jt-toolbar jt-toolbar--flush">
+								<span class="status-pill status-pill-ready">Active since @activeSession.StartedAt</span>
+								<form method="post" asp-page-handler="Finish" class="inline-form">
+									<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
+									<input type="hidden" name="UnassignedOnly" value="@Model.UnassignedOnly"/>
+									<input type="hidden" name="SubtreeRootId" value="@Model.SubtreeRootId"/>
+									<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
+									<input type="hidden" name="version" value="@activeSession.Version"/>
+									<button type="submit" class="btn btn-secondary">Finish / pause</button>
+								</form>
+							</div>
+						} else {
+							<form method="post" asp-page-handler="StartWork" class="inline-form">
+								<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
+								<input type="hidden" name="UnassignedOnly" value="@Model.UnassignedOnly"/>
+								<input type="hidden" name="SubtreeRootId" value="@Model.SubtreeRootId"/>
+								<input type="hidden" name="jobNodeId" value="@entry.Id.Value"/>
+								<button type="submit" class="btn btn-secondary">Start work</button>
+							</form>
+						}
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\JobTrack.Application\JobTrack.Application.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Persistence.PostgreSql\JobTrack.Persistence.PostgreSql.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Persistence.Sqlite\JobTrack.Persistence.Sqlite.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,87 @@
+@page
+@using JobTrack.Identity
+@model PersonalAccessTokensModel
+@{
+	ViewData["Title"] = "Personal access tokens";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Account</p>
+	<h1>Personal access tokens</h1>
+</div>
+
+@if (User.IsInRole(EmployeeRoleNames.Requester)) {
+	<p><a asp-page="/Requests/Index">&larr; Back to your requests</a></p>
+} else {
+	<p><a asp-page="/Jobs/Browse">&larr; Back to Browse</a></p>
+}
+
+<p>
+	A personal access token authenticates the external HTTP API as you, with your own permissions —
+	nothing more. Store it somewhere secure; it cannot be retrieved again once you leave this page.
+</p>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+@if (Model.IssuedPlaintextToken is not null) {
+	<div class="alert alert-warning" role="alert">
+		<p><strong>Copy this token now — it will not be shown again.</strong></p>
+		<code>@Model.IssuedPlaintextToken</code>
+	</div>
+}
+
+<h2>Create a token</h2>
+<form method="post" asp-page-handler="Issue" class="jt-form-card">
+	<div class="form-group">
+		<label asp-for="Issue.Label"></label>
+		<input asp-for="Issue.Label" class="form-control" placeholder="e.g. laptop CLI"/>
+		<span asp-validation-for="Issue.Label" class="text-danger"></span>
+	</div>
+	<div class="form-group">
+		<label asp-for="Issue.LifetimeDays"></label>
+		<input asp-for="Issue.LifetimeDays" class="form-control"/>
+		<span asp-validation-for="Issue.LifetimeDays" class="text-danger"></span>
+	</div>
+	<button type="submit" class="btn btn-primary">Create</button>
+</form>
+
+<h2>Your tokens</h2>
+@if (Model.Tokens.Count == 0) {
+	<p>You have no personal access tokens.</p>
+} else {
+	<div class="jt-table-scroll">
+		<table class="table">
+			<thead>
+			<tr>
+				<th>Label</th>
+				<th>Created</th>
+				<th>Expires</th>
+				<th>Last used</th>
+				<th>Status</th>
+				<th></th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var token in Model.Tokens) {
+				<tr>
+					<td>@token.Label</td>
+					<td>@token.CreatedAt.ToDateTimeOffset()</td>
+					<td>@token.ExpiresAt.ToDateTimeOffset()</td>
+					<td>@(token.LastUsedAt?.ToDateTimeOffset().ToString() ?? "Never")</td>
+					<td>@(token.RevokedAt is not null ? "Revoked" : "Active")</td>
+					<td>
+						@if (token.RevokedAt is null) {
+							<form method="post" asp-page-handler="Revoke" class="inline-form">
+								<input type="hidden" name="tokenId" value="@token.Id.Value"/>
+								<button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+							</form>
+						}
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

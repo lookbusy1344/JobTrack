@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>JobTrack.Identity</PackageId>
+        <Description>Front-end-phase adapter around ASP.NET Core Identity: production Identity DbContext, stores, password hashing, and security-stamp operations. Composed by JobTrack.Web and JobTrack.AdminCli only; not part of the reusable library.</Description>
+        <!-- Front-end-phase adapter composed by hosts, not a reusable-library public API
+             (impl plan §3 line 95; CLAUDE.md "public API discipline" names Abstractions/Domain/
+             Application/both persistence providers only) -->
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\JobTrack.Abstractions\JobTrack.Abstractions.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="ADR 0022 - independent EF mapping of the credential tables">
+        <PackageReference Include="Microsoft.Extensions.Identity.Core"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+    </ItemGroup>
+
+    <ItemGroup Label="ADR 0037 - TOTP two-factor authentication">
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,79 @@
+@page
+@using System.Globalization
+@model CostReportModel
+@{
+	ViewData["Title"] = "Cost report";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Dynamic costing</p>
+	<h1>Cost report</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<form method="get" asp-page="/Jobs/CostReport" class="jt-form-card">
+	<div class="form-group">
+		<label asp-for="NodeId"></label>
+		<input asp-for="NodeId" class="form-control"/>
+	</div>
+	<div class="form-group">
+		<label asp-for="AsOf">As of (leave blank for now)</label>
+		<input asp-for="AsOf" class="form-control"/>
+	</div>
+	<button type="submit" class="btn btn-primary">View</button>
+</form>
+
+@if (Model.Node is not null) {
+	<h2 class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.Node.Node)</h2>
+
+	<p><a asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">&larr; Back to Browse</a></p>
+
+	@if (Model.Readiness is { } readiness) {
+		<partial name="_Readiness" model="readiness"/>
+	}
+
+	@if (Model.CostDetails is { } costDetails) {
+		<div class="jt-metrics">
+			<div>
+				<span class="jt-metric-label">Exact cost</span>
+				<span class="jt-metric-value jt-amount">@MoneyDisplay.Format(costDetails.ExactCost)</span>
+			</div>
+			<div>
+				<span class="jt-metric-label">Displayed cost</span>
+				<span class="jt-metric-value jt-amount">@MoneyDisplay.Format(costDetails.DisplayedCost)</span>
+				<span class="jt-metric-sub">Rounded to pennies</span>
+			</div>
+		</div>
+
+		<h3>Rate provenance</h3>
+		@if (costDetails.Trace.Count == 0) {
+			<p class="jt-empty">No costed segments.</p>
+		} else {
+			<div class="jt-table-scroll">
+				<table class="table">
+					<thead>
+					<tr>
+						<th>Segment start</th>
+						<th>Segment end</th>
+						<th>Rate per hour</th>
+						<th>Rate source</th>
+						<th>Contribution</th>
+					</tr>
+					</thead>
+					<tbody>
+					@foreach (var entry in costDetails.Trace) {
+						<tr>
+							<td>@entry.Segment.Start</td>
+							<td>@entry.Segment.End</td>
+							<td class="jt-amount">@entry.ResolvedRate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+							<td>@entry.ResolvedRate.Source</td>
+							<td class="jt-amount">@MoneyDisplay.Format(entry.UnroundedContribution)</td>
+						</tr>
+					}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}

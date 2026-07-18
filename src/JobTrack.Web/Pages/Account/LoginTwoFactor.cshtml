@@ -1,0 +1,29 @@
+@page
+@model LoginTwoFactorModel
+@{
+	ViewData["Title"] = "Verification code";
+}
+
+<div class="jt-auth">
+	<span class="jt-auth-emblem" aria-hidden="true">
+		<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+		     stroke-linejoin="round">
+			<path
+				d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+		</svg>
+	</span>
+	<p class="jt-eyebrow">JobTrack console</p>
+	<h1>Verification code</h1>
+	<p class="jt-lede">Enter the 6-digit code from your authenticator app.</p>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	<form method="post" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Input.Code"></label>
+			<input asp-for="Input.Code" class="form-control" inputmode="numeric" autocomplete="one-time-code" autofocus/>
+			<span asp-validation-for="Input.Code" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary w-100">Verify</button>
+	</form>
+</div>

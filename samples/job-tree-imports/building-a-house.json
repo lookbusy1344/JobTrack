@@ -1,0 +1,25 @@
+[
+	{ "id": 1, "parentId": null, "title": "Build a house" },
+
+	{ "id": 2, "parentId": 1, "title": "Groundworks" },
+	{ "id": 3, "parentId": 1, "title": "Structure", "prerequisiteIds": [2] },
+	{ "id": 4, "parentId": 1, "title": "Interior fit-out", "prerequisiteIds": [3] },
+	{ "id": 5, "parentId": 1, "title": "Exterior finishing", "prerequisiteIds": [3, 8] },
+
+	{ "id": 6, "parentId": 2, "title": "Site survey", "open": "6 days", "closed": "5 days" },
+	{ "id": 7, "parentId": 2, "title": "Excavate foundations", "prerequisiteIds": [6], "open": "4 days", "closed": "2 days" },
+	{ "id": 8, "parentId": 2, "title": "Pour foundations", "prerequisiteIds": [7], "open": "1 day" },
+
+	{ "id": 9, "parentId": 3, "title": "Build walls" },
+	{ "id": 10, "parentId": 3, "title": "Install roof", "prerequisiteIds": [9] },
+
+	{ "id": 11, "parentId": 4, "title": "First fix (electrics and plumbing)" },
+	{ "id": 12, "parentId": 4, "title": "Plastering", "prerequisiteIds": [11] },
+	{ "id": 13, "parentId": 4, "title": "Second fix and fittings", "prerequisiteIds": [12] },
+
+	{ "id": 14, "parentId": 5, "title": "Render and cladding", "prerequisiteIds": [3] },
+	{ "id": 15, "parentId": 5, "title": "Guttering and downpipes", "prerequisiteIds": [10, 14] },
+
+	{ "id": 16, "parentId": 13, "title": "Install kitchen" },
+	{ "id": 17, "parentId": 13, "title": "Install bathroom" }
+]

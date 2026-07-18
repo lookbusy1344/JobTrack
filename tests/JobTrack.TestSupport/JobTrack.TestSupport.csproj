@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Referencing xunit (for InstallationBootstrapPortContractTestsBase's shared [Fact]
+             methods, see below) makes vstest auto-detect this as a runnable test assembly even
+             though it has no Microsoft.NET.Test.Sdk/xunit.runner.visualstudio — that attempt fails
+             with a testhost/deps.json error. IsTestProject=false stops dotnet test from trying to
+             execute this assembly directly; the shared base class still runs correctly when
+             inherited by concrete test classes in projects that do have the full test SDK. -->
+        <IsTestProject>false</IsTestProject>
+        <!-- Test-support helper library, not test-method code itself for the most part, but built
+             for test convenience the same way ContractTests/PerformanceTests are: ADO.NET
+             fixture/generator code chains .AddWithValue(...)/.Add(...) calls whose return value is
+             never used, and explicit discards there add noise without a corresponding reader
+             benefit. CA1707 covers the one exception: InstallationBootstrapPortContractTestsBase
+             hosts shared [Fact] methods (underscored names) reused by both persistence-provider
+             test projects, since they can't share a test project the way Database.ContractTests'
+             single-project base-plus-subclasses pattern does (each provider's test project only
+             references its own provider). -->
+        <NoWarn>$(NoWarn);CA1707;IDE0058</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AwesomeAssertions"/>
+        <PackageReference Include="Microsoft.Data.Sqlite"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational"/>
+        <PackageReference Include="Npgsql"/>
+        <PackageReference Include="xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\JobTrack.Application\JobTrack.Application.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Database\JobTrack.Database.csproj"/>
+    </ItemGroup>
+
+</Project>

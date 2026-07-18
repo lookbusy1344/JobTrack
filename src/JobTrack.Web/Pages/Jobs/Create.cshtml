@@ -1,0 +1,65 @@
+@page
+@using JobTrack.Abstractions
+@model CreateModel
+@{
+	ViewData["Title"] = "Create child";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">New job node</p>
+		<h1>Create child</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	@if (Model.Parent is not null) {
+		<p class="jt-context"><span>Parent</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.Parent.Node)</strong></p>
+
+		@if (Model.Parent.Node.HasLeafWork) {
+			<p class="jt-empty">This parent already has work attached.</p>
+		} else {
+			<form method="post" class="jt-form-card">
+				<input type="hidden" asp-for="ParentId"/>
+				<div class="form-group">
+					<label asp-for="Input.Description"></label>
+					<input asp-for="Input.Description" class="form-control"/>
+					<span asp-validation-for="Input.Description" class="text-danger"></span>
+				</div>
+				<div class="form-group">
+					<label asp-for="Input.WriteUp"></label>
+					<textarea asp-for="Input.WriteUp" class="form-control"></textarea>
+				</div>
+				<div class="form-group">
+					<label asp-for="Input.OwnerUserId"></label>
+					<select asp-for="Input.OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
+					<span asp-validation-for="Input.OwnerUserId" class="text-danger"></span>
+				</div>
+				<div class="form-group">
+					<label asp-for="Input.Priority"></label>
+					<select asp-for="Input.Priority" class="form-control" asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
+				</div>
+				<div class="form-group">
+					<label asp-for="Input.ExpectedDurationHours"></label>
+					<input asp-for="Input.ExpectedDurationHours" class="form-control"/>
+				</div>
+				<div class="form-group">
+					<label asp-for="Input.ExpectedCost"></label>
+					<input asp-for="Input.ExpectedCost" class="form-control"/>
+				</div>
+				<div class="form-group">
+					<label asp-for="Input.NeededStart"></label>
+					<input asp-for="Input.NeededStart" class="form-control"/>
+				</div>
+				<div class="form-group">
+					<label asp-for="Input.NeededFinish"></label>
+					<input asp-for="Input.NeededFinish" class="form-control"/>
+				</div>
+				<div class="jt-toolbar jt-toolbar--flush">
+					<button type="submit" class="btn btn-primary">Save</button>
+					<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.ParentId">Cancel</a>
+				</div>
+			</form>
+		}
+	}
+</div>

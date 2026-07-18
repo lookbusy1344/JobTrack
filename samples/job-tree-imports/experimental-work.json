@@ -1,0 +1,7 @@
+[
+	{ "id": 1, "parentId": null, "title": "Experimental work" },
+	{ "id": 2, "parentId": 1, "title": "Install whole network" },
+	{ "id": 3, "parentId": 2, "title": "Buy cables", "open": "1 day" },
+	{ "id": 4, "parentId": 2, "title": "Buy switches" },
+	{ "id": 5, "parentId": 2, "title": "Install cables and switches", "prerequisiteIds": [3, 4] }
+]

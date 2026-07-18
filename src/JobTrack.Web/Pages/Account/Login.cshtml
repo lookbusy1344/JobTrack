@@ -1,0 +1,34 @@
+@page
+@model LoginModel
+@{
+	ViewData["Title"] = "Sign in";
+}
+
+<div class="jt-auth">
+	<span class="jt-auth-emblem" aria-hidden="true">
+		<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+		     stroke-linejoin="round">
+			<path
+				d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+		</svg>
+	</span>
+	<p class="jt-eyebrow">JobTrack console</p>
+	<h1>Sign in</h1>
+	<p class="jt-lede">Access your jobs, schedule, and cost reports.</p>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	<form method="post" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Input.UserName"></label>
+			<input asp-for="Input.UserName" class="form-control" autocomplete="username"/>
+			<span asp-validation-for="Input.UserName" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="Input.Password"></label>
+			<input asp-for="Input.Password" type="password" class="form-control" autocomplete="current-password"/>
+			<span asp-validation-for="Input.Password" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary w-100">Sign in</button>
+	</form>
+</div>

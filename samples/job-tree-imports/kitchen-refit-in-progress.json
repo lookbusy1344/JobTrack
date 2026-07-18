@@ -1,0 +1,12 @@
+[
+	{ "id": 1, "parentId": null, "title": "Kitchen refit" },
+	{ "id": 2, "parentId": 1, "title": "Strip out old units", "open": "12 days", "closed": "10 days" },
+	{ "id": 3, "parentId": 1, "title": "First-fix plumbing", "prerequisiteIds": [2], "open": "9 days", "closed": "8 days" },
+	{ "id": 4, "parentId": 1, "title": "First-fix electrics", "prerequisiteIds": [2], "open": "9 days", "closed": "7 days" },
+	{ "id": 5, "parentId": 1, "title": "Plaster walls", "prerequisiteIds": [3, 4], "open": "6 days", "closed": "5 days" },
+	{ "id": 6, "parentId": 1, "title": "Hang wall units", "prerequisiteIds": [5], "open": "2 days" },
+	{ "id": 7, "parentId": 1, "title": "Reclaim the old worktop", "open": "11 days", "closed": "10 days", "outcome": "unsuccessful" },
+	{ "id": 8, "parentId": 1, "title": "Fit worktop", "start": "2026-07-16T08:30:00Z", "end": "2026-07-16T16:00:00Z" },
+	{ "id": 9, "parentId": 1, "title": "Tile splashback", "prerequisiteIds": [8] },
+	{ "id": 10, "parentId": 1, "title": "Final sign-off", "prerequisiteIds": [6, 9] }
+]

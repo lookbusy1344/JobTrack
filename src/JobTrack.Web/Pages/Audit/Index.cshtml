@@ -1,0 +1,87 @@
+@page
+@model IndexModel
+@{
+	ViewData["Title"] = "Audit history";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">History</p>
+	<h1>Audit history</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<form method="get" asp-page="/Audit/Index" class="jt-form-card">
+	<div class="form-group">
+		<label asp-for="ActorId"></label>
+		<input asp-for="ActorId" class="form-control"/>
+	</div>
+	<div class="form-group">
+		<label asp-for="EntityType"></label>
+		<input asp-for="EntityType" class="form-control"/>
+	</div>
+	<div class="form-group">
+		<label asp-for="EntityId"></label>
+		<input asp-for="EntityId" class="form-control"/>
+	</div>
+	<div class="form-group">
+		<label asp-for="CorrelationId"></label>
+		<input asp-for="CorrelationId" class="form-control"/>
+	</div>
+	<div class="form-group">
+		<label asp-for="From"></label>
+		<input asp-for="From" class="form-control"/>
+	</div>
+	<div class="form-group">
+		<label asp-for="To"></label>
+		<input asp-for="To" class="form-control"/>
+	</div>
+	<button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+@if (Model.Events.Count == 0) {
+	<p class="jt-empty">No matching audit events.</p>
+} else {
+	<div class="jt-table-scroll">
+		<table class="table">
+			<thead>
+			<tr>
+				<th>Occurred at</th>
+				<th>Actor</th>
+				<th>Operation</th>
+				<th>Entity type</th>
+				<th>Entity id</th>
+				<th>Correlation id</th>
+				<th>Reason</th>
+				<th>Detail</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var auditEvent in Model.Events) {
+				<tr>
+					<td>@auditEvent.OccurredAt</td>
+					<td class="jt-id">@auditEvent.ActorId.Value</td>
+					<td>@auditEvent.Operation</td>
+					<td>@auditEvent.EntityType</td>
+					<td class="jt-id">@auditEvent.EntityId</td>
+					<td class="jt-id">@auditEvent.CorrelationId</td>
+					<td>@auditEvent.Reason</td>
+					<td>
+						@if (auditEvent.IsRedacted) {
+							<span>redacted</span>
+						} else {
+							@if (auditEvent.BeforeData is { } before) {
+								<p>Before: @string.Join(", ", before.Select(field => $"{field.Key}={field.Value}"))</p>
+							}
+
+							@if (auditEvent.AfterData is { } after) {
+								<p>After: @string.Join(", ", after.Select(field => $"{field.Key}={field.Value}"))</p>
+							}
+						}
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

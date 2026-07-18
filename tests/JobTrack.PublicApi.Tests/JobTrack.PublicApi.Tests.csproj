@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Test method names use underscores by convention (Method_does_thing); CA1707 covers
+             that. IDE0058 is suppressed only here: AwesomeAssertions .Should()... chains are
+             expression statements whose value is intentionally discarded. Source projects do not
+             suppress IDE0058 — they use explicit discards instead. -->
+        <NoWarn>$(NoWarn);CA1707;IDE0058</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AwesomeAssertions"/>
+        <PackageReference Include="coverlet.collector">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+        <PackageReference Include="xunit"/>
+        <PackageReference Include="xunit.runner.visualstudio">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\JobTrack.Abstractions\JobTrack.Abstractions.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Domain\JobTrack.Domain.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Application\JobTrack.Application.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Database\JobTrack.Database.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Persistence.PostgreSql\JobTrack.Persistence.PostgreSql.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Persistence.Sqlite\JobTrack.Persistence.Sqlite.csproj"/>
+        <ProjectReference Include="..\JobTrack.TestSupport\JobTrack.TestSupport.csproj"/>
+    </ItemGroup>
+
+</Project>

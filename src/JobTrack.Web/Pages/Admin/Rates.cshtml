@@ -1,0 +1,146 @@
+@page
+@using System.Globalization
+@model RatesModel
+@{
+	ViewData["Title"] = "Employee rates";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Labour rates</p>
+	<h1>Rates for @Model.DisplayedUserName</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+<form method="get" asp-page="/Admin/Rates" class="jt-form-card">
+	<div class="form-group">
+		<label asp-for="UserId">Viewing rates for</label>
+		<select asp-for="UserId" class="form-control" asp-items="Model.UserOptions"></select>
+	</div>
+	<button type="submit" class="btn btn-secondary">View</button>
+</form>
+
+@if (Model.Snapshot is not null) {
+	<h2>User cost rates</h2>
+	@if (Model.Snapshot.UserCostRates.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<div class="jt-table-scroll">
+			<table class="table">
+				<thead>
+				<tr>
+					<th>Amount per hour</th>
+					<th>Effective start</th>
+					<th>Effective end</th>
+					@if (Model.CanManageRates) {
+						<th></th>
+					}
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var rate in Model.Snapshot.UserCostRates) {
+					<tr>
+						<td>@rate.Rate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+						<td>@rate.Rate.EffectiveStart</td>
+						<td>@(rate.Rate.EffectiveEnd?.ToString() ?? "current")</td>
+						@if (Model.CanManageRates) {
+							<td>
+								<a asp-page="/Admin/CorrectUserCostRate" asp-route-userId="@Model.UserId"
+								   asp-route-rateId="@rate.Id.Value">Correct</a>
+							</td>
+						}
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+
+	<h2>Node rate overrides</h2>
+	@if (Model.Snapshot.NodeRateOverrides.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<div class="jt-table-scroll">
+			<table class="table">
+				<thead>
+				<tr>
+					<th>Node</th>
+					<th>Amount per hour</th>
+					<th>Effective start</th>
+					<th>Effective end</th>
+					@if (Model.CanManageRates) {
+						<th></th>
+					}
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var overrideResult in Model.Snapshot.NodeRateOverrides) {
+					<tr>
+						<td>@overrideResult.Override.NodeId.Value</td>
+						<td>@overrideResult.Override.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+						<td>@overrideResult.Override.EffectiveStart</td>
+						<td>@(overrideResult.Override.EffectiveEnd?.ToString() ?? "current")</td>
+						@if (Model.CanManageRates) {
+							<td>
+								<a asp-page="/Admin/CorrectNodeRateOverride" asp-route-userId="@Model.UserId"
+								   asp-route-overrideId="@overrideResult.Id.Value">Correct</a>
+							</td>
+						}
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+} else if (!Model.CanViewRates) {
+	<p class="jt-notice">Current rates are hidden for your role.</p>
+}
+
+@if (Model.CanManageRates) {
+	<h2>Add a user cost rate</h2>
+	<form method="post" asp-page-handler="AddUserCostRate" class="jt-form-card">
+		<input type="hidden" asp-for="UserId"/>
+		<div class="form-group">
+			<label asp-for="UserCostRateInput.AmountPerHour"></label>
+			<input asp-for="UserCostRateInput.AmountPerHour" class="form-control"/>
+			<span asp-validation-for="UserCostRateInput.AmountPerHour" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="UserCostRateInput.EffectiveStart"></label>
+			<input asp-for="UserCostRateInput.EffectiveStart" class="form-control"/>
+			<span asp-validation-for="UserCostRateInput.EffectiveStart" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="UserCostRateInput.EffectiveEnd">Effective end (leave blank if still current)</label>
+			<input asp-for="UserCostRateInput.EffectiveEnd" class="form-control"/>
+		</div>
+		<button type="submit" class="btn btn-primary">Add user cost rate</button>
+	</form>
+
+	<h2>Add a node rate override</h2>
+	<form method="post" asp-page-handler="AddNodeRateOverride" class="jt-form-card">
+		<input type="hidden" asp-for="UserId"/>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.NodeId"></label>
+			<input asp-for="NodeRateOverrideInput.NodeId" class="form-control"/>
+			<span asp-validation-for="NodeRateOverrideInput.NodeId" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.AmountPerHour"></label>
+			<input asp-for="NodeRateOverrideInput.AmountPerHour" class="form-control"/>
+			<span asp-validation-for="NodeRateOverrideInput.AmountPerHour" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.EffectiveStart"></label>
+			<input asp-for="NodeRateOverrideInput.EffectiveStart" class="form-control"/>
+			<span asp-validation-for="NodeRateOverrideInput.EffectiveStart" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.EffectiveEnd">Effective end (leave blank if still current)</label>
+			<input asp-for="NodeRateOverrideInput.EffectiveEnd" class="form-control"/>
+		</div>
+		<button type="submit" class="btn btn-primary">Add node rate override</button>
+	</form>
+}

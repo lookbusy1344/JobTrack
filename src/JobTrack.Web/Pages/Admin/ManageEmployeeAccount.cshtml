@@ -1,0 +1,116 @@
+@page
+@model ManageEmployeeAccountModel
+@{
+	ViewData["Title"] = "Manage employee account";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">Administration</p>
+		<h1>Manage employee account</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+	<h2>Create employee</h2>
+	<form method="post" asp-page-handler="CreateEmployee" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="CreateEmployee.DisplayName"></label>
+			<input asp-for="CreateEmployee.DisplayName" class="form-control"/>
+			<span asp-validation-for="CreateEmployee.DisplayName" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="CreateEmployee.IanaTimeZone"></label>
+			<input asp-for="CreateEmployee.IanaTimeZone" class="form-control"/>
+			<span asp-validation-for="CreateEmployee.IanaTimeZone" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="CreateEmployee.DefaultHourlyRate"></label>
+			<input asp-for="CreateEmployee.DefaultHourlyRate" type="number" step="0.01" min="0.01" class="form-control"/>
+			<span asp-validation-for="CreateEmployee.DefaultHourlyRate" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="CreateEmployee.UserName"></label>
+			<input asp-for="CreateEmployee.UserName" class="form-control"/>
+			<span asp-validation-for="CreateEmployee.UserName" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="CreateEmployee.Password"></label>
+			<input asp-for="CreateEmployee.Password" type="password" class="form-control"/>
+			<span asp-validation-for="CreateEmployee.Password" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="CreateEmployee.Role"></label>
+			<select asp-for="CreateEmployee.Role" class="form-control" asp-items="Model.EmployeeRoleOptions"></select>
+			<span asp-validation-for="CreateEmployee.Role" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Create</button>
+	</form>
+
+	<h2>Enable or disable account</h2>
+	<form method="post" asp-page-handler="SetEnabled" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="SetEnabled.TargetUserId"></label>
+			<select asp-for="SetEnabled.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<span asp-validation-for="SetEnabled.TargetUserId" class="text-danger"></span>
+		</div>
+		<div class="form-group form-check">
+			<input asp-for="SetEnabled.Enabled" class="form-check-input"/>
+			<label asp-for="SetEnabled.Enabled" class="form-check-label"></label>
+		</div>
+		<button type="submit" class="btn btn-primary">Save</button>
+	</form>
+
+	<h2>Set default hourly rate</h2>
+	<form method="post" asp-page-handler="SetDefaultHourlyRate" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="SetDefaultHourlyRate.TargetUserId"></label>
+			<select asp-for="SetDefaultHourlyRate.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<span asp-validation-for="SetDefaultHourlyRate.TargetUserId" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="SetDefaultHourlyRate.DefaultHourlyRate"></label>
+			<input asp-for="SetDefaultHourlyRate.DefaultHourlyRate" type="number" step="0.01" min="0.01" class="form-control"/>
+			<span asp-validation-for="SetDefaultHourlyRate.DefaultHourlyRate" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Save</button>
+	</form>
+
+	<h2>Reset password</h2>
+	<form method="post" asp-page-handler="ResetPassword" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="ResetPassword.TargetUserId"></label>
+			<select asp-for="ResetPassword.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<span asp-validation-for="ResetPassword.TargetUserId" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="ResetPassword.NewPassword"></label>
+			<input asp-for="ResetPassword.NewPassword" type="password" class="form-control"/>
+			<span asp-validation-for="ResetPassword.NewPassword" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Reset</button>
+	</form>
+
+	<h2>Reset two-factor authentication</h2>
+	<p>Use this if an employee has lost access to their authenticator app.</p>
+	<form method="post" asp-page-handler="ResetTwoFactor" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="ResetTwoFactor.TargetUserId"></label>
+			<select asp-for="ResetTwoFactor.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<span asp-validation-for="ResetTwoFactor.TargetUserId" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-outline-danger">Reset two-factor</button>
+	</form>
+
+	<h2>Revoke personal access tokens</h2>
+	<form method="post" asp-page-handler="RevokeAllTokens" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="RevokeAllTokens.TargetUserId"></label>
+			<select asp-for="RevokeAllTokens.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<span asp-validation-for="RevokeAllTokens.TargetUserId" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-outline-danger">Revoke all tokens</button>
+	</form>
+</div>

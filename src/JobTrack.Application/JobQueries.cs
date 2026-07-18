@@ -1,0 +1,605 @@
+namespace JobTrack.Application;
+
+using Abstractions;
+using Domain.Authorization;
+using Domain.Hierarchy;
+using NodaTime;
+using Ports;
+
+/// <summary>
+///     Implements read-only queries (plan §7.3 steps 2 and 5; plan §8.5 slice 2) by loading
+///     authoritative data through <see cref="IEmployeeQueryPort" />/<see cref="IReadinessQueryPort" />/
+///     <see cref="IJobBrowseQueryPort" />. Employee queries apply <see cref="EmployeeAccessPolicy" />
+///     before returning; readiness and job-tree browsing/search have no such gate (see
+///     <see cref="GetReadinessRequest" />/<see cref="GetJobNodeRequest" />) — readiness calls the pure
+///     <see cref="ReadinessCalculator" /> directly over the port's materialized inputs, while browsing
+///     queries pass straight through to <see cref="IJobBrowseQueryPort" />.
+/// </summary>
+public sealed class JobQueries : IJobQueries
+{
+	// One employee's rate/schedule history is not offset/limit-paginated like a flat collection --
+	// both snapshots are always returned whole so a caller sees a complete, self-consistent picture
+	// of effective-dated entries -- so an oversized snapshot is a hard validation failure (400)
+	// rather than a silently truncated array (remediation plan §3.1).
+	private const int MaxRateEntryCount = 2_000;
+	private const int MaxScheduleEntryCount = 2_000;
+	private readonly IAwaitingProgressQueryPort _awaitingProgressQueryPort;
+	private readonly IJobBrowseQueryPort _browseQueryPort;
+	private readonly ICostQueries _costQueries;
+
+	private readonly IEmployeeQueryPort _employeeQueryPort;
+	private readonly ILeafWorkQueryPort _leafWorkQueryPort;
+	private readonly IPrerequisiteQueryPort _prerequisiteQueryPort;
+	private readonly IRateQueryPort _rateQueryPort;
+	private readonly IReadinessQueryPort _readinessQueryPort;
+	private readonly IScheduleQueryPort _scheduleQueryPort;
+	private readonly IWorkSessionQueryPort _workSessionQueryPort;
+
+	/// <summary>Creates a <see cref="JobQueries" /> over the given ports.</summary>
+	public JobQueries(
+		IEmployeeQueryPort employeeQueryPort, IReadinessQueryPort readinessQueryPort,
+		IJobBrowseQueryPort browseQueryPort, IAwaitingProgressQueryPort awaitingProgressQueryPort,
+		IWorkSessionQueryPort workSessionQueryPort,
+		ILeafWorkQueryPort leafWorkQueryPort, IPrerequisiteQueryPort prerequisiteQueryPort,
+		IScheduleQueryPort scheduleQueryPort, IRateQueryPort rateQueryPort, ICostQueries costQueries)
+	{
+		ArgumentNullException.ThrowIfNull(employeeQueryPort);
+		ArgumentNullException.ThrowIfNull(readinessQueryPort);
+		ArgumentNullException.ThrowIfNull(browseQueryPort);
+		ArgumentNullException.ThrowIfNull(awaitingProgressQueryPort);
+		ArgumentNullException.ThrowIfNull(workSessionQueryPort);
+		ArgumentNullException.ThrowIfNull(leafWorkQueryPort);
+		ArgumentNullException.ThrowIfNull(prerequisiteQueryPort);
+		ArgumentNullException.ThrowIfNull(scheduleQueryPort);
+		ArgumentNullException.ThrowIfNull(rateQueryPort);
+		ArgumentNullException.ThrowIfNull(costQueries);
+
+		_employeeQueryPort = employeeQueryPort;
+		_readinessQueryPort = readinessQueryPort;
+		_browseQueryPort = browseQueryPort;
+		_awaitingProgressQueryPort = awaitingProgressQueryPort;
+		_workSessionQueryPort = workSessionQueryPort;
+		_leafWorkQueryPort = leafWorkQueryPort;
+		_prerequisiteQueryPort = prerequisiteQueryPort;
+		_scheduleQueryPort = scheduleQueryPort;
+		_rateQueryPort = rateQueryPort;
+		_costQueries = costQueries;
+	}
+
+	/// <inheritdoc />
+	public Task<EmployeeProfileResult> GetEmployeeProfileAsync(
+		GetEmployeeProfileRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetEmployeeProfileCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<EmployeeDirectoryEntry>> GetEmployeeDirectoryAsync(
+		GetEmployeeDirectoryRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetEmployeeDirectoryCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<EmployeeDirectoryEntry>> GetAllEmployeesAsync(
+		GetAllEmployeesRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetAllEmployeesCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<AccountStateResult> GetAccountStateAsync(
+		GetAccountStateRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetAccountStateCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<ReadinessResult> GetReadinessAsync(GetReadinessRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetReadinessCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<JobNodeDetailResult> GetJobNodeAsync(GetJobNodeRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetJobNodeCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<JobNodeSummaryResult>> GetJobChildrenAsync(
+		GetJobChildrenRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ValidatePaging(request.Offset, request.Limit);
+
+		return GetJobChildrenCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<JobNodeSummaryResult>> SearchJobNodesAsync(
+		SearchJobNodesRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ArgumentException.ThrowIfNullOrWhiteSpace(request.SearchText);
+		ValidatePaging(request.Offset, request.Limit);
+
+		return SearchJobNodesCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<JobNodeSummaryResult>> GetJobSummariesAsync(
+		GetJobSummariesRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetJobSummariesCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<AwaitingProgressEntry>> GetAwaitingProgressAsync(
+		GetAwaitingProgressRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetAwaitingProgressCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<WorkSessionResult>> GetLeafSessionsAsync(
+		GetLeafSessionsRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ValidatePaging(request.Offset, request.Limit);
+
+		return GetLeafSessionsCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<WorkSessionResult>> GetActiveSessionsAsync(
+		GetActiveSessionsRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetActiveSessionsCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<LeafWorkResult> GetLeafWorkAsync(GetLeafWorkRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetLeafWorkCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesAsync(
+		GetPrerequisitesRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ValidatePaging(request.Offset, request.Limit);
+
+		return GetPrerequisitesCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<JobSubtreeResult> GetJobSubtreeAsync(GetJobSubtreeRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetJobSubtreeCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<ScheduleSnapshotResult> GetScheduleAsync(GetScheduleRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetScheduleCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<RateSnapshotResult> GetRatesAsync(GetRatesRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetRatesCoreAsync(request, cancellationToken);
+	}
+
+	/// <summary>
+	///     Validates the bounded-collection request shape shared by every paginated query (remediation
+	///     plan §3.1) -- a negative offset or a non-positive explicit limit is a caller usage error, not
+	///     a valid "return nothing" request.
+	/// </summary>
+	private static void ValidatePaging(int offset, int? limit)
+	{
+		if (offset < 0) {
+			throw new ArgumentOutOfRangeException(nameof(offset), offset, "Offset must be non-negative.");
+		}
+
+		if (limit is { } value && value <= 0) {
+			throw new ArgumentOutOfRangeException(nameof(limit), value, "Limit must be positive when set.");
+		}
+	}
+
+	private Task<EmployeeProfileResult> GetEmployeeProfileCoreAsync(GetEmployeeProfileRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-employee-profile", request.Context, JobTrackOperation.WithUserId(request.TargetUserId),
+			async () => {
+				var actorRoles = await _employeeQueryPort
+					.GetActorRolesAsync(request.Context.Actor, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (!EmployeeAccessPolicy.CanViewEmployee(request.Context.Actor, request.TargetUserId, actorRoles)) {
+					throw new AuthorizationDeniedException(
+						$"Actor {request.Context.Actor} may not view employee {request.TargetUserId}'s profile.");
+				}
+
+				var result = await _employeeQueryPort
+					.GetEmployeeProfileAsync(request.Context.Actor, request.TargetUserId, cancellationToken)
+					.ConfigureAwait(false);
+
+				return result.Profile;
+			});
+
+	private Task<EquatableArray<EmployeeDirectoryEntry>> GetEmployeeDirectoryCoreAsync(
+		GetEmployeeDirectoryRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-employee-directory", request.Context, null,
+			() => _employeeQueryPort.GetEmployeeDirectoryAsync(cancellationToken));
+
+	private Task<EquatableArray<EmployeeDirectoryEntry>> GetAllEmployeesCoreAsync(
+		GetAllEmployeesRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-all-employees", request.Context, null,
+			() => _employeeQueryPort.GetAllEmployeesAsync(cancellationToken));
+
+	private Task<AccountStateResult> GetAccountStateCoreAsync(GetAccountStateRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-account-state", request.Context, JobTrackOperation.WithUserId(request.TargetUserId),
+			async () => {
+				var actorRoles = await _employeeQueryPort
+					.GetActorRolesAsync(request.Context.Actor, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (!EmployeeAccessPolicy.CanViewEmployee(request.Context.Actor, request.TargetUserId, actorRoles)) {
+					throw new AuthorizationDeniedException(
+						$"Actor {request.Context.Actor} may not view employee {request.TargetUserId}'s account state.");
+				}
+
+				var result = await _employeeQueryPort
+					.GetAccountStateAsync(request.Context.Actor, request.TargetUserId, cancellationToken)
+					.ConfigureAwait(false);
+
+				return result.AccountState;
+			});
+
+	private Task<ReadinessResult> GetReadinessCoreAsync(GetReadinessRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-readiness", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
+			async () => {
+				var inputs = await _readinessQueryPort.GetReadinessInputsAsync(request.NodeId, cancellationToken).ConfigureAwait(false);
+
+				return ReadinessCalculator.IsReady(request.NodeId, inputs.NodesById, inputs.Prerequisites);
+			});
+
+	private Task<JobNodeDetailResult> GetJobNodeCoreAsync(GetJobNodeRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-job-node", request.Context, request.NodeId is { } id ? JobTrackOperation.WithNodeId(id) : null,
+			() => _browseQueryPort.GetNodeAsync(request.NodeId, cancellationToken));
+
+	private Task<EquatableArray<JobNodeSummaryResult>> GetJobChildrenCoreAsync(GetJobChildrenRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-job-children", request.Context, JobTrackOperation.WithNodeId(request.ParentId),
+			async () => {
+				var children = await _browseQueryPort.GetChildrenAsync(
+						request.ParentId, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
+					.ConfigureAwait(false);
+				return await EnrichSummariesWithCostAsync(request.Context, children, cancellationToken).ConfigureAwait(false);
+			});
+
+	private Task<EquatableArray<JobNodeSummaryResult>> SearchJobNodesCoreAsync(SearchJobNodesRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.search-job-nodes", request.Context, null,
+			async () => {
+				var matches = await _browseQueryPort.SearchJobNodesAsync(
+						request.SearchText, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
+					.ConfigureAwait(false);
+				return await EnrichSummariesWithCostAsync(request.Context, matches, cancellationToken).ConfigureAwait(false);
+			});
+
+	private Task<EquatableArray<JobNodeSummaryResult>>
+		GetJobSummariesCoreAsync(GetJobSummariesRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-job-summaries", request.Context, null,
+			async () => {
+				var summaries = await _browseQueryPort.GetSummariesByIdsAsync(request.NodeIds, cancellationToken).ConfigureAwait(false);
+				return await EnrichSummariesWithCostAsync(request.Context, summaries, cancellationToken).ConfigureAwait(false);
+			});
+
+	private Task<JobSubtreeResult> GetJobSubtreeCoreAsync(GetJobSubtreeRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-job-subtree", request.Context, JobTrackOperation.WithNodeId(request.RootId),
+			async () => {
+				var maxDepth = request.MaxDepth ?? JobSubtreeLimits.DefaultMaxDepth;
+				var rows = await _browseQueryPort.GetSubtreeAsync(
+					request.RootId, maxDepth, request.Ownership, request.ArchiveFilter, cancellationToken).ConfigureAwait(false);
+
+				var spans = JobSubtreeOrdinals.Compute(rows, request.RootId);
+
+				Money? rootTotal = null;
+				string? tzdbVersion = null;
+				EquatableDictionary<JobNodeId, Money>? displayedCosts = null;
+				try {
+					var totals = await _costQueries.GetHierarchyTotalsAsync(
+						new() { Context = request.Context, NodeId = request.RootId, AsOf = request.AsOf },
+						cancellationToken).ConfigureAwait(false);
+					rootTotal = totals.DisplayedCosts.GetValueOrDefault(request.RootId);
+					tzdbVersion = totals.TzdbVersion;
+					displayedCosts = totals.DisplayedCosts;
+				}
+				catch (AuthorizationDeniedException) {
+					// ADR 0039 decision 4 / ADR 0040: cost is an optional field on an otherwise
+					// universally browsable subtree, never a whole-request denial.
+				}
+				catch (ArgumentOutOfRangeException) {
+					// The structure fetch is depth/breadth-bounded, while the reused cost hierarchy
+					// query deliberately totals the whole subtree and can reject pathological size.
+					// Treat that the same as unavailable cost: omit the optional fields, keep Browse usable.
+				}
+
+				// ADR 0042: CanView's ownership carve-out admits the whole subtree at once, so each
+				// node's *individual* cost is filtered again here — a branch roll-up is an aggregate
+				// and stays, but another worker's leaf cost would expose their rate and is dropped.
+				var costRoles = displayedCosts is null
+					? []
+					: await GetCostFilterRolesAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
+				Money? CostFor(bool hasChildren, AppUserId? ownerUserId, JobNodeId nodeId) =>
+					CostAccessPolicy.CanViewNodeCost(costRoles, hasChildren, ownerUserId, request.Context.Actor)
+						? displayedCosts?.GetValueOrDefault(nodeId)
+						: null;
+
+				// ADR 0043: one materialization of the readiness facts, then the pure calculator per
+				// row -- the same inputs a single-node readiness check already loads, so this is one
+				// extra round trip whatever the row count, and never one per row.
+				var readinessInputs = await _readinessQueryPort
+					.GetReadinessInputsAsync(request.RootId, cancellationToken).ConfigureAwait(false);
+
+				var nodes = rows.OrderBy(row => spans[row.Id].Lft).Select(row => new JobSubtreeNodeResult {
+					Id = row.Id,
+					ParentId = row.ParentId,
+					Kind = row.Kind,
+					Depth = row.Depth,
+					Description = row.Description,
+					OwnerUserId = row.OwnerUserId,
+					Priority = row.Priority,
+					ArchivedAt = row.ArchivedAt,
+					HasChildren = row.HasChildren,
+					HasLeafWork = row.HasLeafWork,
+					IsReady = ReadinessCalculator
+						.IsReady(row.Id, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
+					HasUnexpandedChildren = row.HasUnexpandedChildren,
+					MatchesFilter = row.MatchesFilter,
+					SubtreeLft = spans[row.Id].Lft,
+					SubtreeRgt = spans[row.Id].Rgt,
+					Cost = CostFor(row.HasChildren, row.OwnerUserId, row.Id),
+				});
+
+				// The root's own total obeys the same rule: browsing a single leaf owned by someone
+				// else must not reveal through RootTotal what the node list withholds.
+				var rootRow = rows.FirstOrDefault(row => row.Id == request.RootId);
+				var displayedRootTotal = rootRow is null
+					? rootTotal
+					: CostFor(rootRow.HasChildren, rootRow.OwnerUserId, rootRow.Id);
+
+				return new JobSubtreeResult {
+					RootId = request.RootId,
+					RootTotal = displayedRootTotal,
+					TzdbVersion = tzdbVersion,
+					Nodes = EquatableArray.CopyOf(nodes),
+				};
+			});
+
+	private Task<EquatableArray<AwaitingProgressEntry>> GetAwaitingProgressCoreAsync(GetAwaitingProgressRequest request,
+		CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-awaiting-progress", request.Context, null,
+			async () => {
+				var inputs = await _awaitingProgressQueryPort.GetAwaitingProgressInputsAsync(cancellationToken).ConfigureAwait(false);
+
+				if (request.SubtreeRootId is { } subtreeRootId && !inputs.NodesById.ContainsKey(subtreeRootId)) {
+					throw new EntityNotFoundException($"Job node {subtreeRootId} does not exist.");
+				}
+
+				var entries = AwaitingProgressCalculator.GetAwaitingProgress(
+					inputs.NodesById, inputs.FactsById, inputs.Prerequisites, request.Ownership, request.SubtreeRootId);
+				return await EnrichAwaitingProgressWithCostAsync(request.Context, entries, cancellationToken).ConfigureAwait(false);
+			});
+
+	private async Task<EquatableArray<JobNodeSummaryResult>> EnrichSummariesWithCostAsync(
+		CommandContext context, EquatableArray<JobNodeSummaryResult> summaries, CancellationToken cancellationToken)
+	{
+		if (summaries.Count == 0) {
+			return summaries;
+		}
+
+		var asOf = SystemClock.Instance.GetCurrentInstant();
+		// ADR 0042: another worker's individual leaf cost stays hidden even where the actor is
+		// admitted to the node; a branch's roll-up is an aggregate and remains visible.
+		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
+		var enriched = await Task.WhenAll(summaries.Select(async summary => summary with {
+			Cost = CostAccessPolicy.CanViewNodeCost(costRoles, summary.HasChildren, summary.OwnerUserId, context.Actor)
+				? await TryGetDisplayedCostAsync(context, summary.Id, asOf, cancellationToken).ConfigureAwait(false)
+				: null,
+		})).ConfigureAwait(false);
+
+		return [.. enriched];
+	}
+
+	private async Task<EquatableArray<AwaitingProgressEntry>> EnrichAwaitingProgressWithCostAsync(
+		CommandContext context, EquatableArray<AwaitingProgressEntry> entries, CancellationToken cancellationToken)
+	{
+		if (entries.Count == 0) {
+			return entries;
+		}
+
+		var asOf = SystemClock.Instance.GetCurrentInstant();
+		// Awaiting-progress entries are leaves by construction, so the branch-aggregate relief in
+		// CanViewNodeCost never applies here: it reduces to "your own or unassigned" (ADR 0042).
+		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
+		var enriched = await Task.WhenAll(entries.Select(async entry => entry with {
+			Cost = CostAccessPolicy.CanViewNodeCost(costRoles, false, entry.OwnerUserId, context.Actor)
+				? await TryGetDisplayedCostAsync(context, entry.Id, asOf, cancellationToken).ConfigureAwait(false)
+				: null,
+		})).ConfigureAwait(false);
+
+		return [.. enriched];
+	}
+
+	/// <summary>
+	///     The actor's roles for the per-node cost filter (ADR 0042). Cost is an optional field on an
+	///     otherwise universally browsable listing, never a whole-request denial (ADR 0039 decision 4), so
+	///     an actor whose roles cannot be resolved yields no roles — the most restrictive answer — rather
+	///     than failing the listing outright.
+	/// </summary>
+	private async Task<EquatableArray<EmployeeRole>> GetCostFilterRolesAsync(AppUserId actor, CancellationToken cancellationToken)
+	{
+		try {
+			return await _employeeQueryPort.GetActorRolesAsync(actor, cancellationToken).ConfigureAwait(false);
+		}
+		catch (EntityNotFoundException) {
+			return [];
+		}
+	}
+
+	private async Task<Money?> TryGetDisplayedCostAsync(
+		CommandContext context, JobNodeId nodeId, Instant asOf, CancellationToken cancellationToken)
+	{
+		try {
+			var totals = await _costQueries.GetHierarchyTotalsAsync(
+				new() { Context = context, NodeId = nodeId, AsOf = asOf }, cancellationToken).ConfigureAwait(false);
+			return totals.DisplayedCosts.GetValueOrDefault(nodeId);
+		}
+		catch (AuthorizationDeniedException) {
+			return null;
+		}
+		catch (EntityNotFoundException) {
+			return null;
+		}
+		catch (ArgumentOutOfRangeException) {
+			return null;
+		}
+		catch (MissingRateException) {
+			return null;
+		}
+	}
+
+	private Task<EquatableArray<WorkSessionResult>> GetLeafSessionsCoreAsync(GetLeafSessionsRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-leaf-sessions", request.Context, JobTrackOperation.WithNodeId(request.LeafWorkId),
+			async () => {
+				var result = await _workSessionQueryPort
+					.GetSessionsAsync(
+						request.Context.Actor, request.LeafWorkId, request.WorkedByUserId, request.Offset, request.Limit, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (!WorkSessionAccessPolicy.CanView(result.ActorRoles)) {
+					throw new AuthorizationDeniedException(
+						$"Actor {request.Context.Actor} may not view sessions on job node {request.LeafWorkId}.");
+				}
+
+				return result.Sessions;
+			});
+
+	private Task<EquatableArray<WorkSessionResult>>
+		GetActiveSessionsCoreAsync(GetActiveSessionsRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-active-sessions", request.Context, null,
+			async () => {
+				var result = await _workSessionQueryPort
+					.GetActiveSessionsAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (result.Sessions.Any(session => session.WorkedByUserId != request.Context.Actor)) {
+					throw new AuthorizationDeniedException(
+						$"Actor {request.Context.Actor} may not view another user's active sessions.");
+				}
+
+				if (!WorkSessionAccessPolicy.CanView(result.ActorRoles)) {
+					throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view their own sessions.");
+				}
+
+				return result.Sessions;
+			});
+
+	private Task<LeafWorkResult> GetLeafWorkCoreAsync(GetLeafWorkRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-leaf-work", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
+			() => _leafWorkQueryPort.GetLeafWorkAsync(request.JobNodeId, cancellationToken));
+
+	private Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesCoreAsync(GetPrerequisitesRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-prerequisites", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
+			() => _prerequisiteQueryPort.GetPrerequisitesAsync(request.NodeId, request.Offset, request.Limit, cancellationToken));
+
+	private Task<ScheduleSnapshotResult> GetScheduleCoreAsync(GetScheduleRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-schedule", request.Context, JobTrackOperation.WithUserId(request.UserId),
+			async () => {
+				var result = await _scheduleQueryPort
+					.GetScheduleAsync(request.Context.Actor, request.UserId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (!ScheduleAccessPolicy.CanManage(result.ActorRoles, request.Context.Actor == request.UserId)) {
+					throw new AuthorizationDeniedException(
+						$"Actor {request.Context.Actor} may not view {request.UserId}'s schedule.");
+				}
+
+				var entryCount = result.Versions.Count + result.Exceptions.Count;
+				if (entryCount > MaxScheduleEntryCount) {
+					throw new ArgumentOutOfRangeException(
+						nameof(request),
+						entryCount,
+						$"This employee's schedule has {entryCount} entries, exceeding the {MaxScheduleEntryCount}-entry maximum.");
+				}
+
+				return new ScheduleSnapshotResult { Versions = result.Versions, Exceptions = result.Exceptions };
+			});
+
+	private Task<RateSnapshotResult> GetRatesCoreAsync(GetRatesRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-rates", request.Context, JobTrackOperation.WithUserId(request.UserId),
+			async () => {
+				var result = await _rateQueryPort
+					.GetRatesAsync(request.Context.Actor, request.UserId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (!CostAccessPolicy.CanView(result.ActorRoles, false)) {
+					throw new AuthorizationDeniedException(
+						$"Actor {request.Context.Actor} may not view {request.UserId}'s rates.");
+				}
+
+				var entryCount = result.UserCostRates.Count + result.NodeRateOverrides.Count;
+				if (entryCount > MaxRateEntryCount) {
+					throw new ArgumentOutOfRangeException(
+						nameof(request),
+						entryCount,
+						$"This employee's rates have {entryCount} entries, exceeding the {MaxRateEntryCount}-entry maximum.");
+				}
+
+				return new RateSnapshotResult { UserCostRates = result.UserCostRates, NodeRateOverrides = result.NodeRateOverrides };
+			});
+}

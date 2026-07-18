@@ -1,0 +1,45 @@
+@page
+@model DeleteModel
+@{
+	ViewData["Title"] = "Delete job node";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<p class="jt-eyebrow">Restructure</p>
+		<h1>Delete job node</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	@if (Model.CurrentNode is not null) {
+		<p class="jt-context"><span>Deleting</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+
+		<div class="jt-notice">
+			<p>
+				This permanently deletes this job node. It never cascades — a node with children, a
+				prerequisite edge, or the root cannot be deleted here.
+			</p>
+			@if (Model.CurrentNode.Node.HasLeafWork) {
+				<p>
+					This leaf has work attached. If it has never actually been worked, it deletes along
+					with the node. If real session time has been logged against it, deleting it requires
+					the <strong>Administrator</strong> role and a reason below.
+				</p>
+			}
+		</div>
+
+		<form method="post" class="jt-form-card">
+			<input type="hidden" asp-for="NodeId"/>
+			<input type="hidden" asp-for="OriginalVersion"/>
+			<div class="form-group">
+				<label asp-for="Input.Reason">Reason (only required if this leaf has worked session history)</label>
+				<input asp-for="Input.Reason" class="form-control"/>
+			</div>
+			<div class="jt-toolbar jt-toolbar--flush">
+				<button type="submit" class="btn btn-outline-danger">Delete permanently</button>
+				<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Cancel</a>
+			</div>
+		</form>
+	}
+</div>

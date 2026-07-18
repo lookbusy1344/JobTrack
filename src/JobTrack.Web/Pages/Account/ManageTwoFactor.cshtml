@@ -1,0 +1,60 @@
+@page
+@using JobTrack.Identity
+@model ManageTwoFactorModel
+@{
+	ViewData["Title"] = "Two-factor authentication";
+}
+
+<div class="jt-page-head">
+	<p class="jt-eyebrow">Account</p>
+	<h1>Two-factor authentication</h1>
+</div>
+
+@if (User.IsInRole(EmployeeRoleNames.Requester)) {
+	<p><a asp-page="/Requests/Index">&larr; Back to your requests</a></p>
+} else {
+	<p><a asp-page="/Jobs/Browse">&larr; Back to Browse</a></p>
+}
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+@if (Model.TwoFactorEnabled) {
+	<p>Two-factor authentication is <strong>enabled</strong> on your account. Signing in requires a
+		code from your authenticator app in addition to your password.</p>
+
+	<h2>Disable two-factor authentication</h2>
+	<p>If you lose access to your authenticator app, an administrator can also disable this for you.</p>
+	<form method="post" asp-page-handler="Disable" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Disable.CurrentPassword"></label>
+			<input asp-for="Disable.CurrentPassword" type="password" class="form-control" autocomplete="current-password"/>
+			<span asp-validation-for="Disable.CurrentPassword" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-outline-danger">Disable</button>
+	</form>
+} else {
+	<p>Two-factor authentication is not enabled. Scan the QR code below with an authenticator app
+		(Google Authenticator, Microsoft Authenticator, Authy, or similar), then enter the 6-digit
+		code it generates to confirm setup.</p>
+
+	<div class="jt-form-card">
+		@if (Model.QrCodeDataUri is not null) {
+			<img src="@Model.QrCodeDataUri" alt="Two-factor authenticator QR code" width="200" height="200"/>
+		}
+		@if (Model.AuthenticatorKey is not null) {
+			<p>Can't scan the code? Enter this key manually: <code>@Model.AuthenticatorKey</code></p>
+		}
+	</div>
+
+	<h2>Confirm setup</h2>
+	<form method="post" asp-page-handler="Confirm" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Confirm.Code"></label>
+			<input asp-for="Confirm.Code" class="form-control" inputmode="numeric" autocomplete="one-time-code"/>
+			<span asp-validation-for="Confirm.Code" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Enable</button>
+	</form>
+}

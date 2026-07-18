@@ -1,0 +1,7 @@
+/* Scoped to _Layout.cshtml. Scoped-CSS attribute selectors carry more specificity than the plain
+   element selectors in site.css, so keep this file limited to layout-only concerns the shared
+   stylesheet doesn't already cover. */
+
+a.navbar-brand {
+    white-space: nowrap;
+}

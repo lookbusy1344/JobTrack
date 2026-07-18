@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>JobTrack.Persistence.Sqlite</PackageId>
+        <Description>SQLite implementation of JobTrack.Application's persistence ports using EF Core. Conforms to the full public contract; not a feature-limited facade.</Description>
+        <EnablePublicApiAnalyzers>true</EnablePublicApiAnalyzers>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\JobTrack.Application\JobTrack.Application.csproj"/>
+        <ProjectReference Include="..\JobTrack.Persistence.Shared\JobTrack.Persistence.Shared.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="JobTrack.Persistence.Sqlite.Tests"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+</Project>
