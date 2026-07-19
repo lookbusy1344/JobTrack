@@ -1,5 +1,7 @@
 # JobTrack
 
+![JobTrack banner](JobTrack_banner.jpg)
+
 A hierarchical job/work-tracking system with dynamic, historically-accurate costing.
 
 JobTrack records hierarchical jobs, their prerequisites, actual work, achievement, employee
@@ -16,7 +18,7 @@ Demo deployment (with SQLite backend) is from [`scripts/deploy-cloudrun.sh`](scr
 The script requires a working local Docker daemon; on this machine that normally means OrbStack is running.
 See [ADR 0014](docs/decisions/0014-single-server-deployment.md) and
 [`docs/operations/production-deployment.md`](docs/operations/production-deployment.md) for the real
-deployment strategy using Postgres. 
+deployment strategy using Postgres. The code here supports both backends.
 
 ## Architecture
 
@@ -25,7 +27,8 @@ then the HTTP API, then the ASP.NET Core web interface — and each layer only e
 beneath it:
 
 1. **Database** (`database/{postgresql,sqlite}/`, `JobTrack.Database`) — versioned schema scripts
-   and the invariants (constraints, triggers) that hold regardless of what calls them.
+   and the invariants (constraints, triggers) that hold regardless of what calls them. Postgresql
+   is the primary backend with SQLite as a full-feature fallback option.
 2. **Reusable .NET library** (`JobTrack.Abstractions`/`Domain`/`Application` +
    `JobTrack.Persistence.{PostgreSql,Sqlite}`) — the cost engine, interval algebra, achievement
    rules, authorization, and audit, exposed through the single `IJobTrackClient` facade. Any .NET
