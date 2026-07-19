@@ -49,6 +49,13 @@ public sealed record JobSubtreeNodeResult
 	public required bool HasLeafWork { get; init; }
 
 	/// <summary>
+	///     The achievement recorded on this node's <c>leaf_work</c> row, or <see langword="null" /> when
+	///     no leaf work is attached — a branch, or a leaf nobody has attached work to yet. Distinct from
+	///     <see cref="Abstractions.Achievement.Waiting" />, which is attached work nobody has started.
+	/// </summary>
+	public Achievement? Achievement { get; init; }
+
+	/// <summary>
 	///     Whether this node has children beyond what this fetch expanded -- either past the breadth cap
 	///     (ADR 0039 decision 2) or the depth cap. A drill-in (re-root Browse here) shows the rest.
 	/// </summary>

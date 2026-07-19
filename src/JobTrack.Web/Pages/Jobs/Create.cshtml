@@ -14,7 +14,8 @@
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 	@if (Model.Parent is not null) {
-		<p class="jt-context"><span>Parent</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.Parent.Node)</strong></p>
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Parent</span><strong
+				class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.Parent.Node)</strong></p>
 
 		@if (Model.Parent.Node.HasLeafWork) {
 			<p class="jt-empty">This parent already has work attached.</p>
@@ -55,7 +56,7 @@
 					<label asp-for="Input.NeededFinish"></label>
 					<input asp-for="Input.NeededFinish" class="form-control"/>
 				</div>
-				<div class="jt-toolbar jt-toolbar--flush">
+				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 					<button type="submit" class="btn btn-primary">Save</button>
 					<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.ParentId">Cancel</a>
 				</div>

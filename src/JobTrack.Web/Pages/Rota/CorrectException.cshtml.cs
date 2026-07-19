@@ -9,14 +9,17 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using NodaTime;
 
 /// <summary>
 ///     Corrects a historical schedule exception's effect, interval, and rate override in place (ADR
 ///     0003), mirroring <see cref="Jobs.CorrectSessionModel" />'s single-step form shape.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.ScheduleAdministration)]
-public sealed class CorrectExceptionModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class CorrectExceptionModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	[BindProperty(SupportsGet = true)] public long UserId { get; init; }
 
@@ -37,9 +40,10 @@ public sealed class CorrectExceptionModel(IJobTrackClient jobTrackClient, UserMa
 
 		await LoadExceptionAsync(actor.Value, cancellationToken);
 		if (Exception is { } exception) {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			Input.Effect = exception.Entry.Effect;
-			Input.Start = exception.Entry.Interval.Start.ToDateTimeOffset();
-			Input.End = exception.Entry.Interval.End.ToDateTimeOffset();
+			Input.Start = BackdateInstant.ToDateTimeLocalValue(exception.Entry.Interval.Start, zone);
+			Input.End = BackdateInstant.ToDateTimeLocalValue(exception.Entry.Interval.End, zone);
 			Input.RateOverride = exception.Entry.RateOverride?.AmountPerHour;
 			Input.Reason = exception.Reason;
 		}
@@ -59,11 +63,17 @@ public sealed class CorrectExceptionModel(IJobTrackClient jobTrackClient, UserMa
 			return Page();
 		}
 
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+		if (!BackdateInstant.TryParse(Input.Start, zone, out var start) || !BackdateInstant.TryParse(Input.End, zone, out var end)) {
+			ErrorMessage = "Start and end must each be a valid date and time.";
+			return Page();
+		}
+
 		try {
 			var entry = new ScheduleExceptionEntry(
 				Input.Effect,
-				new(Instant.FromDateTimeOffset(Input.Start), Instant.FromDateTimeOffset(Input.End)),
-				Input.RateOverride is { } rate ? new HourlyRate(rate) : null);
+				new(start, end),
+				Input.RateOverride.HasValue ? new HourlyRate(Input.RateOverride.Value) : null);
 
 			_ = await jobTrackClient.Schedules.CorrectScheduleExceptionAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
@@ -125,9 +135,9 @@ public sealed class CorrectExceptionModel(IJobTrackClient jobTrackClient, UserMa
 	{
 		[Required] public ScheduleExceptionEffect Effect { get; set; }
 
-		[Required] public DateTimeOffset Start { get; set; }
+		[Required] public string Start { get; set; } = string.Empty;
 
-		[Required] public DateTimeOffset End { get; set; }
+		[Required] public string End { get; set; } = string.Empty;
 
 		public decimal? RateOverride { get; set; }
 

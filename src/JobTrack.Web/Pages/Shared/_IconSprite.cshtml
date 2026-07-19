@@ -20,7 +20,8 @@
 	<symbol id="jt-icon-root" viewBox="0 0 16 16">
 		<path opacity="0.55"
 		      d="M1.5 4C1.5 3.31 2.06 2.75 2.75 2.75h3.19c.3 0 .59.11.81.31L8.4 4.25h4.85c.69 0 1.25.56 1.25 1.25v1.5H1.5z"/>
-		<path d="M2.7 5.75h11.55c.82 0 1.42.77 1.21 1.56l-1.24 4.75c-.14.55-.64.94-1.21.94H1.46c-.82 0-1.42-.77-1.21-1.56l1.24-4.75c.14-.55.64-.94 1.21-.94z"/>
+		<path
+			d="M2.7 5.75h11.55c.82 0 1.42.77 1.21 1.56l-1.24 4.75c-.14.55-.64.94-1.21.94H1.46c-.82 0-1.42-.77-1.21-1.56l1.24-4.75c.14-.55.64-.94 1.21-.94z"/>
 	</symbol>
 	@* Stem first, so the blade drawn over it leaves only the exposed length outside the body. *@
 	<symbol id="jt-icon-leaf" viewBox="0 0 16 16">
@@ -34,6 +35,25 @@
 		      stroke-linejoin="round"/>
 		<path d="M8 5.4V8.3l2 1.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
 		      stroke-linejoin="round"/>
+	</symbol>
+	@* Start: a play mark leaving a starting line. Drawn as an open outline at the same 1.6 stroke as
+	   Backdate so the pair reads as one set when they sit side by side in a row's action cell — and
+	   deliberately unlike `jt-icon-go`, which is a solid filled sign because it labels a state rather
+	   than offering an action. *@
+	<symbol id="jt-icon-start" viewBox="0 0 16 16">
+		<path d="M3.4 3v10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+		<path d="M6.7 3.9 13.3 8l-6.6 4.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+		      stroke-linejoin="round"/>
+	</symbol>
+	@* Finish / pause: the mirror of Start. Start puts its line on the left and moves away from it;
+	   this puts the line on the right and holds two pause bars short of it — the action really is
+	   both ("pause" and "finish" post to the same handler, spec §4.4), so the glyph shows work
+	   stopped at the end rather than committing to one word. The bars are deliberately shorter than
+	   the terminal line so three parallel strokes don't read as a bar chart. *@
+	<symbol id="jt-icon-finish" viewBox="0 0 16 16">
+		<path d="M5.6 4.2v7.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+		<path d="M9.2 4.2v7.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+		<path d="M12.9 3v10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
 	</symbol>
 	@* Readiness as a crossing signal. Stop is the raised palm of a "don't walk" hand — a held
 	   position rather than an error, which is what a blocked job is. Go is a round sign with a play
@@ -54,9 +74,61 @@
 		<circle cx="8" cy="8" r="6.9"/>
 		<path d="M6.5 4.9 11.4 8l-4.9 3.1z" fill="#fff"/>
 	</symbol>
+	@* Achievement as a family of signs: one disc, four knock-outs. They are solid filled bodies for the
+	   same reason `jt-icon-go` is — they label a state rather than offer an action — and they share
+	   `jt-icon-go`'s r=6.9 disc so the whole "sign" vocabulary reads as one set. The knock-outs are
+	   literal white because they are only ever drawn inside the filled body.
+
+	   The marks are chosen to be separable at the ~16px they actually render at, silhouette first:
+	   a clock (queued), a disc with a wedge taken out of it (partly done), a check (done), a struck
+	   bar (closed with nothing achieved). Note the family is deliberately *not* the raised palm —
+	   blocked is not an achievement but an orthogonal fact about prerequisites, and a job is routinely
+	   Waiting and blocked at once, so the two must never look like alternatives to each other. *@
+	<symbol id="jt-icon-achievement-waiting" viewBox="0 0 16 16">
+		<circle cx="8" cy="8" r="6.9"/>
+		<path d="M8 4.3V8l2.6 1.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"
+		      stroke-linejoin="round"/>
+	</symbol>
+	@* The wedge runs 12 o'clock to 3 o'clock, so the disc keeps its round silhouette everywhere but the
+	   bite — a pie part-way through rather than a half-disc, which loses the circle against the page. *@
+	<symbol id="jt-icon-achievement-in-progress" viewBox="0 0 16 16">
+		<circle cx="8" cy="8" r="6.9"/>
+		<path d="M8 8V1.1A6.9 6.9 0 0 1 14.9 8z" fill="#fff"/>
+	</symbol>
+	<symbol id="jt-icon-achievement-success" viewBox="0 0 16 16">
+		<circle cx="8" cy="8" r="6.9"/>
+		<path d="m4.8 8.3 2.2 2.2 4.2-4.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"
+		      stroke-linejoin="round"/>
+	</symbol>
+	@* A level bar, not a diagonal slash: this one glyph covers both Cancelled and Unsuccessful, and a
+	   slash reads as "forbidden" — an accusation the merged state should not make about a job that was
+	   simply withdrawn. A struck bar reads as "closed, nothing achieved" for either route. *@
+	<symbol id="jt-icon-achievement-closed" viewBox="0 0 16 16">
+		<circle cx="8" cy="8" r="6.9"/>
+		<path d="M4.9 8h6.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+	</symbol>
+	@* A running work session: a stopwatch, because what an active session means is that time is
+	   accruing against this leaf. Solid body with white hands, following the same "filled = state"
+	   rule as the rest of the sign vocabulary — deliberately unlike `jt-icon-start`, the outlined
+	   play mark on the button that sits two columns away, which offers an action rather than
+	   reporting one in progress.
+
+	   The crown and stem on top are what separate it from `jt-icon-achievement-waiting`'s plain
+	   disc-and-clock at the small size both render at; the two also never share a colour. *@
+	<symbol id="jt-icon-active" viewBox="0 0 16 16">
+		<rect x="6.4" y="0.6" width="3.2" height="1.6" rx="0.8"/>
+		<rect x="7.2" y="1.8" width="1.6" height="1.6"/>
+		<circle cx="8" cy="9.3" r="5.9"/>
+		<path d="M8 6.1v3.2l2.2 1.3" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"
+		      stroke-linejoin="round"/>
+	</symbol>
 	<symbol id="jt-icon-archived" viewBox="0 0 16 16">
 		<path d="M2 3.25c0-.41.34-.75.75-.75h10.5c.41 0 .75.34.75.75v1.5c0 .41-.34.75-.75.75H2.75A.75.75 0 0 1 2 4.75z"/>
 		<path opacity="0.7" d="M3 7h10v5.25c0 .69-.56 1.25-1.25 1.25h-7.5C3.56 13.5 3 12.94 3 12.25z"/>
 		<path d="M6.5 9.25h3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+	</symbol>
+	<symbol id="jt-icon-github" viewBox="0 0 16 16">
+		<path fill-rule="evenodd" clip-rule="evenodd"
+		      d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>
 	</symbol>
 </svg>

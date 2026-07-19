@@ -99,7 +99,7 @@ internal sealed class FakeRateCommandPort : IRateCommandPort
 		}
 
 		var existing = _userCostRates[index];
-		if (request.UserId is { } expectedUserId && existing.UserId != expectedUserId) {
+		if (request.UserId is AppUserId expectedUserId && existing.UserId != expectedUserId) {
 			throw new EntityNotFoundException($"Rate row {request.RateId} does not belong to employee {expectedUserId}.");
 		}
 
@@ -135,7 +135,7 @@ internal sealed class FakeRateCommandPort : IRateCommandPort
 		}
 
 		var existing = _nodeOverrides[index];
-		if (request.UserId is { } expectedUserId && existing.UserId != expectedUserId) {
+		if (request.UserId is AppUserId expectedUserId && existing.UserId != expectedUserId) {
 			throw new EntityNotFoundException($"Rate row {request.OverrideId} does not belong to employee {expectedUserId}.");
 		}
 

@@ -41,7 +41,7 @@ public static class RateResolver
 
 		var overridesByNode = nodeOverrides.GroupBy(over => over.NodeId).ToDictionary(group => group.Key, group => group.ToList());
 		JobNodeId? currentId = nodeId;
-		while (currentId is { } id) {
+		while (currentId is JobNodeId id) {
 			if (overridesByNode.TryGetValue(id, out var candidates)) {
 				var effective = candidates.FirstOrDefault(over => over.IsEffectiveAt(at));
 				if (effective is not null) {
@@ -57,7 +57,7 @@ public static class RateResolver
 			return new(userRate.Rate, RateSource.UserCostRate);
 		}
 
-		if (userDefaultRate is { } defaultRate) {
+		if (userDefaultRate is HourlyRate defaultRate) {
 			return new(defaultRate, RateSource.UserDefault);
 		}
 

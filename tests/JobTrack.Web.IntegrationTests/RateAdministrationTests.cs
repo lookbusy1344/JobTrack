@@ -75,17 +75,19 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 
 		var (rateCookie, rateToken) = await GetFormAsync(authCookie, workerId);
 		var rateResponse = await PostAddUserCostRateAsync(authCookie, rateCookie, rateToken, workerId, "25.00", "2026-01-01T00:00:00+00:00");
-		var rateBody = await rateResponse.Content.ReadAsStringAsync();
+		rateResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var rateReloaded = await FollowRedirectAsync(rateResponse, authCookie);
+		var rateBody = await rateReloaded.Content.ReadAsStringAsync();
 
-		rateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		rateBody.Should().Contain("User cost rate added");
 
-		var (overrideCookie, overrideToken) = await ExtractFormAsync(rateResponse, rateCookie);
+		var (overrideCookie, overrideToken) = await ExtractFormAsync(rateReloaded, rateCookie);
 		var overrideResponse = await PostAddNodeRateOverrideAsync(
 			authCookie, overrideCookie, overrideToken, workerId, rootJobNodeId, "30.00", "2026-01-01T00:00:00+00:00");
-		var overrideBody = await overrideResponse.Content.ReadAsStringAsync();
+		overrideResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var overrideReloaded = await FollowRedirectAsync(overrideResponse, authCookie);
+		var overrideBody = await overrideReloaded.Content.ReadAsStringAsync();
 
-		overrideResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		overrideBody.Should().Contain("Node rate override added");
 	}
 
@@ -98,9 +100,10 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
 		var response = await PostAddUserCostRateAsync(authCookie, cookie, token, workerId, "25.00", "2026-01-01T00:00:00+00:00");
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("User cost rate added");
 		body.Should().NotContain("may not view");
 		body.Should().Contain("Current rates are hidden");
@@ -342,6 +345,23 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		response.Headers.TryGetValues("Set-Cookie", out var values)
 			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
 			: null;
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 

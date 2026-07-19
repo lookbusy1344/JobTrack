@@ -434,7 +434,7 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 		var created = new List<(long LocalId, JobNodeEntity Entity)>(request.Nodes.Count);
 
 		foreach (var spec in request.Nodes) {
-			var parentId = spec.ParentLocalId is { } parentLocalId ? createdByLocalId[parentLocalId].Id : request.ParentId;
+			var parentId = spec.ParentLocalId.HasValue ? createdByLocalId[spec.ParentLocalId.Value].Id : request.ParentId;
 
 			var node = new JobNodeEntity {
 				Id = default,
@@ -530,7 +530,7 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 					"work-session-start-in-future", "A session's start instant must not be in the future.");
 			}
 
-			if (work.FinishedAt is { } finishedAt && finishedAt > now) {
+			if (work.FinishedAt is Instant finishedAt && finishedAt > now) {
 				throw new InvariantViolationException(
 					"work-session-finish-in-future", "A session's finish instant must not be in the future.");
 			}

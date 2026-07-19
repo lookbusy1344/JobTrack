@@ -44,7 +44,7 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 		if (Version is { } version) {
 			Input.IanaTimeZone = version.Schedule.Zone.Id;
 			Input.EffectiveStart = ToDateOnly(version.Schedule.EffectiveStart);
-			Input.EffectiveEnd = version.Schedule.EffectiveEnd is { } end ? ToDateOnly(end) : null;
+			Input.EffectiveEnd = version.Schedule.EffectiveEnd.HasValue ? ToDateOnly(version.Schedule.EffectiveEnd.Value) : null;
 			Input.WeeklyIntervals = [
 				.. version.Schedule.WeeklyIntervals.Select(interval =>
 					new IndexModel.WeeklyIntervalSlotInput {
@@ -86,7 +86,8 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 				Version = Version.Version,
 				Reason = Input.Reason,
 				Schedule = new(
-					zone, ToLocalDate(Input.EffectiveStart), Input.EffectiveEnd is { } end ? ToLocalDate(end) : null, [.. weeklyIntervals]),
+					zone, ToLocalDate(Input.EffectiveStart),
+					Input.EffectiveEnd.HasValue ? ToLocalDate(Input.EffectiveEnd.Value) : null, [.. weeklyIntervals]),
 			}, cancellationToken);
 
 			return RedirectToPage("/Rota/Index", new { userId = UserId });

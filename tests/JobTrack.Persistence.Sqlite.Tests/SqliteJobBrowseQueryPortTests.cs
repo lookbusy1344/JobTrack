@@ -30,6 +30,9 @@ public sealed class SqliteJobBrowseQueryPortTests()
 	protected override IJobNodeCommandPort CreateCommandPort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString);
 
+	protected override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+		new SqliteAchievementCommandPort(connectionString);
+
 	protected override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
 		new SqliteJobBrowseQueryPort(connectionString);
 

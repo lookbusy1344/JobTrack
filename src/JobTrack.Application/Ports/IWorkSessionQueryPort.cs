@@ -26,9 +26,11 @@ public interface IWorkSessionQueryPort
 		int offset = 0, int? limit = null, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	///     Loads the actor's own unfinished sessions among the given leaves and the actor's current
-	///     roles. A leaf id that no longer resolves is silently omitted, matching
-	///     <see cref="IJobBrowseQueryPort.GetSummariesByIdsAsync" />.
+	///     Loads every worker's unfinished session among the given leaves and the actor's current
+	///     roles, the same "no actor-based filtering" shape as <see cref="GetSessionsAsync" />'s
+	///     null-worker default (ADR 0041) -- <see cref="JobQueries" /> is the layer that narrows this
+	///     to what the querying actor may see. A leaf id that no longer resolves is silently omitted,
+	///     matching <see cref="IJobBrowseQueryPort.GetSummariesByIdsAsync" />.
 	/// </summary>
 	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>
 	Task<WorkSessionQueryResult> GetActiveSessionsAsync(

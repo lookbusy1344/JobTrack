@@ -47,7 +47,7 @@ internal sealed class PostgreSqlWorkSessionQueryPort : IWorkSessionQueryPort
 				ChangedAt = s.ChangedAt,
 				Version = s.RowVersion,
 			});
-		var sessions = await (limit is { } take ? query.Take(take) : query)
+		var sessions = await (limit.HasValue ? query.Take(limit.Value) : query)
 			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return new() { ActorRoles = actorRoles, Sessions = [.. sessions] };
@@ -67,7 +67,7 @@ internal sealed class PostgreSqlWorkSessionQueryPort : IWorkSessionQueryPort
 
 		var leafWorkIdList = leafWorkIds.ToList();
 		var sessions = await context.Set<WorkSessionEntity>().AsNoTracking()
-			.Where(s => s.WorkedByUserId == actorId && s.FinishedAt == null && leafWorkIdList.Contains(s.LeafWorkId))
+			.Where(s => s.FinishedAt == null && leafWorkIdList.Contains(s.LeafWorkId))
 			.Select(s => new WorkSessionResult {
 				Id = s.Id,
 				LeafWorkId = s.LeafWorkId,

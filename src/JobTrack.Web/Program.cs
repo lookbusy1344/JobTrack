@@ -117,6 +117,8 @@ public sealed class Program
 			options.Conventions.AddFolderApplicationModelConvention("/", model =>
 				model.Filters.Add(new RequiresPasswordChangePageFilter())));
 
+		_ = builder.Services.AddScoped<IViewerTimeZoneResolver, ViewerTimeZoneResolver>();
+
 		var databaseProvider = builder.Configuration["Database:Provider"]
 							   ?? throw new InvalidOperationException("Database:Provider is not configured.");
 		var identityConnectionString = builder.Configuration.GetConnectionString("JobTrackIdentity")
@@ -372,7 +374,7 @@ public sealed class Program
 		});
 
 		_ = app.Use(async (context, next) => {
-			if (context.Request.ContentLength is { } contentLength && contentLength > MaxRequestBodyBytes) {
+			if (context.Request.ContentLength is long contentLength && contentLength > MaxRequestBodyBytes) {
 				context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
 				await context.Response.WriteAsJsonAsync(
 					new ProblemDetails {

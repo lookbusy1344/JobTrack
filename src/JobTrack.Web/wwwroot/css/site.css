@@ -151,6 +151,16 @@
        cap, JobSubtreeLimits.HardMaxDepth) off the right of a narrow viewport. */
     --jt-tree-indent: 1.5rem;
 
+    /* A node's kind glyph (root/branch/leaf) and anything meant to read at the same visual weight
+       beside it: the tree row's blocked flag and the icon-only status pills. Kept as one variable
+       so the three never drift apart again. */
+    --jt-icon-size-kind: 1.75rem;
+
+    /* The same root/branch/leaf glyph, sized for sitting inline beside other text or standing alone
+       in a table cell (.jt-kind-icon) rather than leading a tree row -- too small a target for a
+       stepped hierarchy, but the right weight next to a line of prose or a cost figure. */
+    --jt-icon-size-kind-inline: 1rem;
+
     /* Shape — generously rounded for a younger, more dynamic feel. */
     --bs-border-radius: 0.875rem;
     --bs-border-radius-sm: 0.625rem;
@@ -432,6 +442,30 @@ summary:focus-visible {
     color: #fff;
 }
 
+/* GitHub link — trailing item in the right-hand nav, so it lands at the far right of the titlebar. */
+.jt-github-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.625rem;
+    color: var(--jt-console-text);
+    transition: color var(--jt-transition), background-color var(--jt-transition);
+}
+
+.jt-github-link:hover,
+.jt-github-link:focus-visible {
+    color: #fff;
+    background-color: rgb(255 255 255 / 8%);
+}
+
+.jt-github-link-glyph {
+    width: 1.15rem;
+    height: 1.15rem;
+    fill: currentcolor;
+}
+
 .app-header .nav-link {
     position: relative;
     color: var(--jt-console-text);
@@ -549,50 +583,13 @@ main[role="main"] {
     box-shadow: var(--jt-shadow-sm);
 }
 
-/* A dashboard grid for stat/record cards — collapses to one column on phones automatically. */
-.jt-grid {
-    display: grid;
-    gap: var(--jt-space-3);
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    margin-bottom: var(--jt-space-4);
-}
-
 /* Metric read-out — the signature element. A large tabular number under a console eyebrow,
-   with a hairline orange→gold baseline. Used for cost and headline figures. */
-.jt-metrics {
-    display: grid;
-    gap: var(--jt-space-3);
-    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-    margin: 0 0 var(--jt-space-4);
-    padding: 0;
-    max-width: none;
-    background: none;
-    border: none;
-    box-shadow: none;
-}
-
-/* Single-card variant that sits beside a heading instead of spanning the full row —
-   the auto-fit/1fr grid above stretches to fill whatever width it's given. */
-.jt-metrics--compact {
-    grid-template-columns: minmax(13rem, 18rem);
-    margin: 0;
-}
-
-/* Lets a heading and a compact metric card share one line, wrapping on narrow viewports. */
-.jt-subtree-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--jt-space-3);
-    margin-bottom: var(--jt-space-4);
-}
-
+   with a hairline orange→gold baseline. Used for cost and headline figures. Multi-card layout
+   comes from Bootstrap's row/row-cols-* grid on the markup, not from custom CSS here. */
 .jt-subtree-head h2 {
     margin: 0;
 }
 
-.jt-metrics > div,
 .jt-metric {
     position: relative;
     overflow: hidden;
@@ -603,7 +600,6 @@ main[role="main"] {
     box-shadow: var(--jt-shadow-sm);
 }
 
-.jt-metrics > div::after,
 .jt-metric::after {
     content: "";
     position: absolute;
@@ -651,11 +647,10 @@ main[role="main"] {
 /* ---- Record cards (<dl>) ------------------------------------------------------------------ */
 
 /* Every detail view renders a <dl> of one record's fields. Styled as a spec card: a label/value
-   grid on a white surface with a burnt-orange spine, collapsing to a single stacked column on phones. */
+   grid on a white surface with a burnt-orange spine. The label/value column layout and its
+   stacking-on-phones behaviour come from Bootstrap's row/col-sm-* grid on the markup (dt/dd pairs
+   carry col-sm-3/col-sm-9), not from custom CSS here. */
 dl {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    column-gap: var(--jt-space-4);
     row-gap: var(--jt-space-3);
     margin: 0 0 var(--jt-space-4);
     padding: var(--jt-space-4) var(--jt-space-4) var(--jt-space-4) calc(var(--jt-space-4) + 3px);
@@ -668,7 +663,6 @@ dl {
 }
 
 dt {
-    grid-column: 1;
     font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.1em;
@@ -679,38 +673,18 @@ dt {
 }
 
 dd {
-    grid-column: 2;
     margin: 0;
     align-self: center;
     font-variant-numeric: tabular-nums;
     color: var(--jt-ink);
 }
 
-@media (max-width: 30em) {
-    dl {
-        grid-template-columns: 1fr;
-        row-gap: var(--jt-space-1);
-    }
-
-    dt {
-        margin-top: var(--jt-space-2);
-    }
-
-    dt:first-of-type {
-        margin-top: 0;
-    }
-}
-
 /* ---- Action toolbar ----------------------------------------------------------------------- */
 
-/* Pages expose a row of navigation/action buttons. Group them into a wrapping toolbar so they
-   read as a control cluster rather than a stray paragraph of links. */
+/* Pages expose a row of navigation/action buttons, grouped into a wrapping toolbar (Bootstrap's
+   d-flex flex-wrap gap-2 align-items-center on the markup) so they read as a control cluster
+   rather than a stray paragraph of links. This class is a marker for `.jt-toolbar form` below. */
 .jt-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--jt-space-2);
-    align-items: center;
-    margin-bottom: var(--jt-space-4);
     max-width: none;
 }
 
@@ -880,10 +854,9 @@ fieldset legend {
 
 /* ---- Alerts ------------------------------------------------------------------------------- */
 
+/* Layout (icon-beside-message) comes from Bootstrap's d-flex align-items-start gap-2 on each
+   call site's markup. */
 .alert {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--jt-space-2);
     max-width: 52rem;
     border: 1px solid transparent;
     border-left-width: 3px;
@@ -963,6 +936,23 @@ fieldset legend {
     gap: 0;
 }
 
+/* Icon-only pills carry no text to size against, so the glyph matches the tree's kind-icon scale
+   (blocked and ready alike) instead of the smaller default tuned for sitting next to pill text. */
+.status-pill--icon .status-pill-glyph {
+    width: var(--jt-icon-size-kind);
+    height: var(--jt-icon-size-kind);
+}
+
+/* Icon-plus-value, no noun: the row-level "Active since" pill, reduced to its stopwatch and a
+   compact timestamp. Never wraps — a two-line pill in one row of a table drags every other row's
+   height with it, and the content is short enough by construction that there is nothing to gain
+   from letting it break. */
+.status-pill--compact {
+    padding: var(--jt-space-1) var(--jt-space-2);
+    font-size: 0.6875rem;
+    white-space: nowrap;
+}
+
 .status-pill-ready {
     background-color: var(--jt-green-100);
     color: var(--jt-green-700);
@@ -979,40 +969,114 @@ fieldset legend {
     border-color: rgb(179 38 30 / 25%);
 }
 
-/* ---- Node-kind chip (Root / Branch / Leaf) ------------------------------------------------- */
+/* ---- Node-kind icon (Root / Branch / Leaf) -------------------------------------------------- */
 
 /* The structural counterpart to .status-pill: names a node's derived hierarchy classification
-   (ADR 0035) in the cool slate leg, kept deliberately distinct from status (green/amber) and cost
-   (orange) so the three vocabularies never blur. Differentiated by slate depth, not hue. Carries
-   forward unchanged into the Phase B multi-level tree. */
-.jt-kind {
+   (ADR 0035) wherever it appears outside the Browse subtree's own tree row -- the Requires/
+   RequiredBy lists, a node's own detail panel, a flat search-results table. Reuses the same glyphs
+   and colour-by-kind rule as `.jt-tree-icon` (`--root`/`--branch`/`--leaf`, below) so a leaf reads
+   as the same green shape everywhere in the app, just smaller here (`--jt-icon-size-kind-inline`)
+   since this sits inline with other text rather than leading a tree row. `_KindIcon.cshtml` renders
+   the label as visible text when there is room, or visually-hidden-only in a table cell -- either
+   way the glyph itself is `aria-hidden`, so the fact is always carried by text for assistive tech. */
+.jt-kind-icon {
     display: inline-flex;
     align-items: center;
-    padding: 0.15rem var(--jt-space-2);
-    border-radius: 2rem;
+    gap: var(--jt-space-1);
+}
+
+.jt-kind-icon-glyph {
+    flex: 0 0 auto;
+    width: var(--jt-icon-size-kind-inline);
+    height: var(--jt-icon-size-kind-inline);
+}
+
+.jt-kind-icon-label {
     font-family: var(--bs-font-monospace);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    border: 1px solid transparent;
+    color: var(--jt-muted);
 }
 
-.jt-kind--root {
-    background-color: var(--jt-slate-600);
-    color: #fff;
+/* Same clip technique as Bootstrap's `.visually-hidden`, but gated to a breakpoint instead of
+   permanent — the label stays in the accessibility tree at every width, it just isn't painted
+   below desktop width. The Requires/Depends-on-this-job cards go side by side (`row-cols-md-2`)
+   starting at the md breakpoint already, so gating this on md too would reveal the label at the
+   exact width where each card has the least room to spare; wait for lg, where those cards are
+   wide enough again. */
+.jt-kind-icon-label--collapsible {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
-.jt-kind--branch {
-    background-color: var(--jt-slate-100);
-    color: var(--jt-slate-600);
-    border-color: var(--jt-slate-300);
+@media (min-width: 992px) {
+    .jt-kind-icon-label--collapsible {
+        position: static;
+        width: auto;
+        height: auto;
+        margin: 0;
+        overflow: visible;
+        clip: auto;
+        white-space: normal;
+    }
 }
 
-.jt-kind--leaf {
-    background-color: var(--jt-slate-50);
-    color: var(--jt-slate-600);
-    border-color: var(--jt-slate-100);
+/* ---- Achievement icon (Waiting / In progress / Success / Closed unfinished) ----------------- */
+
+/* The state counterpart to `.jt-kind-icon`: names a leaf's recorded achievement wherever a job
+   appears -- the Browse children/subtree tables, the Awaiting-progress list, a node's own detail
+   panel. Same structure as the kind icon (inline flex, glyph + optional label, glyph always
+   `aria-hidden` so the fact is carried by text for assistive tech), so the two sit together in a
+   row without fighting.
+
+   Colour carries the state and the glyph confirms it -- never colour alone, since these appear as
+   icon-only markers in table cells. Amber for in-progress rather than green: green already means an
+   open work session on the "Active since" pill, and a leaf can be In Progress with nobody working
+   on it right now. Red is not used at all here -- it is reserved for blocked (`.status-pill-blocked`),
+   which is an orthogonal fact a job carries *alongside* its achievement, not one of these values. */
+.jt-achievement-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--jt-space-1);
+}
+
+.jt-achievement-icon-glyph {
+    flex: 0 0 auto;
+    width: var(--jt-icon-size-kind-inline);
+    height: var(--jt-icon-size-kind-inline);
+    fill: currentcolor;
+}
+
+.jt-achievement-icon-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.jt-achievement-icon--waiting {
+    color: var(--jt-slate-500);
+}
+
+.jt-achievement-icon--in-progress {
+    color: var(--jt-amber-700);
+}
+
+.jt-achievement-icon--success {
+    color: var(--jt-green-700);
+}
+
+/* Warm dim, against Waiting's cool slate: the two neutrals must not be mistaken for each other, and
+   a terminal state should recede rather than compete with the rows still needing attention. */
+.jt-achievement-icon--closed {
+    color: var(--jt-muted);
 }
 
 /* ---- Multi-level Browse tree (ADR 0039) --------------------------------------------------- */
@@ -1130,8 +1194,8 @@ fieldset legend {
 
 .jt-tree-icon {
     flex: 0 0 auto;
-    width: 1.75rem;
-    height: 1.75rem;
+    width: var(--jt-icon-size-kind);
+    height: var(--jt-icon-size-kind);
 
     /* Sits on the first line, optically centred on it, and stays there when the name wraps. The
        glyph is taller than the line box, so it is pulled up by the overhang rather than pushed
@@ -1167,18 +1231,21 @@ fieldset legend {
     color: var(--jt-muted);
 }
 
-/* ---- Icon-only disclosure (Backdate) -------------------------------------------------------- */
+/* ---- Icon-only row actions (Start, Backdate) ------------------------------------------------- */
 
-/* Backdating a session is a rare correction sitting next to the action people actually take, so it
-   is a small square glyph rather than a labelled control competing with Start / Finish. Its name
-   is carried by visually-hidden text (and a `title` for a pointer tooltip), never by the glyph
-   alone, and the whole square is the hit target so it stays comfortably tappable. */
-.jt-icon-summary {
+/* In a table row the action cell repeats once per row, so Start and its Backdate trigger are small
+   square glyphs rather than labelled controls stacking a paragraph of text down every row. Each
+   one's name is carried by visually-hidden text (and a `title` for a pointer tooltip), never by the
+   glyph alone, and the whole square is the hit target so it stays comfortably tappable. Standalone
+   page toolbars keep labelled buttons — an icon earns its keep by repetition, and a page's single
+   primary action has none. */
+.jt-icon-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 1.75rem;
     height: 1.75rem;
+    padding: 0;
     border: 1px solid var(--jt-line);
     border-radius: 0.625rem;
     background: var(--jt-surface);
@@ -1188,12 +1255,15 @@ fieldset legend {
     transition: color var(--jt-transition), border-color var(--jt-transition);
 }
 
-.jt-icon-summary::-webkit-details-marker {
-    display: none;
+.jt-icon-button:hover,
+.jt-backdate-trigger[aria-expanded="true"] {
+    color: var(--jt-orange-600);
+    border-color: var(--jt-orange-600);
 }
 
-.jt-icon-summary:hover,
-details[open] > .jt-icon-summary {
+/* Start is the action the row exists for, so it carries the accent at rest rather than only on
+   hover — the muted default belongs to the corrections sitting beside it. */
+.jt-icon-button--primary {
     color: var(--jt-orange-600);
     border-color: var(--jt-orange-600);
 }
@@ -1203,16 +1273,90 @@ details[open] > .jt-icon-summary {
     height: 1rem;
 }
 
+/* The same glyph inside a labelled button, so a toolbar's "Start work" and a row's icon-only start
+   are recognisably one action rather than two unrelated controls. It takes the button's own colour
+   by inheritance and is purely redundant with the adjacent label, hence aria-hidden at every use. */
+.jt-btn-glyph {
+    width: 1rem;
+    height: 1rem;
+    margin-right: var(--jt-space-1);
+    vertical-align: -0.15em;
+    fill: currentcolor;
+}
+
+/* ---- Backdate row/panel --------------------------------------------------------------------- */
+
+/* The expansion a _BackdateTrigger reveals (site.js toggles `hidden`): a table row's own cell for
+   _BackdateRow, a block under the toolbar for _BackdatePanel. A tinted surface and top rule mark it
+   as a transient correction pane rather than ordinary row/toolbar content. */
+.jt-backdate-row td {
+    background: var(--jt-orange-50);
+    border-top: 1px solid var(--jt-line);
+    padding: var(--jt-space-3) var(--jt-space-4);
+}
+
+/* Overrides `.table tbody tr:hover`'s orange wash — the row is already tinted to mark it as the open
+   correction pane, so a second, competing hover tint would read as two different things. */
+.jt-backdate-row:hover td {
+    background: var(--jt-orange-50);
+}
+
+.jt-backdate-panel {
+    background: var(--jt-orange-50);
+    border: 1px solid var(--jt-line);
+    border-radius: 0.625rem;
+    padding: var(--jt-space-3) var(--jt-space-4);
+    margin-bottom: var(--jt-space-4);
+}
+
+.jt-backdate-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--jt-space-2) var(--jt-space-3);
+    max-width: none;
+    margin: 0;
+}
+
+/* Scaled to ~70% of the ordinary form controls — this is a transient correction pane, not a page's
+   primary form, so it shouldn't compete for visual weight. Scoped to tablet-and-up: below 768px
+   .form-control is pinned to 16px (see the iOS auto-zoom comment above) and must stay that way. */
+@media (min-width: 768px) {
+    .jt-backdate-form .form-group {
+        margin-bottom: 0;
+    }
+
+    .jt-backdate-form label {
+        font-size: 0.6rem;
+        margin-bottom: 0.1rem;
+    }
+
+    .jt-backdate-form .form-control {
+        padding: 0.35rem 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    .jt-backdate-form .btn {
+        padding: 0.35rem 0.55rem;
+        font-size: 0.7rem;
+    }
+
+    .jt-backdate-form .jt-btn-glyph {
+        width: 0.7rem;
+        height: 0.7rem;
+    }
+}
+
 /* ---- Tree table reflow --------------------------------------------------------------------- */
 
-/* Below 992px the subtree keeps only what navigating a tree needs — where a row sits, what it is
-   called, and how to start work on it — and drops owner, priority, cost, and the span bar. Six
-   columns at phone width would squeeze the name to a couple of characters per line and push the
-   page into a horizontal scroll, which WCAG 1.4.10 Reflow forbids; every dropped column is one tap
-   away on the row's own page. The cut is at 992px rather than the 768px tablet breakpoint because
-   the name column alone reserves 20rem: at 768 the six columns still overflowed, which the viewport
-   matrix in JobBrowseBrowserTests catches. `display: none` is deliberate over a visually-hidden
-   treatment: this is redundant-at-this-size content, not content withheld from assistive tech. */
+/* Below 992px these tables keep only what the task at hand needs and drop the columns that are one
+   tap away on the row's own page (owner, priority, kind/archived, span, deadline). Cost is the one
+   secondary column worth keeping at that width — it is what most people scanning the table are
+   actually looking for — so it carries `.jt-col-cost` instead of `.jt-col-secondary` and survives
+   down to phone width, where it finally goes too: six-plus columns at phone width would squeeze the
+   name to a couple of characters per line and push the page into a horizontal scroll, which WCAG
+   1.4.10 Reflow forbids. `display: none` is deliberate over a visually-hidden treatment: this is
+   redundant-at-this-size content, not content withheld from assistive tech. */
 @media (max-width: 991.98px) {
     .jt-col-secondary {
         display: none;
@@ -1223,23 +1367,60 @@ details[open] > .jt-icon-summary {
         min-width: 0;
     }
 
-    .jt-tree-icon {
-        width: 1.5rem;
-        height: 1.5rem;
+    :root {
+        --jt-icon-size-kind: 1.5rem;
+    }
+}
+
+/* Cost (and, on the awaiting-progress table, achievement) survives the 992px cut above but not
+   phone width — at that width only the name and the row's own action(s) still fit without pushing
+   the page into horizontal scroll.
+
+   The active-session column keeps the same treatment: which jobs are being worked on right now is a
+   live fact that changes under the reader, unlike owner or priority, so it is not something they can
+   reasonably be sent to the row's own page for at tablet width. It goes at phone width with the
+   rest. */
+@media (max-width: 767.98px) {
+    .jt-col-cost,
+    .jt-col-active {
+        display: none;
     }
 }
 
 /* A blocked row's stop palm takes the same red as the readiness pill it echoes, so the two never
-   read as different facts (ADR 0043). It overrides `.jt-tree-flag`'s muted default. */
+   read as different facts (ADR 0043). It overrides `.jt-tree-flag`'s muted default. Sized to match
+   the kind glyph it sits beside rather than the smaller default flag size — the stop palm's blocky
+   geometry needs the extra room to read clearly next to a leaf/branch/root icon. */
 .jt-tree-blocked {
+    width: var(--jt-icon-size-kind);
+    height: var(--jt-icon-size-kind);
     fill: var(--jt-red-700);
     color: var(--jt-red-700);
+}
+
+/* Leading position: a peer of the kind icon in `.jt-tree-label`'s own flex row, not a flag trailing
+   the name text. `.jt-tree-label`'s flex `gap` already spaces it from the kind icon that follows, so
+   `.jt-tree-flag`'s own left margin (sized for trailing use, e.g. the archived flag) would double up;
+   same top-align treatment as `.jt-tree-icon` so it doesn't drop to the text baseline. */
+.jt-tree-flag--leading {
+    margin-left: 0;
+    align-self: flex-start;
+    margin-top: -0.15rem;
 }
 
 /* Marks a container holding more than this fetch expanded — the row's own name links into it. */
 .jt-tree-more {
     margin-left: var(--jt-space-1);
     color: var(--jt-faint);
+}
+
+/* The span bar's column. `min-width` on the track alone could not hold this down: the table is
+   auto-layout, so every column with no stated width gets a share of whatever is left over, and a
+   block-level track with no intrinsic width takes that share happily. Stating a width here is what
+   caps it -- the bar is a rough position-in-tree cue, and three characters' worth of it says as
+   much as a wide one does. */
+.jt-col-span {
+    width: 3rem;
 }
 
 /* Nested-set span bar (ADR 0039 decision 3): purely structural/decorative -- the row's own text
@@ -1249,7 +1430,11 @@ details[open] > .jt-icon-summary {
     position: relative;
     display: block;
     height: 0.375rem;
-    min-width: 4rem;
+    /* A quarter of its original 4rem: the bar shows roughly where a node sits in the tree's ordering,
+       which is a background fact, not something a reader acts on — it does not deserve the width it
+       was taking from the columns that are. Narrowing this alone was not enough; the "Position"
+       heading was the real floor on the column's width and is now visually hidden. */
+    min-width: 1rem;
     background-color: var(--jt-slate-50);
     border-radius: 999px;
     overflow: hidden;
@@ -1272,24 +1457,14 @@ details[open] > .jt-icon-summary {
 
 /* ---- Breadcrumb (Jobs/Browse lineage trail) ----------------------------------------------- */
 
-/* Pairs the breadcrumb with the collapsed "Filter & search" pill on one row so the two don't
-   each claim their own vertical band; wraps to two lines only when the viewport is too narrow. */
+/* Carries the lineage trail alone — "Filter & search" sits beside the node record further down
+   the page (Browse's Bootstrap row), not up here. */
 .jt-browse-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--jt-space-3);
     margin-bottom: var(--jt-space-3);
 }
 
 .jt-browse-toolbar nav[aria-label="breadcrumb"] {
     min-width: 0;
-}
-
-.jt-browse-toolbar .jt-card--filter {
-    flex-shrink: 0;
-    margin-left: auto;
 }
 
 nav[aria-label="breadcrumb"] ol {
@@ -1428,12 +1603,9 @@ nav[aria-label="breadcrumb"] li + li::before {
     margin-bottom: var(--jt-space-4);
 }
 
-/* A quiet subtitle line naming the record/context a page is acting on. */
+/* A quiet subtitle line naming the record/context a page is acting on. Wrapping/alignment/gap
+   come from Bootstrap's d-flex flex-wrap align-items-baseline gap-2 on the markup. */
 .jt-context {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--jt-space-2);
     margin-bottom: var(--jt-space-4);
     color: var(--jt-muted);
     font-size: 0.9375rem;
@@ -1453,12 +1625,9 @@ nav[aria-label="breadcrumb"] li + li::before {
     max-width: 44rem;
 }
 
+/* Wrapping/alignment/gap come from Bootstrap's d-flex flex-wrap align-items-center
+   justify-content-between gap-3 on each <li>. */
 .jt-list > li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--jt-space-3);
     padding: 0.75rem 1rem;
     background: var(--jt-surface);
     border: 1px solid var(--jt-line);
@@ -1608,10 +1777,6 @@ nav[aria-label="breadcrumb"] li + li::before {
 
 .jt-disclosure-body {
     margin-top: var(--jt-space-3);
-}
-
-.jt-toolbar--flush {
-    margin-bottom: 0;
 }
 
 .jt-eyebrow--error {

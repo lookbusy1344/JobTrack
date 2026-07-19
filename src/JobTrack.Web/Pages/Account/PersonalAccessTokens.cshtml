@@ -26,7 +26,7 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (Model.IssuedPlaintextToken is not null) {
-	<div class="alert alert-warning" role="alert">
+	<div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
 		<p><strong>Copy this token now — it will not be shown again.</strong></p>
 		<code>@Model.IssuedPlaintextToken</code>
 	</div>
@@ -67,9 +67,9 @@
 			@foreach (var token in Model.Tokens) {
 				<tr>
 					<td>@token.Label</td>
-					<td>@token.CreatedAt.ToDateTimeOffset()</td>
-					<td>@token.ExpiresAt.ToDateTimeOffset()</td>
-					<td>@(token.LastUsedAt?.ToDateTimeOffset().ToString() ?? "Never")</td>
+					<td>@InstantDisplay.Format(token.CreatedAt, Model.ViewerZone)</td>
+					<td>@InstantDisplay.Format(token.ExpiresAt, Model.ViewerZone)</td>
+					<td>@(token.LastUsedAt is { } lastUsedAt ? InstantDisplay.Format(lastUsedAt, Model.ViewerZone) : "Never")</td>
 					<td>@(token.RevokedAt is not null ? "Revoked" : "Active")</td>
 					<td>
 						@if (token.RevokedAt is null) {

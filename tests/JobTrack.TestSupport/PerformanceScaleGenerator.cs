@@ -421,7 +421,7 @@ public static class PerformanceScaleGenerator
 		var oneBranchId = branchIdByWorker[oneWorkerId];
 		var oneLeafId = await QueryFirstLeafIdAsync(connection, oneBranchId);
 
-		var heavyWorkerBranchId = heavyWorkerId is { } heavyId ? branchIdByWorker[heavyId] : (long?)null;
+		var heavyWorkerBranchId = heavyWorkerId.HasValue ? branchIdByWorker[heavyWorkerId.Value] : (long?)null;
 
 		var seed = $"workers={workerCount};leavesPerWorker={leavesPerWorker};depth={overlapDepth};" +
 				   $"base={baseInstant:O};heavyWorker={includeHeavyWorker};heavyWorkerSessions={heavyWorkerSessionCount}";

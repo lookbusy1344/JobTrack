@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -27,6 +28,17 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	private const string AppliedBy = "test-runner";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
 	private const string AdministratorPassword = "Bootstrap-Horse-Battery-77!";
+
+	/// <summary>
+	///     <c>datetime-local</c> inputs post minute precision, so a backdate assertion has to compare
+	///     against a minute-aligned instant rather than "now minus N hours" with its stray seconds.
+	/// </summary>
+	private const string DateTimeLocalFormat = "yyyy-MM-ddTHH:mm";
+
+	private const int MinutesPerHour = 60;
+	private const int HoursBackdated = 2;
+	private const int HoursBeforeFinish = 3;
+	private const int HoursBeforeNowFinished = 1;
 
 	private readonly SqliteDatabaseFixture database = new();
 	private AppUserId administratorId;
@@ -76,9 +88,10 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
 		var startResponse = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId);
-		var startBody = await startResponse.Content.ReadAsStringAsync();
 
-		startResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var startBody = await startReloaded.Content.ReadAsStringAsync();
 		startBody.Should().Contain("Work started");
 		startBody.Should().Contain("Active");
 	}
@@ -91,9 +104,10 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetWorkFormAsync(authCookie, rootId, jobManagerId);
 		var response = await PostAsync("Start", authCookie, cookie, token, rootId, jobManagerId);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("cannot hold LeafWork");
 	}
 
@@ -106,14 +120,16 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 		var (startCookie, startToken) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
 		var startResponse = await PostAsync("Start", authCookie, startCookie, startToken, leaf.Id, workerId);
-		var startBody = await startResponse.Content.ReadAsStringAsync();
+		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var startBody = await startReloaded.Content.ReadAsStringAsync();
 		var (sessionId, version) = ExtractFirstSession(startBody);
 
-		var (finishCookie, finishToken) = await ExtractFormAsync(startResponse, startCookie);
+		var (finishCookie, finishToken) = await ExtractFormAsync(startReloaded, startCookie);
 		var finishResponse = await PostFinishAsync(authCookie, finishCookie, finishToken, leaf.Id, workerId, sessionId, version);
-		var finishBody = await finishResponse.Content.ReadAsStringAsync();
-
-		finishResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
+		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
 		finishBody.Should().Contain("Session finished");
 	}
 
@@ -126,15 +142,115 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 		var beforeResponse = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&workedByUserId={workerId.Value}", authCookie);
 		var beforeBody = await beforeResponse.Content.ReadAsStringAsync();
-		beforeBody.Should().Contain(">Start work<");
+		beforeBody.Should().Contain("#jt-icon-start");
 
 		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
 		var startResponse = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId);
-		var startBody = await startResponse.Content.ReadAsStringAsync();
 
-		startResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var startBody = await startReloaded.Content.ReadAsStringAsync();
 		startBody.Should().Contain("Finish work");
-		startBody.Should().NotContain(">Start work<");
+		startBody.Should().NotContain("#jt-icon-start");
+	}
+
+	[Fact]
+	public async Task A_worker_can_start_a_session_with_a_backdated_time_from_the_leaf_toolbar()
+	{
+		var workerId = await SeedEmployeeAsync("work.backdate-starter", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Backdated start leaf");
+		var authCookie = await SignInAsync("work.backdate-starter");
+		var backdatedAt = MinutesAgo(HoursBackdated * MinutesPerHour);
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId, FormatForDateTimeLocal(backdatedAt));
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Work started");
+
+		var sessions = await GetSessionsAsync(leaf.Id);
+		sessions.Should().ContainSingle().Which.StartedAt.Should().Be(Instant.FromDateTimeOffset(backdatedAt));
+	}
+
+	[Fact]
+	public async Task Starting_a_session_with_a_future_time_from_the_leaf_toolbar_shows_a_helpful_error()
+	{
+		var workerId = await SeedEmployeeAsync("work.future-starter", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Future start leaf");
+		var authCookie = await SignInAsync("work.future-starter");
+		var future = FormatForDateTimeLocal(MinutesAgo(-HoursBackdated * MinutesPerHour));
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId, future);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("in the future");
+	}
+
+	[Fact]
+	public async Task A_worker_can_finish_a_session_with_a_backdated_time_from_the_sessions_panel()
+	{
+		var workerId = await SeedEmployeeAsync("work.backdate-finisher", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Backdated finish leaf");
+		var authCookie = await SignInAsync("work.backdate-finisher");
+		var startedAt = MinutesAgo(HoursBeforeFinish * MinutesPerHour);
+		var finishedAt = MinutesAgo(HoursBeforeNowFinished * MinutesPerHour);
+
+		var (startCookie, startToken) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var startResponse = await PostAsync("Start", authCookie, startCookie, startToken, leaf.Id, workerId, FormatForDateTimeLocal(startedAt));
+		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var startBody = await startReloaded.Content.ReadAsStringAsync();
+		var (sessionId, version) = ExtractFirstSession(startBody);
+
+		var (finishCookie, finishToken) = await ExtractFormAsync(startReloaded, startCookie);
+		var finishResponse = await PostFinishAsync(
+			authCookie, finishCookie, finishToken, leaf.Id, workerId, sessionId, version, FormatForDateTimeLocal(finishedAt));
+		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
+		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
+		finishBody.Should().Contain("Session finished");
+
+		var sessions = await GetSessionsAsync(leaf.Id);
+		sessions.Should().ContainSingle().Which.FinishedAt.Should().Be(Instant.FromDateTimeOffset(finishedAt));
+	}
+
+	[Fact]
+	public async Task The_sessions_panel_offers_finish_as_an_icon_and_the_toolbar_keeps_its_label()
+	{
+		var workerId = await SeedEmployeeAsync("work.finish-icon", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Finish icon session leaf");
+		var authCookie = await SignInAsync("work.finish-icon");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("#jt-icon-finish");
+		// The panel's row action is icon-only; the page toolbar above it keeps its label.
+		body.Should().Contain("Finish work");
+		body.Should().NotContain("btn btn-secondary\">Finish / pause");
+	}
+
+	[Fact]
+	public async Task The_leaf_toolbar_offers_a_backdate_disclosure_beside_start()
+	{
+		var workerId = await SeedEmployeeAsync("work.backdate-disclosure", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Backdate disclosure leaf");
+		var authCookie = await SignInAsync("work.backdate-disclosure");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&workedByUserId={workerId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("#jt-icon-backdate");
+		body.Should().Contain("name=\"startedAt\"");
 	}
 
 	[Fact]
@@ -179,7 +295,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var (getCookie, getToken) = await GetCorrectFormAsync(authCookie, leaf.Id, workerId, finished.Id);
 		var correctResponse = await PostCorrectAsync(
 			authCookie, getCookie, getToken, leaf.Id, workerId, finished.Id,
-			"2026-01-01T09:00:00+00:00", "2026-01-01T10:00:00+00:00", "Forgot to clock out on time.");
+			"2026-01-01T09:00", "2026-01-01T10:00", "Forgot to clock out on time.");
 
 		correctResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		correctResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Work");
@@ -205,33 +321,70 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		return leaf;
 	}
 
+	/// <summary>
+	///     A minute-aligned UTC wall time, <paramref name="minutes" /> ago. UTC, not the test process's
+	///     own local zone, because a <c>datetime-local</c> backdate posts a bare wall time with no
+	///     offset and is now resolved in the *viewing employee's own* zone (<c>BackdateInstant</c>,
+	///     <c>IViewerTimeZoneResolver</c>) — this suite's worker is seeded with
+	///     <c>
+	///         iana_time_zone =
+	///         'UTC'
+	///     </c>
+	///     (<see cref="SeedEmployeeAsync" />), so a UTC-based wall time round-trips
+	///     regardless of what zone the test process itself happens to run in.
+	/// </summary>
+	private static DateTimeOffset MinutesAgo(int minutes)
+	{
+		var now = DateTimeOffset.UtcNow;
+
+		return new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, now.Offset).AddMinutes(-minutes);
+	}
+
+	private static string FormatForDateTimeLocal(DateTimeOffset value) => value.ToString(DateTimeLocalFormat, CultureInfo.InvariantCulture);
+
+	private async Task<EquatableArray<WorkSessionResult>> GetSessionsAsync(JobNodeId leafId) =>
+		await seedClient.Query.GetLeafSessionsAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, LeafWorkId = leafId },
+			CancellationToken.None);
+
 	private async Task<HttpResponseMessage> PostAsync(
-		string handler, string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, AppUserId workedByUserId)
+		string handler, string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, AppUserId workedByUserId,
+		string? startedAt = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, $"/Jobs/Work?handler={handler}");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+		var fields = new Dictionary<string, string> {
 			["LeafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["WorkedByUserId"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
 			["__RequestVerificationToken"] = token,
-		});
+		};
+		if (startedAt is not null) {
+			fields["startedAt"] = startedAt;
+		}
+
+		request.Content = new FormUrlEncodedContent(fields);
 
 		return await client.SendAsync(request);
 	}
 
 	private async Task<HttpResponseMessage> PostFinishAsync(
 		string authCookie, string antiforgeryCookie, string token,
-		JobNodeId leafNodeId, AppUserId workedByUserId, long sessionId, long version)
+		JobNodeId leafNodeId, AppUserId workedByUserId, long sessionId, long version, string? finishedAt = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Finish");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+		var fields = new Dictionary<string, string> {
 			["LeafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["WorkedByUserId"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
 			["sessionId"] = sessionId.ToString(CultureInfo.InvariantCulture),
 			["version"] = version.ToString(CultureInfo.InvariantCulture),
 			["__RequestVerificationToken"] = token,
-		});
+		};
+		if (finishedAt is not null) {
+			fields["finishedAt"] = finishedAt;
+		}
+
+		request.Content = new FormUrlEncodedContent(fields);
 
 		return await client.SendAsync(request);
 	}
@@ -310,6 +463,23 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 		return await client.SendAsync(request);
 	}
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private async Task<string> SignInAsync(string userName)
 	{

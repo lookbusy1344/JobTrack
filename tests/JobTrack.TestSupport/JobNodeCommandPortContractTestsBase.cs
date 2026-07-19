@@ -932,10 +932,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 					Priority = Priority.Medium,
 					PrerequisiteLocalIds = [1],
 					LeafWork = new() {
-						WorkedByUserId = workerId,
-						StartedAt = now - Duration.FromDays(1),
-						FinishedAt = null,
-						Achievement = Achievement.InProgress,
+						WorkedByUserId = workerId, StartedAt = now - Duration.FromDays(1), FinishedAt = null, Achievement = Achievement.InProgress,
 					},
 				},
 			],
@@ -947,10 +944,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		(await ReadAchievementIdAsync(closedId)).Should().Be((long)Achievement.Success);
 		(await ReadAchievementIdAsync(openId)).Should().Be((long)Achievement.InProgress);
 
-		(await CountSessionsAsync(closedId, finished: true)).Should().Be(1);
-		(await CountSessionsAsync(closedId, finished: false)).Should().Be(0);
-		(await CountSessionsAsync(openId, finished: true)).Should().Be(0);
-		(await CountSessionsAsync(openId, finished: false)).Should().Be(1);
+		(await CountSessionsAsync(closedId, true)).Should().Be(1);
+		(await CountSessionsAsync(closedId, false)).Should().Be(0);
+		(await CountSessionsAsync(openId, true)).Should().Be(0);
+		(await CountSessionsAsync(openId, false)).Should().Be(1);
 	}
 
 	[Fact]
@@ -966,11 +963,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		// about the batch's own edges alone.
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 		var anchor = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		await port.AddPrerequisiteAsync(new() {
-			Context = ContextFor(jobManagerId),
-			RequiredJobId = required.Id,
-			DependentJobId = anchor.Id,
-		});
+		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = anchor.Id });
 
 		var childrenBefore = await CountChildrenAsync(anchor.Id);
 

@@ -14,29 +14,63 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (Model.CurrentNode is not null) {
-	<p class="jt-context"><span>Leaf</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Leaf</span><strong
+			class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
 
 	var activeSession = Model.Panel?.Sessions.FirstOrDefault(session => session.FinishedAt is null);
-	<div class="jt-toolbar">
+	BackdateDisclosureModel? toolbarBackdate = null;
+	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
 		@if (activeSession is not null) {
-			<span class="status-pill status-pill-ready">Active since @activeSession.StartedAt</span>
+			var finishFields = Model.SessionFields(activeSession);
+			<span class="status-pill status-pill-ready">Active since @InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone)</span>
 			<form method="post" asp-page-handler="Finish" class="inline-form">
-				@foreach (var field in Model.Panel!.ExtraHiddenFields) {
+				@foreach (var field in finishFields) {
 					<input type="hidden" name="@field.Key" value="@field.Value"/>
 				}
-				<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
-				<input type="hidden" name="version" value="@activeSession.Version"/>
-				<button type="submit" class="btn btn-secondary">Finish work</button>
+				<button type="submit" class="btn btn-secondary">
+					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+						<use href="#jt-icon-finish"></use>
+					</svg>
+					Finish work
+				</button>
 			</form>
+			toolbarBackdate = new() {
+				Handler = "Finish",
+				FieldName = "finishedAt",
+				Label = "Finished at",
+				SubmitText = "Finish at this time",
+				AccessibleName = "Backdate finish",
+				HiddenFields = finishFields,
+				RowId = "backdate-work-panel",
+			};
+			<partial name="_BackdateTrigger" model="toolbarBackdate"/>
 		} else {
-			<form method="post" asp-page-handler="Start">
-				<input type="hidden" asp-for="LeafNodeId"/>
-				<input type="hidden" name="WorkedByUserId" value="@Model.Panel?.DisplayedWorkedByUserId"/>
-				<button type="submit" class="btn btn-primary">Start work</button>
+			<form method="post" asp-page-handler="Start" class="inline-form">
+				@foreach (var field in Model.ToolbarStateFields) {
+					<input type="hidden" name="@field.Key" value="@field.Value"/>
+				}
+				<button type="submit" class="btn btn-primary">
+					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+						<use href="#jt-icon-start"></use>
+					</svg>
+					Start work
+				</button>
 			</form>
+			toolbarBackdate = new() {
+				Handler = "Start",
+				FieldName = "startedAt",
+				Label = "Started at",
+				SubmitText = "Start at this time",
+				AccessibleName = "Backdate start",
+				HiddenFields = Model.ToolbarStateFields,
+				SubmitClass = "btn btn-primary",
+				RowId = "backdate-work-panel",
+			};
+			<partial name="_BackdateTrigger" model="toolbarBackdate"/>
 		}
 		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Back to Browse</a>
 	</div>
+	<partial name="_BackdatePanel" model="toolbarBackdate"/>
 
 	@if (Model.Panel is { } panel) {
 		<partial name="_LeafWorkSessions" model="panel"/>

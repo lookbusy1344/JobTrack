@@ -75,12 +75,12 @@ public static class CostSegmentPartitioner
 		var pieces = new List<(CostableSession Session, WorkInterval Interval)>();
 		foreach (var session in sessions) {
 			var clippedToBounds = IntervalAlgebra.Intersect(session.Interval, bounds);
-			if (clippedToBounds is not { } clipped) {
+			if (clippedToBounds is not WorkInterval clipped) {
 				continue;
 			}
 
 			foreach (var workingInterval in effectiveWorkingIntervals) {
-				if (IntervalAlgebra.Intersect(clipped, workingInterval) is { } piece) {
+				if (IntervalAlgebra.Intersect(clipped, workingInterval) is WorkInterval piece) {
 					pieces.Add((session, piece));
 				}
 			}
@@ -105,7 +105,7 @@ public static class CostSegmentPartitioner
 			_ = boundaries.Add(interval.End);
 
 			JobNodeId? ancestorId = session.NodeId;
-			while (ancestorId is { } id) {
+			while (ancestorId is JobNodeId id) {
 				if (overridesByNode.TryGetValue(id, out var overrides)) {
 					AddClippedBoundaries(boundaries, overrides.Select(over => (over.EffectiveStart, over.EffectiveEnd)), bounds);
 				}
@@ -127,7 +127,7 @@ public static class CostSegmentPartitioner
 				_ = boundaries.Add(start);
 			}
 
-			if (end is { } exclusiveEnd && exclusiveEnd > bounds.Start && exclusiveEnd < bounds.End) {
+			if (end is Instant exclusiveEnd && exclusiveEnd > bounds.Start && exclusiveEnd < bounds.End) {
 				_ = boundaries.Add(exclusiveEnd);
 			}
 		}

@@ -15,9 +15,10 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (Model.CurrentNode is not null) {
-	<p class="jt-context"><span>Job</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Job</span><strong
+			class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
 
-	<div class="jt-toolbar">
+	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
 		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Back to Browse</a>
 		@if (Model.CurrentNode.Node.Kind != NodeKind.Leaf) {
 			<a class="btn btn-secondary" asp-page="/Jobs/AwaitingProgress" asp-route-subtreeRootId="@Model.NodeId">Back to subtree job list</a>
@@ -30,11 +31,11 @@
 	} else {
 		<ul class="jt-list">
 			@foreach (var edge in Model.Requires) {
-				<li>
+				<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
 					@if (Model.NodeSummariesById.TryGetValue(edge.RequiredJobId, out var requiredNode)) {
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 						   asp-route-nodeId="@edge.RequiredJobId.Value">@JobNodeDisplay.Title(requiredNode)</a>
-						<span class="jt-tag">@EnumDisplay.Label(requiredNode.Kind)</span>
+						<partial name="_KindIcon" model="@(new KindIconModel { Kind = requiredNode.Kind })"/>
 						@if (requiredNode.Cost is { } cost) {
 							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
 						}
@@ -58,11 +59,11 @@
 	} else {
 		<ul class="jt-list">
 			@foreach (var edge in Model.RequiredBy) {
-				<li>
+				<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
 					@if (Model.NodeSummariesById.TryGetValue(edge.DependentJobId, out var dependentNode)) {
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 						   asp-route-nodeId="@edge.DependentJobId.Value">@JobNodeDisplay.Title(dependentNode)</a>
-						<span class="jt-tag">@EnumDisplay.Label(dependentNode.Kind)</span>
+						<partial name="_KindIcon" model="@(new KindIconModel { Kind = dependentNode.Kind })"/>
 						@if (dependentNode.Cost is { } cost) {
 							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
 						}
@@ -116,7 +117,9 @@
 									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
 								</td>
-								<td>@EnumDisplay.Label(node.Kind)</td>
+								<td>
+									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, ShowLabel = false })"/>
+								</td>
 								<td>@(node.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
 								<td>@(node.ArchivedAt is not null ? "yes" : "no")</td>
 								<td>

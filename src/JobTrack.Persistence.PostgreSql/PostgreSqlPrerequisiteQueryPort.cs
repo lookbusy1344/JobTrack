@@ -37,7 +37,7 @@ internal sealed class PostgreSqlPrerequisiteQueryPort : IPrerequisiteQueryPort
 			.OrderBy(jp => jp.FromId).ThenBy(jp => jp.ToId)
 			.Skip(offset)
 			.Select(jp => new PrerequisiteEdge(jp.FromId, jp.ToId));
-		var edges = await (limit is { } take ? query.Take(take) : query)
+		var edges = await (limit.HasValue ? query.Take(limit.Value) : query)
 			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. edges];

@@ -28,7 +28,7 @@ public static class ReadinessCalculator
 		var blockers = new List<UnsatisfiedPrerequisite>();
 
 		JobNodeId? currentId = nodeId;
-		while (currentId is { } id) {
+		while (currentId is JobNodeId id) {
 			if (edgesByDependent.TryGetValue(id, out var edges)) {
 				foreach (var edge in edges) {
 					if (!achievedCache.TryGetValue(edge.RequiredJobId, out var achieved)) {

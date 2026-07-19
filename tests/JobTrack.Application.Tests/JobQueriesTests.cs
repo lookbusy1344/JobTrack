@@ -1329,14 +1329,14 @@ public sealed class JobQueriesTests
 	}
 
 	[Fact]
-	public async Task GetActiveSessionsAsync_rejects_sessions_returned_for_another_user()
+	public async Task GetActiveSessionsAsync_filters_out_another_workers_session_for_a_plain_worker()
 	{
 		var worker = new AppUserId(20);
 		var otherWorker = new AppUserId(21);
 		var leaf = new JobNodeId(30);
 		var port = new FakeWorkSessionQueryPort();
 		port.SeedRoles(worker, EmployeeRole.Worker);
-		port.SeedActiveSessionsOverride(new WorkSessionResult {
+		port.SeedSession(new() {
 			Id = new(1),
 			LeafWorkId = leaf,
 			WorkedByUserId = otherWorker,
@@ -1346,10 +1346,40 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateSut(port);
 
-		var act = () => sut.GetActiveSessionsAsync(
+		var result = await sut.GetActiveSessionsAsync(
 			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
 
-		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+		result.Should().BeEmpty("a plain Worker may not manage another worker's session, so the dashboard offers them Start, not Finish, for it");
+	}
+
+	/// <summary>
+	///     Administrator/JobManager may finish any leaf's session unconditionally
+	///     (<see cref="Domain.Authorization.WorkSessionAccessPolicy.CanManage" />, ADR 0032), so this
+	///     read surfaces another worker's active session to them too -- otherwise the dashboard would
+	///     offer a Start button for work that is already in progress.
+	/// </summary>
+	[Fact]
+	public async Task GetActiveSessionsAsync_includes_another_workers_session_for_an_administrator()
+	{
+		var administrator = new AppUserId(20);
+		var worker = new AppUserId(21);
+		var leaf = new JobNodeId(30);
+		var port = new FakeWorkSessionQueryPort();
+		port.SeedRoles(administrator, EmployeeRole.Administrator);
+		port.SeedSession(new() {
+			Id = new(1),
+			LeafWorkId = leaf,
+			WorkedByUserId = worker,
+			StartedAt = Instant.FromUtc(2026, 1, 1, 9, 0),
+			ChangedAt = Instant.FromUtc(2026, 1, 1, 9, 0),
+			Version = 1,
+		});
+		var sut = CreateSut(port);
+
+		var result = await sut.GetActiveSessionsAsync(
+			new() { Context = ContextFor(administrator), LeafWorkIds = [leaf] });
+
+		result.Should().ContainSingle(s => s.Id == new WorkSessionId(1));
 	}
 
 	[Fact]

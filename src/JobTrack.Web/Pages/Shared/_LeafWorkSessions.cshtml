@@ -1,3 +1,4 @@
+@using System.Globalization
 @model LeafWorkSessionsPanelModel
 
 <form method="get" class="jt-form-card">
@@ -31,27 +32,42 @@
 			</thead>
 			<tbody>
 			@foreach (var session in Model.Sessions) {
+				var sessionBackdate = session.FinishedAt is null
+					? new BackdateDisclosureModel {
+						Handler = "Finish",
+						FieldName = "finishedAt",
+						Label = "Finished at",
+						SubmitText = "Finish at this time",
+						AccessibleName = "Backdate finish",
+						HiddenFields = Model.SessionFields(session),
+						RowId = $"backdate-finish-session-{session.Id.Value.ToString(CultureInfo.InvariantCulture)}",
+					}
+					: null;
 				<tr>
 					<td>@Model.DescribeWorker(session.WorkedByUserId)</td>
-					<td>@session.StartedAt</td>
+					<td>@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
 					<td>
 						@if (session.FinishedAt is { } finishedAt) {
-							@finishedAt
+							@InstantDisplay.Format(finishedAt, Model.ViewerZone)
 						} else {
 							<span class="status-pill status-pill-ready">Active</span>
 						}
 					</td>
 					<td>
-						<div class="jt-toolbar jt-toolbar--flush">
-							@if (session.FinishedAt is null) {
+						<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+							@if (sessionBackdate is not null) {
 								<form method="post" asp-page-handler="Finish" class="inline-form">
-									@foreach (var field in Model.ExtraHiddenFields) {
+									@foreach (var field in sessionBackdate.HiddenFields) {
 										<input type="hidden" name="@field.Key" value="@field.Value"/>
 									}
-									<input type="hidden" name="sessionId" value="@session.Id.Value"/>
-									<input type="hidden" name="version" value="@session.Version"/>
-									<button type="submit" class="btn btn-secondary">Finish / pause</button>
+									<button type="submit" class="jt-icon-button" title="Finish / pause">
+										<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+											<use href="#jt-icon-finish"></use>
+										</svg>
+										<span class="visually-hidden">Finish / pause</span>
+									</button>
 								</form>
+								<partial name="_BackdateTrigger" model="sessionBackdate"/>
 							}
 							@* The list can span several workers, so each row corrects its own worker's
 							   session, not whoever the panel happens to be filtered to. *@
@@ -62,6 +78,9 @@
 						</div>
 					</td>
 				</tr>
+				@if (sessionBackdate is not null) {
+					<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = sessionBackdate, ColumnCount = 4 })"/>
+				}
 			}
 			</tbody>
 		</table>

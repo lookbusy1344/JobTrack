@@ -46,7 +46,7 @@
          SQLitePCLRaw.lib.e_sqlite3 2.1.11 (GHSA-2m69-gcr7-jv3q) transitively;
          pin the bundle to the version that depends on its SourceGear.sqlite3
          successor instead. -->
-    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.4" />
   </ItemGroup>
   <ItemGroup Label="EF Core (impl plan §7.4, ADR 0010)">
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />

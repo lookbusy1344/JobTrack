@@ -90,7 +90,7 @@ internal static class AuditQueryAssembly
 	{
 		var query = context.Set<AuditEventEntity>().AsNoTracking().AsQueryable();
 
-		if (filter.ActorId is { } actorId) {
+		if (filter.ActorId is AppUserId actorId) {
 			query = query.Where(e => e.ActorUserId == actorId);
 		}
 
@@ -98,19 +98,19 @@ internal static class AuditQueryAssembly
 			query = query.Where(e => e.EntityType == entityType);
 		}
 
-		if (filter.EntityId is { } entityId) {
+		if (filter.EntityId is long entityId) {
 			query = query.Where(e => e.EntityId == entityId);
 		}
 
-		if (filter.CorrelationId is { } correlationId) {
+		if (filter.CorrelationId is Guid correlationId) {
 			query = query.Where(e => e.CorrelationId == correlationId);
 		}
 
-		if (filter.From is { } from) {
+		if (filter.From is Instant from) {
 			query = query.Where(e => e.OccurredAt >= from);
 		}
 
-		if (filter.To is { } to) {
+		if (filter.To is Instant to) {
 			query = query.Where(e => e.OccurredAt < to);
 		}
 

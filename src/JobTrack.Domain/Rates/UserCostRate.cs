@@ -10,7 +10,7 @@ public sealed record UserCostRate
 	/// <exception cref="ArgumentOutOfRangeException"><paramref name="effectiveEnd" /> does not strictly follow <paramref name="effectiveStart" />.</exception>
 	public UserCostRate(HourlyRate rate, Instant effectiveStart, Instant? effectiveEnd)
 	{
-		if (effectiveEnd is { } end && end <= effectiveStart) {
+		if (effectiveEnd is Instant end && end <= effectiveStart) {
 			throw new ArgumentOutOfRangeException(nameof(effectiveEnd), effectiveEnd,
 				"An effective end instant must be strictly after the effective start instant.");
 		}
@@ -30,5 +30,5 @@ public sealed record UserCostRate
 	public Instant? EffectiveEnd { get; }
 
 	/// <summary>Whether <paramref name="at" /> falls within <see cref="EffectiveStart" />/<see cref="EffectiveEnd" />.</summary>
-	public bool IsEffectiveAt(Instant at) => at >= EffectiveStart && (EffectiveEnd is not { } end || at < end);
+	public bool IsEffectiveAt(Instant at) => at >= EffectiveStart && (EffectiveEnd is not Instant end || at < end);
 }

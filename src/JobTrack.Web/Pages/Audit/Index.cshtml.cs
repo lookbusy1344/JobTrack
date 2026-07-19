@@ -24,7 +24,11 @@ using NodaTime;
 ///     for a caller who lacks cost-viewing permission, even an Auditor.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.AuditSearch)]
-public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class IndexModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	[BindProperty(SupportsGet = true)] public long? ActorId { get; init; }
 
@@ -34,13 +38,19 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 
 	[BindProperty(SupportsGet = true)] public Guid? CorrelationId { get; init; }
 
-	[BindProperty(SupportsGet = true)] public DateTimeOffset? From { get; init; }
+	[BindProperty(SupportsGet = true)] public string? From { get; init; }
 
-	[BindProperty(SupportsGet = true)] public DateTimeOffset? To { get; init; }
+	[BindProperty(SupportsGet = true)] public string? To { get; init; }
 
 	public string? ErrorMessage { get; private set; }
 
 	public IReadOnlyList<AuditEventResult> Events { get; private set; } = [];
+
+	/// <summary>
+	///     The signed-in actor's own time zone, for formatting every event's <c>OccurredAt</c> and parsing the <see cref="From" />/<see cref="To" />
+	///     filter (<see cref="InstantDisplay" />).
+	/// </summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
@@ -49,18 +59,19 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			return Challenge();
 		}
 
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.AppUserId, cancellationToken);
 		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
 
 		try {
 			Events = await jobTrackClient.Audit.SearchAuditEventsAsync(new() {
 				Context = context,
 				Filter = new() {
-					ActorId = ActorId is { } actorId ? new AppUserId(actorId) : null,
+					ActorId = ActorId.HasValue ? new AppUserId(ActorId.Value) : null,
 					EntityType = EntityType,
 					EntityId = EntityId,
 					CorrelationId = CorrelationId,
-					From = From is { } from ? Instant.FromDateTimeOffset(from) : null,
-					To = To is { } to ? Instant.FromDateTimeOffset(to) : null,
+					From = BackdateInstant.TryParse(From, ViewerZone, out var from) ? from : null,
+					To = BackdateInstant.TryParse(To, ViewerZone, out var to) ? to : null,
 				},
 			}, cancellationToken);
 		}

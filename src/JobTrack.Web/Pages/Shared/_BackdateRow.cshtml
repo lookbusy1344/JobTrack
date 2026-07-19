@@ -1,0 +1,9 @@
+@model BackdateRowModel
+@* Hidden by default (site.js toggles the `hidden` attribute from the matching _BackdateTrigger).
+   A dedicated row rather than nesting the form in the triggering cell: the form needs the whole
+   table's width for a comfortable date/time control and Save button, not one column's worth. *@
+<tr id="@Model.Disclosure.RowId" class="jt-backdate-row" hidden>
+	<td colspan="@Model.ColumnCount">
+		<partial name="_BackdateForm" model="Model.Disclosure"/>
+	</td>
+</tr>

@@ -339,8 +339,9 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		};
 	}
 
-	private static IReadOnlyCollection<RequesterSubtreeLeafState> ToLeafStates(IEnumerable<RequesterSubtreeRow> rows) =>
-		[.. rows.Select(r => new RequesterSubtreeLeafState { LeafAchievement = r.AchievementId is { } id ? (Achievement)id : null })];
+	private static IReadOnlyCollection<RequesterSubtreeLeafState> ToLeafStates(IEnumerable<RequesterSubtreeRow> rows) => [
+		.. rows.Select(r => new RequesterSubtreeLeafState { LeafAchievement = r.AchievementId.HasValue ? (Achievement)r.AchievementId.Value : null }),
+	];
 
 	/// <summary>
 	///     Verifies <paramref name="nodeId" /> has an associated <c>job_request</c> row and returns its

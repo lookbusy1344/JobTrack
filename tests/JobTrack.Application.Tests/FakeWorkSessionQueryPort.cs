@@ -13,7 +13,6 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 	private readonly HashSet<JobNodeId> _leaves = [];
 	private readonly Dictionary<AppUserId, EquatableArray<EmployeeRole>> _roles = [];
 	private readonly Dictionary<(JobNodeId LeafWorkId, AppUserId WorkedByUserId), List<WorkSessionResult>> _sessions = [];
-	private WorkSessionResult[]? _activeSessionsOverride;
 
 	public Task<WorkSessionQueryResult> GetSessionsAsync(
 		AppUserId actorId, JobNodeId leafWorkId, AppUserId? workedByUserId,
@@ -30,7 +29,7 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 		// A null workedByUserId means "every worker's sessions on this leaf" (ADR 0041), so the fake
 		// unions every keyed bucket for the leaf rather than looking up one worker's.
 		IEnumerable<WorkSessionResult> matching;
-		if (workedByUserId is { } workerId) {
+		if (workedByUserId is AppUserId workerId) {
 			matching = _sessions.TryGetValue((leafWorkId, workerId), out var found) ? found : [];
 		} else {
 			matching = _sessions.Where(entry => entry.Key.Item1 == leafWorkId).SelectMany(entry => entry.Value);
@@ -39,7 +38,7 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 		var ordered = matching
 			.OrderByDescending(s => s.StartedAt).ThenByDescending(s => s.Id.Value)
 			.Skip(offset);
-		var sessions = limit is { } take ? ordered.Take(take) : ordered;
+		var sessions = limit.HasValue ? ordered.Take(limit.Value) : ordered;
 
 		return Task.FromResult(new WorkSessionQueryResult { ActorRoles = actorRoles, Sessions = [.. sessions] });
 	}
@@ -51,13 +50,9 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		}
 
-		if (_activeSessionsOverride is { } overrideSessions) {
-			return Task.FromResult(new WorkSessionQueryResult { ActorRoles = actorRoles, Sessions = [.. overrideSessions] });
-		}
-
 		var leafWorkIdSet = leafWorkIds.ToHashSet();
 		var sessions = _sessions
-			.Where(kvp => kvp.Key.WorkedByUserId == actorId && leafWorkIdSet.Contains(kvp.Key.LeafWorkId))
+			.Where(kvp => leafWorkIdSet.Contains(kvp.Key.LeafWorkId))
 			.SelectMany(kvp => kvp.Value)
 			.Where(s => s.FinishedAt is null)
 			.ToArray();
@@ -80,10 +75,4 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 
 		sessions.Add(session);
 	}
-
-	/// <summary>
-	///     Returns the given sessions from <see cref="GetActiveSessionsAsync" /> regardless of actor ownership,
-	///     so Application-layer tests can prove defense-in-depth rejection.
-	/// </summary>
-	public void SeedActiveSessionsOverride(params WorkSessionResult[] sessions) => _activeSessionsOverride = sessions;
 }

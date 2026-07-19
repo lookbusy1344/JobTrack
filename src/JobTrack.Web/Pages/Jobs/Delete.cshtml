@@ -13,7 +13,8 @@
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 	@if (Model.CurrentNode is not null) {
-		<p class="jt-context"><span>Deleting</span><strong class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Deleting</span><strong
+				class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
 
 		<div class="jt-notice">
 			<p>
@@ -36,7 +37,7 @@
 				<label asp-for="Input.Reason">Reason (only required if this leaf has worked session history)</label>
 				<input asp-for="Input.Reason" class="form-control"/>
 			</div>
-			<div class="jt-toolbar jt-toolbar--flush">
+			<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 				<button type="submit" class="btn btn-outline-danger">Delete permanently</button>
 				<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Cancel</a>
 			</div>

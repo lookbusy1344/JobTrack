@@ -43,7 +43,7 @@ public sealed class CostReportModel(IJobTrackClient jobTrackClient, UserManager<
 
 		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
 		var nodeId = new JobNodeId(NodeId);
-		var asOf = AsOf is { } explicitAsOf ? Instant.FromDateTimeOffset(explicitAsOf) : SystemClock.Instance.GetCurrentInstant();
+		var asOf = AsOf.HasValue ? Instant.FromDateTimeOffset(AsOf.Value) : SystemClock.Instance.GetCurrentInstant();
 
 		try {
 			Node = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = nodeId }, cancellationToken);

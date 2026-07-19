@@ -323,7 +323,7 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 							   .FirstOrDefaultAsync(u => u.Id == request.Context.Actor, cancellationToken).ConfigureAwait(false)
 						   ?? throw new EntityNotFoundException($"Employee {request.Context.Actor} does not exist.");
 
-		if (request.NodeId is { } nodeId) {
+		if (request.NodeId is JobNodeId nodeId) {
 			await EnsureNodeIsNotLeafAsync(context, nodeId, cancellationToken).ConfigureAwait(false);
 		}
 

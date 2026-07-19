@@ -1,17 +1,11 @@
 @page
 @using System.Globalization
 @using JobTrack.Abstractions
-@using JobTrack.Application
 @model BrowseModel
 @{
 	ViewData["Title"] = "Browse job";
 
-	static string KindChipClass(NodeKind kind) => kind switch {
-		NodeKind.Root => "jt-kind--root",
-		NodeKind.Branch => "jt-kind--branch",
-		NodeKind.Leaf => "jt-kind--leaf",
-		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-	};
+	const int BreadcrumbMaxDescriptionLength = 50;
 
 	// Sprite symbol id and the spoken noun for a node's kind — the two halves of the tree row's
 	// leading glyph: the drawn icon (aria-hidden) and the screen-reader label that replaces it.
@@ -50,109 +44,124 @@
 				@foreach (var ancestor in Model.CurrentNode.Ancestors) {
 					<li>
 						@if (ancestor.Kind == NodeKind.Root) {
-							<a asp-page="/Jobs/Browse">@JobNodeDisplay.Title(ancestor)</a>
+							<a asp-page="/Jobs/Browse">@JobNodeDisplay.Title(ancestor, BreadcrumbMaxDescriptionLength)</a>
 						} else {
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-							   asp-route-nodeId="@ancestor.Id.Value">@JobNodeDisplay.Title(ancestor)</a>
+							   asp-route-nodeId="@ancestor.Id.Value">@JobNodeDisplay.Title(ancestor, BreadcrumbMaxDescriptionLength)</a>
 						}
 					</li>
 				}
-				<li class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</li>
+				<li class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node, BreadcrumbMaxDescriptionLength)</li>
 			</ol>
 		</nav>
 	}
-
-	<details class="jt-card jt-card--filter">
-		<summary class="jt-disclosure-summary">Filter &amp; search</summary>
-		<form method="get" asp-page="/Jobs/Browse" class="jt-disclosure-body">
-			<div class="form-group">
-				<label asp-for="SearchText"></label>
-				<input asp-for="SearchText" class="form-control"/>
-			</div>
-			<div class="form-group">
-				<label asp-for="OwnerUserId">Owner</label>
-				<select asp-for="OwnerUserId" class="form-control" asp-items="Model.OwnerFilterOptions"></select>
-			</div>
-			<div class="form-group">
-				<label asp-for="UnassignedOnly">
-					<input asp-for="UnassignedOnly"/>
-					Unassigned only (the pickup pool)
-				</label>
-			</div>
-			<div class="form-group">
-				<label asp-for="ArchiveFilter"></label>
-				<select asp-for="ArchiveFilter" class="form-control"
-				        asp-items="EnumDisplay.BuildOptions<JobArchiveFilter>()"></select>
-			</div>
-			<button type="submit" class="btn btn-primary">Apply</button>
-		</form>
-	</details>
 </div>
 
 @if (Model.IsSearch) {
 	<h2>Search results for "@Model.SearchText"</h2>
+	<partial name="_BrowseFilter" model="Model"/>
 } else if (Model.CurrentNode is not null) {
 	<h2 class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</h2>
-	<dl>
-		<dt>Kind</dt>
-		<dd><span class="jt-kind @KindChipClass(Model.CurrentNode.Node.Kind)">@EnumDisplay.Label(Model.CurrentNode.Node.Kind)</span></dd>
-		<dt>Owner</dt>
-		<dd><span class="jt-tag">@Model.DescribeOwner(Model.CurrentNode.Node.OwnerUserId)</span></dd>
-		<dt>Priority</dt>
-		<dd>@EnumDisplay.Label(Model.CurrentNode.Node.Priority)</dd>
-		@if (Model.Subtree?.RootTotal is { } rootTotal) {
-			<dt>Cost</dt>
-			<dd><span class="jt-amount">@MoneyDisplay.Format(rootTotal)</span></dd>
-		}
-		@if (Model.Readiness is { } readiness) {
-			<dt>Readiness</dt>
-			<dd>
-				@if (readiness.IsReady) {
-					<span class="status-pill status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-go"></use></svg>Ready</span>
-				} else {
-					<span class="status-pill status-pill-blocked" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg>Blocked</span>
+	<div class="row g-3 mb-4 align-items-start">
+		<div class="col-md-8">
+			<dl class="row mb-0">
+				<dt class="col-sm-3">Kind</dt>
+				<dd class="col-sm-9">
+					<partial name="_KindIcon" model="@(new KindIconModel { Kind = Model.CurrentNode.Node.Kind })"/>
+				</dd>
+				<dt class="col-sm-3">Owner</dt>
+				<dd class="col-sm-9"><span class="jt-tag">@Model.DescribeOwner(Model.CurrentNode.Node.OwnerUserId)</span></dd>
+				<dt class="col-sm-3">Priority</dt>
+				<dd class="col-sm-9">@EnumDisplay.Label(Model.CurrentNode.Node.Priority)</dd>
+				@if (Model.Subtree?.RootTotal is { } rootTotal) {
+					<dt class="col-sm-3">Cost</dt>
+					<dd class="col-sm-9"><span class="jt-amount">@MoneyDisplay.Format(rootTotal)</span></dd>
 				}
-			</dd>
-		}
-		@if (!string.IsNullOrWhiteSpace(Model.CurrentNode.Node.WriteUp)) {
-			<dt>Writeup</dt>
-			<dd class="jt-preserve-whitespace">@Model.CurrentNode.Node.WriteUp</dd>
-		}
-		@if (Model.CurrentNode.Node.ArchivedAt is { } archivedAt) {
-			<dt>Archived</dt>
-			<dd>@archivedAt</dd>
-		}
-		@if (Model.RequestContext is { } requestContext) {
-			<dt>Requester request</dt>
-			<dd>
-				<span class="jt-tag">@EnumDisplay.Label(requestContext.Status)</span>
-				<a asp-page="/Requests/Details" asp-route-id="@requestContext.JobNodeId.Value">View request detail</a>
-			</dd>
-		}
-	</dl>
+				@if (Model.CurrentNodeAchievement is { } currentAchievement) {
+					<dt class="col-sm-3">Achievement</dt>
+					<dd class="col-sm-9">
+						<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = currentAchievement })"/>
+					</dd>
+				}
+				@if (Model.Readiness is { } readiness) {
+					<dt class="col-sm-3">Readiness</dt>
+					<dd class="col-sm-9">
+						@if (readiness.IsReady) {
+							<span class="status-pill status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+							                                                               aria-hidden="true" focusable="false"><use
+										href="#jt-icon-go"></use></svg>Ready</span>
+						} else {
+							<span class="status-pill status-pill-blocked" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+							                                                                 aria-hidden="true" focusable="false"><use
+										href="#jt-icon-stop"></use></svg>Blocked</span>
+						}
+					</dd>
+				}
+				@if (!string.IsNullOrWhiteSpace(Model.CurrentNode.Node.WriteUp)) {
+					<dt class="col-sm-3">Writeup</dt>
+					<dd class="col-sm-9 jt-preserve-whitespace">@Model.CurrentNode.Node.WriteUp</dd>
+				}
+				@if (Model.CurrentNode.Node.ArchivedAt is { } archivedAt) {
+					<dt class="col-sm-3">Archived</dt>
+					<dd class="col-sm-9">@InstantDisplay.Format(archivedAt, Model.ViewerZone)</dd>
+				}
+				@if (Model.RequestContext is { } requestContext) {
+					<dt class="col-sm-3">Requester request</dt>
+					<dd class="col-sm-9">
+						<span class="jt-tag">@EnumDisplay.Label(requestContext.Status)</span>
+						<a asp-page="/Requests/Details" asp-route-id="@requestContext.JobNodeId.Value">View request detail</a>
+					</dd>
+				}
+			</dl>
+		</div>
 
-	<div class="jt-toolbar">
+		<div class="col-md-4">
+			<partial name="_BrowseFilter" model="Model"/>
+		</div>
+	</div>
+
+	BackdateDisclosureModel? toolbarBackdate = null;
+	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
 		@if (!Model.CurrentNode.Node.HasChildren && Model.CurrentNode.Node.Kind != NodeKind.Root) {
-			@if (Model.ActiveSessionByLeaf.TryGetValue(Model.CurrentNode.Node.Id, out var currentNodeActiveSession)) {
-				<span class="status-pill status-pill-ready">Active since @currentNodeActiveSession.StartedAt</span>
+			var toolbarActions = new WorkRowActionsModel {
+				LeafNodeId = Model.CurrentNode.Node.Id.Value,
+				ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(Model.CurrentNode.Node.Id),
+				ViewerZone = Model.ViewerZone,
+				StartHandler = "Start",
+				StartNodeFieldName = "leafNodeId",
+				PageStateFields = Model.RowStateFields,
+			};
+			@if (toolbarActions.ActiveSession is { } currentNodeActiveSession) {
+				<partial name="_ActiveSincePill" model="@(new ActiveSincePillModel {
+					                                        ActiveSession = currentNodeActiveSession, ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(currentNodeActiveSession), ViewerZone = Model.ViewerZone, Compact = false,
+				                                        })"/>
 				<form method="post" asp-page-handler="Finish" class="inline-form">
-					<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-					<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-					<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-					<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-					<input type="hidden" name="sessionId" value="@currentNodeActiveSession.Id.Value"/>
-					<input type="hidden" name="version" value="@currentNodeActiveSession.Version"/>
-					<button type="submit" class="btn btn-secondary">Finish / pause</button>
+					@foreach (var field in toolbarActions.FinishFields) {
+						<input type="hidden" name="@field.Key" value="@field.Value"/>
+					}
+					<button type="submit" class="btn btn-secondary">
+						<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+							<use href="#jt-icon-finish"></use>
+						</svg>
+						Finish / pause
+					</button>
 				</form>
+				toolbarBackdate = toolbarActions.Backdate;
+				<partial name="_BackdateTrigger" model="toolbarBackdate"/>
 			} else {
 				<form method="post" asp-page-handler="Start" class="inline-form">
-					<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-					<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-					<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-					<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-					<input type="hidden" name="leafNodeId" value="@Model.CurrentNode.Node.Id.Value"/>
-					<button type="submit" class="btn btn-primary">Start work</button>
+					@foreach (var field in toolbarActions.StartFields) {
+						<input type="hidden" name="@field.Key" value="@field.Value"/>
+					}
+					<button type="submit" class="btn btn-primary">
+						<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+							<use href="#jt-icon-start"></use>
+						</svg>
+						Start work
+					</button>
 				</form>
+				toolbarBackdate = toolbarActions.Backdate;
+				<partial name="_BackdateTrigger" model="toolbarBackdate"/>
 			}
 
 			<a class="btn btn-outline-danger"
@@ -214,51 +223,66 @@
 			}
 		}
 	</div>
+	@if (toolbarBackdate is not null) {
+		<partial name="_BackdatePanel" model="toolbarBackdate"/>
+	}
 
 	@if (Model.LeafWorkSessions is { } leafWorkSessions) {
 		<partial name="_LeafWorkSessions" model="leafWorkSessions"/>
 	}
 
 	@if (Model.CurrentNode.Node.Kind != NodeKind.Root) {
-		<div class="jt-grid">
-			<details class="jt-card" open>
+		<div class="row row-cols-1 row-cols-md-2 g-3 mb-4">
+			<details class="jt-card col" open>
 				<summary class="jt-disclosure-summary">&larr; Requires (must finish first)</summary>
 				@if (Model.Requires.Count == 0) {
 					<p class="jt-empty">None.</p>
 				} else {
 					<ul class="jt-list">
 						@foreach (var node in Model.Requires) {
-							<li>
+							<li class="d-flex flex-wrap align-items-center gap-3">
 								@if (Model.BlockingRequiredIds.Contains(node.Id)) {
-									<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
+									<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
+									                                                                                   viewBox="0 0 16 16"
+									                                                                                   aria-hidden="true"
+									                                                                                   focusable="false"><use
+												href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
 								} else {
-									<span class="status-pill status-pill--icon status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-go"></use></svg><span class="visually-hidden">Satisfied</span></span>
+									<span class="status-pill status-pill--icon status-pill-ready" role="status"><svg class="status-pill-glyph"
+									                                                                                 viewBox="0 0 16 16"
+									                                                                                 aria-hidden="true"
+									                                                                                 focusable="false"><use
+												href="#jt-icon-go"></use></svg><span class="visually-hidden">Satisfied</span></span>
 								}
 								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 								   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
-								<span class="jt-kind @KindChipClass(node.Kind)">@node.Kind</span>
-								@if (node.ArchivedAt is not null) {
-									<span class="jt-muted"> · archived</span>
-								}
+								<span class="d-flex align-items-center gap-2 ms-auto">
+									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
+									@if (node.ArchivedAt is not null) {
+										<span class="jt-muted"> · archived</span>
+									}
+								</span>
 							</li>
 						}
 					</ul>
 				}
 			</details>
-			<details class="jt-card" open>
+			<details class="jt-card col" open>
 				<summary class="jt-disclosure-summary">Depends on this job &rarr;</summary>
 				@if (Model.RequiredBy.Count == 0) {
 					<p class="jt-empty">None.</p>
 				} else {
 					<ul class="jt-list">
 						@foreach (var node in Model.RequiredBy) {
-							<li>
+							<li class="d-flex flex-wrap align-items-center gap-3">
 								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 								   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
-								<span class="jt-kind @KindChipClass(node.Kind)">@node.Kind</span>
-								@if (node.ArchivedAt is not null) {
-									<span class="jt-muted"> · archived</span>
-								}
+								<span class="d-flex align-items-center gap-2 ms-auto">
+									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
+									@if (node.ArchivedAt is not null) {
+										<span class="jt-muted"> · archived</span>
+									}
+								</span>
 							</li>
 						}
 					</ul>
@@ -271,8 +295,11 @@
 				<summary class="jt-disclosure-summary">Inherited blockers (from ancestor prerequisites)</summary>
 				<ul class="jt-list">
 					@foreach (var blocker in Model.AncestorBlockers) {
-						<li>
-							<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
+						<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+							<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
+							                                                                                   viewBox="0 0 16 16" aria-hidden="true"
+							                                                                                   focusable="false"><use
+										href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 							   asp-route-nodeId="@blocker.RequiredJobId">@JobNodeDisplay.Title(blocker.RequiredDescription, blocker.RequiredJobId)</a>
 							<span class="jt-muted">declared on</span>
@@ -298,23 +325,38 @@
 					<th scope="col">Description</th>
 					<th scope="col">Kind</th>
 					<th scope="col" class="jt-col-secondary">Owner</th>
-					<th scope="col" class="jt-col-secondary">Priority</th>
-					<th scope="col" class="jt-col-secondary">Cost</th>
+					<th scope="col" class="jt-col-active">Active</th>
+					<th scope="col" class="jt-col-cost">Cost</th>
 					<th scope="col" class="jt-col-secondary">Archived</th>
 					<th scope="col">Work</th>
 				</tr>
 				</thead>
 				<tbody>
 				@foreach (var child in Model.Children) {
+					var childActions = child.HasChildren
+						? null
+						: new WorkRowActionsModel {
+							LeafNodeId = child.Id.Value,
+							ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(child.Id),
+							ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(Model.ActiveSessionByLeaf.GetValueOrDefault(child.Id)),
+							ViewerZone = Model.ViewerZone,
+							StartHandler = "Start",
+							StartNodeFieldName = "leafNodeId",
+							PageStateFields = Model.RowStateFields,
+						};
 					<tr>
 						<td>
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 							   asp-route-nodeId="@child.Id.Value">@JobNodeDisplay.Title(child)</a>
+							<partial name="_AchievementIcon"
+							         model="@(new AchievementIconModel { Achievement = child.Achievement, ShowLabel = false })"/>
 							@if (child.HasChildren) {
 								<span class="jt-muted"> · has children</span>
 							}
 						</td>
-						<td><span class="jt-kind @KindChipClass(child.Kind)">@EnumDisplay.Label(child.Kind)</span></td>
+						<td>
+							<partial name="_KindIcon" model="@(new KindIconModel { Kind = child.Kind, ShowLabel = false })"/>
+						</td>
 						<td class="jt-col-secondary">
 							@if (child.OwnerUserId is { } childOwnerUserId) {
 								@Model.DescribeOwner(childOwnerUserId)
@@ -330,93 +372,32 @@
 								</form>
 							}
 						</td>
-						<td class="jt-col-secondary">@EnumDisplay.Label(child.Priority)</td>
-						<td class="jt-col-secondary">
+						<td class="jt-col-active">
+							<partial name="_ActiveSincePill"
+							         model="@(new ActiveSincePillModel { ActiveSession = childActions?.ActiveSession, ActiveSessionWorkedByOther = childActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone })"/>
+						</td>
+						<td class="jt-col-cost">
 							@if (child.Cost is { } cost) {
 								<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
 							}
 						</td>
 						<td class="jt-col-secondary">@(child.ArchivedAt is not null ? "yes" : "no")</td>
 						<td>
-							@if (!child.HasChildren) {
-								@if (Model.ActiveSessionByLeaf.TryGetValue(child.Id, out var activeSession)) {
-									<div class="jt-toolbar jt-toolbar--flush">
-										<span class="status-pill status-pill-ready">Active since @activeSession.StartedAt</span>
-										<form method="post" asp-page-handler="Finish" class="inline-form">
-											<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-											<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-											<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-											<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-											<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
-											<input type="hidden" name="version" value="@activeSession.Version"/>
-											<button type="submit" class="btn btn-secondary">Finish / pause</button>
-										</form>
-										<details>
-											<summary class="jt-icon-summary" title="Backdate">
-											<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-												<use href="#jt-icon-backdate"></use>
-											</svg>
-											<span class="visually-hidden">Backdate</span>
-										</summary>
-											<form method="post" asp-page-handler="Finish" class="inline-form">
-												<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-												<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-												<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-												<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-												<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
-												<input type="hidden" name="version" value="@activeSession.Version"/>
-												<label>
-													Finished at
-													<input type="datetime-local" name="finishedAt" class="form-control" step="60"/>
-												</label>
-												<button type="submit" class="btn btn-secondary">Finish at this time</button>
-											</form>
-										</details>
-									</div>
-								} else {
-									<div class="jt-toolbar jt-toolbar--flush">
-										<form method="post" asp-page-handler="Start" class="inline-form">
-											<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-											<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-											<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-											<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-											<input type="hidden" name="leafNodeId" value="@child.Id.Value"/>
-											<button type="submit" class="btn btn-primary">Start</button>
-										</form>
-										<details>
-											<summary class="jt-icon-summary" title="Backdate">
-											<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-												<use href="#jt-icon-backdate"></use>
-											</svg>
-											<span class="visually-hidden">Backdate</span>
-										</summary>
-											<form method="post" asp-page-handler="Start" class="inline-form">
-												<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-												<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-												<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-												<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-												<input type="hidden" name="leafNodeId" value="@child.Id.Value"/>
-												<label>
-													Started at
-													<input type="datetime-local" name="startedAt" class="form-control" step="60"/>
-												</label>
-												<button type="submit" class="btn btn-primary">Start at this time</button>
-											</form>
-										</details>
-									</div>
-								}
+							@if (childActions is not null) {
+								<partial name="_WorkRowActions" model="childActions"/>
 							}
 						</td>
 					</tr>
+					@if (childActions is not null) {
+						<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = childActions.Backdate, ColumnCount = 7 })"/>
+					}
 				}
 				</tbody>
 			</table>
 		</div>
 	}
 } else if (Model.Subtree is not null) {
-	<div class="jt-subtree-head">
-		<h2>Subtree</h2>
-	</div>
+	<h2>Subtree</h2>
 
 	@if (Model.SubtreeDescendants.Count == 0) {
 		@if (Model.CurrentNode is { Node.HasChildren: false, Node.HasLeafWork: true }) {
@@ -435,15 +416,29 @@
 					   archived row is flagged in place beside its name. *@
 					<th scope="col">Description</th>
 					<th scope="col" class="jt-col-secondary">Owner</th>
-					<th scope="col" class="jt-col-secondary">Priority</th>
-					<th scope="col" class="jt-col-secondary">Cost</th>
-					<th scope="col" class="jt-col-secondary">Span</th>
+					<th scope="col" class="jt-col-active">Active</th>
+					<th scope="col" class="jt-col-cost">Cost</th>
+					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
+					   the width of the bar it labels, so with it visible the column can never narrow to
+					   the bar's own size however small the bar gets. Assistive tech still gets the name. *@
+					<th scope="col" class="jt-col-secondary jt-col-span"><span class="visually-hidden">Position</span></th>
 					<th scope="col">Work</th>
 				</tr>
 				</thead>
 				<tbody>
 				@foreach (var node in Model.SubtreeDescendants) {
 					var (leftPct, widthPct) = Model.SubtreeSpanPercent(node);
+					var nodeActions = node.HasChildren
+						? null
+						: new WorkRowActionsModel {
+							LeafNodeId = node.Id.Value,
+							ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(node.Id),
+							ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(Model.ActiveSessionByLeaf.GetValueOrDefault(node.Id)),
+							ViewerZone = Model.ViewerZone,
+							StartHandler = "Start",
+							StartNodeFieldName = "leafNodeId",
+							PageStateFields = Model.RowStateFields,
+						};
 					<tr>
 						<td class="jt-tree-cell" data-jt-depth="@node.Depth">
 							<span class="jt-tree-guide" aria-hidden="true">
@@ -453,6 +448,18 @@
 								<span class="jt-tree-elbow"></span>
 							</span>
 							<span class="jt-tree-label">
+								@if (!node.IsReady) {
+									@* ADR 0043 decision 2: blocked rows are marked and ready rows are not — in a
+									   healthy tree a sign on every row would bury the few that matter. The same
+									   stop palm the readiness pill uses, so the two never read as different facts.
+									   Leads the row (beside the kind icon, ahead of the name) so it reads at a
+									   glance rather than after scanning past the name first. *@
+									<svg class="jt-tree-flag jt-tree-blocked jt-tree-flag--leading" viewBox="0 0 16 16" aria-hidden="true"
+									     focusable="false">
+										<use href="#jt-icon-stop"></use>
+									</svg>
+									<span class="visually-hidden">Blocked by a prerequisite.</span>
+								}
 								<svg class="jt-tree-icon jt-tree-icon--@KindNoun(node.Kind)" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 									<use href="#@KindIconId(node.Kind)"></use>
 								</svg>
@@ -460,20 +467,16 @@
 									<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
 									<a class="jt-tree-name-link jt-preserve-whitespace" asp-page="/Jobs/Browse"
 									   asp-route-nodeId="@node.Id.Value">@node.Description</a>
+									@* Trails the name rather than leading it: unlike the blocked palm, an achievement
+									   is present on most leaves in a healthy tree, so it belongs where the eye lands
+									   after reading the row, not competing with the kind glyph for the leading slot. *@
+									<partial name="_AchievementIcon"
+									         model="@(new AchievementIconModel { Achievement = node.Achievement, ShowLabel = false })"/>
 									@if (node.HasUnexpandedChildren) {
 										@* The name already links here; this only says the container holds more
 										   than is drawn, so it is a marker, not a second link to the same page. *@
 										<span class="jt-tree-more" aria-hidden="true">&hellip;</span>
 										<span class="visually-hidden">More levels below.</span>
-									}
-									@if (!node.IsReady) {
-										@* ADR 0043 decision 2: blocked rows are marked and ready rows are not — in a
-										   healthy tree a sign on every row would bury the few that matter. The same
-										   stop palm the readiness pill uses, so the two never read as different facts. *@
-										<svg class="jt-tree-flag jt-tree-blocked" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-											<use href="#jt-icon-stop"></use>
-										</svg>
-										<span class="visually-hidden">Blocked by a prerequisite.</span>
 									}
 									@if (node.ArchivedAt is not null) {
 										@* Replaces the Archived column: archived rows are the exception, so the
@@ -501,13 +504,16 @@
 								</form>
 							}
 						</td>
-						<td class="jt-col-secondary">@EnumDisplay.Label(node.Priority)</td>
-						<td class="jt-col-secondary">
+						<td class="jt-col-active">
+							<partial name="_ActiveSincePill"
+							         model="@(new ActiveSincePillModel { ActiveSession = nodeActions?.ActiveSession, ActiveSessionWorkedByOther = nodeActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone })"/>
+						</td>
+						<td class="jt-col-cost">
 							@if (node.Cost is { } cost) {
 								<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
 							}
 						</td>
-						<td class="jt-col-secondary">
+						<td class="jt-col-secondary jt-col-span">
 							@* Geometry as SVG presentation attributes, not a `style` attribute: the CSP is
 							   `style-src 'self'` with no `'unsafe-inline'`, so an inline style is dropped
 							   and the bar silently collapses to nothing. The viewBox is 100 wide, so the
@@ -521,76 +527,14 @@
 							</span>
 						</td>
 						<td>
-							@if (!node.HasChildren) {
-								@if (Model.ActiveSessionByLeaf.TryGetValue(node.Id, out var activeSession)) {
-									<div class="jt-toolbar jt-toolbar--flush">
-										<span class="status-pill status-pill-ready">Active since @activeSession.StartedAt</span>
-										<form method="post" asp-page-handler="Finish" class="inline-form">
-											<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-											<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-											<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-											<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-											<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
-											<input type="hidden" name="version" value="@activeSession.Version"/>
-											<button type="submit" class="btn btn-secondary">Finish / pause</button>
-										</form>
-										<details>
-											<summary class="jt-icon-summary" title="Backdate">
-											<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-												<use href="#jt-icon-backdate"></use>
-											</svg>
-											<span class="visually-hidden">Backdate</span>
-										</summary>
-											<form method="post" asp-page-handler="Finish" class="inline-form">
-												<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-												<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-												<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-												<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-												<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
-												<input type="hidden" name="version" value="@activeSession.Version"/>
-												<label>
-													Finished at
-													<input type="datetime-local" name="finishedAt" class="form-control" step="60"/>
-												</label>
-												<button type="submit" class="btn btn-secondary">Finish at this time</button>
-											</form>
-										</details>
-									</div>
-								} else {
-									<div class="jt-toolbar jt-toolbar--flush">
-										<form method="post" asp-page-handler="Start" class="inline-form">
-											<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-											<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-											<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-											<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-											<input type="hidden" name="leafNodeId" value="@node.Id.Value"/>
-											<button type="submit" class="btn btn-primary">Start</button>
-										</form>
-										<details>
-											<summary class="jt-icon-summary" title="Backdate">
-											<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-												<use href="#jt-icon-backdate"></use>
-											</svg>
-											<span class="visually-hidden">Backdate</span>
-										</summary>
-											<form method="post" asp-page-handler="Start" class="inline-form">
-												<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-												<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-												<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-												<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-												<input type="hidden" name="leafNodeId" value="@node.Id.Value"/>
-												<label>
-													Started at
-													<input type="datetime-local" name="startedAt" class="form-control" step="60"/>
-												</label>
-												<button type="submit" class="btn btn-primary">Start at this time</button>
-											</form>
-										</details>
-									</div>
-								}
+							@if (nodeActions is not null) {
+								<partial name="_WorkRowActions" model="nodeActions"/>
 							}
 						</td>
 					</tr>
+					@if (nodeActions is not null) {
+						<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = nodeActions.Backdate, ColumnCount = 6 })"/>
+					}
 				}
 				</tbody>
 			</table>

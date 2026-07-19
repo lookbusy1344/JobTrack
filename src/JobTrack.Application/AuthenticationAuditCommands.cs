@@ -1,5 +1,6 @@
 namespace JobTrack.Application;
 
+using Abstractions;
 using Ports;
 
 /// <summary>Application command surface for authentication audit events.</summary>
@@ -20,7 +21,7 @@ public sealed class AuthenticationAuditCommands : IAuthenticationAuditCommands
 	{
 		ArgumentNullException.ThrowIfNull(request);
 
-		var hasKnownActor = request.ActorUserId is { } actor && !actor.IsUnspecified;
+		var hasKnownActor = request.ActorUserId is AppUserId actor && !actor.IsUnspecified;
 		var hasKnownIdentityUser = request.IdentityUserId is not null;
 		if (hasKnownActor != hasKnownIdentityUser) {
 			throw new ArgumentException("Known authentication audit events must include both actor and identity user identifiers.", nameof(request));
@@ -30,10 +31,10 @@ public sealed class AuthenticationAuditCommands : IAuthenticationAuditCommands
 			throw new ArgumentException("Only failed password login events may be recorded without a known actor.", nameof(request));
 		}
 
-		return request.ActorUserId is { } actorId
+		return request.ActorUserId.HasValue
 			? JobTrackOperation.TraceAsync(
 				"authentication-audit.record",
-				new() { Actor = actorId, CorrelationId = request.CorrelationId },
+				new() { Actor = request.ActorUserId.Value, CorrelationId = request.CorrelationId },
 				null,
 				() => port.RecordAsync(request, cancellationToken))
 			: JobTrackOperation.TraceAsync(

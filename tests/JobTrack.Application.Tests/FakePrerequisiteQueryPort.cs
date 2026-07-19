@@ -25,7 +25,7 @@ internal sealed class FakePrerequisiteQueryPort : IPrerequisiteQueryPort
 			.Where(e => e.RequiredJobId == nodeId || e.DependentJobId == nodeId)
 			.OrderBy(e => e.RequiredJobId.Value).ThenBy(e => e.DependentJobId.Value)
 			.Skip(offset);
-		return Task.FromResult<EquatableArray<PrerequisiteEdge>>([.. limit is { } take ? edges.Take(take) : edges]);
+		return Task.FromResult<EquatableArray<PrerequisiteEdge>>([.. limit.HasValue ? edges.Take(limit.Value) : edges]);
 	}
 
 	public void SeedNode(JobNodeId nodeId) => _nodes.Add(nodeId);

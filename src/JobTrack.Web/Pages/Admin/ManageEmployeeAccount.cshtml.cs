@@ -37,9 +37,9 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 	[BindProperty] public RevokeAllTokensInput RevokeAllTokens { get; set; } = new();
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public List<SelectListItem> TargetUserOptions { get; private set; } = [];
 
@@ -89,8 +89,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			ErrorMessage = ex.Message;
 		}
 
-		await LoadTargetUserOptionsAsync(cancellationToken);
-		return Page();
+		return RedirectToPage();
 	}
 
 	public async Task<IActionResult> OnPostSetEnabledAsync(CancellationToken cancellationToken)
@@ -133,7 +132,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			ErrorMessage = "That employee does not exist.";
 		}
 
-		return Page();
+		return RedirectToPage();
 	}
 
 	public async Task<IActionResult> OnPostSetDefaultHourlyRateAsync(CancellationToken cancellationToken)
@@ -171,7 +170,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			ErrorMessage = "That employee does not exist.";
 		}
 
-		return Page();
+		return RedirectToPage();
 	}
 
 	public async Task<IActionResult> OnPostResetPasswordAsync(CancellationToken cancellationToken)
@@ -209,7 +208,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			ErrorMessage = "That employee does not exist.";
 		}
 
-		return Page();
+		return RedirectToPage();
 	}
 
 	/// <summary>
@@ -248,7 +247,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			ErrorMessage = "That employee does not exist.";
 		}
 
-		return Page();
+		return RedirectToPage();
 	}
 
 	/// <summary>
@@ -284,7 +283,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			return Forbid();
 		}
 
-		return Page();
+		return RedirectToPage();
 	}
 
 	private async Task LoadTargetUserOptionsAsync(CancellationToken cancellationToken)

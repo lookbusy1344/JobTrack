@@ -5,7 +5,6 @@ using Abstractions;
 using Application;
 using Application.Ports;
 using Domain.Authorization;
-using Domain.Hierarchy;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Npgsql;
@@ -240,7 +239,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(session.RowVersion, request.Version);
 
-		if (request.FinishedAt is { } finishedAt && finishedAt <= request.StartedAt) {
+		if (request.FinishedAt is Instant finishedAt && finishedAt <= request.StartedAt) {
 			throw new InvariantViolationException(
 				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
 		}
@@ -341,7 +340,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 	/// </summary>
 	private static void EnsureLeafMatchesOrThrow(WorkSessionEntity session, JobNodeId? expectedLeafWorkId)
 	{
-		if (expectedLeafWorkId is { } leafWorkId && session.LeafWorkId != leafWorkId) {
+		if (expectedLeafWorkId is JobNodeId leafWorkId && session.LeafWorkId != leafWorkId) {
 			throw new EntityNotFoundException($"Work session {session.Id} does not exist under job node {leafWorkId}.");
 		}
 	}

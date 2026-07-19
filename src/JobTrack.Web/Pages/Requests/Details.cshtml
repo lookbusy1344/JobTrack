@@ -18,10 +18,10 @@
 		<dt class="col-sm-3">Status</dt>
 		<dd class="col-sm-9">@EnumDisplay.Label(detail.Status)</dd>
 		<dt class="col-sm-3">Submitted</dt>
-		<dd class="col-sm-9">@detail.SubmittedAt.ToDateTimeOffset()</dd>
+		<dd class="col-sm-9">@InstantDisplay.Format(detail.SubmittedAt, Model.ViewerZone)</dd>
 		@if (detail.AcknowledgedAt is { } acknowledgedAt) {
 			<dt class="col-sm-3">Acknowledged</dt>
-			<dd class="col-sm-9">@acknowledgedAt.ToDateTimeOffset()</dd>
+			<dd class="col-sm-9">@InstantDisplay.Format(acknowledgedAt, Model.ViewerZone)</dd>
 		}
 	</dl>
 
@@ -48,7 +48,7 @@
 					<td class="jt-tree-row jt-preserve-whitespace"
 					    data-tree-depth="@row.Depth">@JobNodeDisplay.Title(row.Node.Description, row.Node.JobNodeId.Value)</td>
 					<td>@EnumDisplay.Label(row.Node.Status)</td>
-					<td>@row.Node.LastUpdatedAt.ToDateTimeOffset()</td>
+					<td>@InstantDisplay.Format(row.Node.LastUpdatedAt, Model.ViewerZone)</td>
 				</tr>
 			}
 			</tbody>
@@ -63,7 +63,7 @@
 			@foreach (var note in detail.Notes) {
 				<li class="jt-form-card">
 					<p class="jt-preserve-whitespace">@note.Content</p>
-					<p class="text-muted">@note.CreatedAt.ToDateTimeOffset()</p>
+					<p class="text-muted">@InstantDisplay.Format(note.CreatedAt, Model.ViewerZone)</p>
 				</li>
 			}
 		</ul>

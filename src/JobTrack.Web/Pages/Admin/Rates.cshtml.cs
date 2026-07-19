@@ -44,9 +44,9 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 
 	public bool CanManageRates { get; private set; }
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
@@ -77,7 +77,8 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 					UserId = new(UserId),
 					Rate = new(
 						new(UserCostRateInput.AmountPerHour),
-						ToInstant(UserCostRateInput.EffectiveStart), UserCostRateInput.EffectiveEnd is { } end ? ToInstant(end) : null),
+						ToInstant(UserCostRateInput.EffectiveStart),
+						UserCostRateInput.EffectiveEnd.HasValue ? ToInstant(UserCostRateInput.EffectiveEnd.Value) : null),
 				}, cancellationToken);
 				SuccessMessage = "User cost rate added.";
 			}
@@ -93,6 +94,8 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			catch (ArgumentOutOfRangeException ex) {
 				ErrorMessage = ex.Message;
 			}
+
+			return RedirectToPage(new { userId = UserId });
 		}
 
 		await LoadAsync(actor.Value, cancellationToken);
@@ -115,7 +118,7 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 					Override = new(
 						new(NodeRateOverrideInput.NodeId), new(NodeRateOverrideInput.AmountPerHour),
 						ToInstant(NodeRateOverrideInput.EffectiveStart),
-						NodeRateOverrideInput.EffectiveEnd is { } end ? ToInstant(end) : null),
+						NodeRateOverrideInput.EffectiveEnd.HasValue ? ToInstant(NodeRateOverrideInput.EffectiveEnd.Value) : null),
 				}, cancellationToken);
 				SuccessMessage = "Node rate override added.";
 			}
@@ -131,6 +134,8 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			catch (ArgumentOutOfRangeException ex) {
 				ErrorMessage = ex.Message;
 			}
+
+			return RedirectToPage(new { userId = UserId });
 		}
 
 		await LoadAsync(actor.Value, cancellationToken);

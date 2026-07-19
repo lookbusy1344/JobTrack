@@ -186,7 +186,7 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
 		AddParameter(identityUserCommand, "@isEnabled", isEnabled);
 		AddParameter(identityUserCommand, "@lockoutEnabled", lockoutEnd is not null);
-		AddParameter(identityUserCommand, "@lockoutEnd", lockoutEnd is { } end ? FormatInstantForRawSql(end) : DBNull.Value);
+		AddParameter(identityUserCommand, "@lockoutEnd", lockoutEnd.HasValue ? FormatInstantForRawSql(lockoutEnd.Value) : DBNull.Value);
 		_ = await identityUserCommand.ExecuteNonQueryAsync();
 
 		await using var roleCommand = connection.CreateCommand();

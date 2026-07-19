@@ -69,7 +69,7 @@ public sealed class JobTrackApiClient : IDisposable
 	/// </summary>
 	public async Task<JobSubtree> GetJobSubtreeAsync(long nodeId, int? depth = null, CancellationToken cancellationToken = default)
 	{
-		var query = depth is { } d ? $"?depth={d}" : string.Empty;
+		var query = depth.HasValue ? $"?depth={depth.Value}" : string.Empty;
 		using var response = await _httpClient.GetAsync(
 			new Uri($"/api/jobs/{nodeId}/subtree{query}", UriKind.Relative), cancellationToken).ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);

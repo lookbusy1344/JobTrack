@@ -79,11 +79,11 @@ public sealed class CreateModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			ParentId = new(ParentId),
 			Description = Input.Description,
 			WriteUp = Input.WriteUp,
-			OwnerUserId = Input.OwnerUserId is { } ownerUserId ? new AppUserId(ownerUserId) : null,
+			OwnerUserId = Input.OwnerUserId.HasValue ? new AppUserId(Input.OwnerUserId.Value) : null,
 			ExpectedDurationHours = Input.ExpectedDurationHours,
-			ExpectedCost = Input.ExpectedCost is { } cost ? new Money(cost) : null,
-			NeededStart = Input.NeededStart is { } start ? Instant.FromDateTimeOffset(start) : null,
-			NeededFinish = Input.NeededFinish is { } finish ? Instant.FromDateTimeOffset(finish) : null,
+			ExpectedCost = Input.ExpectedCost.HasValue ? new Money(Input.ExpectedCost.Value) : null,
+			NeededStart = Input.NeededStart.HasValue ? Instant.FromDateTimeOffset(Input.NeededStart.Value) : null,
+			NeededFinish = Input.NeededFinish.HasValue ? Instant.FromDateTimeOffset(Input.NeededFinish.Value) : null,
 			Priority = Input.Priority,
 		};
 

@@ -75,8 +75,9 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var (antiforgeryCookie, token) = await GetPageFormAsync(authCookie);
 		var response = await PostSubmitAsync(authCookie, antiforgeryCookie, token, holdingAreaId, "Printer will not turn on");
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Printer will not turn on");
 	}
 
@@ -90,7 +91,9 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		var (antiforgeryCookie, token) = await GetPageFormAsync(authCookie);
 		var response = await PostSubmitAsync(authCookie, antiforgeryCookie, token, holdingAreaId, InjectedDescription);
-		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 
 		body.Should().NotContain(InjectedDescription);
 		body.Should().Contain("&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;");
@@ -193,9 +196,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		var (antiforgeryCookie, token) = await GetDetailPageFormAsync(submitted.JobNodeId.Value, authCookie);
 		var response = await PostAddNoteAsync(submitted.JobNodeId.Value, authCookie, antiforgeryCookie, token, "Any update?");
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Any update?");
 	}
 
@@ -217,9 +221,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			["__RequestVerificationToken"] = token,
 		});
 		var response = await client.SendAsync(request);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, staffCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Acknowledged");
 	}
 
@@ -310,6 +315,23 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		return await client.SendAsync(request);
 	}
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private async Task<HttpResponseMessage> GetPageAsync(string authCookie)
 	{

@@ -13,6 +13,29 @@ document.addEventListener('click', (event) => {
     event.preventDefault();
 });
 
+// Toggle a backdate row/panel (data-jt-backdate-toggle="<target id>") open/closed, in place of the
+// old <details> disclosure -- a <details> can't legally contain a <tr>, so the row/panel presentation
+// needs its own show/hide instead of relying on the element's native open state.
+document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-jt-backdate-toggle]');
+    if (!trigger) {
+        return;
+    }
+
+    const target = document.getElementById(trigger.getAttribute('data-jt-backdate-toggle'));
+    if (!target) {
+        return;
+    }
+
+    const wasHidden = target.hasAttribute('hidden');
+    target.toggleAttribute('hidden', !wasHidden);
+    trigger.setAttribute('aria-expanded', String(wasHidden));
+
+    if (wasHidden) {
+        target.querySelector('input[type="datetime-local"]')?.focus();
+    }
+});
+
 // Clear client-side "recently visited" job history on sign-out (data-jt-clear-history-on-submit),
 // so a stale account's breadcrumbs never leak into the next signed-in session. The storage key must
 // match STORAGE_KEY in job-history.js -- that module isn't loaded on every page, so the key is

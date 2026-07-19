@@ -20,7 +20,11 @@ using NodaTime.TimeZones;
 ///     self-versus-other employee rule.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.ScheduleAdministration)]
-public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class IndexModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	private const int MaxWeeklyIntervalSlots = 10;
 
@@ -45,9 +49,15 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 
 	public ScheduleSnapshotResult? Snapshot { get; private set; }
 
-	public string? ErrorMessage { get; private set; }
+	/// <summary>
+	///     The viewing actor's own time zone, for formatting and parsing exception boundaries (<see cref="InstantDisplay" />/
+	///     <see cref="BackdateInstant" />) -- distinct from a schedule version's own configured <see cref="AddVersionInput.IanaTimeZone" />.
+	/// </summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
+
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
@@ -60,7 +70,7 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			VersionInput.WeeklyIntervals.Add(new());
 		}
 
-		await LoadAsync(actor.Value, UserId is { } id ? new(id) : actor.Value, cancellationToken);
+		await LoadAsync(actor.Value, UserId.HasValue ? new(UserId.Value) : actor.Value, cancellationToken);
 		return Page();
 	}
 
@@ -71,7 +81,7 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			return Challenge();
 		}
 
-		var targetUserId = UserId is { } id ? new(id) : actor.Value;
+		var targetUserId = UserId.HasValue ? new(UserId.Value) : actor.Value;
 
 		// Every [BindProperty] on the page model is bound and validated regardless of which
 		// handler ran, so ExceptionInput's [Required] fields would otherwise fail validation on
@@ -87,7 +97,7 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 						new(slot.End!.Value.Hour, slot.End.Value.Minute)))
 					.ToArray();
 				var effectiveStart = ToLocalDate(VersionInput.EffectiveStart);
-				LocalDate? effectiveEnd = VersionInput.EffectiveEnd is { } end ? ToLocalDate(end) : null;
+				LocalDate? effectiveEnd = VersionInput.EffectiveEnd.HasValue ? ToLocalDate(VersionInput.EffectiveEnd.Value) : null;
 
 				_ = await jobTrackClient.Schedules.AddScheduleVersionAsync(new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
@@ -109,6 +119,8 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			catch (DateTimeZoneNotFoundException) {
 				ErrorMessage = "That is not a recognized IANA time zone.";
 			}
+
+			return RedirectToPage(new { userId = UserId });
 		}
 
 		for (var i = VersionInput.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; i++) {
@@ -126,15 +138,27 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			return Challenge();
 		}
 
-		var targetUserId = UserId is { } id ? new(id) : actor.Value;
+		var targetUserId = UserId.HasValue ? new(UserId.Value) : actor.Value;
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 
 		ModelState.Clear();
 		if (TryValidateModel(ExceptionInput, nameof(ExceptionInput))) {
+			if (!BackdateInstant.TryParse(ExceptionInput.Start, zone, out var start)
+				|| !BackdateInstant.TryParse(ExceptionInput.End, zone, out var end)) {
+				ModelState.AddModelError(string.Empty, "Start and end must each be a valid date and time.");
+				for (var i = VersionInput.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; i++) {
+					VersionInput.WeeklyIntervals.Add(new());
+				}
+
+				await LoadAsync(actor.Value, targetUserId, cancellationToken);
+				return Page();
+			}
+
 			try {
 				var entry = new ScheduleExceptionEntry(
 					ExceptionInput.Effect,
-					new(Instant.FromDateTimeOffset(ExceptionInput.Start), Instant.FromDateTimeOffset(ExceptionInput.End)),
-					ExceptionInput.RateOverride is { } rate ? new HourlyRate(rate) : null);
+					new(start, end),
+					ExceptionInput.RateOverride.HasValue ? new HourlyRate(ExceptionInput.RateOverride.Value) : null);
 
 				_ = await jobTrackClient.Schedules.AddScheduleExceptionAsync(new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
@@ -156,6 +180,8 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			catch (ArgumentException ex) {
 				ErrorMessage = ex.Message;
 			}
+
+			return RedirectToPage(new { userId = UserId });
 		}
 
 		for (var i = VersionInput.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; i++) {
@@ -169,6 +195,7 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 	private async Task LoadAsync(AppUserId actor, AppUserId targetUserId, CancellationToken cancellationToken)
 	{
 		DisplayedUserId = targetUserId.Value;
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 
 		var directory = await jobTrackClient.Query.GetAllEmployeesAsync(
 			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } },
@@ -226,9 +253,9 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 	{
 		[Required][Display(Name = "Effect")] public ScheduleExceptionEffect Effect { get; set; }
 
-		[Required][Display(Name = "Start")] public DateTimeOffset Start { get; set; }
+		[Required][Display(Name = "Start")] public string Start { get; set; } = string.Empty;
 
-		[Required][Display(Name = "End")] public DateTimeOffset End { get; set; }
+		[Required][Display(Name = "End")] public string End { get; set; } = string.Empty;
 
 		[Display(Name = "Rate override")] public decimal? RateOverride { get; set; }
 

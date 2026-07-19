@@ -75,11 +75,57 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetBrowseFormAsync(authCookie);
 		var response = await PostStartAsync(authCookie, cookie, token, leaf.Id, null);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Work started");
 		body.Should().Contain("Active since");
+	}
+
+	[Fact]
+	/// <summary>
+	/// The active-session pill has its own column rather than sharing the actions cell, where it
+	/// pushed the start/finish buttons out of vertical alignment with every other row. It takes the
+	/// slot Priority used to hold.
+	/// </summary>
+	public async Task The_active_session_pill_has_its_own_column_in_place_of_priority()
+	{
+		var workerId = await SeedEmployeeAsync("browse.activecolumn", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Screed floor");
+		var authCookie = await SignInAsync("browse.activecolumn");
+
+		var (cookie, token) = await GetBrowseFormAsync(authCookie);
+		var response = await PostStartAsync(authCookie, cookie, token, leaf.Id, null);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+
+		// jt-col-active, not jt-col-secondary: which jobs are being worked on right now survives the
+		// 992px cut that drops owner/priority, and goes only at phone width.
+		body.Should().Contain("<th scope=\"col\" class=\"jt-col-active\">Active</th>");
+		body.Should().NotContain(">Priority</th>");
+	}
+
+	[Fact]
+	/// <summary>
+	/// The row pill is a stopwatch and a compact timestamp, nothing else: at one per row the words
+	/// cost more width than they carry. "Active since" survives for assistive tech only, so the
+	/// timestamp is never announced as a bare number with no noun.
+	/// </summary>
+	public async Task The_row_pill_shows_a_stopwatch_and_a_timestamp_with_the_wording_kept_for_assistive_tech()
+	{
+		var workerId = await SeedEmployeeAsync("browse.compactpill", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Tile bathroom");
+		var authCookie = await SignInAsync("browse.compactpill");
+
+		var (cookie, token) = await GetBrowseFormAsync(authCookie);
+		var response = await PostStartAsync(authCookie, cookie, token, leaf.Id, null);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+
+		body.Should().Contain("status-pill--compact");
+		body.Should().Contain("#jt-icon-active");
+		body.Should().Contain("<span class=\"visually-hidden\">Active since</span>");
 	}
 
 	[Fact]
@@ -92,9 +138,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetBrowseFormAsync(authCookie);
 		var response = await PostStartAsync(authCookie, cookie, token, leaf.Id, backdated);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Work started");
 	}
 
@@ -108,9 +155,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetBrowseFormAsync(authCookie);
 		var response = await PostStartAsync(authCookie, cookie, token, leaf.Id, future);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("in the future");
 	}
 
@@ -123,14 +171,16 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		var (startCookie, startToken) = await GetBrowseFormAsync(authCookie);
 		var startResponse = await PostStartAsync(authCookie, startCookie, startToken, leaf.Id, null);
-		var startBody = await startResponse.Content.ReadAsStringAsync();
+		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var startBody = await startReloaded.Content.ReadAsStringAsync();
 		var (sessionId, version) = ExtractFirstSession(startBody);
 
-		var (finishCookie, finishToken) = await ExtractFormAsync(startResponse, startCookie);
+		var (finishCookie, finishToken) = await ExtractFormAsync(startReloaded, startCookie);
 		var finishResponse = await PostFinishAsync(authCookie, finishCookie, finishToken, sessionId, version, null);
-		var finishBody = await finishResponse.Content.ReadAsStringAsync();
-
-		finishResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
+		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
 		finishBody.Should().Contain("Session finished");
 	}
 
@@ -149,9 +199,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetBrowseFormAsync(authCookie);
 		var response = await PostPickUpAsync(authCookie, cookie, token, leaf.Id);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Job node claimed");
 	}
 
@@ -164,7 +215,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		var beforeResponse = await GetLeafDetailAsync(authCookie, leaf.Id);
 		var beforeBody = await beforeResponse.Content.ReadAsStringAsync();
-		beforeBody.Should().Contain(">Start work<");
+		beforeBody.Should().Contain("#jt-icon-start");
 		beforeBody.Should().NotContain("Active since");
 
 		var (cookie, token) = await GetBrowseFormAsync(authCookie);
@@ -175,7 +226,59 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		afterResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		afterBody.Should().Contain("Active since");
-		afterBody.Should().NotContain(">Start work<");
+		afterBody.Should().NotContain("#jt-icon-start");
+	}
+
+	[Fact]
+	public async Task A_browse_row_offers_start_as_an_icon_beside_the_backdate_disclosure()
+	{
+		var workerId = await SeedEmployeeAsync("browse.icons", EmployeeRole.Worker);
+		_ = await AddWorkedLeafAsync(rootId, workerId, "Icon row leaf");
+		var authCookie = await SignInAsync("browse.icons");
+
+		var response = await GetLeafDetailAsync(authCookie, rootId);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("#jt-icon-start");
+		body.Should().Contain("#jt-icon-backdate");
+		body.Should().NotContain(">Start</button>");
+	}
+
+	[Fact]
+	public async Task A_browse_row_offers_finish_as_an_icon_once_a_session_is_active()
+	{
+		var workerId = await SeedEmployeeAsync("browse.finish-icon", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Finish icon row leaf");
+		var authCookie = await SignInAsync("browse.finish-icon");
+
+		var (cookie, token) = await GetBrowseFormAsync(authCookie);
+		_ = await PostStartAsync(authCookie, cookie, token, leaf.Id, null);
+
+		var response = await GetLeafDetailAsync(authCookie, rootId);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("#jt-icon-finish");
+		body.Should().NotContain("btn btn-secondary\">Finish / pause");
+	}
+
+	[Fact]
+	public async Task The_leaf_toolbar_keeps_a_labelled_finish_button_carrying_the_same_glyph()
+	{
+		var workerId = await SeedEmployeeAsync("browse.finish-label", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Labelled finish leaf");
+		var authCookie = await SignInAsync("browse.finish-label");
+
+		var (cookie, token) = await GetBrowseFormAsync(authCookie);
+		_ = await PostStartAsync(authCookie, cookie, token, leaf.Id, null);
+
+		var response = await GetLeafDetailAsync(authCookie, leaf.Id);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("#jt-icon-finish");
+		body.Should().Contain("Finish / pause");
 	}
 
 	[Fact]
@@ -196,6 +299,23 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("name=\"WorkedByUserId\"");
 		body.Should().Contain($"value=\"{otherWorkerId.Value}\">work.selector.other");
 	}
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private async Task<HttpResponseMessage> GetLeafDetailAsync(string authCookie, JobNodeId nodeId)
 	{

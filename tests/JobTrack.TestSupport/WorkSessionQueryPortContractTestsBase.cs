@@ -159,17 +159,27 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		result.Sessions.Should().BeEmpty();
 	}
 
+	/// <summary>
+	///     The port itself applies no actor-based filtering (matching <see cref="GetSessionsAsync" />'s
+	///     "every worker" default, ADR 0041) -- it returns every unfinished session among the given
+	///     leaves regardless of who is querying or who worked it. <c>JobQueries</c> is the layer that
+	///     narrows this to what the querying actor may see.
+	/// </summary>
 	[Fact]
-	public async Task GetActiveSessionsAsync_does_not_return_another_workers_active_session()
+	public async Task GetActiveSessionsAsync_returns_every_workers_active_session_among_the_given_leaves()
 	{
 		var (administratorId, workerId, leafId) = await SeedWorkedLeafAsync();
 		var sessionCommandPort = CreateSessionCommandPort(database.ConnectionString);
-		_ = await sessionCommandPort.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var active = await sessionCommandPort.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		var port = CreateQueryPort(database.ConnectionString);
 
 		var result = await port.GetActiveSessionsAsync(administratorId, [leafId]);
 
-		result.Sessions.Should().BeEmpty();
+		result.Sessions.Should().ContainSingle(s => s.Id == active.Id);
 	}
 
 	[Fact]
@@ -181,6 +191,17 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		var result = await port.GetActiveSessionsAsync(workerId, []);
 
 		result.Sessions.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task GetActiveSessionsAsync_returns_the_actors_current_roles()
+	{
+		var (administratorId, workerId, leafId) = await SeedWorkedLeafAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetActiveSessionsAsync(administratorId, [leafId]);
+
+		result.ActorRoles.Should().Contain(EmployeeRole.Administrator);
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);

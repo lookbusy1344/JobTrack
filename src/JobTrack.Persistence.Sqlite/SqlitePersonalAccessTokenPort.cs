@@ -152,7 +152,7 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 
 		var owner = await context.Set<IdentityUserEntity>().AsNoTracking()
 			.FirstOrDefaultAsync(iu => iu.AppUserId == token.AppUserId, cancellationToken).ConfigureAwait(false);
-		if (owner is null || !owner.IsEnabled || (owner.LockoutEnabled && owner.LockoutEnd is { } lockoutEnd && lockoutEnd > now)) {
+		if (owner is null || !owner.IsEnabled || (owner.LockoutEnabled && owner.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
 			return null;
 		}
 

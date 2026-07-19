@@ -450,6 +450,8 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 
 	protected abstract IJobNodeCommandPort CreateCommandPort(string connectionString);
 
+	protected abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
+
 	protected abstract IJobBrowseQueryPort CreateBrowsePort(string connectionString);
 
 	/// <summary>Stage 6 efficiency-guard seam: a browse port wired with <paramref name="interceptor" /> attached to its <c>DbContext</c>.</summary>
@@ -483,6 +485,84 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 
 		interceptor.Count.Should().Be(
 			3, "a root-existence check, the bounded recursive fetch, and the shaped-detail fetch -- fixed regardless of subtree width (no N+1)");
+	}
+
+	/// <summary>
+	///     A browse row carries the leaf's own achievement, so a caller can mark job state per row
+	///     without a follow-up query per row. <see langword="null" /> means no <c>leaf_work</c> is
+	///     attached yet -- structurally distinct from <see cref="Achievement.Waiting" />, which is
+	///     attached work nobody has started. A branch has no achievement of its own either way.
+	/// </summary>
+	[Fact]
+	public async Task GetChildrenAsync_reports_each_leafs_achievement()
+	{
+		var (rootId, branchId, tree) = await SeedTreeAsync();
+		var browsePort = CreateBrowsePort(database.ConnectionString);
+
+		await AdvancePlumbingToInProgressAsync(tree);
+
+		var children = await browsePort.GetChildrenAsync(branchId, OwnershipFilter.All, JobArchiveFilter.All);
+
+		children.Single(c => c.Id == tree.PlumbingLeafId).Achievement.Should().Be(Achievement.InProgress);
+		children.Single(c => c.Id == tree.CabinetsLeafId).Achievement.Should().Be(Achievement.Waiting);
+		children.Single(c => c.Id == tree.OldWiringLeafId).Achievement.Should().BeNull();
+
+		var rootChildren = await browsePort.GetChildrenAsync(rootId, OwnershipFilter.All, JobArchiveFilter.All);
+		rootChildren.Single(c => c.Id == branchId).Achievement.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task SearchJobNodesAsync_reports_each_leafs_achievement()
+	{
+		var (_, _, tree) = await SeedTreeAsync();
+		var browsePort = CreateBrowsePort(database.ConnectionString);
+
+		await AdvancePlumbingToInProgressAsync(tree);
+
+		var result = await browsePort.SearchJobNodesAsync("Install", OwnershipFilter.All, JobArchiveFilter.All);
+
+		result.Single(r => r.Id == tree.PlumbingLeafId).Achievement.Should().Be(Achievement.InProgress);
+		result.Single(r => r.Id == tree.CabinetsLeafId).Achievement.Should().Be(Achievement.Waiting);
+	}
+
+	[Fact]
+	public async Task GetSubtreeAsync_reports_each_leafs_achievement()
+	{
+		var (rootId, branchId, tree) = await SeedTreeAsync();
+		var browsePort = CreateBrowsePort(database.ConnectionString);
+
+		await AdvancePlumbingToInProgressAsync(tree);
+
+		var rows = await browsePort.GetSubtreeAsync(rootId, JobSubtreeLimits.HardMaxDepth, OwnershipFilter.All, JobArchiveFilter.All);
+
+		rows.Single(r => r.Id == tree.PlumbingLeafId).Achievement.Should().Be(Achievement.InProgress);
+		rows.Single(r => r.Id == tree.CabinetsLeafId).Achievement.Should().Be(Achievement.Waiting);
+		rows.Single(r => r.Id == tree.OldWiringLeafId).Achievement.Should().BeNull();
+		rows.Single(r => r.Id == branchId).Achievement.Should().BeNull();
+	}
+
+	/// <summary>
+	///     Attaches leaf work to the cabinets leaf (leaving it at <see cref="Achievement.Waiting" />) and
+	///     to the plumbing leaf, then advances plumbing to <see cref="Achievement.InProgress" />. The old
+	///     wiring leaf is deliberately left without leaf work.
+	/// </summary>
+	private async Task AdvancePlumbingToInProgressAsync(SeededTree tree)
+	{
+		var commandPort = CreateCommandPort(database.ConnectionString);
+		var achievementPort = CreateAchievementPort(database.ConnectionString);
+
+		_ = await commandPort.AttachLeafWorkAsync(
+			new() { Context = ContextFor(tree.JobManagerId), JobNodeId = tree.CabinetsLeafId });
+
+		var plumbingWork = await commandPort.AttachLeafWorkAsync(
+			new() { Context = ContextFor(tree.JobManagerId), JobNodeId = tree.PlumbingLeafId });
+		_ = await achievementPort.SetAchievementAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			JobNodeId = tree.PlumbingLeafId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Work has started",
+			Version = plumbingWork.Version,
+		});
 	}
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };

@@ -32,7 +32,7 @@ internal sealed class PostgreSqlJobBrowseQueryPort(NpgsqlDataSource dataSource) 
 		await using var context = CreateContext();
 
 		JobNodeEntity node;
-		if (nodeId is { } id) {
+		if (nodeId is JobNodeId id) {
 			node = await context.Set<JobNodeEntity>().AsNoTracking().FirstOrDefaultAsync(n => n.Id == id, cancellationToken)
 					   .ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {id} does not exist.");
@@ -132,11 +132,12 @@ internal sealed class PostgreSqlJobBrowseQueryPort(NpgsqlDataSource dataSource) 
 		}
 
 		var chain = await JobNodeHierarchyQueries.GetAncestorChainAsync(context, node.Id.Value, cancellationToken).ConfigureAwait(false);
-		var parentById = chain.ToDictionary(row => new JobNodeId(row.Id), row => row.ParentId is { } p ? new JobNodeId(p) : (JobNodeId?)null);
+		var parentById = chain.ToDictionary(row => new JobNodeId(row.Id),
+			row => row.ParentId.HasValue ? new JobNodeId(row.ParentId.Value) : (JobNodeId?)null);
 
 		var ancestorIds = new List<JobNodeId>();
 		var current = node.ParentId;
-		while (current is { } ancestorId) {
+		while (current is JobNodeId ancestorId) {
 			ancestorIds.Add(ancestorId);
 			current = parentById.GetValueOrDefault(ancestorId);
 		}
@@ -196,10 +197,12 @@ internal sealed class PostgreSqlJobBrowseQueryPort(NpgsqlDataSource dataSource) 
 			n.ArchivedAt,
 			HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
 			HasLeafWork = context.Set<LeafWorkEntity>().Any(lw => lw.JobNodeId == n.Id),
+			Achievement = context.Set<LeafWorkEntity>()
+				.Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
 		});
 
 		var ordered = shaped.OrderBy(n => n.Id).Skip(offset);
-		var paged = limit is { } take ? ordered.Take(take) : ordered;
+		var paged = limit.HasValue ? ordered.Take(limit.Value) : ordered;
 		var rows = await paged.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return rows.Select(r => new JobNodeSummaryResult {
@@ -212,6 +215,7 @@ internal sealed class PostgreSqlJobBrowseQueryPort(NpgsqlDataSource dataSource) 
 			ArchivedAt = r.ArchivedAt,
 			HasChildren = r.HasChildren,
 			HasLeafWork = r.HasLeafWork,
+			Achievement = r.Achievement,
 		}).ToList();
 	}
 
@@ -235,13 +239,15 @@ internal sealed class PostgreSqlJobBrowseQueryPort(NpgsqlDataSource dataSource) 
 				n.ArchivedAt,
 				HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
 				HasLeafWork = context.Set<LeafWorkEntity>().Any(lw => lw.JobNodeId == n.Id),
+				Achievement = context.Set<LeafWorkEntity>()
+					.Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
 			})
 			.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var matchesById = shaped.ToDictionary(r => r.Id, r => MatchesFilter(r.OwnerUserId, r.ArchivedAt, ownership, archiveFilter));
 
 		var childrenByParent = shaped
-			.Where(r => r.ParentId is { } parentId && idList.Contains(parentId))
+			.Where(r => r.ParentId is JobNodeId parentId && idList.Contains(parentId))
 			.GroupBy(r => r.ParentId!.Value)
 			.ToDictionary(g => g.Key, g => g.Select(r => r.Id).ToList());
 
@@ -265,6 +271,7 @@ internal sealed class PostgreSqlJobBrowseQueryPort(NpgsqlDataSource dataSource) 
 				ArchivedAt = r.ArchivedAt,
 				HasChildren = r.HasChildren,
 				HasLeafWork = r.HasLeafWork,
+				Achievement = r.Achievement,
 				HasUnexpandedChildren = r.HasChildren && !expandedById[r.Id],
 				MatchesFilter = matchesById[r.Id],
 			})

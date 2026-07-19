@@ -36,9 +36,9 @@ public sealed class ManageTwoFactorModel(
 
 	public string? QrCodeDataUri { get; private set; }
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public async Task<IActionResult> OnGetAsync()
 	{
@@ -81,8 +81,7 @@ public sealed class ManageTwoFactorModel(
 		ApplyTwoFactorState(user, updated);
 		await signInManager.RefreshSignInAsync(user);
 		SuccessMessage = "Two-factor authentication is now enabled on your account.";
-		await LoadStateAsync(user);
-		return Page();
+		return RedirectToPage();
 	}
 
 	public async Task<IActionResult> OnPostDisableAsync()
@@ -116,8 +115,7 @@ public sealed class ManageTwoFactorModel(
 		ApplyTwoFactorState(user, updated);
 		await signInManager.RefreshSignInAsync(user);
 		SuccessMessage = "Two-factor authentication has been disabled on your account.";
-		TwoFactorEnabled = false;
-		return Page();
+		return RedirectToPage();
 	}
 
 	private async Task LoadStateAsync(JobTrackIdentityUser user)

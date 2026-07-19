@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages.Jobs;
 
+using System.Globalization;
 using Abstractions;
 using Application;
 using Domain.Hierarchy;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using NodaTime;
 
 /// <summary>
 ///     The flat "jobs awaiting progress" dashboard: leaves only, in priority/deadline order, for one
@@ -22,7 +24,8 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 [Authorize(Policy = JobTrackPolicyNames.AnyEmployee)]
 public sealed class AwaitingProgressModel(
 	IJobTrackClient jobTrackClient,
-	UserManager<JobTrackIdentityUser> userManager) : PageModel
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
@@ -38,9 +41,9 @@ public sealed class AwaitingProgressModel(
 
 	[BindProperty(SupportsGet = true)] public long? SubtreeRootId { get; init; }
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public JobNodeDetailResult? SubtreeRoot { get; private set; }
 
@@ -49,7 +52,38 @@ public sealed class AwaitingProgressModel(
 	public IReadOnlyDictionary<JobNodeId, WorkSessionResult> ActiveSessionByLeaf { get; private set; } =
 		new Dictionary<JobNodeId, WorkSessionResult>();
 
+	/// <summary>
+	///     The signed-in actor, so a row can tell its own active session apart from one
+	///     <see cref="ActiveSessionByLeaf" /> surfaced because the actor may manage any leaf's session
+	///     (Administrator/JobManager, ADR 0032) rather than because it is theirs.
+	/// </summary>
+	public AppUserId? CurrentActorId { get; private set; }
+
+	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
+
 	public List<SelectListItem> OwnerOptions { get; private set; } = [];
+
+	/// <summary>
+	///     The page's own view state, replayed as hidden fields by every per-row work form so a start
+	///     or finish lands back on the same owner, pool, and subtree filters rather than resetting the
+	///     dashboard to everyone's work.
+	/// </summary>
+	public IReadOnlyDictionary<string, string?> RowStateFields => new Dictionary<string, string?> {
+		["OwnerUserId"] = OwnerUserId?.ToString(CultureInfo.InvariantCulture),
+		["UnassignedOnly"] = UnassignedOnly.ToString(),
+		["SubtreeRootId"] = SubtreeRootId?.ToString(CultureInfo.InvariantCulture),
+	};
+
+	/// <summary>
+	///     <paramref name="activeSession" />'s worker, formatted for display, but only when it is not
+	///     <see cref="CurrentActorId" /> -- an admin managing another worker's session should see whose
+	///     it is; the actor's own needs no such label.
+	/// </summary>
+	public string? ActiveSessionWorkedByOther(WorkSessionResult? activeSession) =>
+		activeSession is { } session && session.WorkedByUserId != CurrentActorId
+			? DescribeOwner(session.WorkedByUserId)
+			: null;
 
 	/// <summary>
 	///     Formats an owner id for display: display name and username when it resolves in
@@ -71,7 +105,7 @@ public sealed class AwaitingProgressModel(
 		return Page();
 	}
 
-	public async Task<IActionResult> OnPostStartWorkAsync(long jobNodeId, CancellationToken cancellationToken)
+	public async Task<IActionResult> OnPostStartWorkAsync(long jobNodeId, string? startedAt, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -79,11 +113,13 @@ public sealed class AwaitingProgressModel(
 		}
 
 		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 					JobNodeId = new(jobNodeId),
 					WorkedByUserId = actor.Value,
+					StartedAt = BackdateInstant.TryParse(startedAt, zone, out var startedAtInstant) ? startedAtInstant : null,
 				}, cancellationToken);
 			SuccessMessage = "Work started.";
 		}
@@ -94,19 +130,17 @@ public sealed class AwaitingProgressModel(
 			ErrorMessage = "That job node does not exist.";
 		}
 		catch (InvariantViolationException ex) {
-			ErrorMessage = ex.ConstraintId == "work-session-already-active"
-				? "You already have an active session for this leaf."
-				: ex.Message;
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 		catch (PrerequisiteBlockedException) {
 			ErrorMessage = "This leaf's prerequisites are not satisfied.";
 		}
 
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
 
-	public async Task<IActionResult> OnPostFinishAsync(long sessionId, long version, CancellationToken cancellationToken)
+	public async Task<IActionResult> OnPostFinishAsync(
+		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -114,9 +148,13 @@ public sealed class AwaitingProgressModel(
 		}
 
 		try {
-			_ = await jobTrackClient.Work.FinishSessionAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, SessionId = new(sessionId), Version = version },
-				cancellationToken);
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				SessionId = new(sessionId),
+				Version = version,
+				FinishedAt = BackdateInstant.TryParse(finishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
+			}, cancellationToken);
 			SuccessMessage = "Session finished.";
 		}
 		catch (AuthorizationDeniedException) {
@@ -129,15 +167,27 @@ public sealed class AwaitingProgressModel(
 			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
 		}
 		catch (InvariantViolationException ex) {
-			ErrorMessage = ex.Message;
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
+
+	/// <summary>
+	///     The page's own browsing context (mirrors <see cref="RowStateFields" />, minus the string
+	///     conversion), replayed on the redirect every mutating handler ends with so the reloaded GET
+	///     lands back on the same owner, pool, and subtree filters.
+	/// </summary>
+	private RouteValueDictionary CurrentRouteValues() => new() {
+		["ownerUserId"] = OwnerUserId,
+		["unassignedOnly"] = UnassignedOnly,
+		["subtreeRootId"] = SubtreeRootId,
+	};
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
+		CurrentActorId = actor;
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
 
 		var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
@@ -146,9 +196,9 @@ public sealed class AwaitingProgressModel(
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Everyone", string.Empty));
 
 		try {
-			if (SubtreeRootId is { } subtreeRootId) {
-				SubtreeRoot = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = new JobNodeId(subtreeRootId) },
-					cancellationToken);
+			if (SubtreeRootId.HasValue) {
+				SubtreeRoot = await jobTrackClient.Query.GetJobNodeAsync(
+					new() { Context = context, NodeId = new JobNodeId(SubtreeRootId.Value) }, cancellationToken);
 			}
 
 			var ownership = (UnassignedOnly, OwnerUserId) switch {
@@ -158,7 +208,11 @@ public sealed class AwaitingProgressModel(
 			};
 
 			Entries = await jobTrackClient.Query.GetAwaitingProgressAsync(
-				new() { Context = context, Ownership = ownership, SubtreeRootId = SubtreeRootId is { } id ? new JobNodeId(id) : null },
+				new() {
+					Context = context,
+					Ownership = ownership,
+					SubtreeRootId = SubtreeRootId.HasValue ? new JobNodeId(SubtreeRootId.Value) : null,
+				},
 				cancellationToken);
 
 			await LoadActiveSessionsAsync(context, cancellationToken);
@@ -180,7 +234,7 @@ public sealed class AwaitingProgressModel(
 			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [.. leafIds] },
 				cancellationToken);
 
-			ActiveSessionByLeaf = sessions.ToDictionary(s => s.LeafWorkId);
+			ActiveSessionByLeaf = WorkRowActiveSessions.ByLeaf(sessions);
 		}
 		catch (AuthorizationDeniedException) {
 			ActiveSessionByLeaf = new Dictionary<JobNodeId, WorkSessionResult>();

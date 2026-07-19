@@ -75,9 +75,9 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 
 	public bool IsSearch => !string.IsNullOrWhiteSpace(SearchText);
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
@@ -116,8 +116,7 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 
 		if (requiresIds.Length == 0 && requiredByIds.Length == 0) {
 			ErrorMessage = "Select at least one job to link before adding.";
-			await LoadAsync(actor.Value, cancellationToken);
-			return Page();
+			return RedirectToPage(CurrentRouteValues());
 		}
 
 		var failures = new List<string>();
@@ -144,8 +143,7 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 			ErrorMessage = string.Join(" ", failures);
 		}
 
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
 
 	private async Task<int> AddOneAsync(
@@ -193,9 +191,14 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 			ErrorMessage = "That prerequisite edge does not exist.";
 		}
 
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
+
+	/// <summary>
+	///     The page's own browsing context, replayed on the redirect every mutating handler ends with
+	///     so the reloaded GET lands back on the same node and search text.
+	/// </summary>
+	private object CurrentRouteValues() => new { nodeId = NodeId, searchText = SearchText };
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{

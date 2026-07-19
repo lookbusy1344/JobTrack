@@ -79,12 +79,12 @@ public sealed class DecomposeModel(IJobTrackClient jobTrackClient, UserManager<J
 			.Select(child => new NewChildJobSpec {
 				Description = child.Description!,
 				WriteUp = child.WriteUp,
-				OwnerUserId = child.OwnerUserId is { } ownerUserId ? new AppUserId(ownerUserId) : null,
+				OwnerUserId = child.OwnerUserId.HasValue ? new AppUserId(child.OwnerUserId.Value) : null,
 				Priority = child.Priority,
 				ExpectedDurationHours = child.ExpectedDurationHours,
-				ExpectedCost = child.ExpectedCost is { } cost ? new Money(cost) : null,
-				NeededStart = child.NeededStart is { } start ? Instant.FromDateTimeOffset(start) : null,
-				NeededFinish = child.NeededFinish is { } finish ? Instant.FromDateTimeOffset(finish) : null,
+				ExpectedCost = child.ExpectedCost.HasValue ? new Money(child.ExpectedCost.Value) : null,
+				NeededStart = child.NeededStart.HasValue ? Instant.FromDateTimeOffset(child.NeededStart.Value) : null,
+				NeededFinish = child.NeededFinish.HasValue ? Instant.FromDateTimeOffset(child.NeededFinish.Value) : null,
 			})
 			.ToArray();
 

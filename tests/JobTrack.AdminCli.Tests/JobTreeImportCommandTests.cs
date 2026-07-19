@@ -346,11 +346,11 @@ public sealed class JobTreeImportCommandTests
 
 			// Node 2 requires node 1, but starts three days ago -- a day before node 1 finished.
 			const string ImpossibleJson = """
-									[
-										{ "id": 1, "title": "First", "open": "5 days", "closed": "2 days" },
-										{ "id": 2, "title": "Second", "prerequisiteIds": [1], "open": "3 days" }
-									]
-									""";
+										  [
+										  	{ "id": 1, "title": "First", "open": "5 days", "closed": "2 days" },
+										  	{ "id": 2, "title": "Second", "prerequisiteIds": [1], "open": "3 days" }
+										  ]
+										  """;
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
 				console, userManager, client, "ada.chrono", rootId, ImpossibleJson, CancellationToken.None);

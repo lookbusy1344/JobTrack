@@ -10,7 +10,7 @@ internal static class ActorAccountState
 	public static void EnsureMayAct(IdentityUserEntity identityUser, AppUserId actorId, Instant now)
 	{
 		if (!identityUser.IsEnabled
-			|| (identityUser.LockoutEnabled && identityUser.LockoutEnd is { } lockoutEnd && lockoutEnd > now)) {
+			|| (identityUser.LockoutEnabled && identityUser.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} has a disabled or locked account.");
 		}
 	}

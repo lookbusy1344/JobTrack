@@ -1,0 +1,33 @@
+@model ActiveSincePillModel
+@* Renders nothing when there is no running session: the column is empty for that row rather than
+   carrying a placeholder, since "not currently being worked on" is the ordinary case and a mark on
+   every such row would bury the few rows that are live.
+
+   In the compact (per-row) form the stopwatch carries the meaning, so "Active since" is dropped from
+   the visible pill and kept for assistive tech — a bare "14:40" read aloud with no noun would say
+   nothing. The worked-by name goes the same way there: it would force the column wide enough to hold
+   a full display name on the rare row that has one, so it stays in the accessible name and the
+   tooltip. The toolbar form has the width to say all of it outright. *@
+@if (Model.ActiveSession is { } activeSession) {
+	var since = InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone);
+	var workedBy = Model.ActiveSessionWorkedByOther is { } other ? $" · worked by {other}" : string.Empty;
+	@if (Model.Compact) {
+		<span class="status-pill status-pill-ready status-pill--compact" title="Active since @since@workedBy">
+			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-active"></use>
+			</svg>
+			<span class="visually-hidden">Active since</span>
+			@since
+			@if (!string.IsNullOrEmpty(workedBy)) {
+				<span class="visually-hidden">@workedBy</span>
+			}
+		</span>
+	} else {
+		<span class="status-pill status-pill-ready">
+			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-active"></use>
+			</svg>
+			Active since @since@workedBy
+		</span>
+	}
+}

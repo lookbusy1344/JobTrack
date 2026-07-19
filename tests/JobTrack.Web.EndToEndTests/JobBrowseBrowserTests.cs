@@ -234,7 +234,8 @@ public abstract class JobBrowseBrowserTestsBase
 		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
 		(await phoneRow.Locator(".jt-tree-name-link").First.IsVisibleAsync()).Should().BeTrue("the name is the point of the row");
 		(await phoneRow.Locator(".jt-tree-icon").First.IsVisibleAsync()).Should().BeTrue("the kind glyph replaces the dropped Kind column");
-		(await phoneRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should().BeTrue("starting work must stay reachable on a phone");
+		(await phoneRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should()
+			.BeTrue("starting work must stay reachable on a phone");
 		(await phoneRow.Locator(".jt-col-secondary").First.IsVisibleAsync()).Should().BeFalse("owner/priority/cost/span are secondary on a phone");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);

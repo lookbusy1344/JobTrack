@@ -1,0 +1,37 @@
+@model WorkRowActionsModel
+@* One leaf row's work controls, shared by every table listing leaves. Start is icon-only because
+   this cell repeats once per row and a labelled button in each would out-shout the row's own name;
+   the standalone toolbars on Browse's node detail and the leaf's own page keep their labels.
+
+   The "Active since" pill is deliberately *not* here — it has its own column (`_ActiveSincePill`).
+   Sharing this cell made the buttons shift horizontally from row to row depending on whether a
+   session happened to be running, so the one control a reader is aiming for never sat still. *@
+<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+	@if (Model.ActiveSession is not null) {
+		<form method="post" asp-page-handler="Finish" class="inline-form">
+			@foreach (var field in Model.FinishFields) {
+				<input type="hidden" name="@field.Key" value="@field.Value"/>
+			}
+			<button type="submit" class="jt-icon-button" title="Finish / pause">
+				<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-finish"></use>
+				</svg>
+				<span class="visually-hidden">Finish / pause</span>
+			</button>
+		</form>
+		<partial name="_BackdateTrigger" model="Model.Backdate"/>
+	} else {
+		<form method="post" asp-page-handler="@Model.StartHandler" class="inline-form">
+			@foreach (var field in Model.StartFields) {
+				<input type="hidden" name="@field.Key" value="@field.Value"/>
+			}
+			<button type="submit" class="jt-icon-button jt-icon-button--primary" title="Start work">
+				<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-start"></use>
+				</svg>
+				<span class="visually-hidden">Start work</span>
+			</button>
+		</form>
+		<partial name="_BackdateTrigger" model="Model.Backdate"/>
+	}
+</div>

@@ -94,8 +94,9 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetBrowseFormAsync(authCookie, branchId);
 		var setResponse = await PostSetHomeNodeAsync(authCookie, cookie, token, branchId);
-		setResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-		var setBody = await setResponse.Content.ReadAsStringAsync();
+		setResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var setReloaded = await FollowRedirectAsync(setResponse, authCookie);
+		var setBody = await setReloaded.Content.ReadAsStringAsync();
 		setBody.Should().Contain("Home node set");
 
 		var landingResponse = await GetAsync("/", authCookie);
@@ -115,9 +116,10 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetBrowseFormAsync(authCookie, leafId);
 		var setResponse = await PostSetHomeNodeAsync(authCookie, cookie, token, leafId);
-		var setBody = await setResponse.Content.ReadAsStringAsync();
 
-		setResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		setResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var setReloaded = await FollowRedirectAsync(setResponse, authCookie);
+		var setBody = await setReloaded.Content.ReadAsStringAsync();
 		setBody.Should().Contain("leaf cannot be set as a home node");
 	}
 
@@ -134,7 +136,7 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 
 		var (resetCookie, resetToken) = await GetBrowseFormAsync(authCookie, branchId);
 		var resetResponse = await PostResetHomeNodeAsync(authCookie, resetCookie, resetToken);
-		resetResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		resetResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
 		var landingResponse = await GetAsync("/", authCookie);
 		var location = landingResponse.Headers.Location!.OriginalString;
@@ -201,6 +203,23 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 
 		return await client.SendAsync(request);
 	}
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private async Task<string> SignInAsync(string userName)
 	{

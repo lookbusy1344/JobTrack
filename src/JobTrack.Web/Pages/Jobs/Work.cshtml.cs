@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using NodaTime;
 
 /// <summary>
 ///     A leaf's own work-session detail (plan §8.5 slice 4): a deep-linkable page showing the same
@@ -23,7 +24,8 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
 public sealed class WorkModel(
 	IJobTrackClient jobTrackClient,
-	UserManager<JobTrackIdentityUser> userManager) : PageModel
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
 
@@ -38,9 +40,35 @@ public sealed class WorkModel(
 
 	public LeafWorkSessionsPanelModel? Panel { get; private set; }
 
-	public string? ErrorMessage { get; private set; }
+	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
+
+	[TempData] public string? SuccessMessage { get; set; }
+
+	/// <summary>
+	///     The toolbar's own round-trip state — which leaf, and whose sessions are being shown — as
+	///     hidden fields, so starting work (or backdating a start) returns to the same filtered view.
+	/// </summary>
+	public IReadOnlyDictionary<string, string?> ToolbarStateFields => new Dictionary<string, string?> {
+		["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture),
+		["WorkedByUserId"] = Panel?.DisplayedWorkedByUserId?.ToString(CultureInfo.InvariantCulture),
+	};
+
+	/// <summary>
+	///     <see cref="ToolbarStateFields" /> plus the identity and version of <paramref name="session" />,
+	///     for the forms acting on an existing session rather than on the leaf.
+	/// </summary>
+	public IReadOnlyDictionary<string, string?> SessionFields(WorkSessionResult session)
+	{
+		ArgumentNullException.ThrowIfNull(session);
+
+		return new Dictionary<string, string?>(ToolbarStateFields) {
+			["sessionId"] = session.Id.Value.ToString(CultureInfo.InvariantCulture),
+			["version"] = session.Version.ToString(CultureInfo.InvariantCulture),
+		};
+	}
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
@@ -49,25 +77,27 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
-		await LoadAsync(actor.Value, WorkedByUserId is { } id ? new AppUserId(id) : null, cancellationToken);
+		await LoadAsync(actor.Value, WorkedByUserId.HasValue ? new AppUserId(WorkedByUserId.Value) : null, cancellationToken);
 		return Page();
 	}
 
-	public async Task<IActionResult> OnPostStartAsync(CancellationToken cancellationToken)
+	public async Task<IActionResult> OnPostStartAsync(string? startedAt, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
 			return Challenge();
 		}
 
-		var workedByUserId = WorkedByUserId is { } id ? new(id) : actor.Value;
+		var workedByUserId = WorkedByUserId.HasValue ? new(WorkedByUserId.Value) : actor.Value;
 
 		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 					JobNodeId = new(LeafNodeId),
 					WorkedByUserId = workedByUserId,
+					StartedAt = BackdateInstant.TryParse(startedAt, zone, out var startedAtInstant) ? startedAtInstant : null,
 				}, cancellationToken);
 			SuccessMessage = "Work started.";
 		}
@@ -78,19 +108,17 @@ public sealed class WorkModel(
 			ErrorMessage = "That job node does not exist.";
 		}
 		catch (InvariantViolationException ex) {
-			ErrorMessage = ex.ConstraintId == "work-session-already-active"
-				? "This worker already has an active session for this leaf."
-				: ex.Message;
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 		catch (PrerequisiteBlockedException) {
 			ErrorMessage = "This leaf's prerequisites are not satisfied.";
 		}
 
-		await LoadAsync(actor.Value, WorkedByUserId is { } filterId ? new AppUserId(filterId) : null, cancellationToken);
-		return Page();
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 	}
 
-	public async Task<IActionResult> OnPostFinishAsync(long sessionId, long version, CancellationToken cancellationToken)
+	public async Task<IActionResult> OnPostFinishAsync(
+		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -98,9 +126,13 @@ public sealed class WorkModel(
 		}
 
 		try {
-			_ = await jobTrackClient.Work.FinishSessionAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, SessionId = new(sessionId), Version = version },
-				cancellationToken);
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				SessionId = new(sessionId),
+				Version = version,
+				FinishedAt = BackdateInstant.TryParse(finishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
+			}, cancellationToken);
 			SuccessMessage = "Session finished.";
 		}
 		catch (AuthorizationDeniedException) {
@@ -112,13 +144,16 @@ public sealed class WorkModel(
 		catch (ConcurrencyConflictException) {
 			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
 		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
 
-		await LoadAsync(actor.Value, WorkedByUserId is { } id ? new AppUserId(id) : null, cancellationToken);
-		return Page();
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 	}
 
 	private async Task LoadAsync(AppUserId actor, AppUserId? workedByUserId, CancellationToken cancellationToken)
 	{
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
 
 		_employeeDirectory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
@@ -140,6 +175,7 @@ public sealed class WorkModel(
 
 			Panel = new() {
 				LeafNodeId = LeafNodeId,
+				ViewerZone = ViewerZone,
 				DisplayedWorkedByUserId = workedByUserId?.Value,
 				DisplayedWorkedByName = workedByUserId is { } filtered
 					? EmployeeDirectoryDisplay.Describe(_employeeDirectoryById, filtered.Value, "Unknown")

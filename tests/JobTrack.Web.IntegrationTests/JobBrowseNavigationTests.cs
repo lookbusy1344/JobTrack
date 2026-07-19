@@ -152,7 +152,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		body.Should().Contain("Depends on this job");
 		body.Should().Contain(">Dependencies<");
 		body.Should().Contain(">Decompose<");
-		body.Should().Contain(">Start work<");
+		body.Should().Contain("#jt-icon-start");
 		body.Should().Contain(">Achievement<");
 	}
 

@@ -54,7 +54,7 @@
 				<tr>
 					<td><a class="jt-preserve-whitespace" asp-page="Details"
 					       asp-route-id="@request.JobNodeId.Value">@JobNodeDisplay.Title(request.Description, request.JobNodeId.Value)</a></td>
-					<td>@request.SubmittedAt.ToDateTimeOffset()</td>
+					<td>@InstantDisplay.Format(request.SubmittedAt, Model.ViewerZone)</td>
 				</tr>
 			}
 			</tbody>

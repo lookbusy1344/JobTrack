@@ -37,7 +37,7 @@ internal static class SubtreeImportPlanner
 		}
 
 		foreach (var node in nodes) {
-			if (node.ParentLocalId is { } parentLocalId && !byLocalId.ContainsKey(parentLocalId)) {
+			if (node.ParentLocalId is long parentLocalId && !byLocalId.ContainsKey(parentLocalId)) {
 				throw new InvariantViolationException(
 					"import-subtree-unknown-parent-local-id",
 					$"Node {node.LocalId} references unknown parent local id {parentLocalId}.");
@@ -163,7 +163,7 @@ internal static class SubtreeImportPlanner
 				$"Node {node.LocalId} records work, so its achievement cannot be {work.Achievement}.");
 		}
 
-		if (work.FinishedAt is { } finishedAt && finishedAt <= work.StartedAt) {
+		if (work.FinishedAt is Instant finishedAt && finishedAt <= work.StartedAt) {
 			throw new InvariantViolationException(
 				"import-subtree-invalid-work-interval",
 				$"Node {node.LocalId}'s work finishes at {finishedAt}, which is not after its start at {work.StartedAt}.");

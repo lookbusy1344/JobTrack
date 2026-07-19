@@ -1,0 +1,6 @@
+@model BackdateDisclosureModel
+@* The toolbar (non-table) counterpart to _BackdateRow: a full-width panel below the toolbar's own
+   buttons rather than a table row, since there is no table to add a row to. *@
+<div id="@Model.RowId" class="jt-backdate-panel" hidden>
+	<partial name="_BackdateForm" model="Model"/>
+</div>

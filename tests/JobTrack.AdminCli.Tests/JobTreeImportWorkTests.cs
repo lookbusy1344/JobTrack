@@ -1,6 +1,7 @@
 namespace JobTrack.AdminCli.Tests;
 
 using Abstractions;
+using Application;
 using AwesomeAssertions;
 using NodaTime;
 
@@ -16,15 +17,12 @@ public sealed class JobTreeImportWorkTests
 	private static readonly AppUserId Worker = new(7);
 
 	[Fact]
-	public void A_row_with_no_work_fields_resolves_to_no_work()
-	{
-		Resolve().Should().BeNull();
-	}
+	public void A_row_with_no_work_fields_resolves_to_no_work() => Resolve().Should().BeNull();
 
 	[Fact]
 	public void An_open_row_starts_the_given_duration_before_the_import_and_stays_in_progress()
 	{
-		var work = Resolve(open: "2 days");
+		var work = Resolve("2 days");
 
 		work.Should().NotBeNull();
 		work!.StartedAt.Should().Be(ImportedAt - Duration.FromDays(2));
@@ -36,7 +34,7 @@ public sealed class JobTreeImportWorkTests
 	[Fact]
 	public void A_closed_row_spans_both_durations_before_the_import_and_succeeds()
 	{
-		var work = Resolve(open: "2 days", closed: "1 day");
+		var work = Resolve("2 days", "1 day");
 
 		work.Should().NotBeNull();
 		work!.StartedAt.Should().Be(ImportedAt - Duration.FromDays(2));
@@ -54,7 +52,7 @@ public sealed class JobTreeImportWorkTests
 	[InlineData("  5   days  ", 5 * NodaConstants.TicksPerDay)]
 	public void Relative_durations_accept_the_documented_units_and_spellings(string text, long expectedTicks)
 	{
-		var work = Resolve(open: text);
+		var work = Resolve(text);
 
 		work!.StartedAt.Should().Be(ImportedAt - Duration.FromTicks(expectedTicks));
 	}
@@ -68,7 +66,7 @@ public sealed class JobTreeImportWorkTests
 	[InlineData("-2 days")]
 	public void An_unparseable_relative_duration_is_rejected(string text)
 	{
-		var act = () => Resolve(open: text);
+		var act = () => Resolve(text);
 
 		act.Should().Throw<AdminCliUsageException>().WithMessage("*open*");
 	}
@@ -113,7 +111,7 @@ public sealed class JobTreeImportWorkTests
 	[InlineData("unsuccessful", Achievement.Unsuccessful)]
 	public void An_explicit_outcome_sets_the_closed_leafs_achievement(string outcome, Achievement expected)
 	{
-		var work = Resolve(open: "2 days", closed: "1 day", outcome: outcome);
+		var work = Resolve("2 days", "1 day", outcome: outcome);
 
 		work!.Achievement.Should().Be(expected);
 	}
@@ -121,7 +119,7 @@ public sealed class JobTreeImportWorkTests
 	[Fact]
 	public void An_unrecognised_outcome_is_rejected()
 	{
-		var act = () => Resolve(open: "2 days", closed: "1 day", outcome: "nearly");
+		var act = () => Resolve("2 days", "1 day", outcome: "nearly");
 
 		act.Should().Throw<AdminCliUsageException>().WithMessage("*outcome*");
 	}
@@ -129,7 +127,7 @@ public sealed class JobTreeImportWorkTests
 	[Fact]
 	public void An_outcome_on_a_job_that_never_closes_is_rejected()
 	{
-		var act = () => Resolve(open: "2 days", outcome: "success");
+		var act = () => Resolve("2 days", outcome: "success");
 
 		act.Should().Throw<AdminCliUsageException>().WithMessage("*outcome*");
 	}
@@ -145,7 +143,7 @@ public sealed class JobTreeImportWorkTests
 	[Fact]
 	public void Mixing_relative_and_absolute_spellings_is_rejected()
 	{
-		var act = () => Resolve(open: "2 days", end: "2026-07-17T09:00:00Z");
+		var act = () => Resolve("2 days", end: "2026-07-17T09:00:00Z");
 
 		act.Should().Throw<AdminCliUsageException>().WithMessage("*cannot mix*");
 	}
@@ -166,10 +164,18 @@ public sealed class JobTreeImportWorkTests
 		act.Should().Throw<AdminCliUsageException>().WithMessage("*start*");
 	}
 
-	private static Application.ImportSubtreeLeafWorkSpec? Resolve(
+	private static ImportSubtreeLeafWorkSpec? Resolve(
 		string? open = null, string? closed = null, string? start = null, string? end = null, string? outcome = null) =>
 		JobTreeImportWork.Resolve(
-			new() { Id = 1, Title = "A node", Open = open, Closed = closed, Start = start, End = end, Outcome = outcome },
+			new() {
+				Id = 1,
+				Title = "A node",
+				Open = open,
+				Closed = closed,
+				Start = start,
+				End = end,
+				Outcome = outcome,
+			},
 			ImportedAt,
 			Worker);
 }

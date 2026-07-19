@@ -398,7 +398,7 @@ internal sealed class PostgreSqlScheduleCommandPort : IScheduleCommandPort
 	/// </summary>
 	private static void EnsureUserMatchesOrThrow(AppUserId actualUserId, AppUserId? expectedUserId, long rowId)
 	{
-		if (expectedUserId is { } userId && actualUserId != userId) {
+		if (expectedUserId is AppUserId userId && actualUserId != userId) {
 			throw new EntityNotFoundException($"Schedule row {rowId} does not belong to employee {userId}.");
 		}
 	}

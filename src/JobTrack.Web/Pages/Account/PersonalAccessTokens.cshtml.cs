@@ -20,15 +20,22 @@ using NodaTime;
 ///     issue for anyone but themselves.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.AnyAuthenticatedUser)]
-public sealed class PersonalAccessTokensModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class PersonalAccessTokensModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	[BindProperty] public IssueTokenInput Issue { get; set; } = new();
 
 	public EquatableArray<PersonalAccessTokenSummaryResult> Tokens { get; private set; } = [];
 
-	public string? ErrorMessage { get; private set; }
+	/// <summary>The signed-in actor's own time zone, for formatting every token's timestamps (<see cref="InstantDisplay" />).</summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
+
+	[TempData] public string? SuccessMessage { get; set; }
 
 	/// <summary>
 	///     The newly issued plaintext token, rendered exactly once directly in this response. Never
@@ -39,6 +46,12 @@ public sealed class PersonalAccessTokensModel(IJobTrackClient jobTrackClient, Us
 
 	public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadTokensAsync(cancellationToken);
 
+	/// <summary>
+	///     Deliberately not converted to Post/Redirect/Get like every other mutating handler in this
+	///     codebase: <see cref="IssuedPlaintextToken" /> must render in this exact response and would be
+	///     lost across a redirect (see its own doc comment), so this one handler still risks a
+	///     resubmission warning on refresh in exchange for never persisting the secret past this request.
+	/// </summary>
 	public async Task<IActionResult> OnPostIssueAsync(CancellationToken cancellationToken)
 	{
 		ModelState.Clear();
@@ -99,8 +112,7 @@ public sealed class PersonalAccessTokensModel(IJobTrackClient jobTrackClient, Us
 			ErrorMessage = "That token does not exist.";
 		}
 
-		await LoadTokensAsync(cancellationToken);
-		return Page();
+		return RedirectToPage();
 	}
 
 	private async Task LoadTokensAsync(CancellationToken cancellationToken)
@@ -110,6 +122,7 @@ public sealed class PersonalAccessTokensModel(IJobTrackClient jobTrackClient, Us
 			return;
 		}
 
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 		Tokens = await jobTrackClient.Tokens.ListAsync(
 			new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, TargetUserId = actor.Value }, cancellationToken);
 	}

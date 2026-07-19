@@ -91,9 +91,10 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 		var tokenId = await GetMostRecentTokenIdAsync("pat.revoke");
 
 		var revokeResponse = await PostRevokeAsync(authCookie, tokenId);
-		var revokeBody = await revokeResponse.Content.ReadAsStringAsync();
+		revokeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var revokeReloaded = await FollowRedirectAsync(revokeResponse, authCookie);
+		var revokeBody = await revokeReloaded.Content.ReadAsStringAsync();
 
-		revokeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		revokeBody.Should().Contain("revoked");
 	}
 
@@ -115,9 +116,10 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 		var attackerAuthCookie = await SignInAsync("pat.revoke.attacker");
 
 		var revokeResponse = await PostRevokeAsync(attackerAuthCookie, tokenId);
-		var revokeBody = await revokeResponse.Content.ReadAsStringAsync();
+		revokeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var revokeReloaded = await FollowRedirectAsync(revokeResponse, attackerAuthCookie);
+		var revokeBody = await revokeReloaded.Content.ReadAsStringAsync();
 
-		revokeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		revokeBody.Should().Contain("does not exist");
 		(await IsTokenRevokedAsync(tokenId)).Should().BeFalse("the attacker's request must not affect the owner's token");
 	}
@@ -149,9 +151,10 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 		var adminAuthCookie = await SignInAsync("pat.admin-revoke.admin");
 
 		var response = await PostAdminRevokeAllAsync(adminAuthCookie, workerId);
-		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, adminAuthCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("revoked");
 	}
 
@@ -228,6 +231,23 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 
 		return await client.SendAsync(request);
 	}
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private async Task<HttpResponseMessage> GetPageAsync(string authCookie)
 	{

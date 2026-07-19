@@ -66,9 +66,10 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 			"grace.hopper.new",
 			"Correct-Horse-Battery-42!",
 			EmployeeRole.Worker);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, adminAuthCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("created");
 		body.Should().Contain("grace.hopper.new");
 	}
@@ -81,9 +82,10 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 
 		var response = await PostCreateEmployeeWithoutRoleAsync(
 			adminAuthCookie, "Default Role", "Etc/UTC", 20m, "default.role.new", "Correct-Horse-Battery-42!");
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, adminAuthCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("created");
 		body.Should().Contain("Worker");
 		body.Should().NotContain("None");
@@ -111,9 +113,10 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 
 		var response = await PostCreateEmployeeAsync(
 			adminAuthCookie, "Second Admin", "Etc/UTC", 20m, "second.admin.new", "Correct-Horse-Battery-42!", EmployeeRole.Administrator);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, adminAuthCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Administrator");
 	}
 
@@ -127,9 +130,10 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 
 		var response = await PostCreateEmployeeAsync(adminAuthCookie, "Second", "Etc/UTC", 20m, "duplicate.username", "Correct-Horse-Battery-42!",
 			EmployeeRole.Worker);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, adminAuthCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("already taken");
 	}
 
@@ -169,7 +173,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		beforeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		var setEnabledResponse = await PostSetEnabledAsync(adminAuthCookie, workerId, false);
-		setEnabledResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		setEnabledResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		(await IsEnabledAsync(workerId)).Should().BeFalse();
 
 		using var afterRequest = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
@@ -211,7 +215,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		var adminAuthCookie = await SignInAsync("admin.reset");
 
 		var resetResponse = await PostResetPasswordAsync(adminAuthCookie, workerId, NewPassword);
-		resetResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		resetResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
 		var oldPasswordResponse = await PostLoginAsync("worker.reset", KnownPassword);
 		oldPasswordResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -241,7 +245,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		beforeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		var resetResponse = await PostResetPasswordAsync(adminAuthCookie, workerId, NewPassword);
-		resetResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		resetResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
 		using var afterRequest = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
 		afterRequest.Headers.Add("Cookie", workerAuthCookie);
@@ -283,9 +287,10 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		var adminAuthCookie = await SignInAsync("admin.default-rate");
 
 		var response = await PostSetDefaultHourlyRateAsync(adminAuthCookie, workerId, 30m);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, adminAuthCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("default hourly rate");
 		(await GetDefaultHourlyRateAsync(workerId)).Should().Be(30m);
 	}
@@ -340,7 +345,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 
 		var resetResponse = await PostResetTwoFactorAsync(adminAuthCookie, workerId);
 
-		resetResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		resetResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var (enabled, _) = await GetTwoFactorStateAsync(workerId);
 		enabled.Should().BeFalse();
 		_ = adminId;
@@ -365,7 +370,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		beforeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
 		var resetResponse = await PostResetTwoFactorAsync(adminAuthCookie, workerId);
-		resetResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		resetResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
 		using var afterRequest = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
 		afterRequest.Headers.Add("Cookie", workerAuthCookie);
@@ -596,6 +601,23 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 			: null;
 
 	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();

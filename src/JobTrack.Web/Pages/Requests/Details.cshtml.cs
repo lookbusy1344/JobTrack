@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using NodaTime;
 
 /// <summary>
 ///     A single request's requester-safe detail: status, read-only subtree, and the notes thread (ADR
@@ -18,7 +19,11 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 ///     or audit fields — that is <c>/Jobs/{id}</c>'s surface, not this one's.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.RequestDetailAccess)]
-public sealed class DetailsModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class DetailsModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	[BindProperty] public AddNoteInput NoteInput { get; set; } = new();
 
@@ -26,9 +31,12 @@ public sealed class DetailsModel(IJobTrackClient jobTrackClient, UserManager<Job
 
 	public IReadOnlyList<SubtreeRow> OrderedSubtree { get; private set; } = [];
 
+	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
+
 	public bool CanAcknowledge { get; private set; }
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
 	public async Task<IActionResult> OnGetAsync(long id, CancellationToken cancellationToken)
 	{
@@ -64,8 +72,7 @@ public sealed class DetailsModel(IJobTrackClient jobTrackClient, UserManager<Job
 			return NotFound();
 		}
 
-		NoteInput = new();
-		return await LoadAsync(id, cancellationToken);
+		return RedirectToPage(new { id });
 	}
 
 	public async Task<IActionResult> OnPostAcknowledgeAsync(long id, long version, CancellationToken cancellationToken)
@@ -92,7 +99,7 @@ public sealed class DetailsModel(IJobTrackClient jobTrackClient, UserManager<Job
 			ErrorMessage = "This request was changed by someone else. Reload and try again.";
 		}
 
-		return await LoadAsync(id, cancellationToken);
+		return RedirectToPage(new { id });
 	}
 
 	private async Task<IActionResult> LoadAsync(long id, CancellationToken cancellationToken)
@@ -101,6 +108,8 @@ public sealed class DetailsModel(IJobTrackClient jobTrackClient, UserManager<Job
 		if (actor is null) {
 			return Challenge();
 		}
+
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 
 		try {
 			Detail = await jobTrackClient.Requests.GetDetailAsync(

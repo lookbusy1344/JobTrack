@@ -25,7 +25,11 @@ using NodaTime;
 ///     (<see cref="JobNodeSummaryResult" />: "no per-row N+1 readiness lookups").
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.AnyEmployee)]
-public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class BrowseModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
 
@@ -52,9 +56,9 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 	[BindProperty(SupportsGet = true)]
 	public long? WorkedByUserId { get; init; }
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public JobNodeDetailResult? CurrentNode { get; private set; }
 
@@ -117,12 +121,30 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		new Dictionary<JobNodeId, WorkSessionResult>();
 
 	/// <summary>
+	///     The signed-in actor, so a row can tell its own active session apart from one
+	///     <see cref="ActiveSessionByLeaf" /> surfaced because the actor may manage any leaf's session
+	///     (Administrator/JobManager, ADR 0032) rather than because it is theirs.
+	/// </summary>
+	public AppUserId? CurrentActorId { get; private set; }
+
+	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
+
+	/// <summary>
 	///     When <see cref="CurrentNode" /> is a leaf, its work-session panel: session history,
 	///     worked-by picker, and start/finish actions — the same content <c>Work</c> shows, folded in so
 	///     viewing a leaf's own detail never requires navigating to a second page for anything
 	///     time-tracking related (<c>Work</c> itself remains a stable deep link).
 	/// </summary>
 	public LeafWorkSessionsPanelModel? LeafWorkSessions { get; private set; }
+
+	/// <summary>
+	///     The current node's recorded achievement, when it is a leaf with work attached. Read through
+	///     the existing leaf-work query rather than threaded onto <see cref="JobNodeResult" />, which
+	///     every job-node command path also projects — one extra read on a leaf's own detail page is
+	///     cheaper than that blast radius. <see langword="null" /> for a branch, or a leaf without work.
+	/// </summary>
+	public Achievement? CurrentNodeAchievement { get; private set; }
 
 	/// <summary>
 	///     Every enabled workflow employee's directory entry, keyed by id, for resolving an
@@ -149,6 +171,28 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 	public bool IsSearch => !string.IsNullOrWhiteSpace(SearchText);
 
 	/// <summary>
+	///     The page's own view state, replayed as hidden fields by every per-row work form so a start
+	///     or finish lands back on the same node, owner filter, archive filter, and search rather than
+	///     resetting the browser to the root.
+	/// </summary>
+	public IReadOnlyDictionary<string, string?> RowStateFields => new Dictionary<string, string?> {
+		["NodeId"] = NodeId?.ToString(CultureInfo.InvariantCulture),
+		["OwnerUserId"] = OwnerUserId?.ToString(CultureInfo.InvariantCulture),
+		["ArchiveFilter"] = ArchiveFilter.ToString(),
+		["SearchText"] = SearchText,
+	};
+
+	/// <summary>
+	///     <paramref name="activeSession" />'s worker, formatted for display, but only when it is not
+	///     <see cref="CurrentActorId" /> -- an admin managing another worker's session should see whose
+	///     it is; the actor's own needs no such label.
+	/// </summary>
+	public string? ActiveSessionWorkedByOther(WorkSessionResult? activeSession) =>
+		activeSession is { } session && session.WorkedByUserId != CurrentActorId
+			? DescribeOwner(session.WorkedByUserId)
+			: null;
+
+	/// <summary>
 	///     <paramref name="node" />'s nested-set span (ADR 0039 decision 3) as a left offset and width
 	///     percentage of the whole subtree's span, for the interval bar column — rebased so the root's
 	///     own span always renders as the full-width track.
@@ -173,7 +217,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		return Page();
 	}
 
-	public async Task<IActionResult> OnPostStartAsync(long leafNodeId, DateTimeOffset? startedAt, CancellationToken cancellationToken)
+	public async Task<IActionResult> OnPostStartAsync(long leafNodeId, string? startedAt, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -181,11 +225,12 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		}
 
 		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			_ = await jobTrackClient.Work.StartWorkAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				JobNodeId = new(leafNodeId),
 				WorkedByUserId = actor.Value,
-				StartedAt = startedAt is { } value ? Instant.FromDateTimeOffset(value) : null,
+				StartedAt = BackdateInstant.TryParse(startedAt, zone, out var startedAtInstant) ? startedAtInstant : null,
 			}, cancellationToken);
 			SuccessMessage = "Work started.";
 		}
@@ -196,18 +241,17 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			ErrorMessage = "That job node does not exist.";
 		}
 		catch (InvariantViolationException ex) {
-			ErrorMessage = DescribeStartFinishFailure(ex);
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 		catch (PrerequisiteBlockedException) {
 			ErrorMessage = "This leaf's prerequisites are not satisfied.";
 		}
 
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
 
 	public async Task<IActionResult> OnPostFinishAsync(
-		long sessionId, long version, DateTimeOffset? finishedAt, CancellationToken cancellationToken)
+		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -215,11 +259,12 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		}
 
 		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				SessionId = new(sessionId),
 				Version = version,
-				FinishedAt = finishedAt is { } value ? Instant.FromDateTimeOffset(value) : null,
+				FinishedAt = BackdateInstant.TryParse(finishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
 			}, cancellationToken);
 			SuccessMessage = "Session finished.";
 		}
@@ -233,11 +278,10 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
 		}
 		catch (InvariantViolationException ex) {
-			ErrorMessage = DescribeStartFinishFailure(ex);
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
 
 	public async Task<IActionResult> OnPostPickUpAsync(long nodeId, CancellationToken cancellationToken)
@@ -262,8 +306,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			ErrorMessage = "This job node has already been claimed by someone else.";
 		}
 
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
 
 	public async Task<IActionResult> OnPostSetHomeNodeAsync(long nodeId, CancellationToken cancellationToken)
@@ -274,7 +317,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		}
 
 		await SetHomeNodeAsync(actor.Value, new JobNodeId(nodeId), cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
 
 	public async Task<IActionResult> OnPostResetHomeNodeAsync(CancellationToken cancellationToken)
@@ -285,7 +328,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		}
 
 		await SetHomeNodeAsync(actor.Value, null, cancellationToken);
-		return Page();
+		return RedirectToPage(CurrentRouteValues());
 	}
 
 	private async Task SetHomeNodeAsync(AppUserId actor, JobNodeId? nodeId, CancellationToken cancellationToken)
@@ -301,21 +344,25 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
 		}
-
-		await LoadAsync(actor, cancellationToken);
 	}
 
-	private static string DescribeStartFinishFailure(InvariantViolationException ex) =>
-		ex.ConstraintId switch {
-			"work-session-already-active" => "This worker already has an active session for this leaf.",
-			"work-session-start-in-future" or "work-session-finish-in-future" => "That time is in the future — enter a past time.",
-			"work-session-overlap" => "That time overlaps another session for this leaf.",
-			"work-session-invalid-interval" => "The finish time must be after the start time.",
-			_ => ex.Message,
-		};
+	/// <summary>
+	///     The page's own browsing context (mirrors <see cref="RowStateFields" />, minus the string
+	///     conversion), replayed on the redirect every mutating handler ends with so the reloaded GET
+	///     lands back on the same node, owner filter, archive filter, and search rather than resetting
+	///     to the root.
+	/// </summary>
+	private RouteValueDictionary CurrentRouteValues() => new() {
+		["nodeId"] = NodeId,
+		["ownerUserId"] = OwnerUserId,
+		["archiveFilter"] = ArchiveFilter,
+		["searchText"] = SearchText,
+	};
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
+		CurrentActorId = actor;
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
 		var ownerFilter = (UnassignedOnly, OwnerUserId) switch {
 			(true, _) => OwnershipFilter.Unassigned,
@@ -340,7 +387,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			}
 
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = context, NodeId = NodeId is { } nodeId ? new JobNodeId(nodeId) : null }, cancellationToken);
+				new() { Context = context, NodeId = NodeId.HasValue ? new JobNodeId(NodeId.Value) : null }, cancellationToken);
 
 			Subtree = await jobTrackClient.Query.GetJobSubtreeAsync(new() {
 				Context = context,
@@ -359,6 +406,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 
 			if (CurrentNode.Node.Kind == NodeKind.Leaf) {
 				await LoadLeafWorkSessionsAsync(context, actor, CurrentNode.Node.Id, cancellationToken);
+				await LoadCurrentNodeAchievementAsync(context, CurrentNode.Node, cancellationToken);
 			}
 		}
 		catch (EntityNotFoundException) {
@@ -397,7 +445,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [.. leafIds] },
 				cancellationToken);
 
-			ActiveSessionByLeaf = sessions.ToDictionary(s => s.LeafWorkId);
+			ActiveSessionByLeaf = WorkRowActiveSessions.ByLeaf(sessions);
 		}
 		catch (AuthorizationDeniedException) {
 			ActiveSessionByLeaf = new Dictionary<JobNodeId, WorkSessionResult>();
@@ -413,11 +461,22 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		OwnerFilterOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory, new SelectListItem("All owners", string.Empty));
 	}
 
+	private async Task LoadCurrentNodeAchievementAsync(CommandContext context, JobNodeResult node, CancellationToken cancellationToken)
+	{
+		if (!node.HasLeafWork) {
+			return;
+		}
+
+		var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
+			new() { Context = context, JobNodeId = node.Id }, cancellationToken);
+		CurrentNodeAchievement = leafWork.Achievement;
+	}
+
 	private async Task LoadLeafWorkSessionsAsync(CommandContext context, AppUserId actor, JobNodeId leafNodeId, CancellationToken cancellationToken)
 	{
 		// Unset means every worker's sessions on this leaf, not the actor's own (ADR 0041): the whole
 		// record of work is what a reader wants first, and it is job data every employee may read.
-		var workedByUserId = WorkedByUserId is { } id ? new AppUserId(id) : (AppUserId?)null;
+		var workedByUserId = WorkedByUserId.HasValue ? new AppUserId(WorkedByUserId.Value) : (AppUserId?)null;
 
 		try {
 			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
@@ -425,6 +484,7 @@ public sealed class BrowseModel(IJobTrackClient jobTrackClient, UserManager<JobT
 
 			LeafWorkSessions = new() {
 				LeafNodeId = leafNodeId.Value,
+				ViewerZone = ViewerZone,
 				DisplayedWorkedByUserId = workedByUserId?.Value,
 				DisplayedWorkedByName = workedByUserId is { } filtered
 					? EmployeeDirectoryDisplay.Describe(EmployeeDirectoryById, filtered.Value, "Unknown")

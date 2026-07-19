@@ -54,8 +54,8 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 	{
 		var ownerIds = new List<AppUserId>();
 		var current = (JobNodeId?)nodeId;
-		while (current is { } id) {
-			if (_ownerByNodeId.TryGetValue(id, out var owner) && owner is { } ownerId) {
+		while (current is JobNodeId id) {
+			if (_ownerByNodeId.TryGetValue(id, out var owner) && owner is AppUserId ownerId) {
 				ownerIds.Add(ownerId);
 			}
 

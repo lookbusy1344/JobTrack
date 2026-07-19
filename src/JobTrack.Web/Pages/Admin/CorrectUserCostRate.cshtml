@@ -35,7 +35,7 @@
 				<input asp-for="Input.Reason" class="form-control"/>
 				<span asp-validation-for="Input.Reason" class="text-danger"></span>
 			</div>
-			<div class="jt-toolbar jt-toolbar--flush">
+			<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 				<button type="submit" class="btn btn-primary">Save</button>
 				<a class="btn btn-secondary" asp-page="/Admin/Rates" asp-route-userId="@Model.UserId">Cancel</a>
 			</div>

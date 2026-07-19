@@ -74,7 +74,7 @@ public static class AwaitingProgressCalculator
 	private static bool IsInSubtree(JobNodeId id, JobNodeId rootId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
 	{
 		JobNodeId? current = id;
-		while (current is { } currentId) {
+		while (current is JobNodeId currentId) {
 			if (currentId == rootId) {
 				return true;
 			}

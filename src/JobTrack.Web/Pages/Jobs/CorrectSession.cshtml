@@ -19,19 +19,19 @@
 			<input type="hidden" asp-for="SessionId"/>
 			<div class="form-group">
 				<label asp-for="Input.StartedAt"></label>
-				<input asp-for="Input.StartedAt" class="form-control"/>
+				<input asp-for="Input.StartedAt" type="datetime-local" step="60" class="form-control"/>
 				<span asp-validation-for="Input.StartedAt" class="text-danger"></span>
 			</div>
 			<div class="form-group">
 				<label asp-for="Input.FinishedAt">Finished (leave blank to leave the session active)</label>
-				<input asp-for="Input.FinishedAt" class="form-control"/>
+				<input asp-for="Input.FinishedAt" type="datetime-local" step="60" class="form-control"/>
 			</div>
 			<div class="form-group">
 				<label asp-for="Input.Reason">Reason for this correction</label>
 				<input asp-for="Input.Reason" class="form-control"/>
 				<span asp-validation-for="Input.Reason" class="text-danger"></span>
 			</div>
-			<div class="jt-toolbar jt-toolbar--flush">
+			<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 				<button type="submit" class="btn btn-primary">Save</button>
 				<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId"
 				   asp-route-workedByUserId="@Model.WorkedByUserId">Cancel</a>

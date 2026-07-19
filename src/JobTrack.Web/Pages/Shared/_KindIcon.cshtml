@@ -1,0 +1,21 @@
+@using JobTrack.Abstractions
+@model KindIconModel
+@{
+	var (iconId, noun) = Model.Kind switch {
+		NodeKind.Root => ("jt-icon-root", "root"),
+		NodeKind.Branch => ("jt-icon-branch", "branch"),
+		NodeKind.Leaf => ("jt-icon-leaf", "leaf"),
+		_ => throw new ArgumentOutOfRangeException(nameof(Model.Kind), Model.Kind, null),
+	};
+	var label = EnumDisplay.Label(Model.Kind);
+}
+<span class="jt-kind-icon">
+	<svg class="jt-kind-icon-glyph jt-tree-icon--@noun" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+		<use href="#@iconId"></use>
+	</svg>
+	@if (Model.ShowLabel) {
+		<span class="jt-kind-icon-label@(Model.CollapseLabelOnNarrow ? " jt-kind-icon-label--collapsible" : null)">@label</span>
+	} else {
+		<span class="visually-hidden">@label</span>
+	}
+</span>

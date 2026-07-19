@@ -129,7 +129,7 @@ internal sealed class FakeEmployeeCommandPort : IEmployeeCommandPort
 	{
 		_ = GetRolesOrThrow(request.Context.Actor);
 
-		if (request.NodeId is { } nodeId) {
+		if (request.NodeId is JobNodeId nodeId) {
 			if (!_existingNodes.Contains(nodeId)) {
 				throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 			}

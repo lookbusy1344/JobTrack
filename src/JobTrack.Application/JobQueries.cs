@@ -229,7 +229,7 @@ public sealed class JobQueries : IJobQueries
 			throw new ArgumentOutOfRangeException(nameof(offset), offset, "Offset must be non-negative.");
 		}
 
-		if (limit is { } value && value <= 0) {
+		if (limit is int value && value <= 0) {
 			throw new ArgumentOutOfRangeException(nameof(limit), value, "Limit must be positive when set.");
 		}
 	}
@@ -297,7 +297,7 @@ public sealed class JobQueries : IJobQueries
 
 	private Task<JobNodeDetailResult> GetJobNodeCoreAsync(GetJobNodeRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
-			"query.get-job-node", request.Context, request.NodeId is { } id ? JobTrackOperation.WithNodeId(id) : null,
+			"query.get-job-node", request.Context, request.NodeId.HasValue ? JobTrackOperation.WithNodeId(request.NodeId.Value) : null,
 			() => _browseQueryPort.GetNodeAsync(request.NodeId, cancellationToken));
 
 	private Task<EquatableArray<JobNodeSummaryResult>> GetJobChildrenCoreAsync(GetJobChildrenRequest request, CancellationToken cancellationToken) =>
@@ -389,6 +389,7 @@ public sealed class JobQueries : IJobQueries
 					ArchivedAt = row.ArchivedAt,
 					HasChildren = row.HasChildren,
 					HasLeafWork = row.HasLeafWork,
+					Achievement = row.Achievement,
 					IsReady = ReadinessCalculator
 						.IsReady(row.Id, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
 					HasUnexpandedChildren = row.HasUnexpandedChildren,
@@ -420,7 +421,7 @@ public sealed class JobQueries : IJobQueries
 			async () => {
 				var inputs = await _awaitingProgressQueryPort.GetAwaitingProgressInputsAsync(cancellationToken).ConfigureAwait(false);
 
-				if (request.SubtreeRootId is { } subtreeRootId && !inputs.NodesById.ContainsKey(subtreeRootId)) {
+				if (request.SubtreeRootId is JobNodeId subtreeRootId && !inputs.NodesById.ContainsKey(subtreeRootId)) {
 					throw new EntityNotFoundException($"Job node {subtreeRootId} does not exist.");
 				}
 
@@ -533,16 +534,20 @@ public sealed class JobQueries : IJobQueries
 					.GetActiveSessionsAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
 					.ConfigureAwait(false);
 
-				if (result.Sessions.Any(session => session.WorkedByUserId != request.Context.Actor)) {
-					throw new AuthorizationDeniedException(
-						$"Actor {request.Context.Actor} may not view another user's active sessions.");
-				}
-
 				if (!WorkSessionAccessPolicy.CanView(result.ActorRoles)) {
-					throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view their own sessions.");
+					throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view active sessions.");
 				}
 
-				return result.Sessions;
+				// Administrator/JobManager may manage any leaf's session unconditionally
+				// (WorkSessionAccessPolicy.CanManage, ADR 0032), so the dashboard shows them a finish/
+				// pause control for someone else's active session too, not only their own — the same
+				// elevation that already lets them submit that Finish. A plain Worker sees only their
+				// own active sessions here, matching who they may actually finish.
+				var seesEveryWorkersSessions = WorkSessionAccessPolicy.CanManage(result.ActorRoles, false);
+
+				return seesEveryWorkersSessions
+					? result.Sessions
+					: [.. result.Sessions.Where(session => session.WorkedByUserId == request.Context.Actor)];
 			});
 
 	private Task<LeafWorkResult> GetLeafWorkCoreAsync(GetLeafWorkRequest request, CancellationToken cancellationToken) =>

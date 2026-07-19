@@ -148,7 +148,7 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		AuthorizeOrThrow(request.Context.Actor, existing.LeafWorkId);
 		CheckVersionOrThrow(existing.Version, request.Version);
 
-		if (request.FinishedAt is { } finishedAt && finishedAt <= request.StartedAt) {
+		if (request.FinishedAt is Instant finishedAt && finishedAt <= request.StartedAt) {
 			throw new InvariantViolationException(
 				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
 		}

@@ -73,20 +73,22 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 
 		var (versionCookie, versionToken) = await GetFormAsync(authCookie, workerId);
 		var versionResponse = await PostAddVersionAsync(authCookie, versionCookie, versionToken, workerId, "2026-01-01", "Europe/London");
-		var versionBody = await versionResponse.Content.ReadAsStringAsync();
+		versionResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var versionReloaded = await FollowRedirectAsync(versionResponse, authCookie);
+		var versionBody = await versionReloaded.Content.ReadAsStringAsync();
 
-		versionResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		versionBody.Should().Contain("Rota version added");
 		versionBody.Should().Contain("Europe/London");
 		versionBody.Should().Contain("<td>Thursday, 1 January 2026</td>");
 
-		var (exceptionCookie, exceptionToken) = await ExtractFormAsync(versionResponse, versionCookie);
+		var (exceptionCookie, exceptionToken) = await ExtractFormAsync(versionReloaded, versionCookie);
 		var exceptionResponse = await PostAddExceptionAsync(
 			authCookie, exceptionCookie, exceptionToken, workerId, "RemoveWorkingTime",
-			"2026-01-05T00:00:00+00:00", "2026-01-06T00:00:00+00:00", "Public holiday");
-		var exceptionBody = await exceptionResponse.Content.ReadAsStringAsync();
+			"2026-01-05T00:00", "2026-01-06T00:00", "Public holiday");
+		exceptionResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var exceptionReloaded = await FollowRedirectAsync(exceptionResponse, authCookie);
+		var exceptionBody = await exceptionReloaded.Content.ReadAsStringAsync();
 
-		exceptionResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		exceptionBody.Should().Contain("Rota exception added");
 		exceptionBody.Should().Contain("Public holiday");
 	}
@@ -137,9 +139,10 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
 		var response = await PostAddVersionAsync(authCookie, cookie, token, workerId, "2026-01-01", "Bogus/NotAZone");
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("That is not a recognized IANA time zone.");
 	}
 
@@ -166,9 +169,10 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
 		var response = await PostAddVersionAsync(authCookie, cookie, token, workerId, "2026-01-01", "Europe/London");
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Rota version added");
 	}
 
@@ -224,10 +228,33 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 		var (cookie, token) = await GetFormAsync(authCookie, $"/Rota/CorrectException?userId={workerId.Value}&exceptionId={added.Id.Value}");
 		var response = await PostCorrectExceptionAsync(
 			authCookie, cookie, token, workerId, added.Id,
-			"RemoveWorkingTime", "2026-01-03T00:00:00+00:00", "2026-01-04T00:00:00+00:00", "Wrong date entered originally");
+			"RemoveWorkingTime", "2026-01-03T00:00", "2026-01-04T00:00", "Wrong date entered originally");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Rota");
+	}
+
+	[Fact]
+	// Auckland (NZST, UTC+12 in June, no DST) never coincides with whatever zone the test process's
+	// own machine happens to run in, so a round trip through this employee's own zone proves the
+	// exception boundary is genuinely zone-converted, not passed through as UTC.
+	public async Task A_worker_can_add_a_schedule_exception_in_their_own_non_uk_zone()
+	{
+		var workerId = await SeedEmployeeAsync("schedule.tz-auckland", EmployeeRole.Worker, "Pacific/Auckland");
+		var authCookie = await SignInAsync("schedule.tz-auckland");
+
+		var (cookie, token) = await GetFormAsync(authCookie, workerId);
+		var response = await PostAddExceptionAsync(
+			authCookie, cookie, token, workerId, "RemoveWorkingTime", "2026-06-15T09:00", "2026-06-15T17:00", "Public holiday");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var snapshot = await seedClient.Query.GetScheduleAsync(
+			new() { Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() }, UserId = workerId });
+
+		var interval = snapshot.Exceptions.Should().ContainSingle().Which.Entry.Interval;
+		interval.Start.Should().Be(Instant.FromUtc(2026, 6, 14, 21, 0), "09:00 NZST (UTC+12) on 15 June is 21:00 UTC the day before");
+		interval.End.Should().Be(Instant.FromUtc(2026, 6, 15, 5, 0), "17:00 NZST (UTC+12) on 15 June is 05:00 UTC the same day");
 	}
 
 	private async Task<HttpResponseMessage> PostCorrectVersionAsync(
@@ -344,6 +371,23 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 		return await client.SendAsync(request);
 	}
 
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
+
 	private async Task<string> SignInAsync(string userName)
 	{
 		var (antiforgeryCookie, token) = await GetLoginFormAsync();
@@ -386,15 +430,16 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
+	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
 
 		await using var insertAppUser = connection.CreateCommand();
 		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
+			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, $ianaTimeZone); SELECT last_insert_rowid();";
 		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
+		_ = insertAppUser.Parameters.AddWithValue("$ianaTimeZone", ianaTimeZone);
 		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
 		var placeholderUser = new JobTrackIdentityUser {

@@ -14,7 +14,7 @@ public sealed record ScheduleVersion
 	/// <exception cref="ArgumentOutOfRangeException"><paramref name="effectiveEnd" /> does not strictly follow <paramref name="effectiveStart" />.</exception>
 	public ScheduleVersion(DateTimeZone zone, LocalDate effectiveStart, LocalDate? effectiveEnd, EquatableArray<WeeklyInterval> weeklyIntervals)
 	{
-		if (effectiveEnd is { } end && end <= effectiveStart) {
+		if (effectiveEnd is LocalDate end && end <= effectiveStart) {
 			throw new ArgumentOutOfRangeException(nameof(effectiveEnd), effectiveEnd,
 				"An effective end date must be strictly after the effective start date.");
 		}
@@ -50,7 +50,7 @@ public sealed record ScheduleVersion
 		&& WeeklyIntervals.Equals(other.WeeklyIntervals);
 
 	/// <summary>Whether <paramref name="date" /> falls within <see cref="EffectiveStart" />/<see cref="EffectiveEnd" />.</summary>
-	public bool IsEffectiveOn(LocalDate date) => date >= EffectiveStart && (EffectiveEnd is not { } end || date < end);
+	public bool IsEffectiveOn(LocalDate date) => date >= EffectiveStart && (EffectiveEnd is not LocalDate end || date < end);
 
 	/// <inheritdoc cref="Equals(ScheduleVersion?)" />
 	public override int GetHashCode() => HashCode.Combine(Zone.Id, EffectiveStart, EffectiveEnd, WeeklyIntervals);

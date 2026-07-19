@@ -120,7 +120,8 @@ The markup composes these classes; styling lives entirely in `site.css`.
 | `<dl>` | Record card — a label/value grid with a burnt-orange spine, collapsing to one column below 30em. |
 | `.jt-tree-cell` (+ `.jt-tree-guide`, `.jt-tree-label`, `.jt-tree-icon`) | The Browse subtree's description cell, styled as a file-manager listing — see below. |
 | `.jt-col-secondary` | A table column that is dropped below 768px. See "The tree row" for what qualifies. |
-| `.jt-icon-summary` | A `<summary>` reduced to a small square glyph button, for a rare action sitting beside a common one (Backdate, next to Start/Finish). Always carries a visually-hidden name. |
+| `.jt-icon-button` (+ `.jt-backdate-trigger`) | A small square glyph button, for a rare action sitting beside a common one (Backdate, next to Start/Finish). Always carries a visually-hidden name. A `.jt-backdate-trigger` toggles the matching `.jt-backdate-row`/`.jt-backdate-panel` open via `aria-expanded`/`aria-controls` (site.js), rather than opening a floating popup. |
+| `.jt-backdate-row` / `.jt-backdate-panel` | The tinted, hidden-by-default expansion a backdate trigger reveals: a full-width table row (`.jt-backdate-row`, one cell spanning the table via `colspan`) or a block under a toolbar (`.jt-backdate-panel`), each wrapping the shared `.jt-backdate-form` (label + `datetime-local` input + submit). |
 
 ### Stop and go
 

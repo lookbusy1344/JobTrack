@@ -339,7 +339,7 @@ internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 	/// </summary>
 	private static void EnsureUserMatchesOrThrow(AppUserId actualUserId, AppUserId? expectedUserId, long rowId)
 	{
-		if (expectedUserId is { } userId && actualUserId != userId) {
+		if (expectedUserId is AppUserId userId && actualUserId != userId) {
 			throw new EntityNotFoundException($"Rate row {rowId} does not belong to employee {userId}.");
 		}
 	}

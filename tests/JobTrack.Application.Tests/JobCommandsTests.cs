@@ -855,7 +855,7 @@ public sealed class JobCommandsTests
 
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
 			WorkedNode(1, null, WorkFrom(TwoDaysAgo, OneDayAgo)),
-			PlainNode(2, parentLocalId: 1),
+			PlainNode(2, 1),
 		]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -897,7 +897,7 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(CreateSeededPort());
 
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
-			WorkedNode(1, null, WorkFrom(TwoDaysAgo, finishedAt: null) with { Achievement = Achievement.Success }),
+			WorkedNode(1, null, WorkFrom(TwoDaysAgo, null) with { Achievement = Achievement.Success }),
 		]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -913,7 +913,7 @@ public sealed class JobCommandsTests
 		// impossible history, even though replaying it in prerequisite order would satisfy the gate.
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
 			WorkedNode(1, null, WorkFrom(ThreeDaysAgo, OneDayAgo)),
-			WorkedNode(2, null, WorkFrom(TwoDaysAgo, OneDayAgo), prerequisiteLocalIds: [1]),
+			WorkedNode(2, null, WorkFrom(TwoDaysAgo, OneDayAgo), [1]),
 		]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -927,8 +927,8 @@ public sealed class JobCommandsTests
 
 		// Node 1 is left open, so it never reaches Success and cannot satisfy node 2's gate.
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
-			WorkedNode(1, null, WorkFrom(ThreeDaysAgo, finishedAt: null) with { Achievement = Achievement.InProgress }),
-			WorkedNode(2, null, WorkFrom(TwoDaysAgo, OneDayAgo), prerequisiteLocalIds: [1]),
+			WorkedNode(1, null, WorkFrom(ThreeDaysAgo, null) with { Achievement = Achievement.InProgress }),
+			WorkedNode(2, null, WorkFrom(TwoDaysAgo, OneDayAgo), [1]),
 		]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -944,7 +944,7 @@ public sealed class JobCommandsTests
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
 			PlainNode(1),
 			WorkedNode(2, 1, WorkFrom(ThreeDaysAgo, TwoDaysAgo) with { Achievement = Achievement.Cancelled }),
-			WorkedNode(3, null, WorkFrom(OneDayAgo, OneDayAgo.Plus(Duration.FromHours(1))), prerequisiteLocalIds: [1]),
+			WorkedNode(3, null, WorkFrom(OneDayAgo, OneDayAgo.Plus(Duration.FromHours(1))), [1]),
 		]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -960,8 +960,8 @@ public sealed class JobCommandsTests
 		var result = await sut.ImportSubtreeAsync(ImportRequestWith([
 			WorkedNode(1, null, WorkFrom(ThreeDaysAgo, TwoDaysAgo)),
 			WorkedNode(
-				2, null, WorkFrom(OneDayAgo, finishedAt: null) with { Achievement = Achievement.InProgress },
-				prerequisiteLocalIds: [1]),
+				2, null, WorkFrom(OneDayAgo, null) with { Achievement = Achievement.InProgress },
+				[1]),
 		]));
 
 		result.Nodes.Should().HaveCount(2);

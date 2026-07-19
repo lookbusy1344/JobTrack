@@ -40,7 +40,7 @@ internal static class LeafReadiness
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
 		foreach (var ancestor in ancestorChain) {
 			var id = new JobNodeId(ancestor.Id);
-			var parentId = ancestor.ParentId is { } p ? new JobNodeId(p) : (JobNodeId?)null;
+			var parentId = ancestor.ParentId.HasValue ? new JobNodeId(ancestor.ParentId.Value) : (JobNodeId?)null;
 			nodesById[id] = new(id, parentId, [], null);
 		}
 
@@ -58,9 +58,9 @@ internal static class LeafReadiness
 
 			foreach (var row in subtree) {
 				var id = new JobNodeId(row.Id);
-				var parentId = row.ParentId is { } p ? new JobNodeId(p) : (JobNodeId?)null;
+				var parentId = row.ParentId.HasValue ? new JobNodeId(row.ParentId.Value) : (JobNodeId?)null;
 				var childIds = childIdsByParent.TryGetValue(row.Id, out var kids) ? kids : [];
-				var achievement = row.AchievementId is { } a ? (Achievement)a : (Achievement?)null;
+				var achievement = row.AchievementId.HasValue ? (Achievement)row.AchievementId.Value : (Achievement?)null;
 				nodesById[id] = new(id, parentId, [.. childIds], achievement);
 			}
 		}

@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages;
 
+using Abstractions;
 using Application;
 using Identity;
 using Microsoft.AspNetCore.Identity;
@@ -33,7 +34,7 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			new() { Context = new() { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() }, TargetUserId = actor.AppUserId },
 			cancellationToken);
 
-		return profile.HomeNodeId is { } homeNodeId
+		return profile.HomeNodeId is JobNodeId homeNodeId
 			? RedirectToPage("/Jobs/Browse", new { NodeId = homeNodeId.Value, ArchiveFilter = JobArchiveFilter.ActiveOnly })
 			: RedirectToPage("/Jobs/Browse", new { ArchiveFilter = JobArchiveFilter.ActiveOnly });
 	}

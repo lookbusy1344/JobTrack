@@ -77,17 +77,19 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 		var (searchCookie, searchToken) = await GetFormAsync(authCookie, dependent.Id, "Pour");
 		var addResponse = await PostAddSelectedAsync(
 			authCookie, searchCookie, searchToken, dependent.Id, "Pour", [required.Id], []);
-		var addBody = await addResponse.Content.ReadAsStringAsync();
+		addResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var addReloaded = await FollowRedirectAsync(addResponse, authCookie);
+		var addBody = await addReloaded.Content.ReadAsStringAsync();
 
-		addResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		addBody.Should().Contain("Dependency added");
 		addBody.Should().Contain("Pour foundation");
 
-		var (removeCookie, removeToken) = await ExtractFormAsync(addResponse, searchCookie);
+		var (removeCookie, removeToken) = await ExtractFormAsync(addReloaded, searchCookie);
 		var removeResponse = await PostRemoveAsync(authCookie, removeCookie, removeToken, dependent.Id, required.Id, dependent.Id);
-		var removeBody = await removeResponse.Content.ReadAsStringAsync();
+		removeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var removeReloaded = await FollowRedirectAsync(removeResponse, authCookie);
+		var removeBody = await removeReloaded.Content.ReadAsStringAsync();
 
-		removeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		removeBody.Should().Contain("Prerequisite removed");
 	}
 
@@ -209,6 +211,23 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 
 		return await client.SendAsync(request);
 	}
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private async Task<string> SignInAsync(string userName)
 	{

@@ -79,7 +79,7 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		apiRequest.Headers.Authorization = new("Bearer", issued.Token);
 		var apiResponse = await client.SendAsync(apiRequest);
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var updatedSecurityStamp = await GetSecurityStampAsync(appUserId);
 		var (enabled, keyProtected) = await GetTwoFactorStateAsync(appUserId);
 		enabled.Should().BeTrue();
@@ -134,7 +134,7 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		});
 		var response = await client.SendAsync(request);
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var (enabled, keyProtected) = await GetTwoFactorStateAsync(appUserId);
 		enabled.Should().BeFalse();
 		keyProtected.Should().BeNull();
@@ -169,7 +169,7 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		apiRequest.Headers.Authorization = new("Bearer", issued.Token);
 		var apiResponse = await client.SendAsync(apiRequest);
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var updatedSecurityStamp = await GetSecurityStampAsync(appUserId);
 		var (enabled, _) = await GetTwoFactorStateAsync(appUserId);
 		enabled.Should().BeFalse();

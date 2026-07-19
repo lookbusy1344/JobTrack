@@ -1,8 +1,10 @@
 namespace JobTrack.Web;
 
+using System.Globalization;
 using Abstractions;
 using Application;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using NodaTime;
 
 /// <summary>
 ///     View model for the <c>_LeafWorkSessions</c> partial shared by <c>Browse</c>'s leaf detail view
@@ -16,6 +18,9 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 public sealed class LeafWorkSessionsPanelModel
 {
 	public required long LeafNodeId { get; init; }
+
+	/// <summary>The viewing employee's own time zone, for formatting every session's <c>StartedAt</c>/<c>FinishedAt</c> (<see cref="InstantDisplay" />).</summary>
+	public required DateTimeZone ViewerZone { get; init; }
 
 	/// <summary>
 	///     The single worker the list is narrowed to, or <see langword="null" /> (the default)
@@ -42,6 +47,20 @@ public sealed class LeafWorkSessionsPanelModel
 	///     several workers, so the row, not the panel header, carries whose session it is.
 	/// </summary>
 	public required IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> EmployeeDirectoryById { get; init; }
+
+	/// <summary>
+	///     <see cref="ExtraHiddenFields" /> plus the identity and version of <paramref name="session" />,
+	///     for the row's forms acting on that session (finish, and finishing at a chosen time).
+	/// </summary>
+	public IReadOnlyDictionary<string, string?> SessionFields(WorkSessionResult session)
+	{
+		ArgumentNullException.ThrowIfNull(session);
+
+		return new Dictionary<string, string?>(ExtraHiddenFields) {
+			["sessionId"] = session.Id.Value.ToString(CultureInfo.InvariantCulture),
+			["version"] = session.Version.ToString(CultureInfo.InvariantCulture),
+		};
+	}
 
 	// Row actions (finish/correct) are rendered unconditionally and enforced by the command, which
 	// re-evaluates WorkSessionAccessPolicy.CanManage's node-control rule per call. That is deliberate:

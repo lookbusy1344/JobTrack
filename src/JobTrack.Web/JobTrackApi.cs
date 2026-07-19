@@ -540,7 +540,7 @@ internal static partial class JobTrackApi
 				Rate = new(
 					new(request.AmountPerHour),
 					Instant.FromDateTimeOffset(request.EffectiveStart),
-					request.EffectiveEnd is { } end ? Instant.FromDateTimeOffset(end) : null),
+					request.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(request.EffectiveEnd.Value) : null),
 			}, cancellationToken);
 
 			return TypedResults.Created($"/api/employees/{userId}/rates", Map(result));
@@ -566,7 +566,7 @@ internal static partial class JobTrackApi
 				Rate = new(
 					new(request.AmountPerHour),
 					Instant.FromDateTimeOffset(request.EffectiveStart),
-					request.EffectiveEnd is { } end ? Instant.FromDateTimeOffset(end) : null),
+					request.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(request.EffectiveEnd.Value) : null),
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -593,7 +593,7 @@ internal static partial class JobTrackApi
 					new(request.NodeId),
 					new(request.AmountPerHour),
 					Instant.FromDateTimeOffset(request.EffectiveStart),
-					request.EffectiveEnd is { } end ? Instant.FromDateTimeOffset(end) : null),
+					request.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(request.EffectiveEnd.Value) : null),
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -616,7 +616,7 @@ internal static partial class JobTrackApi
 					new(request.NodeId),
 					new(request.AmountPerHour),
 					Instant.FromDateTimeOffset(request.EffectiveStart),
-					request.EffectiveEnd is { } end ? Instant.FromDateTimeOffset(end) : null),
+					request.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(request.EffectiveEnd.Value) : null),
 			}, cancellationToken);
 
 			return TypedResults.Created($"/api/employees/{userId}/rates", Map(result));
@@ -782,7 +782,7 @@ internal static partial class JobTrackApi
 				Context = context,
 				LeafWorkId = new(nodeId),
 				WorkedByUserId = new(request.WorkedByUserId),
-				StartedAt = request.StartedAt is { } startedAt ? Instant.FromDateTimeOffset(startedAt) : null,
+				StartedAt = request.StartedAt.HasValue ? Instant.FromDateTimeOffset(request.StartedAt.Value) : null,
 			}, cancellationToken);
 
 			return TypedResults.Created($"/api/jobs/{nodeId}/sessions/{result.Id.Value}", Map(result));
@@ -803,7 +803,7 @@ internal static partial class JobTrackApi
 				Context = context,
 				SessionId = new(sessionId),
 				Version = request.Version,
-				FinishedAt = request.FinishedAt is { } finishedAt ? Instant.FromDateTimeOffset(finishedAt) : null,
+				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
 				LeafWorkId = new JobNodeId(nodeId),
 			}, cancellationToken);
 
@@ -825,7 +825,7 @@ internal static partial class JobTrackApi
 				Context = context,
 				SessionId = new(sessionId),
 				StartedAt = Instant.FromDateTimeOffset(request.StartedAt),
-				FinishedAt = request.FinishedAt is { } finishedAt ? Instant.FromDateTimeOffset(finishedAt) : null,
+				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
 				Reason = request.Reason,
 				Version = request.Version,
 				LeafWorkId = new JobNodeId(nodeId),
@@ -937,7 +937,7 @@ internal static partial class JobTrackApi
 			var result = await jobTrackClient.Costs.GetCostDetailsAsync(new() {
 				Context = context,
 				NodeId = new(nodeId),
-				AsOf = asOf is { } instant ? Instant.FromDateTimeOffset(instant) : SystemClock.Instance.GetCurrentInstant(),
+				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : SystemClock.Instance.GetCurrentInstant(),
 				MaxTraceSegments = maxTraceSegments,
 			}, cancellationToken);
 
@@ -958,7 +958,7 @@ internal static partial class JobTrackApi
 			var result = await jobTrackClient.Costs.GetHierarchyTotalsAsync(new() {
 				Context = context,
 				NodeId = new(nodeId),
-				AsOf = asOf is { } instant ? Instant.FromDateTimeOffset(instant) : SystemClock.Instance.GetCurrentInstant(),
+				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : SystemClock.Instance.GetCurrentInstant(),
 				MaxHierarchyNodes = maxHierarchyNodes,
 			}, cancellationToken);
 
@@ -985,7 +985,7 @@ internal static partial class JobTrackApi
 				MaxDepth = depth,
 				Ownership = ResolveOwnership(ownerUserId, unassignedOnly),
 				ArchiveFilter = archiveFilter,
-				AsOf = asOf is { } instant ? Instant.FromDateTimeOffset(instant) : SystemClock.Instance.GetCurrentInstant(),
+				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : SystemClock.Instance.GetCurrentInstant(),
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -1097,7 +1097,7 @@ internal static partial class JobTrackApi
 					new(
 						Instant.FromDateTimeOffset(request.Start),
 						Instant.FromDateTimeOffset(request.End)),
-					request.RateOverrideAmountPerHour is { } amount ? new HourlyRate(amount) : null),
+					request.RateOverrideAmountPerHour.HasValue ? new HourlyRate(request.RateOverrideAmountPerHour.Value) : null),
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -1121,7 +1121,7 @@ internal static partial class JobTrackApi
 					new(
 						Instant.FromDateTimeOffset(request.Start),
 						Instant.FromDateTimeOffset(request.End)),
-					request.RateOverrideAmountPerHour is { } amount ? new HourlyRate(amount) : null),
+					request.RateOverrideAmountPerHour.HasValue ? new HourlyRate(request.RateOverrideAmountPerHour.Value) : null),
 				Reason = request.Reason,
 			}, cancellationToken);
 
@@ -1340,7 +1340,7 @@ internal static partial class JobTrackApi
 	///     not silently coerced -- so it flows through to the library's own <c>Limit</c> validation and
 	///     surfaces as <c>400</c>.
 	/// </summary>
-	private static int ResolvePageSize(int? pageSize) => pageSize is { } requested ? Math.Min(requested, MaxPageSize) : DefaultPageSize;
+	private static int ResolvePageSize(int? pageSize) => pageSize.HasValue ? Math.Min(pageSize.Value, MaxPageSize) : DefaultPageSize;
 
 	/// <summary>
 	///     Builds the paged response envelope (remediation plan §3.1): the library call always requests
@@ -1578,7 +1578,7 @@ internal static partial class JobTrackApi
 			UserId = result.UserId.Value,
 			IanaTimeZone = result.Schedule.Zone.Id,
 			EffectiveStart = ToDateOnly(result.Schedule.EffectiveStart),
-			EffectiveEnd = result.Schedule.EffectiveEnd is { } end ? ToDateOnly(end) : null,
+			EffectiveEnd = result.Schedule.EffectiveEnd.HasValue ? ToDateOnly(result.Schedule.EffectiveEnd.Value) : null,
 			WeeklyIntervals = [
 				.. result.Schedule.WeeklyIntervals.Select(interval =>
 					new WeeklyIntervalResponse {

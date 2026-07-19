@@ -24,9 +24,9 @@ public sealed class AssignRoleModel(IJobTrackClient jobTrackClient, UserManager<
 
 	[BindProperty] public AssignRoleInput Input { get; set; } = new();
 
-	public string? ErrorMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public List<SelectListItem> TargetUserOptions { get; private set; } = [];
 
@@ -67,7 +67,7 @@ public sealed class AssignRoleModel(IJobTrackClient jobTrackClient, UserManager<
 			ErrorMessage = "That employee does not exist.";
 		}
 
-		return Page();
+		return RedirectToPage();
 	}
 
 	private async Task LoadTargetUserOptionsAsync(CancellationToken cancellationToken)

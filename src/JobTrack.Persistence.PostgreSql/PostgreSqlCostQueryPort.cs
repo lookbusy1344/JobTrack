@@ -257,7 +257,7 @@ internal static class CostQueryAssembly
 	}
 
 	private static Instant ClipEnd(Instant? finishedAt, Instant asOf) =>
-		finishedAt is { } finish && finish < asOf ? finish : asOf;
+		finishedAt.HasValue && finishedAt.Value < asOf ? finishedAt.Value : asOf;
 
 	/// <summary>
 	///     Loads one worker's database-wide overlapping sessions (ADR 0017's elevated read scope)

@@ -169,6 +169,44 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	[Fact]
 	/// <summary>
+	/// A job's achievement reads as a glyph per row, drawn from one family of signs, so scanning a
+	/// subtree for what is done/underway/closed costs no reading. Cancelled and Unsuccessful share
+	/// one "closed unfinished" glyph, with the specific word carried by the accessible label. A leaf
+	/// with no leaf work attached carries no glyph at all — that is the absence of a state, not a
+	/// sixth one.
+	/// </summary>
+	public async Task Subtree_rows_show_each_leafs_achievement_as_a_glyph()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.achievement");
+		var rootId = bootstrappedRootId!.Value;
+		var waitingLeafId = await AddChildAsync(rootId, workerId, "Waiting leaf");
+		var inProgressLeafId = await AddChildAsync(rootId, workerId, "In progress leaf");
+		var successLeafId = await AddChildAsync(rootId, workerId, "Success leaf");
+		var cancelledLeafId = await AddChildAsync(rootId, workerId, "Cancelled leaf");
+		_ = await AddChildAsync(rootId, workerId, "No work attached leaf");
+
+		await AttachLeafWorkAsync(waitingLeafId, adminId);
+		await SetAchievementAsync(inProgressLeafId, adminId, Achievement.InProgress);
+		await SetAchievementAsync(successLeafId, adminId, Achievement.Success);
+		await SetAchievementAsync(cancelledLeafId, adminId, Achievement.Cancelled);
+
+		var authCookie = await SignInAsync("browse.achievement");
+		var response = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("#jt-icon-achievement-waiting");
+		body.Should().Contain("#jt-icon-achievement-in-progress");
+		body.Should().Contain("#jt-icon-achievement-success");
+		body.Should().Contain("#jt-icon-achievement-closed");
+
+		// Colour never carries the state alone: each glyph is aria-hidden and named in text.
+		body.Should().Contain("Cancelled");
+		body.Should().Contain("In Progress");
+	}
+
+	[Fact]
+	/// <summary>
 	/// ADR 0043: a subtree row blocked by a prerequisite carries the stop glyph, and a prerequisite
 	/// declared on a branch gates every descendant of it. Ready rows carry nothing — in a healthy
 	/// tree nearly every row is ready, so a sign on each would bury the few that matter.
@@ -345,7 +383,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain("<dt>Cost</dt>");
+		body.Should().Contain("<dt class=\"col-sm-3\">Cost</dt>");
 		body.Should().Contain(">&#xA3;200.00<");
 		body.Should().NotContain("Subtree cost");
 	}
@@ -444,6 +482,36 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
 			NodeId = nodeId,
 			Version = node.Node.Version,
+		});
+	}
+
+	private async Task SetAchievementAsync(JobNodeId leafId, AppUserId adminId, Achievement achievement)
+	{
+		var leafWork = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+		});
+
+		// Achievement moves forward one step at a time (ADR 0001), so a terminal state is reached
+		// through InProgress rather than jumped to.
+		var version = leafWork.Version;
+		if (achievement != Achievement.InProgress) {
+			var inProgress = await seedClient.Work.SetAchievementAsync(new() {
+				Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+				JobNodeId = leafId,
+				NewAchievement = Achievement.InProgress,
+				Reason = "Work has started",
+				Version = version,
+			});
+			version = inProgress.Version;
+		}
+
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+			NewAchievement = achievement,
+			Reason = "Seeded for the achievement-glyph test",
+			Version = version,
 		});
 	}
 
@@ -549,7 +617,9 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("""jt-tree-blocked""")]
 	private static partial Regex BlockedRowPattern();
 
-	[GeneratedRegex(""">Root \(ID \d+\)<""")]
+	// The root renders uniquely as plain "Root" (no "(ID N)" suffix) wherever its NodeKind is known —
+	// see JobNodeDisplay.Title.
+	[GeneratedRegex(""">Root<""")]
 	private static partial Regex RootCrumbPattern();
 
 	[GeneratedRegex("""aria-label="breadcrumb"[^>]*>.*?</nav>""", RegexOptions.Singleline)]

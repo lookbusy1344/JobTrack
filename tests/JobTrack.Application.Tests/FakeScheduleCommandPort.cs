@@ -100,7 +100,7 @@ internal sealed class FakeScheduleCommandPort : IScheduleCommandPort
 		}
 
 		var existing = _versions[index];
-		if (request.UserId is { } expectedUserId && existing.UserId != expectedUserId) {
+		if (request.UserId is AppUserId expectedUserId && existing.UserId != expectedUserId) {
 			throw new EntityNotFoundException($"Schedule row {request.VersionId} does not belong to employee {expectedUserId}.");
 		}
 
@@ -136,7 +136,7 @@ internal sealed class FakeScheduleCommandPort : IScheduleCommandPort
 		}
 
 		var existing = _exceptions[index];
-		if (request.UserId is { } expectedUserId && existing.UserId != expectedUserId) {
+		if (request.UserId is AppUserId expectedUserId && existing.UserId != expectedUserId) {
 			throw new EntityNotFoundException($"Schedule row {request.ExceptionId} does not belong to employee {expectedUserId}.");
 		}
 

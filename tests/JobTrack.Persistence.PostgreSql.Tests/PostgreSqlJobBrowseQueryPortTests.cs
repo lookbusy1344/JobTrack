@@ -25,6 +25,9 @@ public sealed class PostgreSqlJobBrowseQueryPortTests()
 	protected override IJobNodeCommandPort CreateCommandPort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
 
+	protected override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+		new PostgreSqlAchievementCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+
 	protected override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
 		new PostgreSqlJobBrowseQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
 

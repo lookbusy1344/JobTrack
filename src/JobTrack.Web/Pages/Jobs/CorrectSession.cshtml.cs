@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using NodaTime;
 
 /// <summary>
 ///     Corrects a historical session's start and/or finish instants (plan §8.5 slice 4, spec §4.4):
@@ -18,7 +17,11 @@ using NodaTime;
 ///     no second-person approval, so this is a single-step form rather than preview-then-confirm.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
-public sealed class CorrectSessionModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class CorrectSessionModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	[BindProperty(SupportsGet = true)] public long LeafNodeId { get; init; }
 
@@ -41,8 +44,9 @@ public sealed class CorrectSessionModel(IJobTrackClient jobTrackClient, UserMana
 
 		await LoadSessionAsync(actor.Value, cancellationToken);
 		if (Session is { } session) {
-			Input.StartedAt = session.StartedAt.ToDateTimeOffset();
-			Input.FinishedAt = session.FinishedAt?.ToDateTimeOffset();
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			Input.StartedAt = BackdateInstant.ToDateTimeLocalValue(session.StartedAt, zone);
+			Input.FinishedAt = session.FinishedAt.HasValue ? BackdateInstant.ToDateTimeLocalValue(session.FinishedAt.Value, zone) : null;
 		}
 
 		return Page();
@@ -60,11 +64,17 @@ public sealed class CorrectSessionModel(IJobTrackClient jobTrackClient, UserMana
 			return Page();
 		}
 
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+		if (!BackdateInstant.TryParse(Input.StartedAt, zone, out var startedAtInstant)) {
+			ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.StartedAt)}", "Enter a valid date and time.");
+			return Page();
+		}
+
 		var request = new CorrectSessionRequest {
 			Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 			SessionId = new(SessionId),
-			StartedAt = Instant.FromDateTimeOffset(Input.StartedAt),
-			FinishedAt = Input.FinishedAt is { } finish ? Instant.FromDateTimeOffset(finish) : null,
+			StartedAt = startedAtInstant,
+			FinishedAt = BackdateInstant.TryParse(Input.FinishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
 			Reason = Input.Reason,
 			Version = Session.Version,
 		};
@@ -121,9 +131,9 @@ public sealed class CorrectSessionModel(IJobTrackClient jobTrackClient, UserMana
 
 	public sealed class CorrectInput
 	{
-		[Required] public DateTimeOffset StartedAt { get; set; }
+		[Required] public string StartedAt { get; set; } = string.Empty;
 
-		public DateTimeOffset? FinishedAt { get; set; }
+		public string? FinishedAt { get; set; }
 
 		[Required] public string Reason { get; set; } = string.Empty;
 	}

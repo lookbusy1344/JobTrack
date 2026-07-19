@@ -66,7 +66,7 @@ public sealed class CorrectUserCostRateModel(IJobTrackClient jobTrackClient, Use
 				Rate = new(
 					new(Input.AmountPerHour),
 					Instant.FromDateTimeOffset(Input.EffectiveStart),
-					Input.EffectiveEnd is { } end ? Instant.FromDateTimeOffset(end) : null),
+					Input.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(Input.EffectiveEnd.Value) : null),
 			}, cancellationToken);
 
 			return RedirectToPage("/Admin/Rates", new { userId = UserId });

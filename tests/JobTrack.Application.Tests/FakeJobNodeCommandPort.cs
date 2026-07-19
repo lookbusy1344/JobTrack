@@ -66,7 +66,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	public Task<JobNodeDetailResult> GetNodeAsync(JobNodeId? nodeId, CancellationToken cancellationToken = default)
 	{
 		JobNodeResult node;
-		if (nodeId is { } id) {
+		if (nodeId is JobNodeId id) {
 			node = GetExisting(id);
 		} else {
 			node = _nodes.Values.SingleOrDefault(n => n.ParentId is null)
@@ -75,7 +75,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 
 		var ancestors = new List<JobNodeAncestorResult>();
 		var current = node.ParentId;
-		while (current is { } ancestorId) {
+		while (current is JobNodeId ancestorId) {
 			var ancestor = GetExisting(ancestorId);
 			var enrichedAncestor = WithStructuralFacts(ancestor);
 			ancestors.Insert(0, new(enrichedAncestor.Id, enrichedAncestor.Description, enrichedAncestor.Kind));
@@ -168,7 +168,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		var matchesById = rows.ToDictionary(n => n.Id, n => ownership.Matches(n.OwnerUserId) && MatchesArchiveFilter(n, archiveFilter));
 
 		var childrenByParent = rows
-			.Where(n => n.ParentId is { } p && depthById.ContainsKey(p))
+			.Where(n => n.ParentId is JobNodeId p && depthById.ContainsKey(p))
 			.GroupBy(n => n.ParentId!.Value)
 			.ToDictionary(g => g.Key, g => g.Select(n => n.Id).ToList());
 
@@ -444,7 +444,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		var created = new List<ImportedJobNode>(request.Nodes.Count);
 
 		foreach (var spec in request.Nodes) {
-			var parentId = spec.ParentLocalId is { } parentLocalId ? createdByLocalId[parentLocalId] : request.ParentId;
+			var parentId = spec.ParentLocalId.HasValue ? createdByLocalId[spec.ParentLocalId.Value] : request.ParentId;
 			var node = Create(new() {
 				Context = request.Context,
 				ParentId = parentId,
@@ -528,7 +528,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	{
 		_nodes[node.Id] = node;
 		RefreshStructuralFacts(node.Id);
-		if (node.ParentId is { } parentId) {
+		if (node.ParentId is JobNodeId parentId) {
 			RefreshStructuralFacts(parentId);
 		}
 	}
@@ -616,7 +616,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	private static IEnumerable<T> ApplyPaging<T>(IEnumerable<T> sequence, int offset, int? limit)
 	{
 		var skipped = sequence.Skip(offset);
-		return limit is { } take ? skipped.Take(take) : skipped;
+		return limit.HasValue ? skipped.Take(limit.Value) : skipped;
 	}
 
 	private static bool MatchesArchiveFilter(JobNodeResult node, JobArchiveFilter archiveFilter) => archiveFilter switch {
@@ -692,7 +692,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			HasLeafWork = false,
 		});
 		_nodes[node.Id] = node;
-		if (node.ParentId is { } parentId && _nodes.TryGetValue(parentId, out var parent)) {
+		if (node.ParentId is JobNodeId parentId && _nodes.TryGetValue(parentId, out var parent)) {
 			_nodes[parentId] = WithStructuralFacts(parent);
 		}
 
@@ -740,7 +740,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	public bool OwnsNodeOrAncestor(AppUserId actorId, JobNodeId? nodeId)
 	{
 		var current = nodeId;
-		while (current is { } id) {
+		while (current is JobNodeId id) {
 			var node = GetExisting(id);
 			if (node.OwnerUserId == actorId) {
 				return true;
@@ -755,7 +755,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	private bool IsDescendantOf(JobNodeId candidate, JobNodeId ancestor)
 	{
 		var current = GetExisting(candidate).ParentId;
-		while (current is { } id) {
+		while (current is JobNodeId id) {
 			if (id == ancestor) {
 				return true;
 			}

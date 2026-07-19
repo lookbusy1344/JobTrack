@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using NodaTime;
 
 /// <summary>
 ///     Requester self-service: submit a new request into an eligible holding area, and see a flat list
@@ -18,7 +19,11 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 ///     rates, costs, and audit history are never reachable from here.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.RequesterAccess)]
-public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class IndexModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	: PageModel
 {
 	[BindProperty] public SubmitRequestInput Submit { get; set; } = new();
 
@@ -26,9 +31,12 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 
 	public EquatableArray<JobRequestSummaryResult> MyRequests { get; private set; } = [];
 
-	public string? ErrorMessage { get; private set; }
+	/// <summary>The signed-in actor's own time zone, for formatting <see cref="MyRequests" />'s <c>SubmittedAt</c> (<see cref="InstantDisplay" />).</summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
-	public string? SuccessMessage { get; private set; }
+	[TempData] public string? ErrorMessage { get; set; }
+
+	[TempData] public string? SuccessMessage { get; set; }
 
 	public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadAsync(cancellationToken);
 
@@ -62,9 +70,7 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			ErrorMessage = "That holding area no longer exists.";
 		}
 
-		Submit = new();
-		await LoadAsync(cancellationToken);
-		return Page();
+		return RedirectToPage();
 	}
 
 	private async Task LoadAsync(CancellationToken cancellationToken)
@@ -74,6 +80,7 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 			return;
 		}
 
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
 		EligibleHoldingAreas = await jobTrackClient.Requests.GetEligibleHoldingAreasAsync(context, cancellationToken);
 		MyRequests = await jobTrackClient.Requests.GetMyRequestsAsync(context, cancellationToken);

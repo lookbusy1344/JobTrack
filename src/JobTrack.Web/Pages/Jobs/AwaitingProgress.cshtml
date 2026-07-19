@@ -14,7 +14,7 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (Model.SubtreeRoot is { } subtreeRoot) {
-	<p class="jt-context">
+	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2">
 		<span>Scoped to <strong><a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 		                           asp-route-nodeId="@subtreeRoot.Node.Id.Value">@JobNodeDisplay.Title(subtreeRoot.Node)</a></strong></span>
 		<a asp-page="/Jobs/AwaitingProgress" asp-route-ownerUserId="@Model.OwnerUserId">Show the whole tree</a>
@@ -45,53 +45,53 @@
 			<thead>
 			<tr>
 				<th>Description</th>
-				<th>Owner</th>
-				<th>Priority</th>
-				<th>Cost</th>
-				<th>Achievement</th>
-				<th>Deadline</th>
+				<th class="jt-col-secondary">Owner</th>
+				<th class="jt-col-active">Active</th>
+				<th class="jt-col-cost">Cost</th>
+				<th class="jt-col-cost">Achievement</th>
+				<th class="jt-col-secondary">Deadline</th>
 				<th>Actions</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var entry in Model.Entries) {
+				var entryActions = new WorkRowActionsModel {
+					LeafNodeId = entry.Id.Value,
+					ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(entry.Id),
+					ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(Model.ActiveSessionByLeaf.GetValueOrDefault(entry.Id)),
+					ViewerZone = Model.ViewerZone,
+					StartHandler = "StartWork",
+					StartNodeFieldName = "jobNodeId",
+					PageStateFields = Model.RowStateFields,
+				};
 				<tr>
-					<td><a class="jt-preserve-whitespace" asp-page="/Jobs/Browse" asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry)</a>
-					</td>
-					<td>@Model.DescribeOwner(entry.OwnerUserId)</td>
-					<td>@EnumDisplay.Label(entry.Priority)</td>
-					<td>@(entry.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
 					<td>
-						@(entry.Achievement is { } achievement ? EnumDisplay.Label(achievement) : "No work attached")
 						@if (!entry.IsReady) {
-							<span class="status-pill status-pill--icon status-pill-blocked"><svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocked</span></span>
+							<span class="status-pill status-pill--icon status-pill-blocked"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+							                                                                     aria-hidden="true" focusable="false"><use
+										href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocked</span></span>
+						}
+						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse" asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry)</a>
+					</td>
+					<td class="jt-col-secondary">@Model.DescribeOwner(entry.OwnerUserId)</td>
+					<td class="jt-col-active">
+						<partial name="_ActiveSincePill"
+						         model="@(new ActiveSincePillModel { ActiveSession = entryActions.ActiveSession, ActiveSessionWorkedByOther = entryActions.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone })"/>
+					</td>
+					<td class="jt-col-cost">@(entry.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
+					<td class="jt-col-cost">
+						@if (entry.Achievement is { } achievement) {
+							<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = achievement })"/>
+						} else {
+							<span class="jt-muted">None</span>
 						}
 					</td>
-					<td>@(entry.NeededFinish ?? entry.NeededStart)</td>
+					<td class="jt-col-secondary">@((entry.NeededFinish ?? entry.NeededStart) is { } needed ? InstantDisplay.Format(needed, Model.ViewerZone) : null)</td>
 					<td>
-						@if (Model.ActiveSessionByLeaf.TryGetValue(entry.Id, out var activeSession)) {
-							<div class="jt-toolbar jt-toolbar--flush">
-								<span class="status-pill status-pill-ready">Active since @activeSession.StartedAt</span>
-								<form method="post" asp-page-handler="Finish" class="inline-form">
-									<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-									<input type="hidden" name="UnassignedOnly" value="@Model.UnassignedOnly"/>
-									<input type="hidden" name="SubtreeRootId" value="@Model.SubtreeRootId"/>
-									<input type="hidden" name="sessionId" value="@activeSession.Id.Value"/>
-									<input type="hidden" name="version" value="@activeSession.Version"/>
-									<button type="submit" class="btn btn-secondary">Finish / pause</button>
-								</form>
-							</div>
-						} else {
-							<form method="post" asp-page-handler="StartWork" class="inline-form">
-								<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-								<input type="hidden" name="UnassignedOnly" value="@Model.UnassignedOnly"/>
-								<input type="hidden" name="SubtreeRootId" value="@Model.SubtreeRootId"/>
-								<input type="hidden" name="jobNodeId" value="@entry.Id.Value"/>
-								<button type="submit" class="btn btn-secondary">Start work</button>
-							</form>
-						}
+						<partial name="_WorkRowActions" model="entryActions"/>
 					</td>
 				</tr>
+				<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = entryActions.Backdate, ColumnCount = 7 })"/>
 			}
 			</tbody>
 		</table>

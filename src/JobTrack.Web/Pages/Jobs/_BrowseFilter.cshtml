@@ -1,0 +1,30 @@
+@using JobTrack.Application
+@model BrowseModel
+
+@* Rendered beside the node record on a node view, and standalone on the search-results view —
+   hence a partial rather than markup inlined into one branch of Browse's if/else. *@
+<details class="jt-card jt-card--filter">
+	<summary class="jt-disclosure-summary">Filter &amp; search</summary>
+	<form method="get" asp-page="/Jobs/Browse" class="jt-disclosure-body">
+		<div class="form-group">
+			<label asp-for="SearchText"></label>
+			<input asp-for="SearchText" class="form-control"/>
+		</div>
+		<div class="form-group">
+			<label asp-for="OwnerUserId">Owner</label>
+			<select asp-for="OwnerUserId" class="form-control" asp-items="Model.OwnerFilterOptions"></select>
+		</div>
+		<div class="form-group">
+			<label asp-for="UnassignedOnly">
+				<input asp-for="UnassignedOnly"/>
+				Unassigned only (the pickup pool)
+			</label>
+		</div>
+		<div class="form-group">
+			<label asp-for="ArchiveFilter"></label>
+			<select asp-for="ArchiveFilter" class="form-control"
+			        asp-items="EnumDisplay.BuildOptions<JobArchiveFilter>()"></select>
+		</div>
+		<button type="submit" class="btn btn-primary">Apply</button>
+	</form>
+</details>

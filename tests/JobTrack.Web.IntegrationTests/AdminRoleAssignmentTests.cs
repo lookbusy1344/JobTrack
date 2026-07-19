@@ -102,9 +102,10 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 		var authCookie = await SignInAsync("admin.assigner");
 
 		var response = await PostAssignRoleAsync(authCookie, targetId, EmployeeRole.RateManager, false);
-		var body = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Rate Manager");
 		_ = adminId;
 	}
@@ -129,7 +130,7 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 
 		var response = await client.SendAsync(request);
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var isStillEnabled = await IsEmployeeEnabledAsync(targetId);
 		isStillEnabled.Should().BeTrue();
 		_ = adminId;
@@ -199,6 +200,23 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 			: null;
 
 	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
+
+	/// <summary>
+	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
+	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
+	///     on) alongside the caller's own auth cookie.
+	/// </summary>
+	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
+		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
+		request.Headers.Add("Cookie", cookieHeader);
+
+		return await client.SendAsync(request);
+	}
+
+	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
+		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();

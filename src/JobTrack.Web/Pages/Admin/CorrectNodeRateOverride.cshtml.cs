@@ -68,7 +68,7 @@ public sealed class CorrectNodeRateOverrideModel(IJobTrackClient jobTrackClient,
 					new(Input.NodeId),
 					new(Input.AmountPerHour),
 					Instant.FromDateTimeOffset(Input.EffectiveStart),
-					Input.EffectiveEnd is { } end ? Instant.FromDateTimeOffset(end) : null),
+					Input.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(Input.EffectiveEnd.Value) : null),
 			}, cancellationToken);
 
 			return RedirectToPage("/Admin/Rates", new { userId = UserId });
