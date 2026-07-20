@@ -187,6 +187,22 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Requesting_the_login_page_while_already_authenticated_redirects_into_the_app()
+	{
+		await SeedUserAsync("linus", KnownPassword, false);
+		var loginResponse = await PostLoginAsync("linus", KnownPassword);
+		var authCookie = ExtractCookiePair(FindSetCookie(loginResponse, "Identity.Application")!);
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/Login");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().NotContain("/Account/Login");
+		response.Headers.Location!.OriginalString.Should().Be("/");
+	}
+
+	[Fact]
 	public async Task An_unauthenticated_request_for_a_protected_page_redirects_to_sign_in()
 	{
 		var response = await client.GetAsync("/Account/PersonalAccessTokens");

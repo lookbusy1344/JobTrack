@@ -25,8 +25,13 @@ public sealed class LoginModel(
 
 	public string? ErrorMessage { get; private set; }
 
-	public void OnGet()
+	public IActionResult OnGet(string? returnUrl = null)
 	{
+		// An already-authenticated visitor landing here -- a password manager re-opening the saved
+		// login URL, or a SameSite bounce -- must be sent into the app rather than shown a live login
+		// form. A re-shown form is what password managers auto-resubmit, and that second POST carries a
+		// stale antiforgery token, producing the zero-byte 400 dead end this page must avoid.
+		return User.Identity?.IsAuthenticated == true ? RedirectToApp(returnUrl) : Page();
 	}
 
 	public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
@@ -72,8 +77,11 @@ public sealed class LoginModel(
 			return RedirectToPage("ChangePassword");
 		}
 
-		return returnUrl is not null && Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl) : RedirectToPage("/Index");
+		return RedirectToApp(returnUrl);
 	}
+
+	private IActionResult RedirectToApp(string? returnUrl) =>
+		returnUrl is not null && Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl) : RedirectToPage("/Index");
 
 	private static string GetPasswordPartitionKey(string remoteAddress, string? userName)
 	{
