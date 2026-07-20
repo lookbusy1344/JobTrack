@@ -34,4 +34,8 @@
         <ProjectReference Include="..\..\src\JobTrack.Persistence.PostgreSql\JobTrack.Persistence.PostgreSql.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
 </Project>

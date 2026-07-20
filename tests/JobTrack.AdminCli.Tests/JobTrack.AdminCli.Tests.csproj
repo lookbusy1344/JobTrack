@@ -39,4 +39,8 @@
         <ProjectReference Include="..\JobTrack.TestSupport\JobTrack.TestSupport.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
 </Project>

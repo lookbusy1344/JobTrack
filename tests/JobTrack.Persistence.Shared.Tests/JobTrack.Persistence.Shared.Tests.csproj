@@ -37,4 +37,8 @@
         <ProjectReference Include="..\..\src\JobTrack.Persistence.Shared\JobTrack.Persistence.Shared.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
 </Project>

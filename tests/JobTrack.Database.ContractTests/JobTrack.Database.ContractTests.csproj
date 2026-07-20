@@ -33,4 +33,8 @@
         <ProjectReference Include="..\..\src\JobTrack.Database\JobTrack.Database.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
 </Project>
