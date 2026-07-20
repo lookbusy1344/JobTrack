@@ -156,7 +156,43 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 
-		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+		// Rejection is now graceful: a 302 back to a fresh login form rather than a zero-byte 400 that
+		// browsers replay on refresh. The CSRF guarantee is unchanged -- no credentials are processed,
+		// so no authentication cookie is issued for a forged (tokenless) login POST.
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
+		FindSetCookie(response, "Identity.Application").Should().BeNull();
+	}
+
+	[Fact]
+	public async Task A_stale_antiforgery_token_redirects_to_a_fresh_login_form_showing_a_retry_notice()
+	{
+		await SeedUserAsync("dorothy", KnownPassword, false);
+		var (antiforgeryCookie, _) = await GetLoginFormAsync();
+
+		// A valid antiforgery cookie paired with a garbage request token fails validation exactly as a
+		// key rotated by a scale-to-zero cold start would -- the real-world trigger this fix targets.
+		using var postRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
+		postRequest.Headers.Add("Cookie", antiforgeryCookie);
+		postRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.UserName"] = "dorothy",
+			["Input.Password"] = KnownPassword,
+			["__RequestVerificationToken"] = "stale-token-value",
+		});
+		var postResponse = await client.SendAsync(postRequest);
+
+		postResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		postResponse.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
+		var tempDataCookie = ExtractCookiePair(FindSetCookie(postResponse, "TempData")
+											   ?? throw new InvalidOperationException("No TempData cookie carrying the retry notice."));
+
+		using var followRequest = new HttpRequestMessage(HttpMethod.Get, postResponse.Headers.Location!.OriginalString);
+		followRequest.Headers.Add("Cookie", tempDataCookie);
+		var followResponse = await client.SendAsync(followRequest);
+		var body = await followResponse.Content.ReadAsStringAsync();
+
+		followResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Your session expired");
 	}
 
 	[Fact]
