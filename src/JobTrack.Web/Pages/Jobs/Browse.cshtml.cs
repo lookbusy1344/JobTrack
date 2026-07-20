@@ -28,10 +28,14 @@ using NodaTime;
 public sealed class BrowseModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	IClock clock)
 	: PageModel
 {
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
+
+	/// <summary>Captured once per request, per ADR 0016's "one captured instant per operation".</summary>
+	public Instant Now { get; } = clock.GetCurrentInstant();
 
 	[BindProperty(SupportsGet = true)] public long? NodeId { get; init; }
 
@@ -188,8 +192,8 @@ public sealed class BrowseModel(
 	///     it is; the actor's own needs no such label.
 	/// </summary>
 	public string? ActiveSessionWorkedByOther(WorkSessionResult? activeSession) =>
-		activeSession is { } session && session.WorkedByUserId != CurrentActorId
-			? DescribeOwner(session.WorkedByUserId)
+		activeSession is not null && activeSession.WorkedByUserId != CurrentActorId
+			? DescribeOwner(activeSession.WorkedByUserId)
 			: null;
 
 	/// <summary>
@@ -226,11 +230,16 @@ public sealed class BrowseModel(
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(CurrentRouteValues());
+			}
+
 			_ = await jobTrackClient.Work.StartWorkAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				JobNodeId = new(leafNodeId),
 				WorkedByUserId = actor.Value,
-				StartedAt = BackdateInstant.TryParse(startedAt, zone, out var startedAtInstant) ? startedAtInstant : null,
+				StartedAt = startedAtInstant,
 			}, cancellationToken);
 			SuccessMessage = "Work started.";
 		}
@@ -260,11 +269,16 @@ public sealed class BrowseModel(
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(CurrentRouteValues());
+			}
+
 			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				SessionId = new(sessionId),
 				Version = version,
-				FinishedAt = BackdateInstant.TryParse(finishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
+				FinishedAt = finishedAtInstant,
 			}, cancellationToken);
 			SuccessMessage = "Session finished.";
 		}
@@ -394,7 +408,7 @@ public sealed class BrowseModel(
 				RootId = CurrentNode.Node.Id,
 				Ownership = ownerFilter,
 				ArchiveFilter = ArchiveFilter,
-				AsOf = SystemClock.Instance.GetCurrentInstant(),
+				AsOf = Now,
 			}, cancellationToken);
 
 			Readiness = await jobTrackClient.Query.GetReadinessAsync(new() { Context = context, NodeId = CurrentNode.Node.Id }, cancellationToken);
@@ -486,8 +500,8 @@ public sealed class BrowseModel(
 				LeafNodeId = leafNodeId.Value,
 				ViewerZone = ViewerZone,
 				DisplayedWorkedByUserId = workedByUserId?.Value,
-				DisplayedWorkedByName = workedByUserId is { } filtered
-					? EmployeeDirectoryDisplay.Describe(EmployeeDirectoryById, filtered.Value, "Unknown")
+				DisplayedWorkedByName = workedByUserId.HasValue
+					? EmployeeDirectoryDisplay.Describe(EmployeeDirectoryById, workedByUserId.Value.Value, "Unknown")
 					: null,
 				Sessions = sessions,
 				EmployeeDirectoryById = EmployeeDirectoryById,
@@ -513,7 +527,7 @@ public sealed class BrowseModel(
 	private List<SelectListItem> BuildWorkerFilterOptions(AppUserId? selectedId)
 	{
 		var options = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory, new SelectListItem("Everyone", string.Empty));
-		if (selectedId is { } id) {
+		if (selectedId is AppUserId id) {
 			foreach (var option in options) {
 				option.Selected = option.Value == id.Value.ToString(CultureInfo.InvariantCulture);
 			}

@@ -65,7 +65,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_auditor_sees_ordinary_events_but_has_rate_events_redacted()
 	{
-		var administratorId = await SeedAdministratorAsync();
+		var administratorId = await SeedEmployeeAsync("audit.malformed-filter-admin", EmployeeRole.Administrator);
 		var workerId = await SeedEmployeeAsync("audit.worker", EmployeeRole.Worker);
 		_ = await SeedEmployeeAsync("audit.auditor", EmployeeRole.Auditor);
 		await SeedRateChangeAsync(administratorId, workerId);
@@ -98,6 +98,44 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task A_malformed_audit_time_filter_is_rejected_instead_of_being_dropped()
+	{
+		var administratorId = await SeedEmployeeAsync("audit.malformed-filter-admin", EmployeeRole.Administrator);
+		var workerId = await SeedEmployeeAsync("audit.malformed-filter-worker", EmployeeRole.Worker);
+		await SeedRateChangeAsync(administratorId, workerId);
+		var authCookie = await SignInAsync("audit.malformed-filter-admin");
+
+		var response = await GetAsync("/Audit/Index?from=not-a-local-date-time", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Enter a valid date and time for each audit time filter.");
+		body.Should().NotContain("user_cost_rate");
+	}
+
+	[Fact]
+	public async Task A_result_page_beyond_the_default_page_size_offers_a_next_page_link_that_preserves_filters()
+	{
+		var administratorId = await SeedEmployeeAsync("audit.paging-admin", EmployeeRole.Administrator);
+		await SeedManyJobNodeEventsAsync(administratorId, AuditSearchPaging.DefaultPageSize + 1);
+		var authCookie = await SignInAsync("audit.paging-admin");
+
+		var firstResponse = await GetAsync("/Audit/Index?entityType=job_node", authCookie);
+		var firstBody = await firstResponse.Content.ReadAsStringAsync();
+
+		firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		firstBody.Should().Contain("Next page");
+		firstBody.Should().Contain("EntityType=job_node");
+
+		var nextLink = ExtractHrefContaining(firstBody, "Cursor=").Replace("&amp;", "&", StringComparison.Ordinal);
+		var secondResponse = await GetAsync(nextLink, authCookie);
+		var secondBody = await secondResponse.Content.ReadAsStringAsync();
+
+		secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		secondBody.Should().NotContain("Next page");
+	}
+
+	[Fact]
 	public async Task A_worker_cannot_open_audit_search()
 	{
 		var workerId = await SeedEmployeeAsync("audit.self", EmployeeRole.Worker);
@@ -119,6 +157,38 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+
+	private async Task SeedManyJobNodeEventsAsync(AppUserId actorId, int count)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+
+		for (var index = 0; index < count; index++) {
+			await using var command = connection.CreateCommand();
+			command.CommandText = """
+								  INSERT INTO audit_event
+								    (occurred_at, actor_user_id, operation, entity_type, entity_id, correlation_id, reason, before_data, after_data)
+								  VALUES
+								    ($occurredAt, $actorUserId, 'create-job-node', 'job_node', $entityId, $correlationId, NULL, NULL, '{}');
+								  """;
+			_ = command.Parameters.AddWithValue(
+				"$occurredAt", (Instant.FromUtc(2026, 1, 1, 0, 0) + Duration.FromSeconds(index)).ToUnixTimeTicks());
+			_ = command.Parameters.AddWithValue("$actorUserId", actorId.Value);
+			_ = command.Parameters.AddWithValue("$entityId", 1000 + index);
+			_ = command.Parameters.AddWithValue("$correlationId", Guid.NewGuid().ToString());
+			_ = await command.ExecuteNonQueryAsync();
+		}
+	}
+
+	private static string ExtractHrefContaining(string body, string marker)
+	{
+		var markerIndex = body.IndexOf(marker, StringComparison.Ordinal);
+		markerIndex.Should().BeGreaterThanOrEqualTo(0, $"the page should contain a link with '{marker}'");
+
+		var hrefStart = body.LastIndexOf("href=\"", markerIndex, StringComparison.Ordinal) + "href=\"".Length;
+		var hrefEnd = body.IndexOf('"', hrefStart);
+		return body[hrefStart..hrefEnd];
+	}
 
 	private async Task<AppUserId> SeedAdministratorAsync()
 	{

@@ -4,6 +4,7 @@ using System.Data.Common;
 using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using TestSupport;
 
 public sealed class SqliteScheduleQueryPortTests()
@@ -25,11 +26,11 @@ public sealed class SqliteScheduleQueryPortTests()
 	}
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new SqliteInstallationBootstrapPort(connectionString);
+		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	protected override IScheduleCommandPort CreateCommandPort(string connectionString) =>
-		new SqliteScheduleCommandPort(connectionString);
+		new SqliteScheduleCommandPort(connectionString, SystemClock.Instance);
 
 	protected override IScheduleQueryPort CreateQueryPort(string connectionString) =>
-		new SqliteScheduleQueryPort(connectionString);
+		new SqliteScheduleQueryPort(connectionString, SystemClock.Instance);
 }

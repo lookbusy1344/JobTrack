@@ -3,6 +3,7 @@ namespace JobTrack.AdminCli;
 using Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 
 /// <summary>
 ///     The <c>reset-2fa</c> command (ADR 0037): a database-backed emergency mechanism for clearing an
@@ -24,11 +25,13 @@ public static class EmergencyTwoFactorReset
 		JobTrackIdentityDbContext identityContext,
 		AdminCliProvider provider,
 		string username,
+		IClock clock,
 		CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(io);
 		ArgumentNullException.ThrowIfNull(userManager);
 		ArgumentNullException.ThrowIfNull(identityContext);
+		ArgumentNullException.ThrowIfNull(clock);
 		ArgumentException.ThrowIfNullOrWhiteSpace(username);
 
 		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false);
@@ -54,7 +57,7 @@ public static class EmergencyTwoFactorReset
 		// See EmergencyPasswordReset for why this is a new, narrow, one-off insert rather than a
 		// shared audit writer, and why occurred_at needs a provider-specific value.
 		if (provider == AdminCliProvider.Sqlite) {
-			var occurredAtTicks = DateTimeOffset.UtcNow.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;
+			var occurredAtTicks = clock.GetCurrentInstant().ToUnixTimeTicks();
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"""
 				 INSERT INTO audit_event (occurred_at, actor_user_id, operation, entity_type, entity_id, correlation_id, reason)

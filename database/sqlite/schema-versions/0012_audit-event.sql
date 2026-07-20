@@ -12,7 +12,10 @@ CREATE TABLE audit_event
 (
     id             INTEGER PRIMARY KEY,
     occurred_at    INTEGER NOT NULL,
-    actor_user_id  INTEGER NOT NULL REFERENCES app_user (id) ON DELETE RESTRICT,
+    -- Nullable: an unknown-subject authentication failure (no matching app_user for the
+    -- attempted username) has no real actor to attribute the event to. See the sibling
+    -- PostgreSQL script's header for the fresh-eyes review §2.6 rationale.
+    actor_user_id  INTEGER REFERENCES app_user (id) ON DELETE RESTRICT,
     operation      TEXT NOT NULL CHECK (trim(operation) <> ''),
     entity_type    TEXT NOT NULL CHECK (trim(entity_type) <> ''),
     entity_id      INTEGER NOT NULL,

@@ -89,6 +89,40 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		unknownUserAudit.AfterData.Should().NotContain("no-such-user");
 	}
 
+	/// <summary>
+	///     §2.6: an administrator's choice of an employee's display name is ordinary, non-unique user
+	///     data (spec §16) -- it must never let an unrelated anonymous login failure attach to that
+	///     employee, which is exactly what the removed display-name-keyed "system actor" lookup allowed.
+	/// </summary>
+	[Fact]
+	public async Task An_employee_sharing_the_former_system_actor_display_name_is_never_blamed_for_an_unknown_login_failure()
+	{
+		var collidingActorId = await SeedAppUserOnlyAsync("JobTrack authentication audit");
+
+		_ = await PostLoginAsync("no-such-user", KnownPassword);
+		var (actorUserId, entityType) = await GetLatestUnknownLoginFailureActorAsync();
+
+		actorUserId.Should().BeNull();
+		actorUserId.Should().NotBe(collidingActorId.Value);
+		entityType.Should().Be("authentication_attempt");
+	}
+
+	/// <summary>
+	///     §2.6: simultaneous unknown-username failures must all be recorded, must not fail the request,
+	///     and must never race to create or share an actor row -- there is none to create now that
+	///     <c>actor_user_id</c> is simply left null.
+	/// </summary>
+	[Fact]
+	public async Task Simultaneous_unknown_login_failures_are_all_recorded_without_any_request_failing()
+	{
+		const int concurrentAttempts = 8;
+
+		var responses = await Task.WhenAll(Enumerable.Range(0, concurrentAttempts).Select(_ => PostLoginAsync("no-such-user", KnownPassword)));
+
+		responses.Should().OnlyContain(response => response.StatusCode == HttpStatusCode.OK);
+		(await CountUnknownLoginFailuresWithNullActorAsync()).Should().Be(concurrentAttempts);
+	}
+
 	[Fact]
 	public async Task Repeated_failed_attempts_lock_the_account_and_reject_the_correct_password_once_locked()
 	{
@@ -275,6 +309,53 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		await using var reader = await command.ExecuteReaderAsync();
 		(await reader.ReadAsync()).Should().BeTrue();
 		return (reader.GetString(0), reader.GetString(1));
+	}
+
+	private async Task<(long? ActorUserId, string EntityType)> GetLatestUnknownLoginFailureActorAsync()
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  SELECT actor_user_id, entity_type
+							  FROM audit_event
+							  WHERE entity_type = 'authentication_attempt'
+							  ORDER BY id DESC
+							  LIMIT 1;
+							  """;
+
+		await using var reader = await command.ExecuteReaderAsync();
+		(await reader.ReadAsync()).Should().BeTrue();
+		return (reader.IsDBNull(0) ? null : reader.GetInt64(0), reader.GetString(1));
+	}
+
+	private async Task<long> CountUnknownLoginFailuresWithNullActorAsync()
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  SELECT COUNT(*)
+							  FROM audit_event
+							  WHERE entity_type = 'authentication_attempt' AND actor_user_id IS NULL;
+							  """;
+
+		return (long)(await command.ExecuteScalarAsync())!;
+	}
+
+	private async Task<AppUserId> SeedAppUserOnlyAsync(string displayName)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+
+		await using var insertAppUser = connection.CreateCommand();
+		insertAppUser.CommandText =
+			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
+		_ = insertAppUser.Parameters.AddWithValue("$displayName", displayName);
+
+		return new((long)(await insertAppUser.ExecuteScalarAsync())!);
 	}
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]

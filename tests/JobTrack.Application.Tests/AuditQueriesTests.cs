@@ -44,6 +44,20 @@ public sealed class AuditQueriesTests
 		IsSensitive = true,
 	};
 
+	private static AuditEventRecord Event(long id, Instant occurredAt) => new() {
+		Id = new(id),
+		OccurredAt = occurredAt,
+		ActorId = ActorId,
+		Operation = "create-job-node",
+		EntityType = "job_node",
+		EntityId = id,
+		CorrelationId = Guid.NewGuid(),
+		Reason = null,
+		BeforeData = null,
+		AfterData = null,
+		IsSensitive = false,
+	};
+
 	private static FakeAuditQueryPort CreateSeededPort()
 	{
 		var port = new FakeAuditQueryPort();
@@ -63,11 +77,11 @@ public sealed class AuditQueriesTests
 
 		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() { EntityType = "user_cost_rate" } });
 
-		results.Should().ContainSingle();
-		results[0].EntityType.Should().Be("user_cost_rate");
-		results[0].Operation.Should().Be("add-user-cost-rate");
-		results[0].IsRedacted.Should().BeTrue();
-		results[0].AfterData.Should().BeNull();
+		results.Events.Should().ContainSingle();
+		results.Events[0].EntityType.Should().Be("user_cost_rate");
+		results.Events[0].Operation.Should().Be("add-user-cost-rate");
+		results.Events[0].IsRedacted.Should().BeTrue();
+		results.Events[0].AfterData.Should().BeNull();
 	}
 
 	[Fact]
@@ -80,9 +94,9 @@ public sealed class AuditQueriesTests
 			Filter = new() { EntityType = "user_cost_rate" },
 		});
 
-		results.Should().ContainSingle();
-		results[0].IsRedacted.Should().BeFalse();
-		results[0].AfterData!.Value.Should().ContainKey("amount_per_hour");
+		results.Events.Should().ContainSingle();
+		results.Events[0].IsRedacted.Should().BeFalse();
+		results.Events[0].AfterData!.Value.Should().ContainKey("amount_per_hour");
 	}
 
 	[Fact]
@@ -92,9 +106,9 @@ public sealed class AuditQueriesTests
 
 		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() { EntityType = "job_node" } });
 
-		results.Should().ContainSingle();
-		results[0].IsRedacted.Should().BeFalse();
-		results[0].AfterData!.Value.Should().ContainKey("description");
+		results.Events.Should().ContainSingle();
+		results.Events[0].IsRedacted.Should().BeFalse();
+		results.Events[0].AfterData!.Value.Should().ContainKey("description");
 	}
 
 	[Fact]
@@ -117,8 +131,8 @@ public sealed class AuditQueriesTests
 
 		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() });
 
-		results.Should().HaveCount(2);
-		results[0].OccurredAt.Should().BeGreaterThan(results[1].OccurredAt);
+		results.Events.Should().HaveCount(2);
+		results.Events[0].OccurredAt.Should().BeGreaterThan(results.Events[1].OccurredAt);
 	}
 
 	[Fact]
@@ -147,5 +161,119 @@ public sealed class AuditQueriesTests
 		Action act = () => _ = sut.SearchAuditEventsAsync(null!);
 
 		act.Should().Throw<ArgumentNullException>();
+	}
+
+	[Fact]
+	public async Task An_absent_page_size_asks_the_port_for_the_default_page_size_plus_one_probe_row()
+	{
+		var port = CreateSeededPort();
+		var sut = new AuditQueries(port);
+
+		_ = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() });
+
+		port.ObservedLimits.Should().ContainSingle().Which.Should().Be(AuditSearchPaging.DefaultPageSize + 1);
+	}
+
+	[Fact]
+	public async Task A_requested_page_size_beyond_the_maximum_is_clamped_before_reaching_the_port()
+	{
+		var port = CreateSeededPort();
+		var sut = new AuditQueries(port);
+
+		_ = await sut.SearchAuditEventsAsync(
+			new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = AuditSearchPaging.MaxPageSize + 500 });
+
+		port.ObservedLimits.Should().ContainSingle().Which.Should().Be(AuditSearchPaging.MaxPageSize + 1);
+	}
+
+	[Fact]
+	public async Task A_page_that_exactly_fills_the_requested_size_still_returns_a_continuation_cursor_when_a_probe_row_exists()
+	{
+		var port = new FakeAuditQueryPort();
+		port.SeedRoles(AuditorId, EmployeeRole.Auditor);
+		port.SeedEvent(Event(1, At(1)));
+		port.SeedEvent(Event(2, At(2)));
+		port.SeedEvent(Event(3, At(3)));
+		var sut = new AuditQueries(port);
+
+		var page = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 2 });
+
+		page.Events.Should().HaveCount(2);
+		page.Events[0].Id.Should().Be(new(3));
+		page.Events[1].Id.Should().Be(new(2));
+		page.ContinuationCursor.Should().NotBeNull();
+	}
+
+	[Fact]
+	public async Task The_last_page_carries_no_continuation_cursor()
+	{
+		var port = new FakeAuditQueryPort();
+		port.SeedRoles(AuditorId, EmployeeRole.Auditor);
+		port.SeedEvent(Event(1, At(1)));
+		port.SeedEvent(Event(2, At(2)));
+		var sut = new AuditQueries(port);
+
+		var page = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 5 });
+
+		page.Events.Should().HaveCount(2);
+		page.ContinuationCursor.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Passing_the_first_pages_continuation_cursor_back_fetches_the_next_non_overlapping_page()
+	{
+		var port = new FakeAuditQueryPort();
+		port.SeedRoles(AuditorId, EmployeeRole.Auditor);
+		port.SeedEvent(Event(1, At(1)));
+		port.SeedEvent(Event(2, At(2)));
+		port.SeedEvent(Event(3, At(3)));
+		var sut = new AuditQueries(port);
+
+		var firstPage = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 2 });
+		var secondPage = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+			PageSize = 2,
+			Cursor = firstPage.ContinuationCursor,
+		});
+
+		secondPage.Events.Should().ContainSingle();
+		secondPage.Events[0].Id.Should().Be(new(1));
+		secondPage.ContinuationCursor.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Equal_timestamp_events_are_tie_broken_by_id_and_paged_without_overlap_or_gaps()
+	{
+		var tied = At(5);
+		var port = new FakeAuditQueryPort();
+		port.SeedRoles(AuditorId, EmployeeRole.Auditor);
+		port.SeedEvent(Event(1, tied));
+		port.SeedEvent(Event(2, tied));
+		port.SeedEvent(Event(3, tied));
+		var sut = new AuditQueries(port);
+
+		var firstPage = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 2 });
+		var secondPage = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+			PageSize = 2,
+			Cursor = firstPage.ContinuationCursor,
+		});
+
+		firstPage.Events.Select(e => e.Id).Should().Equal(new AuditEventId(3), new AuditEventId(2));
+		secondPage.Events.Select(e => e.Id).Should().Equal(new AuditEventId(1));
+	}
+
+	[Fact]
+	public async Task A_malformed_cursor_is_rejected_without_reaching_the_port()
+	{
+		var port = CreateSeededPort();
+		var sut = new AuditQueries(port);
+
+		var act = () => sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), Cursor = "not-a-valid-cursor!!" });
+
+		await act.Should().ThrowAsync<ArgumentException>();
+		port.SearchAuditEventsCallCount.Should().Be(0);
 	}
 }

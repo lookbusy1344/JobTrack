@@ -7,11 +7,13 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
+using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -168,6 +170,52 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 		(await browseResponse.Content.ReadAsStringAsync()).Should().Contain("Concurrently changed elsewhere");
 	}
 
+	/// <summary>
+	///     §2.4: the edit form's <c>NeededStart</c> field round-trips a stored instant back to a
+	///     <c>datetime-local</c> string in the viewing employee's own zone, never the server process's.
+	/// </summary>
+	[Fact]
+	public async Task The_edit_form_prefills_NeededStart_formatted_in_the_viewing_employees_own_zone()
+	{
+		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+		var managerId = await SeedEmployeeAsync("edit.zone-prefill", EmployeeRole.JobManager, "America/New_York");
+		var stored = CivilTimeResolver.ToInstant(new(2026, 6, 15, 9, 0, 0), newYork);
+		var leaf = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Node with a needed-start",
+			OwnerUserId = managerId,
+			Priority = Priority.Medium,
+			NeededStart = stored,
+		});
+		var authCookie = await SignInAsync("edit.zone-prefill");
+
+		var response = await GetAsync($"/Jobs/Edit?nodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("value=\"2026-06-15T09:00\"");
+	}
+
+	/// <summary>§2.4: a malformed <c>NeededStart</c> is rejected, never silently reinterpreted or dropped.</summary>
+	[Fact]
+	public async Task A_malformed_NeededStart_on_save_is_rejected_and_the_node_is_not_changed()
+	{
+		var managerId = await SeedEmployeeAsync("edit.malformed-needed", EmployeeRole.JobManager);
+		var leaf = await AddChildAsync(rootId, managerId, "Unchanged description");
+		var authCookie = await SignInAsync("edit.malformed-needed");
+
+		var (antiforgeryCookie, token) = await GetEditFormAsync(authCookie, leaf.Id);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, leaf.Id, leaf.Version, "Attempted change", managerId, "not-a-local-date-time");
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("Enter a valid date and time.");
+
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id }, CancellationToken.None);
+		current.Node.Description.Should().Be("Unchanged description");
+	}
+
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
 		await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
@@ -179,18 +227,23 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 
 	private async Task<HttpResponseMessage> PostAsync(
 		string authCookie, string antiforgeryCookie, string token,
-		JobNodeId nodeId, long version, string description, AppUserId ownerId)
+		JobNodeId nodeId, long version, string description, AppUserId ownerId, string? neededStart = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Edit");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+		var fields = new Dictionary<string, string> {
 			["NodeId"] = nodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["OriginalVersion"] = version.ToString(CultureInfo.InvariantCulture),
 			["Input.Description"] = description,
 			["Input.OwnerUserId"] = ownerId.Value.ToString(CultureInfo.InvariantCulture),
 			["Input.Priority"] = nameof(Priority.Medium),
 			["__RequestVerificationToken"] = token,
-		});
+		};
+		if (neededStart is not null) {
+			fields["Input.NeededStart"] = neededStart;
+		}
+
+		request.Content = new FormUrlEncodedContent(fields);
 
 		return await client.SendAsync(request);
 	}
@@ -261,15 +314,16 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
+	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
 
 		await using var insertAppUser = connection.CreateCommand();
 		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
+			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, $ianaTimeZone); SELECT last_insert_rowid();";
 		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
+		_ = insertAppUser.Parameters.AddWithValue("$ianaTimeZone", ianaTimeZone);
 		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
 		var placeholderUser = new JobTrackIdentityUser {

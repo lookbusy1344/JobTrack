@@ -11,7 +11,7 @@ the tree); achievement state is recursively derived from the hierarchy; and cost
 dynamically from effective-dated labour rates, per-job rate overrides, and the actual time worked,
 rather than stored as a static number.
 
-[Live Google Cloud Run demo](https://jobtrack-web-716005672573.europe-west2.run.app)
+[Live Google Cloud Run demo](https://jobtrack-web-716005672573.europe-west1.run.app)
 
 Demo deployment (with SQLite backend) is from [`scripts/deploy-cloudrun.sh`](scripts/deploy-cloudrun.sh) see
 [`docs/operations/docker-image.md`](docs/operations/docker-image.md#cloud-run-smoke-test-2026-07-17).
@@ -590,7 +590,7 @@ history, not just the end state. An import is rejected, whole, when a row record
 Prerequisites inherited from ancestors *outside* the file are enforced too — those are rechecked
 against real database state inside the import transaction.
 
-`samples/job-tree-imports/` has six worked examples, roughly from simplest to largest:
+`samples/job-tree-imports/` has seven worked examples, roughly from simplest to largest:
 
 - `experimental-work.json` — 5 nodes, 2 levels, one dependent leaf with two prerequisites.
 - `kitchen-refit-in-progress.json` — 10 nodes, the only example carrying work history: closed
@@ -605,6 +605,11 @@ against real database state inside the import transaction.
   with fan-in (briefing candidates requires both the published candidate list and the approved
   rules), and a branch — "Verify candidate eligibility", itself two leaves — standing as a
   prerequisite for a later step.
+- `implementing-ai-enrolment-system.json` — 22 nodes, 4 levels, a complete finished project (every
+  leaf carries absolute `start`/`end` work history, all reaching `success`) spanning three parallel
+  sub-sections — logic engine, MIS write-back, and load testing under 100 simultaneous users — over
+  roughly three working months, every session bounded to weekday 09:00-17:00, demonstrating costing
+  over a realistically-shaped completed subtree.
 
 ## Seeding a synthetic end-user testing (UAT) scenario
 

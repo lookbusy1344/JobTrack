@@ -47,7 +47,8 @@ public sealed partial class EmergencyPasswordResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyPasswordReset.RunAsync(
-				console, userManager, identityContext, passwordHasher, AdminCliProvider.Sqlite, "ada.reset", CancellationToken.None);
+				console, userManager, identityContext, passwordHasher, AdminCliProvider.Sqlite, "ada.reset", SystemClock.Instance,
+				CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			var temporaryPassword = ExtractTemporaryPassword(console);
@@ -93,7 +94,8 @@ public sealed partial class EmergencyPasswordResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyPasswordReset.RunAsync(
-				console, userManager, identityContext, passwordHasher, AdminCliProvider.PostgreSql, "ada.reset", CancellationToken.None);
+				console, userManager, identityContext, passwordHasher, AdminCliProvider.PostgreSql, "ada.reset", SystemClock.Instance,
+				CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			var temporaryPassword = ExtractTemporaryPassword(console);
@@ -147,7 +149,8 @@ public sealed partial class EmergencyPasswordResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyPasswordReset.RunAsync(
-				console, userManager, identityContext, passwordHasher, AdminCliProvider.Sqlite, "ada.reset-revokes", CancellationToken.None);
+				console, userManager, identityContext, passwordHasher, AdminCliProvider.Sqlite, "ada.reset-revokes", SystemClock.Instance,
+				CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			var authenticated = await jobTrackClient.Tokens.TryAuthenticateAsync(
@@ -179,7 +182,8 @@ public sealed partial class EmergencyPasswordResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyPasswordReset.RunAsync(
-				console, userManager, identityContext, passwordHasher, AdminCliProvider.Sqlite, "no.such.user", CancellationToken.None);
+				console, userManager, identityContext, passwordHasher, AdminCliProvider.Sqlite, "no.such.user", SystemClock.Instance,
+				CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle(error => error.Contains("no.such.user", StringComparison.Ordinal));

@@ -25,8 +25,9 @@ public sealed class JobQueries : IJobQueries
 	private const int MaxScheduleEntryCount = 2_000;
 	private readonly IAwaitingProgressQueryPort _awaitingProgressQueryPort;
 	private readonly IJobBrowseQueryPort _browseQueryPort;
-	private readonly ICostQueries _costQueries;
 
+	private readonly IClock _clock;
+	private readonly ICostQueries _costQueries;
 	private readonly IEmployeeQueryPort _employeeQueryPort;
 	private readonly ILeafWorkQueryPort _leafWorkQueryPort;
 	private readonly IPrerequisiteQueryPort _prerequisiteQueryPort;
@@ -41,7 +42,7 @@ public sealed class JobQueries : IJobQueries
 		IJobBrowseQueryPort browseQueryPort, IAwaitingProgressQueryPort awaitingProgressQueryPort,
 		IWorkSessionQueryPort workSessionQueryPort,
 		ILeafWorkQueryPort leafWorkQueryPort, IPrerequisiteQueryPort prerequisiteQueryPort,
-		IScheduleQueryPort scheduleQueryPort, IRateQueryPort rateQueryPort, ICostQueries costQueries)
+		IScheduleQueryPort scheduleQueryPort, IRateQueryPort rateQueryPort, ICostQueries costQueries, IClock clock)
 	{
 		ArgumentNullException.ThrowIfNull(employeeQueryPort);
 		ArgumentNullException.ThrowIfNull(readinessQueryPort);
@@ -53,7 +54,9 @@ public sealed class JobQueries : IJobQueries
 		ArgumentNullException.ThrowIfNull(scheduleQueryPort);
 		ArgumentNullException.ThrowIfNull(rateQueryPort);
 		ArgumentNullException.ThrowIfNull(costQueries);
+		ArgumentNullException.ThrowIfNull(clock);
 
+		_clock = clock;
 		_employeeQueryPort = employeeQueryPort;
 		_readinessQueryPort = readinessQueryPort;
 		_browseQueryPort = browseQueryPort;
@@ -153,8 +156,12 @@ public sealed class JobQueries : IJobQueries
 		GetAwaitingProgressRequest request, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(request);
+		ValidatePaging(request.Offset, request.Limit);
+		var limit = request.Limit.HasValue
+			? Math.Min(request.Limit.Value, AwaitingProgressPaging.MaxPageSize)
+			: AwaitingProgressPaging.DefaultPageSize;
 
-		return GetAwaitingProgressCoreAsync(request, cancellationToken);
+		return GetAwaitingProgressCoreAsync(request, limit, cancellationToken);
 	}
 
 	/// <inheritdoc />
@@ -414,8 +421,8 @@ public sealed class JobQueries : IJobQueries
 				};
 			});
 
-	private Task<EquatableArray<AwaitingProgressEntry>> GetAwaitingProgressCoreAsync(GetAwaitingProgressRequest request,
-		CancellationToken cancellationToken) =>
+	private Task<EquatableArray<AwaitingProgressEntry>> GetAwaitingProgressCoreAsync(
+		GetAwaitingProgressRequest request, int limit, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-awaiting-progress", request.Context, null,
 			async () => {
@@ -427,7 +434,12 @@ public sealed class JobQueries : IJobQueries
 
 				var entries = AwaitingProgressCalculator.GetAwaitingProgress(
 					inputs.NodesById, inputs.FactsById, inputs.Prerequisites, request.Ownership, request.SubtreeRootId);
-				return await EnrichAwaitingProgressWithCostAsync(request.Context, entries, cancellationToken).ConfigureAwait(false);
+
+				// Fresh-eyes review §2.8: bound the page before cost enrichment, not after -- the
+				// calculator's own ordering is preserved, only the slice offered to the caller changes.
+				var page = entries.Skip(request.Offset).Take(limit);
+
+				return await EnrichAwaitingProgressWithCostAsync(request.Context, [.. page], cancellationToken).ConfigureAwait(false);
 			});
 
 	private async Task<EquatableArray<JobNodeSummaryResult>> EnrichSummariesWithCostAsync(
@@ -437,17 +449,19 @@ public sealed class JobQueries : IJobQueries
 			return summaries;
 		}
 
-		var asOf = SystemClock.Instance.GetCurrentInstant();
+		var asOf = _clock.GetCurrentInstant();
 		// ADR 0042: another worker's individual leaf cost stays hidden even where the actor is
 		// admitted to the node; a branch's roll-up is an aggregate and remains visible.
 		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
-		var enriched = await Task.WhenAll(summaries.Select(async summary => summary with {
-			Cost = CostAccessPolicy.CanViewNodeCost(costRoles, summary.HasChildren, summary.OwnerUserId, context.Actor)
-				? await TryGetDisplayedCostAsync(context, summary.Id, asOf, cancellationToken).ConfigureAwait(false)
-				: null,
-		})).ConfigureAwait(false);
+		var candidateIds = summaries
+			.Where(summary => CostAccessPolicy.CanViewNodeCost(costRoles, summary.HasChildren, summary.OwnerUserId, context.Actor))
+			.Select(summary => summary.Id)
+			.ToArray();
 
-		return [.. enriched];
+		// Fresh-eyes review §2.8: one bulk snapshot for the whole page, never one round trip per row.
+		var displayedCosts = await GetBulkDisplayedCostsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
+
+		return [.. summaries.Select(summary => summary with { Cost = displayedCosts.GetValueOrDefault(summary.Id) })];
 	}
 
 	private async Task<EquatableArray<AwaitingProgressEntry>> EnrichAwaitingProgressWithCostAsync(
@@ -457,17 +471,47 @@ public sealed class JobQueries : IJobQueries
 			return entries;
 		}
 
-		var asOf = SystemClock.Instance.GetCurrentInstant();
+		var asOf = _clock.GetCurrentInstant();
 		// Awaiting-progress entries are leaves by construction, so the branch-aggregate relief in
 		// CanViewNodeCost never applies here: it reduces to "your own or unassigned" (ADR 0042).
 		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
-		var enriched = await Task.WhenAll(entries.Select(async entry => entry with {
-			Cost = CostAccessPolicy.CanViewNodeCost(costRoles, false, entry.OwnerUserId, context.Actor)
-				? await TryGetDisplayedCostAsync(context, entry.Id, asOf, cancellationToken).ConfigureAwait(false)
-				: null,
-		})).ConfigureAwait(false);
+		var candidateIds = entries
+			.Where(entry => CostAccessPolicy.CanViewNodeCost(costRoles, false, entry.OwnerUserId, context.Actor))
+			.Select(entry => entry.Id)
+			.ToArray();
 
-		return [.. enriched];
+		var displayedCosts = await GetBulkDisplayedCostsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
+
+		return [.. entries.Select(entry => entry with { Cost = displayedCosts.GetValueOrDefault(entry.Id) })];
+	}
+
+	/// <summary>
+	///     Prices every candidate in one bulk call (fresh-eyes review §2.8) instead of one
+	///     <see cref="ICostQueries.GetHierarchyTotalsAsync" /> round trip per row. Cost is an optional
+	///     field on an otherwise universally browsable listing (ADR 0039 decision 4), so a failure here
+	///     degrades to "no costs shown" rather than failing the whole listing.
+	/// </summary>
+	private async Task<EquatableDictionary<JobNodeId, Money>> GetBulkDisplayedCostsAsync(
+		CommandContext context, JobNodeId[] candidateIds, Instant asOf, CancellationToken cancellationToken)
+	{
+		if (candidateIds.Length == 0) {
+			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
+		}
+
+		try {
+			var result = await _costQueries.GetBulkNodeCostsAsync(
+				new() { Context = context, NodeIds = [.. candidateIds], AsOf = asOf }, cancellationToken).ConfigureAwait(false);
+			return result.DisplayedCosts;
+		}
+		catch (AuthorizationDeniedException) {
+			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
+		}
+		catch (ArgumentOutOfRangeException) {
+			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
+		}
+		catch (MissingRateException) {
+			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
+		}
 	}
 
 	/// <summary>
@@ -483,28 +527,6 @@ public sealed class JobQueries : IJobQueries
 		}
 		catch (EntityNotFoundException) {
 			return [];
-		}
-	}
-
-	private async Task<Money?> TryGetDisplayedCostAsync(
-		CommandContext context, JobNodeId nodeId, Instant asOf, CancellationToken cancellationToken)
-	{
-		try {
-			var totals = await _costQueries.GetHierarchyTotalsAsync(
-				new() { Context = context, NodeId = nodeId, AsOf = asOf }, cancellationToken).ConfigureAwait(false);
-			return totals.DisplayedCosts.GetValueOrDefault(nodeId);
-		}
-		catch (AuthorizationDeniedException) {
-			return null;
-		}
-		catch (EntityNotFoundException) {
-			return null;
-		}
-		catch (ArgumentOutOfRangeException) {
-			return null;
-		}
-		catch (MissingRateException) {
-			return null;
 		}
 	}
 

@@ -23,10 +23,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 {
+	private readonly IClock clock;
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteAchievementCommandPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteAchievementCommandPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<LeafWorkResult> SetAchievementAsync(SetAchievementRequest request, CancellationToken cancellationToken = default)
@@ -39,8 +44,9 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 						   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
 
+		var now = clock.GetCurrentInstant();
 		var isReopening = AchievementTransitions.IsReopening(leafWork.Achievement, request.NewAchievement);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, isReopening, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, isReopening, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(leafWork.RowVersion, request.Version);
 
 		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, request.NewAchievement)) {
@@ -56,7 +62,7 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 
 		var previousAchievement = leafWork.Achievement;
 		leafWork.Achievement = request.NewAchievement;
-		leafWork.ChangedAt = SystemClock.Instance.GetCurrentInstant();
+		leafWork.ChangedAt = now;
 		leafWork.RowVersion += 1;
 
 		AuditEventWriter.Add(
@@ -81,9 +87,10 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 		SqliteDbContextFactory.CreateOpenContextAsync(connectionString, cancellationToken);
 
 	private static async Task AuthorizeOrThrowAsync(
-		SqliteJobTrackDbContext context, AppUserId actorId, JobNodeId nodeId, bool isReopening, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, AppUserId actorId, JobNodeId nodeId, bool isReopening, Instant now,
+		CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -97,12 +104,12 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 	}
 
 	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)

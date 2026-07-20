@@ -2,6 +2,7 @@ namespace JobTrack.Persistence.Sqlite;
 
 using Application;
 using Microsoft.AspNetCore.Identity;
+using NodaTime;
 
 /// <summary>Composes the SQLite provider behind JobTrack's single public facade.</summary>
 public static class JobTrackSqlite
@@ -10,39 +11,42 @@ public static class JobTrackSqlite
 	public static IJobTrackClient Create(
 		string connectionString,
 		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
-		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null)
+		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
+		IClock? clock = null)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-		var bootstrap = new SqliteInstallationBootstrapPort(connectionString);
-		var employees = new SqliteEmployeeQueryPort(connectionString);
-		var employeeCommands = new SqliteEmployeeCommandPort(connectionString);
+		clock ??= SystemClock.Instance;
+
+		var bootstrap = new SqliteInstallationBootstrapPort(connectionString, clock);
+		var employees = new SqliteEmployeeQueryPort(connectionString, clock);
+		var employeeCommands = new SqliteEmployeeCommandPort(connectionString, clock);
 		var readiness = new SqliteReadinessQueryPort(connectionString);
 		var browse = new SqliteJobBrowseQueryPort(connectionString);
 		var awaitingProgress = new SqliteAwaitingProgressQueryPort(connectionString);
-		var jobs = new SqliteJobNodeCommandPort(connectionString);
-		var sessions = new SqliteWorkSessionCommandPort(connectionString);
-		var leafSessions = new SqliteWorkSessionQueryPort(connectionString);
+		var jobs = new SqliteJobNodeCommandPort(connectionString, clock);
+		var sessions = new SqliteWorkSessionCommandPort(connectionString, clock);
+		var leafSessions = new SqliteWorkSessionQueryPort(connectionString, clock);
 		var leafWork = new SqliteLeafWorkQueryPort(connectionString);
 		var prerequisites = new SqlitePrerequisiteQueryPort(connectionString);
-		var scheduleQueries = new SqliteScheduleQueryPort(connectionString);
-		var achievements = new SqliteAchievementCommandPort(connectionString);
-		var schedules = new SqliteScheduleCommandPort(connectionString);
-		var rates = new SqliteRateCommandPort(connectionString);
-		var rateQueries = new SqliteRateQueryPort(connectionString);
-		var costs = new SqliteCostQueryPort(connectionString);
-		var audit = new SqliteAuditQueryPort(connectionString);
-		var tokens = new SqlitePersonalAccessTokenPort(connectionString);
-		var requests = new SqliteJobRequestCommandPort(connectionString);
-		var authenticationAudit = new SqliteAuthenticationAuditPort(connectionString);
-		var credentials = new SqliteAccountCredentialPort(connectionString);
+		var scheduleQueries = new SqliteScheduleQueryPort(connectionString, clock);
+		var achievements = new SqliteAchievementCommandPort(connectionString, clock);
+		var schedules = new SqliteScheduleCommandPort(connectionString, clock);
+		var rates = new SqliteRateCommandPort(connectionString, clock);
+		var rateQueries = new SqliteRateQueryPort(connectionString, clock);
+		var costs = new SqliteCostQueryPort(connectionString, clock);
+		var audit = new SqliteAuditQueryPort(connectionString, clock);
+		var tokens = new SqlitePersonalAccessTokenPort(connectionString, clock);
+		var requests = new SqliteJobRequestCommandPort(connectionString, clock);
+		var authenticationAudit = new SqliteAuthenticationAuditPort(connectionString, clock);
+		var credentials = new SqliteAccountCredentialPort(connectionString, clock);
 		var costQueries = new CostQueries(costs);
 
 		return new JobTrackClient(
 			new InstallationCommands(bootstrap, passwordHasher ?? new PasswordHasher<BootstrapCredentialSubject>()),
 			new JobQueries(
 				employees, readiness, browse, awaitingProgress, leafSessions, leafWork, prerequisites, scheduleQueries, rateQueries,
-				costQueries),
+				costQueries, clock),
 			new EmployeeCommands(employeeCommands, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>()),
 			new JobCommands(jobs),
 			new WorkCommands(sessions, achievements),
@@ -50,7 +54,7 @@ public static class JobTrackSqlite
 			new RateCommands(rates),
 			costQueries,
 			new AuditQueries(audit),
-			new TokenCommands(tokens),
+			new TokenCommands(tokens, clock),
 			new RequestCommands(requests),
 			new AuthenticationAuditCommands(authenticationAudit),
 			new AccountCredentialCommands(credentials));

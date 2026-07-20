@@ -221,11 +221,11 @@ internal static class SubtreeImportPlanner
 				yield return requiredLocalId;
 			}
 
-			if (current.ParentLocalId is not { } parentLocalId) {
+			if (current.ParentLocalId is not long parentId) {
 				yield break;
 			}
 
-			current = byLocalId[parentLocalId];
+			current = byLocalId[parentId];
 		}
 	}
 }

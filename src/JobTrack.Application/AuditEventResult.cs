@@ -25,8 +25,12 @@ public sealed record AuditEventResult
 	/// <summary>The instant this event was recorded.</summary>
 	public required Instant OccurredAt { get; init; }
 
-	/// <summary>The user who performed the audited operation.</summary>
-	public required AppUserId ActorId { get; init; }
+	/// <summary>
+	///     The user who performed the audited operation, or <see langword="null" /> for an
+	///     unknown-subject authentication failure that has no real actor to attribute the event to
+	///     (fresh-eyes review §2.6) -- render this as "system"/"unknown", never a fabricated employee.
+	/// </summary>
+	public required AppUserId? ActorId { get; init; }
 
 	/// <summary>The operation performed (e.g. <c>"add-user-cost-rate"</c>).</summary>
 	public required string Operation { get; init; }

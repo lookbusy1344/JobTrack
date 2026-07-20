@@ -47,7 +47,7 @@ public sealed class OverlappingCostScaleCorrectnessTests : IAsyncLifetime
 			await GrantCostViewerRoleAsync(connection, workerId);
 		}
 
-		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build());
+		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build(), SystemClock.Instance);
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
 		var baseInstant = Instant.FromDateTimeOffset(BaseInstant);
 		var totalSlots = LeavesPerWorker + OverlapDepth - 1;

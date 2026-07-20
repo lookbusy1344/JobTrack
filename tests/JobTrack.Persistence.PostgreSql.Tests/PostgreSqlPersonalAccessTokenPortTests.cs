@@ -21,10 +21,13 @@ public sealed class PostgreSqlPersonalAccessTokenPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override IPersonalAccessTokenPort CreatePort(string connectionString) =>
-		new PostgreSqlPersonalAccessTokenPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		CreatePort(connectionString, SystemClock.Instance);
+
+	protected override IPersonalAccessTokenPort CreatePort(string connectionString, IClock clock) =>
+		new PostgreSqlPersonalAccessTokenPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), clock);
 
 	protected override object FormatInstantForRawSql(Instant instant) => instant.ToDateTimeOffset();
 }

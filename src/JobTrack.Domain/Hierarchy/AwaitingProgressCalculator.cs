@@ -40,7 +40,7 @@ public static class AwaitingProgressCalculator
 			.Select(node => (Node: node, Facts: factsById[node.Id]))
 			.Where(candidate => candidate.Facts.ArchivedAt is null)
 			.Where(candidate => ownership.Matches(candidate.Facts.OwnerUserId))
-			.Where(candidate => subtreeRootId is not { } root || IsInSubtree(candidate.Node.Id, root, nodesById))
+			.Where(candidate => !subtreeRootId.HasValue || IsInSubtree(candidate.Node.Id, subtreeRootId.Value, nodesById))
 			.Select(candidate => new AwaitingProgressEntry(
 				candidate.Node.Id,
 				candidate.Node.ParentId,

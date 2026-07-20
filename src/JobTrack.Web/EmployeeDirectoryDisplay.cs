@@ -19,7 +19,7 @@ internal static class EmployeeDirectoryDisplay
 	internal static string Describe(IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> directoryById, long? userId,
 		string noneLabel = "Unassigned")
 	{
-		if (userId is not { } id) {
+		if (userId is not long id) {
 			return noneLabel;
 		}
 

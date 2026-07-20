@@ -338,7 +338,7 @@ public static class JobTrackModelConfiguration
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.AuditEventId).ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.OccurredAt).HasColumnName("occurred_at").IsRequired();
-			_ = builder.Property(e => e.ActorUserId).HasColumnName("actor_user_id").HasConversion(IdValueConverters.AppUserId).IsRequired();
+			_ = builder.Property(e => e.ActorUserId).HasColumnName("actor_user_id").HasConversion(IdValueConverters.NullableAppUserId);
 			_ = builder.Property(e => e.Operation).HasColumnName("operation").IsRequired();
 			_ = builder.Property(e => e.EntityType).HasColumnName("entity_type").IsRequired();
 			_ = builder.Property(e => e.EntityId).HasColumnName("entity_id").IsRequired();

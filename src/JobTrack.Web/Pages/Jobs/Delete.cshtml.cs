@@ -38,7 +38,8 @@ public sealed class DeleteModel(IJobTrackClient jobTrackClient, UserManager<JobT
 		}
 
 		await LoadCurrentNodeAsync(actor.Value, cancellationToken);
-		if (CurrentNode is { } node) {
+		var node = CurrentNode;
+		if (node is not null) {
 			OriginalVersion = node.Node.Version;
 			if (node.Node.HasChildren) {
 				ErrorMessage = "A node with children cannot be deleted; delete or move its children first.";
@@ -75,7 +76,7 @@ public sealed class DeleteModel(IJobTrackClient jobTrackClient, UserManager<JobT
 				Reason = string.IsNullOrWhiteSpace(Input.Reason) ? null : Input.Reason,
 			}, cancellationToken);
 
-			return RedirectToPage("/Jobs/Browse", parentId is { } id ? new { nodeId = id.Value } : null);
+			return RedirectToPage("/Jobs/Browse", parentId.HasValue ? new { nodeId = parentId.Value.Value } : null);
 		}
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "This node has worked session history; deleting it requires the Administrator role.";
@@ -97,7 +98,8 @@ public sealed class DeleteModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			ErrorMessage = "Someone else changed this node since the form was loaded. " +
 						   "The latest version is shown below — review and try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);
-			if (CurrentNode is { } refreshed) {
+			var refreshed = CurrentNode;
+			if (refreshed is not null) {
 				OriginalVersion = refreshed.Node.Version;
 			}
 

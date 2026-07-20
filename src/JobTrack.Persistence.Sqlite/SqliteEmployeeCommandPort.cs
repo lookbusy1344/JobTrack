@@ -28,10 +28,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 {
+	private readonly IClock clock;
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteEmployeeCommandPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteEmployeeCommandPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<AccountStateResult> CreateEmployeeAsync(
@@ -41,9 +46,9 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var canonicalZone = ScheduleZoneId.Resolve(request.IanaTimeZone);
 		var appUser = new AppUserEntity {
 			Id = default,
@@ -107,7 +112,8 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var (targetIdentityUserId, currentRoles) =
 			await LoadTargetAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 
@@ -115,7 +121,6 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 			return new() { UserId = request.TargetUserId, Roles = currentRoles };
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		_ = context.Add(new IdentityUserRoleEntity { IdentityUserId = targetIdentityUserId, IdentityRoleId = (short)request.Role });
 
 		AuditEventWriter.Add(
@@ -140,7 +145,8 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var (targetIdentityUserId, currentRoles) =
 			await LoadTargetAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 
@@ -148,7 +154,6 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 			return new() { UserId = request.TargetUserId, Roles = currentRoles };
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
 			$"DELETE FROM identity_user_role WHERE identity_user_id = {targetIdentityUserId} AND identity_role_id = {(short)request.Role};",
 			cancellationToken).ConfigureAwait(false);
@@ -177,7 +182,8 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -187,7 +193,6 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 			return BuildAccountStateResult(request.TargetUserId, target, currentRoles);
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.IsEnabled = request.Enabled;
 		target.SecurityStamp = Guid.NewGuid().ToString("N");
 
@@ -216,7 +221,8 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<AppUserEntity>()
 						 .FirstOrDefaultAsync(u => u.Id == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -224,7 +230,6 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 				.FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 			?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.DefaultHourlyRate = request.DefaultHourlyRate;
 
 		AuditEventWriter.Add(
@@ -255,12 +260,12 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.PasswordHash = request.PasswordHash;
 		target.SecurityStamp = Guid.NewGuid().ToString("N");
 		target.RequiresPasswordChange = true;
@@ -287,12 +292,12 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.TwoFactorEnabled = false;
 		target.AuthenticatorKeyProtected = null;
 		target.TwoFactorEnabledAt = null;
@@ -318,7 +323,7 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 
-		_ = await LoadActorAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		_ = await LoadActorAsync(context, request.Context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 		var actorAppUser = await context.Set<AppUserEntity>().AsNoTracking()
 							   .FirstOrDefaultAsync(u => u.Id == request.Context.Actor, cancellationToken).ConfigureAwait(false)
 						   ?? throw new EntityNotFoundException($"Employee {request.Context.Actor} does not exist.");
@@ -405,20 +410,20 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 	}
 
 	private static async Task<IdentityUserEntity> LoadActorAsync(
-		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		return actorIdentityUser;
 	}
 
 	private static async Task AuthorizeRolesOrThrowAsync(
-		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorIdentityUser = await LoadActorAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorIdentityUser = await LoadActorAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var actorRoles = await GetRolesForIdentityUserAsync(context, actorIdentityUser.Id, cancellationToken).ConfigureAwait(false);
 
 		if (!EmployeeAccessPolicy.CanManageRoles(actorRoles)) {
@@ -427,9 +432,9 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 	}
 
 	private static async Task AuthorizeAccountsOrThrowAsync(
-		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorIdentityUser = await LoadActorAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorIdentityUser = await LoadActorAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var actorRoles = await GetRolesForIdentityUserAsync(context, actorIdentityUser.Id, cancellationToken).ConfigureAwait(false);
 
 		if (!EmployeeAccessPolicy.CanManageAccounts(actorRoles)) {

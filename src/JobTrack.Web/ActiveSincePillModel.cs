@@ -27,6 +27,9 @@ public sealed class ActiveSincePillModel
 	/// <summary>The viewing employee's own time zone, for formatting the session's start time.</summary>
 	public required DateTimeZone ViewerZone { get; init; }
 
+	/// <summary>The hosting page's own captured "now" (ADR 0016), for the compact today/not-today choice.</summary>
+	public required Instant Now { get; init; }
+
 	/// <summary>
 	///     Whether to draw the row-sized pill — stopwatch plus a compact timestamp, no wrapping, the
 	///     words carried only for assistive tech. <see langword="false" /> gives the full "Active

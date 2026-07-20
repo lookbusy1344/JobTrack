@@ -11,9 +11,14 @@ using Shared.Entities;
 
 internal sealed class PostgreSqlAccountCredentialPort : IAccountCredentialPort
 {
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
-	public PostgreSqlAccountCredentialPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlAccountCredentialPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	public async Task<SetTwoFactorStateResult> SetTwoFactorStateAsync(
 		SetTwoFactorStateRequest request, CancellationToken cancellationToken = default)
@@ -34,7 +39,7 @@ internal sealed class PostgreSqlAccountCredentialPort : IAccountCredentialPort
 				"Two-factor authentication cannot be enabled without an authenticator key.");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
+		var now = clock.GetCurrentInstant();
 		identityUser.TwoFactorEnabled = request.Enabled;
 		identityUser.TwoFactorEnabledAt = request.Enabled ? now : null;
 		if (!request.Enabled) {

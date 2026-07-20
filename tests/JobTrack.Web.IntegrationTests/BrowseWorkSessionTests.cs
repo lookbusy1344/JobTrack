@@ -163,6 +163,25 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Starting_a_session_with_a_malformed_backdate_from_the_browse_row_does_not_start_work()
+	{
+		var workerId = await SeedEmployeeAsync("browse.malformed", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Malformed browse start");
+		var authCookie = await SignInAsync("browse.malformed");
+
+		var (cookie, token) = await GetBrowseFormAsync(authCookie);
+		var response = await PostStartAsync(authCookie, cookie, token, leaf.Id, "not-a-local-date-time");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Enter a valid date and time.");
+		var sessions = await seedClient.Query.GetLeafSessionsAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, LeafWorkId = leaf.Id });
+		sessions.Should().BeEmpty();
+	}
+
+	[Fact]
 	public async Task A_worker_can_finish_their_active_session_inline_from_the_browse_row()
 	{
 		var workerId = await SeedEmployeeAsync("browse.finisher", EmployeeRole.Worker);
@@ -410,7 +429,8 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	private static async Task<(string CookieHeader, string Token)> ExtractFormAsync(HttpResponseMessage response, string previousAntiforgeryCookie)
 	{
 		var body = await response.Content.ReadAsStringAsync();
-		var cookie = FindSetCookie(response, "Antiforgery") is { } newCookie ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
+		var newCookie = FindSetCookie(response, "Antiforgery");
+		var cookie = newCookie is not null ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in response body.");

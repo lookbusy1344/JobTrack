@@ -6,6 +6,7 @@ using Abstractions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 
 /// <summary>
 ///     Hand-written EF-backed <see cref="JobTrackIdentityUser" /> store (ADR 0022): identity, password,
@@ -33,11 +34,14 @@ public sealed class JobTrackUserStore :
 
 	private readonly IDataProtector authenticatorKeyProtector;
 
+	private readonly IClock clock;
+
 	private readonly JobTrackIdentityDbContext dbContext;
 
-	public JobTrackUserStore(JobTrackIdentityDbContext dbContext, IDataProtectionProvider dataProtectionProvider)
+	public JobTrackUserStore(JobTrackIdentityDbContext dbContext, IDataProtectionProvider dataProtectionProvider, IClock clock)
 	{
 		this.dbContext = dbContext;
+		this.clock = clock;
 		authenticatorKeyProtector = dataProtectionProvider.CreateProtector(AuthenticatorKeyProtectionPurpose);
 	}
 
@@ -242,7 +246,7 @@ public sealed class JobTrackUserStore :
 	public Task SetTwoFactorEnabledAsync(JobTrackIdentityUser user, bool enabled, CancellationToken cancellationToken)
 	{
 		user.TwoFactorEnabled = enabled;
-		user.TwoFactorEnabledAt = enabled ? DateTimeOffset.UtcNow : null;
+		user.TwoFactorEnabledAt = enabled ? clock.GetCurrentInstant().ToDateTimeOffset() : null;
 		return Task.CompletedTask;
 	}
 

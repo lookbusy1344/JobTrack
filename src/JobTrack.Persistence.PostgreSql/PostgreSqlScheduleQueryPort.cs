@@ -16,10 +16,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlScheduleQueryPort : IScheduleQueryPort
 {
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlScheduleQueryPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlScheduleQueryPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<ScheduleQueryResult> GetScheduleAsync(
@@ -79,13 +84,13 @@ internal sealed class PostgreSqlScheduleQueryPort : IScheduleQueryPort
 		return new() { ActorRoles = actorRoles, Versions = [.. versions], Exceptions = [.. exceptions] };
 	}
 
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
+	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)

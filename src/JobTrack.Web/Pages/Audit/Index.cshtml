@@ -60,7 +60,7 @@
 			@foreach (var auditEvent in Model.Events) {
 				<tr>
 					<td>@InstantDisplay.Format(auditEvent.OccurredAt, Model.ViewerZone)</td>
-					<td class="jt-id">@auditEvent.ActorId.Value</td>
+					<td class="jt-id">@(auditEvent.ActorId?.Value.ToString() ?? "system")</td>
 					<td>@auditEvent.Operation</td>
 					<td>@auditEvent.EntityType</td>
 					<td class="jt-id">@auditEvent.EntityId</td>
@@ -84,4 +84,18 @@
 			</tbody>
 		</table>
 	</div>
+
+	@if (Model.NextCursor is not null) {
+		<a class="btn btn-outline-secondary"
+		   asp-page="/Audit/Index"
+		   asp-route-ActorId="@Model.ActorId"
+		   asp-route-EntityType="@Model.EntityType"
+		   asp-route-EntityId="@Model.EntityId"
+		   asp-route-CorrelationId="@Model.CorrelationId"
+		   asp-route-From="@Model.From"
+		   asp-route-To="@Model.To"
+		   asp-route-Cursor="@Model.NextCursor">
+			Next page
+		</a>
+	}
 }

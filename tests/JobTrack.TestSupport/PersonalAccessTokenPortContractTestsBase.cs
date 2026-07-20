@@ -25,6 +25,7 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 	private static readonly Instant CreatedAt = Instant.FromUtc(2026, 1, 1, 0, 0);
 	private static readonly Instant ExpiresAt = Instant.FromUtc(2026, 2, 1, 0, 0);
 	private static readonly Instant FarFutureLockoutEnd = Instant.FromUtc(2099, 1, 1, 0, 0);
+	private static readonly Duration OneTick = Duration.FromTicks(1);
 
 	private readonly IDisposableTestDatabase database;
 
@@ -93,6 +94,24 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task An_actor_may_issue_a_token_at_the_exact_lockout_end_boundary()
+	{
+		var actorId = await SeedEmployeeAsync("worker.lockout-boundary", true, CreatedAt);
+		var sut = CreatePort(database.ConnectionString);
+
+		var result = await sut.IssueAsync(new() {
+			Context = ContextFor(actorId),
+			TargetUserId = actorId,
+			Label = "boundary",
+			TokenHash = "hash-lockout-boundary",
+			CreatedAt = CreatedAt,
+			ExpiresAt = ExpiresAt,
+		});
+
+		result.CreatedAt.Should().Be(CreatedAt);
+	}
+
+	[Fact]
 	public async Task An_administrator_cannot_issue_a_token_for_another_user()
 	{
 		var administratorId = await SeedAdministratorAsync();
@@ -111,6 +130,35 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
 
+	[Fact]
+	public async Task Token_authentication_uses_one_injected_clock_read_at_the_expiry_boundary()
+	{
+		var actorId = await SeedEmployeeAsync("worker.expiry-boundary", true, null);
+		var clock = new AdjustableClock(ExpiresAt - OneTick);
+		var sut = CreatePort(database.ConnectionString, clock);
+		_ = await sut.IssueAsync(new() {
+			Context = ContextFor(actorId),
+			TargetUserId = actorId,
+			Label = "boundary",
+			TokenHash = "hash-boundary",
+			CreatedAt = CreatedAt,
+			ExpiresAt = ExpiresAt,
+		});
+
+		clock.ResetReadCount();
+		var beforeExpiry = await sut.TryAuthenticateAsync("hash-boundary");
+
+		beforeExpiry.Should().NotBeNull();
+		clock.ReadCount.Should().Be(1);
+
+		clock.Current = ExpiresAt;
+		clock.ResetReadCount();
+		var atExpiry = await sut.TryAuthenticateAsync("hash-boundary");
+
+		atExpiry.Should().BeNull();
+		clock.ReadCount.Should().Be(1);
+	}
+
 	protected abstract DbConnection CreateConnection(string connectionString);
 
 	protected abstract ISchemaVersionStore CreateStore();
@@ -123,6 +171,8 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
 	protected abstract IPersonalAccessTokenPort CreatePort(string connectionString);
+
+	protected abstract IPersonalAccessTokenPort CreatePort(string connectionString, IClock clock);
 
 	/// <summary>
 	///     Formats an <see cref="Instant" /> for a raw ADO.NET parameter matching the

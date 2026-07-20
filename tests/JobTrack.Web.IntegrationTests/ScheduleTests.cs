@@ -355,7 +355,8 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	private static async Task<(string CookieHeader, string Token)> ExtractFormAsync(HttpResponseMessage response, string previousAntiforgeryCookie)
 	{
 		var body = await response.Content.ReadAsStringAsync();
-		var cookie = FindSetCookie(response, "Antiforgery") is { } newCookie ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
+		var newCookie = FindSetCookie(response, "Antiforgery");
+		var cookie = newCookie is not null ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in response body.");

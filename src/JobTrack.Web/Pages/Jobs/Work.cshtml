@@ -22,7 +22,8 @@
 	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
 		@if (activeSession is not null) {
 			var finishFields = Model.SessionFields(activeSession);
-			<span class="status-pill status-pill-ready">Active since @InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone)</span>
+			<span
+				class="status-pill status-pill-ready">Active since @InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone, Model.Now)</span>
 			<form method="post" asp-page-handler="Finish" class="inline-form">
 				@foreach (var field in finishFields) {
 					<input type="hidden" name="@field.Key" value="@field.Value"/>

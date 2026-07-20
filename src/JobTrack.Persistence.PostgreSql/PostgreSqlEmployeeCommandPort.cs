@@ -26,10 +26,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 {
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlEmployeeCommandPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlEmployeeCommandPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<AccountStateResult> CreateEmployeeAsync(
@@ -38,9 +43,9 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var canonicalZone = ScheduleZoneId.Resolve(request.IanaTimeZone);
 		var appUser = new AppUserEntity {
 			Id = default,
@@ -103,7 +108,8 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var (targetIdentityUserId, currentRoles) =
 			await LoadTargetAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 
@@ -111,7 +117,6 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 			return new() { UserId = request.TargetUserId, Roles = currentRoles };
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		_ = context.Add(new IdentityUserRoleEntity { IdentityUserId = targetIdentityUserId, IdentityRoleId = (short)request.Role });
 
 		AuditEventWriter.Add(
@@ -135,7 +140,8 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeRolesOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var (targetIdentityUserId, currentRoles) =
 			await LoadTargetAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 
@@ -143,7 +149,6 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 			return new() { UserId = request.TargetUserId, Roles = currentRoles };
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
 			$"DELETE FROM identity_user_role WHERE identity_user_id = {targetIdentityUserId} AND identity_role_id = {(short)request.Role};",
 			cancellationToken).ConfigureAwait(false);
@@ -171,7 +176,8 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -181,7 +187,6 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 			return BuildAccountStateResult(request.TargetUserId, target, currentRoles);
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.IsEnabled = request.Enabled;
 		target.SecurityStamp = Guid.NewGuid().ToString("N");
 
@@ -209,7 +214,8 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<AppUserEntity>()
 						 .FirstOrDefaultAsync(u => u.Id == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -217,7 +223,6 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 				.FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 			?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.DefaultHourlyRate = request.DefaultHourlyRate;
 
 		AuditEventWriter.Add(
@@ -247,12 +252,12 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.PasswordHash = request.PasswordHash;
 		target.SecurityStamp = Guid.NewGuid().ToString("N");
 		target.RequiresPasswordChange = true;
@@ -278,12 +283,12 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		target.TwoFactorEnabled = false;
 		target.AuthenticatorKeyProtected = null;
 		target.TwoFactorEnabledAt = null;
@@ -309,7 +314,7 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 	{
 		await using var context = CreateContext();
 
-		_ = await LoadActorAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		_ = await LoadActorAsync(context, request.Context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 		var actorAppUser = await context.Set<AppUserEntity>().AsNoTracking()
 							   .FirstOrDefaultAsync(u => u.Id == request.Context.Actor, cancellationToken).ConfigureAwait(false)
 						   ?? throw new EntityNotFoundException($"Employee {request.Context.Actor} does not exist.");
@@ -402,20 +407,20 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 	}
 
 	private static async Task<IdentityUserEntity> LoadActorAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		return actorIdentityUser;
 	}
 
 	private static async Task AuthorizeRolesOrThrowAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorIdentityUser = await LoadActorAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorIdentityUser = await LoadActorAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var actorRoles = await GetRolesForIdentityUserAsync(context, actorIdentityUser.Id, cancellationToken).ConfigureAwait(false);
 
 		if (!EmployeeAccessPolicy.CanManageRoles(actorRoles)) {
@@ -424,9 +429,9 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 	}
 
 	private static async Task AuthorizeAccountsOrThrowAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorIdentityUser = await LoadActorAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorIdentityUser = await LoadActorAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var actorRoles = await GetRolesForIdentityUserAsync(context, actorIdentityUser.Id, cancellationToken).ConfigureAwait(false);
 
 		if (!EmployeeAccessPolicy.CanManageAccounts(actorRoles)) {

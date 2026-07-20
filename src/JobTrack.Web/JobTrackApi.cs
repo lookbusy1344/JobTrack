@@ -18,7 +18,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using NodaTime;
 using NodaTime.TimeZones;
-using SystemClock = NodaTime.SystemClock;
 
 internal static partial class JobTrackApi
 {
@@ -664,16 +663,41 @@ internal static partial class JobTrackApi
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var resolvedPageSize = ResolvePageSize(pageSize);
-			var result = await jobTrackClient.Query.GetJobChildrenAsync(new() {
+			var ownership = ResolveOwnership(ownerUserId, unassignedOnly);
+
+			// Fresh-eyes review §2.8: cost enrichment happens inside GetJobChildrenAsync, so the page
+			// itself is fetched at exactly pageSize -- never the pageSize + 1 probe row -- and "is there
+			// another page" is answered by a second, unenriched-scale (Limit = 1) call, skipped entirely
+			// when this page didn't even fill up.
+			var page = await jobTrackClient.Query.GetJobChildrenAsync(new() {
 				Context = context,
 				ParentId = new(nodeId),
-				Ownership = ResolveOwnership(ownerUserId, unassignedOnly),
+				Ownership = ownership,
 				ArchiveFilter = archiveFilter,
 				Offset = offset,
-				Limit = resolvedPageSize + 1,
+				Limit = resolvedPageSize,
 			}, cancellationToken);
 
-			return TypedResults.Ok(ToPagedResponse(result, offset, resolvedPageSize, "id ascending", Map));
+			var hasMore = false;
+			if (page.Count == resolvedPageSize) {
+				var probe = await jobTrackClient.Query.GetJobChildrenAsync(new() {
+					Context = context,
+					ParentId = new(nodeId),
+					Ownership = ownership,
+					ArchiveFilter = archiveFilter,
+					Offset = offset + resolvedPageSize,
+					Limit = 1,
+				}, cancellationToken);
+				hasMore = probe.Count > 0;
+			}
+
+			return TypedResults.Ok(new PagedResponse<JobNodeSummaryResponse> {
+				Items = [.. page.Select(Map)],
+				Offset = offset,
+				PageSize = resolvedPageSize,
+				HasMore = hasMore,
+				OrderedBy = "id ascending",
+			});
 		});
 	}
 
@@ -691,16 +715,39 @@ internal static partial class JobTrackApi
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var resolvedPageSize = ResolvePageSize(pageSize);
-			var result = await jobTrackClient.Query.SearchJobNodesAsync(new() {
+			var ownership = ResolveOwnership(ownerUserId, unassignedOnly);
+
+			// Fresh-eyes review §2.8: same shape as GetJobChildrenAsync -- fetch exactly pageSize
+			// enriched rows, only probe for another page (Limit = 1) when this page filled up.
+			var page = await jobTrackClient.Query.SearchJobNodesAsync(new() {
 				Context = context,
 				SearchText = searchText,
-				Ownership = ResolveOwnership(ownerUserId, unassignedOnly),
+				Ownership = ownership,
 				ArchiveFilter = archiveFilter,
 				Offset = offset,
-				Limit = resolvedPageSize + 1,
+				Limit = resolvedPageSize,
 			}, cancellationToken);
 
-			return TypedResults.Ok(ToPagedResponse(result, offset, resolvedPageSize, "id ascending", Map));
+			var hasMore = false;
+			if (page.Count == resolvedPageSize) {
+				var probe = await jobTrackClient.Query.SearchJobNodesAsync(new() {
+					Context = context,
+					SearchText = searchText,
+					Ownership = ownership,
+					ArchiveFilter = archiveFilter,
+					Offset = offset + resolvedPageSize,
+					Limit = 1,
+				}, cancellationToken);
+				hasMore = probe.Count > 0;
+			}
+
+			return TypedResults.Ok(new PagedResponse<JobNodeSummaryResponse> {
+				Items = [.. page.Select(Map)],
+				Offset = offset,
+				PageSize = resolvedPageSize,
+				HasMore = hasMore,
+				OrderedBy = "id ascending",
+			});
 		});
 	}
 
@@ -931,13 +978,14 @@ internal static partial class JobTrackApi
 		HttpContext httpContext,
 		UserManager<JobTrackIdentityUser> userManager,
 		IJobTrackClient jobTrackClient,
+		IClock clock,
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var result = await jobTrackClient.Costs.GetCostDetailsAsync(new() {
 				Context = context,
 				NodeId = new(nodeId),
-				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : SystemClock.Instance.GetCurrentInstant(),
+				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : clock.GetCurrentInstant(),
 				MaxTraceSegments = maxTraceSegments,
 			}, cancellationToken);
 
@@ -952,13 +1000,14 @@ internal static partial class JobTrackApi
 		HttpContext httpContext,
 		UserManager<JobTrackIdentityUser> userManager,
 		IJobTrackClient jobTrackClient,
+		IClock clock,
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var result = await jobTrackClient.Costs.GetHierarchyTotalsAsync(new() {
 				Context = context,
 				NodeId = new(nodeId),
-				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : SystemClock.Instance.GetCurrentInstant(),
+				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : clock.GetCurrentInstant(),
 				MaxHierarchyNodes = maxHierarchyNodes,
 			}, cancellationToken);
 
@@ -974,6 +1023,7 @@ internal static partial class JobTrackApi
 		HttpContext httpContext,
 		UserManager<JobTrackIdentityUser> userManager,
 		IJobTrackClient jobTrackClient,
+		IClock clock,
 		CancellationToken cancellationToken,
 		JobArchiveFilter archiveFilter = JobArchiveFilter.ActiveOnly,
 		bool unassignedOnly = false)
@@ -985,7 +1035,7 @@ internal static partial class JobTrackApi
 				MaxDepth = depth,
 				Ownership = ResolveOwnership(ownerUserId, unassignedOnly),
 				ArchiveFilter = archiveFilter,
-				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : SystemClock.Instance.GetCurrentInstant(),
+				AsOf = asOf.HasValue ? Instant.FromDateTimeOffset(asOf.Value) : clock.GetCurrentInstant(),
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -1029,8 +1079,8 @@ internal static partial class JobTrackApi
 				Schedule = new(
 					zone,
 					new(request.EffectiveStart.Year, request.EffectiveStart.Month, request.EffectiveStart.Day),
-					request.EffectiveEnd is { } end
-						? new LocalDate(end.Year, end.Month, end.Day)
+					request.EffectiveEnd.HasValue
+						? new LocalDate(request.EffectiveEnd.Value.Year, request.EffectiveEnd.Value.Month, request.EffectiveEnd.Value.Day)
 						: null,
 					[.. weeklyIntervals]),
 			}, cancellationToken);
@@ -1066,8 +1116,8 @@ internal static partial class JobTrackApi
 				Schedule = new(
 					zone,
 					new(request.EffectiveStart.Year, request.EffectiveStart.Month, request.EffectiveStart.Day),
-					request.EffectiveEnd is { } end
-						? new LocalDate(end.Year, end.Month, end.Day)
+					request.EffectiveEnd.HasValue
+						? new LocalDate(request.EffectiveEnd.Value.Year, request.EffectiveEnd.Value.Month, request.EffectiveEnd.Value.Day)
 						: null,
 					[.. weeklyIntervals]),
 			}, cancellationToken);
@@ -1149,7 +1199,8 @@ internal static partial class JobTrackApi
 		IJobTrackClient jobTrackClient,
 		CancellationToken cancellationToken)
 	{
-		if (ValidateSubmitRequestBody(request) is { } validationProblem) {
+		var validationProblem = ValidateSubmitRequestBody(request);
+		if (validationProblem is not null) {
 			return validationProblem;
 		}
 
@@ -1197,7 +1248,8 @@ internal static partial class JobTrackApi
 		IJobTrackClient jobTrackClient,
 		CancellationToken cancellationToken)
 	{
-		if (ValidateAddRequestNoteBody(request) is { } validationProblem) {
+		var validationProblem = ValidateAddRequestNoteBody(request);
+		if (validationProblem is not null) {
 			return validationProblem;
 		}
 

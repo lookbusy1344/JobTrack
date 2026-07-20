@@ -3,6 +3,7 @@ namespace JobTrack.Persistence.PostgreSql.Tests;
 using System.Data.Common;
 using Application.Ports;
 using Database;
+using NodaTime;
 using Npgsql;
 using TestSupport;
 
@@ -22,6 +23,6 @@ public sealed class PostgreSqlInstallationBootstrapPortTests()
 	protected override IInstallationBootstrapPort CreatePort(string connectionString)
 	{
 		var dataSource = new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build();
-		return new PostgreSqlInstallationBootstrapPort(dataSource);
+		return new PostgreSqlInstallationBootstrapPort(dataSource, SystemClock.Instance);
 	}
 }

@@ -25,12 +25,16 @@ using NodaTime;
 public sealed class WorkModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	IClock clock) : PageModel
 {
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
 
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
+
+	/// <summary>Captured once per request, per ADR 0016's "one captured instant per operation".</summary>
+	public Instant Now { get; } = clock.GetCurrentInstant();
 
 	[BindProperty(SupportsGet = true)] public long LeafNodeId { get; init; }
 
@@ -92,12 +96,17 @@ public sealed class WorkModel(
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			}
+
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 					JobNodeId = new(LeafNodeId),
 					WorkedByUserId = workedByUserId,
-					StartedAt = BackdateInstant.TryParse(startedAt, zone, out var startedAtInstant) ? startedAtInstant : null,
+					StartedAt = startedAtInstant,
 				}, cancellationToken);
 			SuccessMessage = "Work started.";
 		}
@@ -127,11 +136,16 @@ public sealed class WorkModel(
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			}
+
 			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				SessionId = new(sessionId),
 				Version = version,
-				FinishedAt = BackdateInstant.TryParse(finishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
+				FinishedAt = finishedAtInstant,
 			}, cancellationToken);
 			SuccessMessage = "Session finished.";
 		}
@@ -177,8 +191,8 @@ public sealed class WorkModel(
 				LeafNodeId = LeafNodeId,
 				ViewerZone = ViewerZone,
 				DisplayedWorkedByUserId = workedByUserId?.Value,
-				DisplayedWorkedByName = workedByUserId is { } filtered
-					? EmployeeDirectoryDisplay.Describe(_employeeDirectoryById, filtered.Value, "Unknown")
+				DisplayedWorkedByName = workedByUserId.HasValue
+					? EmployeeDirectoryDisplay.Describe(_employeeDirectoryById, workedByUserId.Value.Value, "Unknown")
 					: null,
 				Sessions = sessions,
 				EmployeeDirectoryById = _employeeDirectoryById,
@@ -199,7 +213,7 @@ public sealed class WorkModel(
 	private List<SelectListItem> BuildWorkerFilterOptions(AppUserId? selectedId)
 	{
 		var options = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory, new SelectListItem("Everyone", string.Empty));
-		if (selectedId is { } id) {
+		if (selectedId is AppUserId id) {
 			foreach (var option in options) {
 				option.Selected = option.Value == id.Value.ToString(CultureInfo.InvariantCulture);
 			}

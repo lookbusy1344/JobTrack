@@ -215,7 +215,7 @@ Four steps run at build time (see the `/appdata` block in the Dockerfile), all t
 3. **Create the `demo` user** (`AdminCli create-employee`) — a normal, non-admin
    `JobManager`+`Worker` employee (`demo` / `demo1234`), also `--no-force-password-change` so the
    published credential stays reusable. Employee id 2.
-4. **Import the five sample trees** (`AdminCli import-tree`, once per file in
+4. **Import the seven sample trees** (`AdminCli import-tree`, once per file in
    `samples/job-tree-imports/`) as `demo`, so the demo user — not the admin — owns them. Each lands a
    subtree under the root (`--parent-id` defaults to the root, id 1). The admin owns only the root
    node; `demo` owns everything below it.
@@ -292,8 +292,12 @@ build with a freshly generated `ADMIN_PASSWORD` (demo stays `demo1234`), push to
 deploy — and prints **both** logins at the end, since nothing else records the random admin one:
 
 ```bash
-./scripts/deploy-cloudrun.sh <gcp-project-id> [region]   # region defaults to europe-west2
+./scripts/deploy-cloudrun.sh <gcp-project-id> [region]   # region defaults to europe-west1
 ```
+
+`europe-west1` (Belgium) is a Tier 1 GCP pricing region, so the Always Free allowance and
+per-unit cost both go further than in `europe-west2` (London), which is Tier 2 — pick that
+default over a same-continent alternative that costs more for no functional benefit.
 
 It assumes an existing Artifact Registry Docker repo named `cloud-run-source-deploy` in that
 project/region (already present in this project from other services). `--platform linux/amd64` in
@@ -343,7 +347,7 @@ not wire up.
 as it exists:
 
 ```bash
-gcloud run services delete jobtrack-web --project=<project-id> --region=europe-west2 --quiet
+gcloud run services delete jobtrack-web --project=<project-id> --region=<region used to deploy> --quiet
 ```
 
 ## What makes this demo-only

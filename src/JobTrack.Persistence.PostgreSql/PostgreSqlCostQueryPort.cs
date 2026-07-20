@@ -9,6 +9,7 @@ using Domain.Intervals;
 using Domain.Rates;
 using Domain.Schedules;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
 using Shared;
@@ -29,10 +30,22 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 {
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
+	private readonly IReadOnlyList<IInterceptor> interceptors = [];
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlCostQueryPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlCostQueryPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
+
+	/// <summary>Test-only seam for asserting bulk-query command and connection bounds.</summary>
+	internal PostgreSqlCostQueryPort(
+		NpgsqlDataSource dataSource, IClock clock, IReadOnlyList<IInterceptor> interceptors)
+		: this(dataSource, clock) =>
+		this.interceptors = interceptors;
 
 	/// <inheritdoc />
 	public async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
@@ -51,12 +64,12 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
-		var nodesById = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
+		var (nodesById, _) = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
 		if (!nodesById.ContainsKey(nodeId)) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 		}
 
-		var subtreeNodeCount = CostQueryAssembly.CountSubtreeNodes(nodeId, nodesById);
+		var subtreeNodeCount = CostQueryAssembly.CountSubtreeNodes([nodeId], nodesById);
 		if (subtreeNodeCount > maxHierarchyNodes) {
 			throw new ArgumentOutOfRangeException(
 				nameof(maxHierarchyNodes),
@@ -65,7 +78,7 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 		}
 
 		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAsync(
-			context, nodeId, nodesById, asOf, cancellationToken).ConfigureAwait(false);
+			context, [nodeId], nodesById, asOf, cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 		return new() {
@@ -85,22 +98,57 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 		return EquatableArray.CopyOf(ownerIds.Select(id => new AppUserId(id)));
 	}
 
-	private PostgreSqlJobTrackDbContext CreateContext()
+	/// <inheritdoc />
+	public async Task<BulkCostQueryResult> GetBulkCostInputsAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> nodeIds, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default)
 	{
-		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, o => o.UseNodaTime())
-			.Options;
+		await using var context = CreateContext();
+		await using var transaction = await PostgreSqlCostQuerySnapshot.BeginAsync(context, cancellationToken).ConfigureAwait(false);
 
-		return new(options);
+		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+
+		var (nodesById, ownersById) = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
+		var existingNodeIds = nodeIds.Where(nodesById.ContainsKey).ToArray();
+
+		var unionNodeCount = CostQueryAssembly.CountSubtreeNodes(existingNodeIds, nodesById);
+		if (unionNodeCount > maxHierarchyNodes) {
+			throw new ArgumentOutOfRangeException(
+				nameof(maxHierarchyNodes),
+				unionNodeCount,
+				$"These nodes' combined subtrees have {unionNodeCount} nodes, exceeding the {maxHierarchyNodes}-node maximum.");
+		}
+
+		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAsync(
+			context, existingNodeIds, nodesById, asOf, cancellationToken).ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+		return new() {
+			ActorRoles = actorRoles,
+			NodesById = EquatableDictionaryFactory.CopyOf(nodesById),
+			OwnerUserIdsById = EquatableDictionaryFactory.CopyOf(ownersById),
+			Bounds = bounds,
+			Workers = EquatableArray.CopyOf(workers),
+		};
 	}
 
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
+	private PostgreSqlJobTrackDbContext CreateContext()
+	{
+		var optionsBuilder = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
+			.UseNpgsql(dataSource, o => o.UseNodaTime());
+		if (interceptors.Count > 0) {
+			optionsBuilder = optionsBuilder.AddInterceptors(interceptors);
+		}
+
+		return new(optionsBuilder.Options);
+	}
+
+	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
@@ -124,10 +172,11 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 /// </summary>
 internal static class CostQueryAssembly
 {
-	public static async Task<Dictionary<JobNodeId, HierarchyNode>> LoadNodesByIdAsync(DbContext context, CancellationToken cancellationToken)
+	public static async Task<(Dictionary<JobNodeId, HierarchyNode> NodesById, Dictionary<JobNodeId, AppUserId?> OwnersById)> LoadNodesByIdAsync(
+		DbContext context, CancellationToken cancellationToken)
 	{
 		var nodes = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Select(n => new { n.Id, n.ParentId })
+			.Select(n => new { n.Id, n.ParentId, n.OwnerUserId })
 			.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var achievements = await context.Set<LeafWorkEntity>().AsNoTracking()
@@ -138,20 +187,23 @@ internal static class CostQueryAssembly
 			.GroupBy(n => n.ParentId!.Value)
 			.ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(n => n.Id)));
 
-		return nodes.ToDictionary(
+		var nodesById = nodes.ToDictionary(
 			n => n.Id,
 			n => new HierarchyNode(
 				n.Id,
 				n.ParentId,
 				childrenByParent.TryGetValue(n.Id, out var children) ? children : [],
 				achievements.TryGetValue(n.Id, out var achievement) ? achievement : null));
+		var ownersById = nodes.ToDictionary(n => n.Id, n => n.OwnerUserId);
+
+		return (nodesById, ownersById);
 	}
 
 	public static async Task<(WorkInterval Bounds, List<WorkerCostInputs> Workers)> LoadWorkersAsync(
-		DbContext context, JobNodeId nodeId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		DbContext context, IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
 		Instant asOf, CancellationToken cancellationToken)
 	{
-		var requestedNodeIds = GetSubtreeIds(nodeId, nodesById);
+		var requestedNodeIds = GetSubtreeIds(rootIds, nodesById);
 		var requestedSessionStarts = await context.Set<WorkSessionEntity>().AsNoTracking()
 			.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
 			.Select(s => s.StartedAt)
@@ -186,12 +238,13 @@ internal static class CostQueryAssembly
 		var appUsersById = await context.Set<AppUserEntity>().AsNoTracking()
 			.Where(u => workerIds.Contains(u.Id))
 			.ToDictionaryAsync(u => u.Id, cancellationToken).ConfigureAwait(false);
+		var sessionsByWorkerId = await LoadWorkerSessionsAsync(context, workerIds, bounds, asOf, cancellationToken).ConfigureAwait(false);
 
 		var intervalsByVersion = scheduleIntervals.GroupBy(i => i.ScheduleVersionId).ToDictionary(group => group.Key, group => group.ToList());
 
 		var workers = new List<WorkerCostInputs>();
 		foreach (var workerId in workerIds) {
-			var workerSessions = await LoadWorkerSessionsAsync(context, workerId, bounds, asOf, cancellationToken).ConfigureAwait(false);
+			var workerSessions = sessionsByWorkerId.GetValueOrDefault(workerId, []);
 
 			var expandedScheduleIntervals = new List<WorkInterval>();
 			foreach (var version in scheduleVersions.Where(v => v.UserId == workerId)) {
@@ -237,16 +290,20 @@ internal static class CostQueryAssembly
 		return (bounds, workers);
 	}
 
-	public static int CountSubtreeNodes(JobNodeId nodeId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById) =>
-		GetSubtreeIds(nodeId, nodesById).Count;
+	public static int CountSubtreeNodes(IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById) =>
+		GetSubtreeIds(rootIds, nodesById).Count;
 
 	private static List<JobNodeId> GetSubtreeIds(
-		JobNodeId nodeId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
+		IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
 	{
 		var result = new List<JobNodeId>();
-		var pending = new Stack<JobNodeId>();
-		pending.Push(nodeId);
+		var seen = new HashSet<JobNodeId>();
+		var pending = new Stack<JobNodeId>(rootIds);
 		while (pending.TryPop(out var current)) {
+			if (!seen.Add(current)) {
+				continue;
+			}
+
 			result.Add(current);
 			foreach (var childId in nodesById[current].ChildIds) {
 				pending.Push(childId);
@@ -260,9 +317,10 @@ internal static class CostQueryAssembly
 		finishedAt.HasValue && finishedAt.Value < asOf ? finishedAt.Value : asOf;
 
 	/// <summary>
-	///     Loads one worker's database-wide overlapping sessions (ADR 0017's elevated read scope)
-	///     through the <c>worker_overlapping_sessions</c> stored function (schema version 0018) rather
-	///     than duplicating its predicate in LINQ -- ADR 0010 names both "database-wide overlap
+	///     Loads every contributing worker's database-wide overlapping sessions (ADR 0017's elevated read
+	///     scope) through one set-based invocation of the <c>worker_overlapping_sessions</c> stored
+	///     function (schema version 0018), rather than one command per worker or a duplicated LINQ
+	///     predicate. ADR 0010 names both "database-wide overlap
 	///     discovery" and "the canonical cost-input queries" as the sanctioned reason this function
 	///     exists, and only a query expressed against the generated <c>session_range</c> column lets the
 	///     planner use <c>work_session_user_range_gist_idx</c> instead of filtering the worker's entire
@@ -270,21 +328,26 @@ internal static class CostQueryAssembly
 	///     to <paramref name="asOf" /> by the function itself (its own <c>effective_finished_at</c> column
 	///     is not selected here) -- <see cref="ClipEnd" /> does that, exactly as before this change.
 	/// </summary>
-	private static async Task<CostableSession[]> LoadWorkerSessionsAsync(
-		DbContext context, AppUserId workerId, WorkInterval bounds, Instant asOf, CancellationToken cancellationToken)
+	private static async Task<Dictionary<AppUserId, CostableSession[]>> LoadWorkerSessionsAsync(
+		DbContext context, IReadOnlyCollection<AppUserId> workerIds, WorkInterval bounds, Instant asOf, CancellationToken cancellationToken)
 	{
+		var workerIdValues = workerIds.Select(workerId => workerId.Value).ToArray();
 		var rows = await context.Database.SqlQuery<OverlappingSessionRow>(
 			$"""
-			 SELECT session_id AS "SessionId", leaf_work_id AS "LeafWorkId", started_at AS "StartedAt", finished_at AS "FinishedAt"
-			 FROM worker_overlapping_sessions({workerId.Value}, {bounds.Start}, {bounds.End}, {asOf})
+			 SELECT worker_ids.worker_id AS "WorkerId", sessions.session_id AS "SessionId", sessions.leaf_work_id AS "LeafWorkId",
+			        sessions.started_at AS "StartedAt", sessions.finished_at AS "FinishedAt"
+			 FROM unnest({workerIdValues}) AS worker_ids(worker_id)
+			 CROSS JOIN LATERAL worker_overlapping_sessions(worker_ids.worker_id, {bounds.Start}, {bounds.End}, {asOf}) AS sessions
 			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return rows
-			.Select(row => new CostableSession(
-				new(row.SessionId), new(row.LeafWorkId), new(row.StartedAt, ClipEnd(row.FinishedAt, asOf))))
-			.ToArray();
+			.GroupBy(row => new AppUserId(row.WorkerId))
+			.ToDictionary(
+				group => group.Key,
+				group => group.Select(row => new CostableSession(
+					new(row.SessionId), new(row.LeafWorkId), new(row.StartedAt, ClipEnd(row.FinishedAt, asOf)))).ToArray());
 	}
 }
 
-/// <summary>One row of <see cref="CostQueryAssembly.LoadWorkerSessionsAsync" />, mapping <c>worker_overlapping_sessions</c>'s output columns.</summary>
-internal sealed record OverlappingSessionRow(long SessionId, long LeafWorkId, Instant StartedAt, Instant? FinishedAt);
+/// <summary>One row of <see cref="CostQueryAssembly.LoadWorkerSessionsAsync" />, mapping the set-based <c>worker_overlapping_sessions</c> invocation.</summary>
+internal sealed record OverlappingSessionRow(long WorkerId, long SessionId, long LeafWorkId, Instant StartedAt, Instant? FinishedAt);

@@ -20,6 +20,10 @@
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
     </ItemGroup>
 
+    <ItemGroup Label="ADR 0016 - IClock as the sole source of &quot;now&quot;">
+        <PackageReference Include="NodaTime"/>
+    </ItemGroup>
+
     <ItemGroup Label="ADR 0037 - TOTP two-factor authentication">
         <PackageReference Include="Microsoft.AspNetCore.DataProtection"/>
     </ItemGroup>

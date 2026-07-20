@@ -22,10 +22,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 {
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlRateCommandPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlRateCommandPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<UserCostRateResult> AddUserCostRateAsync(
@@ -34,10 +39,10 @@ internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		await EnsureEmployeeExistsAsync(context, request.UserId, cancellationToken).ConfigureAwait(false);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var entity = new UserCostRateEntity {
 			Id = default,
 			UserId = request.UserId,
@@ -85,11 +90,11 @@ internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		await EnsureEmployeeExistsAsync(context, request.UserId, cancellationToken).ConfigureAwait(false);
 		await EnsureNodeExistsAsync(context, request.Override.NodeId, cancellationToken).ConfigureAwait(false);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var entity = new NodeRateOverrideEntity {
 			Id = default,
 			NodeId = request.Override.NodeId,
@@ -139,12 +144,12 @@ internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		var entity = await LoadTrackedUserCostRateAsync(context, request.RateId, cancellationToken).ConfigureAwait(false);
 		EnsureUserMatchesOrThrow(entity.UserId, request.UserId, request.RateId.Value);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(entity.RowVersion, request.Version);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var before = new Dictionary<string, string?> {
 			["effective_start"] = entity.EffectiveStart.ToString(),
 			["effective_end"] = entity.EffectiveEnd?.ToString(),
@@ -195,13 +200,13 @@ internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		var entity = await LoadTrackedNodeRateOverrideAsync(context, request.OverrideId, cancellationToken).ConfigureAwait(false);
 		EnsureUserMatchesOrThrow(entity.UserId, request.UserId, request.OverrideId.Value);
 		await EnsureNodeExistsAsync(context, request.Override.NodeId, cancellationToken).ConfigureAwait(false);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(entity.RowVersion, request.Version);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var before = new Dictionary<string, string?> {
 			["node_id"] = entity.NodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["effective_start"] = entity.EffectiveStart.ToString(),
@@ -296,9 +301,9 @@ internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 	}
 
 	private static async Task AuthorizeOrThrowAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 
 		if (!RateAccessPolicy.CanManage(actorRoles)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage rate data.");
@@ -306,12 +311,12 @@ internal sealed class PostgreSqlRateCommandPort : IRateCommandPort
 	}
 
 	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)

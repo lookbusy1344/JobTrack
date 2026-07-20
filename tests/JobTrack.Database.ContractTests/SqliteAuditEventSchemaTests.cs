@@ -27,7 +27,7 @@ public sealed class SqliteAuditEventSchemaTests()
 
 	protected override async Task<long> InsertAuditEventAsync(
 		DbConnection connection,
-		long actorUserId,
+		long? actorUserId,
 		string operation,
 		string entityType,
 		long entityId,
@@ -44,7 +44,7 @@ public sealed class SqliteAuditEventSchemaTests()
 							  	(@actorUserId, @occurredAt, @operation, @entityType, @entityId, @correlationId, @reason, @beforeData, @afterData)
 							  RETURNING id;
 							  """;
-		AddParameter(command, "@actorUserId", actorUserId);
+		AddParameter(command, "@actorUserId", (object?)actorUserId ?? DBNull.Value);
 		AddParameter(command, "@occurredAt", EncodeInstant(DateTimeOffset.UtcNow));
 		AddParameter(command, "@operation", operation);
 		AddParameter(command, "@entityType", entityType);

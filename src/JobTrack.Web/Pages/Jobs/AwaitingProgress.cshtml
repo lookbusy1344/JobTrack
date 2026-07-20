@@ -76,7 +76,7 @@
 					<td class="jt-col-secondary">@Model.DescribeOwner(entry.OwnerUserId)</td>
 					<td class="jt-col-active">
 						<partial name="_ActiveSincePill"
-						         model="@(new ActiveSincePillModel { ActiveSession = entryActions.ActiveSession, ActiveSessionWorkedByOther = entryActions.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone })"/>
+						         model="@(new ActiveSincePillModel { ActiveSession = entryActions.ActiveSession, ActiveSessionWorkedByOther = entryActions.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone, Now = Model.Now })"/>
 					</td>
 					<td class="jt-col-cost">@(entry.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
 					<td class="jt-col-cost">
@@ -96,4 +96,15 @@
 			</tbody>
 		</table>
 	</div>
+
+	@if (Model.HasMore) {
+		<a class="btn btn-outline-secondary"
+		   asp-page="/Jobs/AwaitingProgress"
+		   asp-route-OwnerUserId="@Model.OwnerUserId"
+		   asp-route-UnassignedOnly="@Model.UnassignedOnly"
+		   asp-route-SubtreeRootId="@Model.SubtreeRootId"
+		   asp-route-Offset="@(Model.Offset + AwaitingProgressModel.PageSize)">
+			Next page
+		</a>
+	}
 }

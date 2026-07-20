@@ -237,7 +237,8 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
 
-		var refreshedAuthCookie = FindSetCookie(response, "Identity.Application") is { } reissued ? ExtractCookiePair(reissued) : authCookie;
+		var reissued = FindSetCookie(response, "Identity.Application");
+		var refreshedAuthCookie = reissued is not null ? ExtractCookiePair(reissued) : authCookie;
 		var antiforgeryCookie = ExtractCookiePair(
 			FindSetCookie(response, "Antiforgery") ?? throw new InvalidOperationException("No antiforgery cookie in the enrolment page response."));
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } tokenMatch

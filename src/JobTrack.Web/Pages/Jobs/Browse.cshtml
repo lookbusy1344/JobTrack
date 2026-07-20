@@ -133,7 +133,11 @@
 			};
 			@if (toolbarActions.ActiveSession is { } currentNodeActiveSession) {
 				<partial name="_ActiveSincePill" model="@(new ActiveSincePillModel {
-					                                        ActiveSession = currentNodeActiveSession, ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(currentNodeActiveSession), ViewerZone = Model.ViewerZone, Compact = false,
+					                                        ActiveSession = currentNodeActiveSession,
+					                                        ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(currentNodeActiveSession),
+					                                        ViewerZone = Model.ViewerZone,
+					                                        Now = Model.Now,
+					                                        Compact = false,
 				                                        })"/>
 				<form method="post" asp-page-handler="Finish" class="inline-form">
 					@foreach (var field in toolbarActions.FinishFields) {
@@ -374,7 +378,7 @@
 						</td>
 						<td class="jt-col-active">
 							<partial name="_ActiveSincePill"
-							         model="@(new ActiveSincePillModel { ActiveSession = childActions?.ActiveSession, ActiveSessionWorkedByOther = childActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone })"/>
+							         model="@(new ActiveSincePillModel { ActiveSession = childActions?.ActiveSession, ActiveSessionWorkedByOther = childActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone, Now = Model.Now })"/>
 						</td>
 						<td class="jt-col-cost">
 							@if (child.Cost is { } cost) {
@@ -506,7 +510,7 @@
 						</td>
 						<td class="jt-col-active">
 							<partial name="_ActiveSincePill"
-							         model="@(new ActiveSincePillModel { ActiveSession = nodeActions?.ActiveSession, ActiveSessionWorkedByOther = nodeActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone })"/>
+							         model="@(new ActiveSincePillModel { ActiveSession = nodeActions?.ActiveSession, ActiveSessionWorkedByOther = nodeActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone, Now = Model.Now })"/>
 						</td>
 						<td class="jt-col-cost">
 							@if (node.Cost is { } cost) {

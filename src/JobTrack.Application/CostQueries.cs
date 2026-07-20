@@ -29,6 +29,11 @@ public sealed class CostQueries : ICostQueries
 	private const int MaxCostTraceSegments = 50_000;
 	private const int MaxHierarchyNodeCount = 50_000;
 
+	// A bulk request's candidate count is caller-controlled (one listing page's rows), so this is a
+	// defensive backstop against a misbehaving caller, not a realistic page width -- the largest
+	// paginated listing page this library serves is far smaller (fresh-eyes review §2.8).
+	private const int MaxBulkNodeIdCount = 500;
+
 	private readonly ICostQueryPort _port;
 
 	/// <summary>Creates a <see cref="CostQueries" /> over the given port.</summary>
@@ -57,6 +62,18 @@ public sealed class CostQueries : ICostQueries
 		var maxHierarchyNodes = ResolveBound(request.MaxHierarchyNodes, MaxHierarchyNodeCount, nameof(request.MaxHierarchyNodes));
 
 		return GetHierarchyTotalsCoreAsync(request, maxHierarchyNodes, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<BulkNodeCostResult> GetBulkNodeCostsAsync(GetBulkNodeCostsRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		if (request.NodeIds.Count > MaxBulkNodeIdCount) {
+			throw new ArgumentOutOfRangeException(
+				nameof(request), request.NodeIds.Count, $"A bulk cost request cannot price more than {MaxBulkNodeIdCount} node ids at once.");
+		}
+
+		return GetBulkNodeCostsCoreAsync(request, cancellationToken);
 	}
 
 	private async Task<(CostQueryResult Inputs, Dictionary<JobNodeId, Money> ExactCosts, List<CostSegmentTrace> Trace)> CalculateAsync(
@@ -191,4 +208,64 @@ public sealed class CostQueries : ICostQueries
 					TzdbVersion = DateTimeZoneProviders.Tzdb.VersionId,
 				};
 			});
+
+	private Task<BulkNodeCostResult> GetBulkNodeCostsCoreAsync(GetBulkNodeCostsRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"costs.get-bulk-node-costs", request.Context, null,
+			async () => {
+				if (request.NodeIds.Count == 0) {
+					return new() { DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()) };
+				}
+
+				var inputs = await _port.GetBulkCostInputsAsync(
+						request.Context.Actor, request.NodeIds, request.AsOf, MaxHierarchyNodeCount, cancellationToken)
+					.ConfigureAwait(false);
+
+				// ADR 0040: a candidate is only costable if the actor is admin/cost-viewer or owns the
+				// node or one of its ancestors -- walked from the one already-materialized snapshot, so
+				// this adds no further round trips no matter how many candidates the page holds.
+				var authorizedNodeIds = request.NodeIds
+					.Where(nodeId => inputs.NodesById.ContainsKey(nodeId)
+									 && CostAccessPolicy.CanView(
+										 inputs.ActorRoles,
+										 OwnsNodeOrAncestor(nodeId, request.Context.Actor, inputs.NodesById, inputs.OwnerUserIdsById)))
+					.ToArray();
+
+				var exactCosts = new Dictionary<JobNodeId, Money>();
+				foreach (var worker in inputs.Workers) {
+					var allocations = CostSegmentPartitioner.Partition(
+						worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
+						worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds);
+					var leafCosts = CostEngine.ComputeLeafCosts(
+						allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, worker.UserDefaultRate);
+
+					foreach (var nodeId in authorizedNodeIds) {
+						var contribution = HierarchicalCostAggregator.Aggregate(nodeId, inputs.NodesById, leafCosts)
+							.GetValueOrDefault(nodeId, new(0m));
+						exactCosts[nodeId] = new(exactCosts.GetValueOrDefault(nodeId, new(0m)).Amount + contribution.Amount);
+					}
+				}
+
+				var displayedCosts = authorizedNodeIds.ToDictionary(
+					nodeId => nodeId, nodeId => exactCosts.GetValueOrDefault(nodeId, new(0m)).RoundToPennies());
+
+				return new BulkNodeCostResult { DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayedCosts) };
+			});
+
+	/// <summary>Whether <paramref name="actorId" /> owns <paramref name="nodeId" /> or any of its ancestors, walked entirely in memory (ADR 0040).</summary>
+	private static bool OwnsNodeOrAncestor(
+		JobNodeId nodeId, AppUserId actorId,
+		EquatableDictionary<JobNodeId, HierarchyNode> nodesById, EquatableDictionary<JobNodeId, AppUserId?> ownersById)
+	{
+		JobNodeId? current = nodeId;
+		while (current is JobNodeId currentId) {
+			if (ownersById.GetValueOrDefault(currentId) == actorId) {
+				return true;
+			}
+
+			current = nodesById[currentId].ParentId;
+		}
+
+		return false;
+	}
 }

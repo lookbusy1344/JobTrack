@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NodaTime;
 
 /// <summary>
 ///     Provider registration for <c>JobTrack.Identity</c> (ADR 0022, plan §8.2) — composed by
@@ -54,6 +56,12 @@ public static class ServiceCollectionExtensions
 
 	private static IdentityBuilder AddJobTrackIdentityCore(this IServiceCollection services)
 	{
+		// ADR 0016: JobTrackUserStore's sole source of "now". TryAddSingleton, not AddSingleton --
+		// a host (JobTrack.Web/JobTrack.AdminCli) that already registered its own IClock keeps that
+		// registration; this only supplies the default for callers (tests, ad hoc tooling) that
+		// haven't registered one themselves.
+		services.TryAddSingleton<IClock>(SystemClock.Instance);
+
 		// Also resolvable as its concrete type (not only as IUserStore<JobTrackIdentityUser>) so the
 		// bearer authentication scheme (ADR 0029) can reach FindByAppUserIdAsync, which the
 		// IUserStore<T>/UserManager<T> surface has no equivalent lookup for.

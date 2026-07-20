@@ -16,7 +16,11 @@ internal sealed class AuditEventEntity
 
 	public Instant OccurredAt { get; set; }
 
-	public required AppUserId ActorUserId { get; set; }
+	/// <summary>
+	///     Null for an unknown-subject authentication failure -- no <c>app_user</c> matched the attempted
+	///     username, so there is no real actor to attribute the event to (fresh-eyes review §2.6).
+	/// </summary>
+	public AppUserId? ActorUserId { get; set; }
 
 	public required string Operation { get; set; }
 

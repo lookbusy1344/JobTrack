@@ -1,6 +1,7 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
+using System.Diagnostics;
 using System.Globalization;
 using Abstractions;
 using Application;
@@ -8,6 +9,7 @@ using Application.Ports;
 using AwesomeAssertions;
 using Database;
 using Domain.Schedules;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 
 /// <summary>
@@ -28,6 +30,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
+	private const int BulkCostMaximumCommandCount = 16;
 
 	private readonly IDisposableTestDatabase database;
 
@@ -141,6 +144,138 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task GetBulkNodeCostsAsync_prices_every_candidate_from_one_snapshot_matching_individual_hierarchy_totals()
+	{
+		var (_, branchId, leafId, otherLeafId, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+		await CreateCorrectedSessionAsync(administratorId, workerId, otherLeafId, At(10), At(12));
+		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
+
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeIds = [branchId, leafId, otherLeafId],
+			AsOf = At(24),
+		});
+		var individualBranch = await sut.GetHierarchyTotalsAsync(
+			new() { Context = ContextFor(administratorId), NodeId = branchId, AsOf = At(24) });
+		var individualOtherLeaf = await sut.GetHierarchyTotalsAsync(
+			new() { Context = ContextFor(administratorId), NodeId = otherLeafId, AsOf = At(24) });
+
+		// Same overlap as Hierarchy_totals_reflect_a_workers_foreign_concurrent_session_without_exposing_it:
+		// branch/leaf see 90 (the shared [10:00,11:00) segment costed once each side), otherLeaf sees its
+		// own contribution only.
+		bulk.DisplayedCosts[branchId].Should().Be(individualBranch.DisplayedCosts[branchId]);
+		bulk.DisplayedCosts[leafId].Should().Be(new Money(90m));
+		bulk.DisplayedCosts[otherLeafId].Should().Be(individualOtherLeaf.DisplayedCosts[otherLeafId]);
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_omits_a_candidate_the_actor_may_not_view_without_failing_the_rest()
+	{
+		var (_, branchId, leafId, otherLeafId, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
+
+		// leafId is owned by workerId (ADR 0040 admits it); branchId is owned by the administrator, so a
+		// plain worker with no cost-viewing role may not see it and otherLeafId does not even exist yet.
+		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(workerId), NodeIds = [branchId, leafId], AsOf = At(24) });
+
+		bulk.DisplayedCosts.Should().NotContainKey(branchId);
+		bulk.DisplayedCosts[leafId].Should().Be(new Money(120m));
+	}
+
+	/// <summary>
+	///     Fresh-eyes review §2.8's own scale check: at the HTTP API's maximum page width
+	///     (<c>JobTrackApi.MaxPageSize</c>), bulk pricing must still complete from one connection/snapshot
+	///     rather than degrading toward the old one-round-trip-per-row shape. Not a strict latency budget
+	///     (§6.5 of performance-budgets.md reserves those for <c>JobTrack.Database.PerformanceTests</c>
+	///     against the dedicated scale generator) -- a generous wall-clock ceiling here just catches a
+	///     regression back to per-row materialization, which would multiply this by 200.
+	/// </summary>
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_prices_a_maximum_width_page_of_candidates_promptly()
+	{
+		const int candidateCount = 200;
+		var (_, branchId, _, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var leafIds = new List<JobNodeId>();
+		for (var index = 0; index < candidateCount; index++) {
+			var leaf = await jobNodePort.AddChildAsync(new() {
+				Context = ContextFor(administratorId),
+				ParentId = branchId,
+				Description = $"Scale leaf {index}",
+				OwnerUserId = workerId,
+				Priority = Priority.Medium,
+			});
+			_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+			await CreateCorrectedSessionAsync(administratorId, workerId, leaf.Id, At(9), At(10));
+			leafIds.Add(leaf.Id);
+		}
+
+		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
+
+		var stopwatch = Stopwatch.StartNew();
+		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(administratorId), NodeIds = [.. leafIds], AsOf = At(24) });
+		stopwatch.Stop();
+
+		// All 200 sessions are the same worker's, at the identical [09:00,10:00) window, so ADR 0017's
+		// concurrency divisor splits that hour's 60-currency cost evenly across all of them: 60 / 200.
+		bulk.DisplayedCosts.Should().HaveCount(candidateCount);
+		bulk.DisplayedCosts.Should().OnlyContain(entry => entry.Value == new Money(0.30m));
+		stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "bulk pricing must not degrade into one round trip per candidate");
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_keeps_commands_and_connections_constant_at_maximum_width()
+	{
+		const int candidateCount = 200;
+		var (_, branchId, _, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var leafIds = new List<JobNodeId>();
+		for (var index = 0; index < candidateCount; index++) {
+			var leaf = await jobNodePort.AddChildAsync(new() {
+				Context = ContextFor(administratorId),
+				ParentId = branchId,
+				Description = $"Command-count leaf {index}",
+				OwnerUserId = workerId,
+				Priority = Priority.Medium,
+			});
+			_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+			await CreateCorrectedSessionAsync(administratorId, workerId, leaf.Id, At(9), At(10));
+			leafIds.Add(leaf.Id);
+		}
+
+		var narrowCommands = new CommandCountInterceptor();
+		var narrowConnections = new ConnectionConcurrencyInterceptor();
+		var narrowSut = new CostQueries(CreateCostQueryPortWithInterceptors(
+			database.ConnectionString, [narrowCommands, narrowConnections]));
+		_ = await narrowSut.GetBulkNodeCostsAsync(
+			new() { Context = ContextFor(administratorId), NodeIds = [leafIds[0]], AsOf = At(24) });
+
+		var wideCommands = new CommandCountInterceptor();
+		var wideConnections = new ConnectionConcurrencyInterceptor();
+		var wideSut = new CostQueries(CreateCostQueryPortWithInterceptors(
+			database.ConnectionString, [wideCommands, wideConnections]));
+		_ = await wideSut.GetBulkNodeCostsAsync(
+			new() { Context = ContextFor(administratorId), NodeIds = [.. leafIds], AsOf = At(24) });
+
+		wideCommands.Count.Should().Be(narrowCommands.Count);
+		wideCommands.Count.Should().BeLessThanOrEqualTo(BulkCostMaximumCommandCount);
+		narrowConnections.MaximumConcurrentConnections.Should().Be(1);
+		wideConnections.MaximumConcurrentConnections.Should().Be(1);
+	}
+
+	[Fact]
 	public async Task Calculating_cost_details_for_a_nonexistent_node_throws_not_found()
 	{
 		var (_, _, _, _, administratorId, _) = await SeedTreeAsync();
@@ -208,6 +343,9 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 	protected abstract IWorkSessionCommandPort CreateSessionPort(string connectionString);
 
 	protected abstract ICostQueryPort CreateCostQueryPort(string connectionString);
+
+	protected abstract ICostQueryPort CreateCostQueryPortWithInterceptors(
+		string connectionString, IReadOnlyList<IInterceptor> interceptors);
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 

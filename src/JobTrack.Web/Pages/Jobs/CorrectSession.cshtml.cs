@@ -43,10 +43,11 @@ public sealed class CorrectSessionModel(
 		}
 
 		await LoadSessionAsync(actor.Value, cancellationToken);
-		if (Session is { } session) {
+		var result = Session;
+		if (result is not null) {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
-			Input.StartedAt = BackdateInstant.ToDateTimeLocalValue(session.StartedAt, zone);
-			Input.FinishedAt = session.FinishedAt.HasValue ? BackdateInstant.ToDateTimeLocalValue(session.FinishedAt.Value, zone) : null;
+			Input.StartedAt = BackdateInstant.ToDateTimeLocalValue(result.StartedAt, zone);
+			Input.FinishedAt = result.FinishedAt.HasValue ? BackdateInstant.ToDateTimeLocalValue(result.FinishedAt.Value, zone) : null;
 		}
 
 		return Page();
@@ -70,11 +71,16 @@ public sealed class CorrectSessionModel(
 			return Page();
 		}
 
+		if (!BackdateInstant.TryParseOptional(Input.FinishedAt, zone, out var finishedAtInstant)) {
+			ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.FinishedAt)}", "Enter a valid date and time.");
+			return Page();
+		}
+
 		var request = new CorrectSessionRequest {
 			Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 			SessionId = new(SessionId),
 			StartedAt = startedAtInstant,
-			FinishedAt = BackdateInstant.TryParse(Input.FinishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
+			FinishedAt = finishedAtInstant,
 			Reason = Input.Reason,
 			Version = Session.Version,
 		};

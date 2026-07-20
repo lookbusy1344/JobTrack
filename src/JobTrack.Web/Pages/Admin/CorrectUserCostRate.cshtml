@@ -18,12 +18,12 @@
 			<input type="hidden" asp-for="RateId"/>
 			<div class="form-group">
 				<label asp-for="Input.EffectiveStart"></label>
-				<input asp-for="Input.EffectiveStart" class="form-control"/>
+				<input asp-for="Input.EffectiveStart" type="datetime-local" step="60" class="form-control"/>
 				<span asp-validation-for="Input.EffectiveStart" class="text-danger"></span>
 			</div>
 			<div class="form-group">
 				<label asp-for="Input.EffectiveEnd">Effective end (leave blank if still current)</label>
-				<input asp-for="Input.EffectiveEnd" class="form-control"/>
+				<input asp-for="Input.EffectiveEnd" type="datetime-local" step="60" class="form-control"/>
 			</div>
 			<div class="form-group">
 				<label asp-for="Input.AmountPerHour"></label>

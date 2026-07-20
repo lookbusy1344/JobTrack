@@ -49,11 +49,11 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 
 		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(auditorId), Filter = new() { EntityType = "user_cost_rate" } });
 
-		results.Should().ContainSingle();
-		results[0].EntityType.Should().Be("user_cost_rate");
-		results[0].Operation.Should().Be("add-user-cost-rate");
-		results[0].IsRedacted.Should().BeTrue();
-		results[0].AfterData.Should().BeNull();
+		results.Events.Should().ContainSingle();
+		results.Events[0].EntityType.Should().Be("user_cost_rate");
+		results.Events[0].Operation.Should().Be("add-user-cost-rate");
+		results.Events[0].IsRedacted.Should().BeTrue();
+		results.Events[0].AfterData.Should().BeNull();
 	}
 
 	[Fact]
@@ -67,9 +67,9 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 			Filter = new() { EntityType = "user_cost_rate" },
 		});
 
-		results.Should().ContainSingle();
-		results[0].IsRedacted.Should().BeFalse();
-		results[0].AfterData!.Value.Should().ContainKey("amount_per_hour");
+		results.Events.Should().ContainSingle();
+		results.Events[0].IsRedacted.Should().BeFalse();
+		results.Events[0].AfterData!.Value.Should().ContainKey("amount_per_hour");
 	}
 
 	[Fact]
@@ -80,9 +80,9 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 
 		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(auditorId), Filter = new() { EntityType = "job_node" } });
 
-		results.Should().ContainSingle();
-		results[0].IsRedacted.Should().BeFalse();
-		results[0].AfterData!.Value.Should().ContainKey("description");
+		results.Events.Should().ContainSingle();
+		results.Events[0].IsRedacted.Should().BeFalse();
+		results.Events[0].AfterData!.Value.Should().ContainKey("description");
 	}
 
 	[Fact]
@@ -104,8 +104,100 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 
 		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(auditorId), Filter = new() });
 
-		results.Should().HaveCount(2);
-		results[0].OccurredAt.Should().BeGreaterThan(results[1].OccurredAt);
+		results.Events.Should().HaveCount(2);
+		results.Events[0].OccurredAt.Should().BeGreaterThan(results.Events[1].OccurredAt);
+	}
+
+	[Fact]
+	public async Task Paging_covers_every_matching_event_exactly_once_without_gaps_or_overlap()
+	{
+		const int eventCount = 5;
+		var (auditorId, entityIds) = await SeedAuditorAndManyEventsAsync(
+			eventCount, index => At(1 + index), index => "job_node", index => 100 + index);
+		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
+
+		var seenIds = new List<long>();
+		string? cursor = null;
+		do {
+			var page = await sut.SearchAuditEventsAsync(new() {
+				Context = ContextFor(auditorId),
+				Filter = new() { EntityType = "job_node" },
+				PageSize = 2,
+				Cursor = cursor,
+			});
+			page.Events.Count.Should().BeLessThanOrEqualTo(2);
+			seenIds.AddRange(page.Events.Select(e => e.EntityId));
+			cursor = page.ContinuationCursor;
+		} while (cursor is not null);
+
+		seenIds.Should().BeEquivalentTo(entityIds);
+		seenIds.Distinct().Should().HaveCount(eventCount);
+	}
+
+	[Fact]
+	public async Task Equal_timestamp_events_are_tie_broken_deterministically_across_pages()
+	{
+		const int eventCount = 4;
+		var tied = At(5);
+		var (auditorId, entityIds) = await SeedAuditorAndManyEventsAsync(
+			eventCount, _ => tied, _ => "job_node", index => 200 + index);
+		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
+
+		var firstPage = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(auditorId),
+			Filter = new() { EntityType = "job_node" },
+			PageSize = 2,
+		});
+		var secondPage = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(auditorId),
+			Filter = new() { EntityType = "job_node" },
+			PageSize = 2,
+			Cursor = firstPage.ContinuationCursor,
+		});
+
+		firstPage.Events.Should().HaveCount(2);
+		secondPage.Events.Should().HaveCount(2);
+		secondPage.ContinuationCursor.Should().BeNull();
+		var pagedIds = firstPage.Events.Concat(secondPage.Events).Select(e => e.EntityId).ToArray();
+		pagedIds.Should().BeEquivalentTo(entityIds);
+		pagedIds.Distinct().Should().HaveCount(eventCount);
+	}
+
+	[Fact]
+	public async Task The_entity_type_filter_narrows_before_the_page_limit_is_applied()
+	{
+		var (auditorId, jobNodeEntityIds) = await SeedAuditorAndManyEventsAsync(
+			3, index => At(1 + (index * 2)), index => "job_node", index => 300 + index,
+			index => (At(2 + (index * 2)), "user_schedule_version", 900 + index));
+		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
+
+		var page = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(auditorId),
+			Filter = new() { EntityType = "job_node" },
+			PageSize = 10,
+		});
+
+		page.Events.Should().HaveCount(3);
+		page.Events.Select(e => e.EntityId).Should().BeEquivalentTo(jobNodeEntityIds);
+		page.ContinuationCursor.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task A_page_from_a_large_result_set_only_materializes_the_requested_page_size()
+	{
+		const int totalEvents = 250;
+		var (auditorId, _) = await SeedAuditorAndManyEventsAsync(
+			totalEvents, index => At(1) + Duration.FromSeconds(index), index => "job_node", index => 400 + index);
+		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
+
+		var page = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(auditorId),
+			Filter = new() { EntityType = "job_node" },
+			PageSize = 10,
+		});
+
+		page.Events.Should().HaveCount(10);
+		page.ContinuationCursor.Should().NotBeNull();
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);
@@ -167,6 +259,54 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 			"""{"amount_per_hour":"60.00"}""");
 
 		return (auditorId, costViewerAuditorId, workerId);
+	}
+
+	/// <summary>
+	///     Seeds a deployed schema, one <see cref="EmployeeRole.Auditor" /> employee, one actor employee,
+	///     and <paramref name="count" /> audit events (one per index, via <paramref name="entityTypeAt" />/
+	///     <paramref name="entityIdAt" />/<paramref name="occurredAtAt" />), optionally interleaving an
+	///     additional non-matching event per index via <paramref name="interleaveWith" /> (fresh-eyes
+	///     review §2.3's paging/filter-before-limit coverage).
+	/// </summary>
+	private async Task<(AppUserId AuditorId, IReadOnlyList<long> EntityIds)> SeedAuditorAndManyEventsAsync(
+		int count,
+		Func<int, Instant> occurredAtAt,
+		Func<int, string> entityTypeAt,
+		Func<int, long> entityIdAt,
+		Func<int, (Instant OccurredAt, string EntityType, long EntityId)>? interleaveWith = null)
+	{
+		await using (var connection = await OpenExistingConnectionAsync()) {
+			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
+			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
+			await deployer.DeployAsync(scripts, CancellationToken.None);
+		}
+
+		var bootstrapPort = CreateBootstrapPort(database.ConnectionString);
+		_ = await bootstrapPort.BootstrapAsync(new() {
+			DisplayName = "Ada Lovelace",
+			IanaTimeZone = "Europe/London",
+			UserName = "ada.lovelace",
+			PasswordHash = "test-hash",
+			SecurityStamp = Guid.NewGuid().ToString("N"),
+		});
+
+		var auditorId = await SeedEmployeeAsync("Rosalind Franklin", "rosalind.franklin.audit", EmployeeRole.Auditor);
+		var actorId = await SeedEmployeeAsync("Margaret Hamilton", "margaret.hamilton.audit", EmployeeRole.Worker);
+
+		var entityIds = new List<long>(count);
+		for (var index = 0; index < count; index++) {
+			var entityId = entityIdAt(index);
+			entityIds.Add(entityId);
+			await InsertAuditEventAsync(
+				actorId, occurredAtAt(index), "create-job-node", entityTypeAt(index), entityId, Guid.NewGuid(), "{}");
+
+			if (interleaveWith is not null) {
+				var (extraOccurredAt, extraEntityType, extraEntityId) = interleaveWith(index);
+				await InsertAuditEventAsync(actorId, extraOccurredAt, "add-request-note", extraEntityType, extraEntityId, Guid.NewGuid(), "{}");
+			}
+		}
+
+		return (auditorId, entityIds);
 	}
 
 	private async Task InsertAuditEventAsync(

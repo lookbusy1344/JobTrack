@@ -18,4 +18,17 @@ public sealed record GetAwaitingProgressRequest
 
 	/// <summary>When set, only leaves within this node's subtree (inclusive) are returned; otherwise the whole tree.</summary>
 	public JobNodeId? SubtreeRootId { get; init; }
+
+	/// <summary>
+	///     Zero-based number of matching leaves (in the calculator's own priority/deadline order) to skip
+	///     before returning results. Must be non-negative.
+	/// </summary>
+	public int Offset { get; init; }
+
+	/// <summary>
+	///     Maximum number of leaves to return. An omitted value uses
+	///     <see cref="AwaitingProgressPaging.DefaultPageSize" />; larger values are clamped to
+	///     <see cref="AwaitingProgressPaging.MaxPageSize" />. Must be positive when set.
+	/// </summary>
+	public int? Limit { get; init; }
 }

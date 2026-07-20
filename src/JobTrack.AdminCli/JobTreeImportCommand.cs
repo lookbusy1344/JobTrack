@@ -27,11 +27,13 @@ public static class JobTreeImportCommand
 		string username,
 		JobNodeId importRootId,
 		string jsonContent,
+		IClock clock,
 		CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(io);
 		ArgumentNullException.ThrowIfNull(userManager);
 		ArgumentNullException.ThrowIfNull(jobTrackClient);
+		ArgumentNullException.ThrowIfNull(clock);
 		ArgumentException.ThrowIfNullOrWhiteSpace(username);
 		ArgumentNullException.ThrowIfNull(jsonContent);
 
@@ -43,7 +45,7 @@ public static class JobTreeImportCommand
 
 		// One captured clock value for the whole import (plan §2): every relative "open"/"closed"
 		// duration in the file counts back from this same instant, so a large file cannot drift.
-		var importedAt = SystemClock.Instance.GetCurrentInstant();
+		var importedAt = clock.GetCurrentInstant();
 
 		EquatableArray<ImportSubtreeNodeSpec> nodes;
 		try {

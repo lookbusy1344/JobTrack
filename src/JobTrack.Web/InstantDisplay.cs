@@ -25,10 +25,10 @@ internal static class InstantDisplay
 	///     on the viewer's current calendar day, otherwise just the date (<c>d MMM</c>). The pill's own
 	///     colour already carries "in progress"; the timestamp only needs to say when.
 	/// </summary>
-	internal static string FormatCompact(Instant instant, DateTimeZone zone)
+	internal static string FormatCompact(Instant instant, DateTimeZone zone, Instant now)
 	{
 		var local = instant.InZone(zone).LocalDateTime;
-		var today = SystemClock.Instance.GetCurrentInstant().InZone(zone).Date;
+		var today = now.InZone(zone).Date;
 		return local.Date == today ? CompactTimePattern.Format(local.TimeOfDay) : CompactDatePattern.Format(local.Date);
 	}
 }

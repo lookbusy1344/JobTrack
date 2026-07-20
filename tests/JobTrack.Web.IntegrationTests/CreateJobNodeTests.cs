@@ -7,11 +7,13 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
+using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -215,19 +217,104 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("already has work attached");
 	}
 
+	/// <summary>
+	///     §2.4: a malformed <c>NeededStart</c> must be rejected before the command runs, not silently
+	///     reinterpreted or dropped.
+	/// </summary>
+	[Fact]
+	public async Task A_malformed_NeededStart_is_rejected_without_creating_the_child()
+	{
+		var managerId = await SeedEmployeeAsync("create.malformed-needed", EmployeeRole.JobManager);
+		var authCookie = await SignInAsync("create.malformed-needed");
+
+		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, rootId, "Malformed needed-start child", managerId, "not-a-local-date-time");
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("Enter a valid date and time.");
+		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		(await afterSave.Content.ReadAsStringAsync()).Should().NotContain("Malformed needed-start child");
+	}
+
+	/// <summary>
+	///     §2.4: <c>NeededStart</c> is a bare wall-clock string resolved in the viewing employee's own
+	///     zone (<c>BackdateInstant</c>), never the server process's own OS zone. The employee here is
+	///     seeded with <c>America/New_York</c>, deliberately different from whatever zone this test
+	///     process itself runs in, so the assertion only holds if resolution actually used the viewer's
+	///     zone.
+	/// </summary>
+	[Fact]
+	public async Task NeededStart_is_resolved_in_the_viewing_employees_own_zone_not_the_server_process_zone()
+	{
+		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+		var managerId = await SeedEmployeeAsync("create.viewer-zone", EmployeeRole.JobManager, "America/New_York");
+		var authCookie = await SignInAsync("create.viewer-zone");
+
+		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, rootId, "Zoned needed-start child", managerId, "2026-06-15T09:00");
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var created = await FindChildNodeAsync(rootId, "Zoned needed-start child");
+		created.NeededStart.Should().Be(CivilTimeResolver.ToInstant(new(2026, 6, 15, 9, 0, 0), newYork));
+	}
+
+	/// <summary>
+	///     §2.4 DST coverage: 2024-03-10 springs forward in <c>America/New_York</c>, so 02:30 local never
+	///     occurs. <c>CivilTimeResolver</c> shifts it forward by the gap length (spec/ADR 0008) rather
+	///     than throwing or silently picking a nearby offset, and the create form must follow the exact
+	///     same policy as every other backdate path in the app.
+	/// </summary>
+	[Fact]
+	public async Task A_NeededStart_landing_in_a_spring_forward_gap_shifts_forward_by_the_gap_length()
+	{
+		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+		var managerId = await SeedEmployeeAsync("create.dst-gap", EmployeeRole.JobManager, "America/New_York");
+		var authCookie = await SignInAsync("create.dst-gap");
+
+		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, rootId, "DST gap needed-start child", managerId, "2024-03-10T02:30");
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var created = await FindChildNodeAsync(rootId, "DST gap needed-start child");
+		created.NeededStart.Should().Be(CivilTimeResolver.ToInstant(new(2024, 3, 10, 2, 30, 0), newYork));
+		created.NeededStart!.Value.InZone(newYork).LocalDateTime.Should().Be(new(2024, 3, 10, 3, 30, 0));
+	}
+
+	private async Task<JobNodeResult> FindChildNodeAsync(JobNodeId parentId, string description)
+	{
+		var children = await seedClient.Query.GetJobChildrenAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, ParentId = parentId },
+			CancellationToken.None);
+		var summary = children.Single(child => child.Description == description);
+
+		var detail = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = summary.Id },
+			CancellationToken.None);
+
+		return detail.Node;
+	}
+
 	private async Task<HttpResponseMessage> PostAsync(
 		string authCookie, string antiforgeryCookie, string token,
-		JobNodeId parentId, string description, AppUserId? ownerId)
+		JobNodeId parentId, string description, AppUserId? ownerId, string? neededStart = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Create");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+		var fields = new Dictionary<string, string> {
 			["ParentId"] = parentId.Value.ToString(CultureInfo.InvariantCulture),
 			["Input.Description"] = description,
 			["Input.OwnerUserId"] = ownerId?.Value.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
 			["Input.Priority"] = nameof(Priority.Medium),
 			["__RequestVerificationToken"] = token,
-		});
+		};
+		if (neededStart is not null) {
+			fields["Input.NeededStart"] = neededStart;
+		}
+
+		request.Content = new FormUrlEncodedContent(fields);
 
 		return await client.SendAsync(request);
 	}
@@ -298,15 +385,16 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
+	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
 
 		await using var insertAppUser = connection.CreateCommand();
 		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
+			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, $ianaTimeZone); SELECT last_insert_rowid();";
 		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
+		_ = insertAppUser.Parameters.AddWithValue("$ianaTimeZone", ianaTimeZone);
 		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
 		var placeholderUser = new JobTrackIdentityUser {

@@ -9,7 +9,7 @@
    a full display name on the rare row that has one, so it stays in the accessible name and the
    tooltip. The toolbar form has the width to say all of it outright. *@
 @if (Model.ActiveSession is { } activeSession) {
-	var since = InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone);
+	var since = InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone, Model.Now);
 	var workedBy = Model.ActiveSessionWorkedByOther is { } other ? $" · worked by {other}" : string.Empty;
 	@if (Model.Compact) {
 		<span class="status-pill status-pill-ready status-pill--compact" title="Active since @since@workedBy">

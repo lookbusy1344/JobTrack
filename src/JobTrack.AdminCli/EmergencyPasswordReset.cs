@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 
 /// <summary>
 ///     The <c>reset-password</c> command (plan §8.6; spec §7.1): a database-backed emergency mechanism
@@ -31,12 +32,14 @@ public static class EmergencyPasswordReset
 		IPasswordHasher<JobTrackIdentityUser> passwordHasher,
 		AdminCliProvider provider,
 		string username,
+		IClock clock,
 		CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(io);
 		ArgumentNullException.ThrowIfNull(userManager);
 		ArgumentNullException.ThrowIfNull(identityContext);
 		ArgumentNullException.ThrowIfNull(passwordHasher);
+		ArgumentNullException.ThrowIfNull(clock);
 		ArgumentException.ThrowIfNullOrWhiteSpace(username);
 
 		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false);
@@ -73,7 +76,7 @@ public static class EmergencyPasswordReset
 		// Unix-epoch ticks), which this raw insert must supply explicitly since it bypasses EF's
 		// entity mapping entirely.
 		if (provider == AdminCliProvider.Sqlite) {
-			var occurredAtTicks = DateTimeOffset.UtcNow.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;
+			var occurredAtTicks = clock.GetCurrentInstant().ToUnixTimeTicks();
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"""
 				 INSERT INTO audit_event (occurred_at, actor_user_id, operation, entity_type, entity_id, correlation_id, reason)

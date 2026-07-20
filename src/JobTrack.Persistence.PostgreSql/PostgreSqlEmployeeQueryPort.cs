@@ -19,10 +19,16 @@ internal sealed class PostgreSqlEmployeeQueryPort : IEmployeeQueryPort
 		(short)EmployeeRole.Administrator, (short)EmployeeRole.JobManager, (short)EmployeeRole.Worker,
 	];
 
+	private readonly IClock clock;
+
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlEmployeeQueryPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlEmployeeQueryPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
@@ -127,13 +133,13 @@ internal sealed class PostgreSqlEmployeeQueryPort : IEmployeeQueryPort
 		return new(options);
 	}
 
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
+	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		return await GetRolesForIdentityUserAsync(context, actorIdentityUser.Id, cancellationToken).ConfigureAwait(false);
 	}

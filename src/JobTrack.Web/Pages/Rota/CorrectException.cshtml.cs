@@ -39,13 +39,14 @@ public sealed class CorrectExceptionModel(
 		}
 
 		await LoadExceptionAsync(actor.Value, cancellationToken);
-		if (Exception is { } exception) {
+		var result = Exception;
+		if (result is not null) {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
-			Input.Effect = exception.Entry.Effect;
-			Input.Start = BackdateInstant.ToDateTimeLocalValue(exception.Entry.Interval.Start, zone);
-			Input.End = BackdateInstant.ToDateTimeLocalValue(exception.Entry.Interval.End, zone);
-			Input.RateOverride = exception.Entry.RateOverride?.AmountPerHour;
-			Input.Reason = exception.Reason;
+			Input.Effect = result.Entry.Effect;
+			Input.Start = BackdateInstant.ToDateTimeLocalValue(result.Entry.Interval.Start, zone);
+			Input.End = BackdateInstant.ToDateTimeLocalValue(result.Entry.Interval.End, zone);
+			Input.RateOverride = result.Entry.RateOverride?.AmountPerHour;
+			Input.Reason = result.Reason;
 		}
 
 		return Page();

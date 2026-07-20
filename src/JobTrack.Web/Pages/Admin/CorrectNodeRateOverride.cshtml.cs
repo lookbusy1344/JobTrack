@@ -8,14 +8,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using NodaTime;
 
 /// <summary>
 ///     Corrects a historical node rate override's node, effective range, and amount in place (ADR
 ///     0003), mirroring <see cref="Jobs.CorrectSessionModel" />'s single-step form shape.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.RateAdministration)]
-public sealed class CorrectNodeRateOverrideModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class CorrectNodeRateOverrideModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long UserId { get; init; }
 
@@ -35,11 +37,15 @@ public sealed class CorrectNodeRateOverrideModel(IJobTrackClient jobTrackClient,
 		}
 
 		await LoadOverrideAsync(actor.Value, cancellationToken);
-		if (Override is { } over) {
+		var over = Override;
+		if (over is not null) {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			Input.NodeId = over.Override.NodeId.Value;
 			Input.AmountPerHour = over.Override.Rate.AmountPerHour;
-			Input.EffectiveStart = over.Override.EffectiveStart.ToDateTimeOffset();
-			Input.EffectiveEnd = over.Override.EffectiveEnd?.ToDateTimeOffset();
+			Input.EffectiveStart = BackdateInstant.ToDateTimeLocalValue(over.Override.EffectiveStart, zone);
+			Input.EffectiveEnd = over.Override.EffectiveEnd.HasValue
+				? BackdateInstant.ToDateTimeLocalValue(over.Override.EffectiveEnd.Value, zone)
+				: null;
 		}
 
 		return Page();
@@ -57,6 +63,13 @@ public sealed class CorrectNodeRateOverrideModel(IJobTrackClient jobTrackClient,
 			return Page();
 		}
 
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+		if (!BackdateInstant.TryParse(Input.EffectiveStart, zone, out var effectiveStart)
+			|| !BackdateInstant.TryParseOptional(Input.EffectiveEnd, zone, out var effectiveEnd)) {
+			ErrorMessage = "Enter a valid date and time.";
+			return Page();
+		}
+
 		try {
 			_ = await jobTrackClient.Rates.CorrectNodeRateOverrideAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
@@ -64,11 +77,7 @@ public sealed class CorrectNodeRateOverrideModel(IJobTrackClient jobTrackClient,
 				UserId = new AppUserId(UserId),
 				Version = Override.Version,
 				Reason = Input.Reason,
-				Override = new(
-					new(Input.NodeId),
-					new(Input.AmountPerHour),
-					Instant.FromDateTimeOffset(Input.EffectiveStart),
-					Input.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(Input.EffectiveEnd.Value) : null),
+				Override = new(new(Input.NodeId), new(Input.AmountPerHour), effectiveStart, effectiveEnd),
 			}, cancellationToken);
 
 			return RedirectToPage("/Admin/Rates", new { userId = UserId });
@@ -122,9 +131,9 @@ public sealed class CorrectNodeRateOverrideModel(IJobTrackClient jobTrackClient,
 	{
 		[Required] public long NodeId { get; set; }
 
-		[Required] public DateTimeOffset EffectiveStart { get; set; }
+		[Required] public string EffectiveStart { get; set; } = string.Empty;
 
-		public DateTimeOffset? EffectiveEnd { get; set; }
+		public string? EffectiveEnd { get; set; }
 
 		[Required] public decimal AmountPerHour { get; set; }
 

@@ -59,7 +59,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			requesterId, new() { EntityType = "job_request", EntityId = result.JobNodeId.Value });
+			new() { EntityType = "job_request", EntityId = result.JobNodeId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("submit-request");
@@ -366,7 +366,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			jobManagerId, new() { EntityType = "job_request", EntityId = submitted.JobNodeId.Value });
+			new() { EntityType = "job_request", EntityId = submitted.JobNodeId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "acknowledge-request");
 	}
@@ -483,7 +483,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			requesterId, new() { EntityType = "job_request_note", EntityId = note.Id.Value });
+			new() { EntityType = "job_request_note", EntityId = note.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("add-request-note");

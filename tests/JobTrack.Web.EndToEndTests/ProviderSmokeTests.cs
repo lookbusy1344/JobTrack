@@ -201,7 +201,8 @@ public sealed partial class ProviderSmokeTests
 		var postResponse = await client.SendAsync(postRequest);
 		postResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
-		return FindSetCookie(postResponse, "Identity.Application") is { } refreshedCookie
+		var refreshedCookie = FindSetCookie(postResponse, "Identity.Application");
+		return refreshedCookie is not null
 			? ExtractCookiePair(refreshedCookie)
 			: authCookie;
 	}

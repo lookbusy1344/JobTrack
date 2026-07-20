@@ -16,8 +16,12 @@ public sealed record IssuePersonalAccessTokenRequest
 	public required string Label { get; init; }
 
 	/// <summary>
-	///     The instant this token stops being valid. Required and bounded — there is no non-expiring
-	///     token (ADR 0029, <see cref="Domain.Authorization.PersonalAccessTokenPolicy.MaxLifetime" />).
+	///     The instant this token stops being valid. Supply this for callers which already own an
+	///     explicit expiry instant; otherwise use <see cref="Lifetime" /> so the command captures
+	///     one authoritative current instant for both timestamps.
 	/// </summary>
-	public required Instant ExpiresAt { get; init; }
+	public Instant? ExpiresAt { get; init; }
+
+	/// <summary>The requested lifetime, resolved from the command's single captured current instant.</summary>
+	public Duration? Lifetime { get; init; }
 }

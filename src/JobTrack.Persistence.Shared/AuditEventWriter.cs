@@ -20,11 +20,13 @@ public static class AuditEventWriter
 	///     Queues an audit event for <paramref name="entityType" />/<paramref name="entityId" />.
 	///     <paramref name="beforeData" /> is <see langword="null" /> on creation; <paramref name="afterData" />
 	///     is <see langword="null" /> on deletion. Both are serialized as flat JSON objects (ADR 0003: "the
-	///     full before and after row content").
+	///     full before and after row content"). <paramref name="actorId" /> is <see langword="null" /> only
+	///     for an unknown-subject authentication failure (fresh-eyes review §2.6) -- every other caller
+	///     passes a real actor.
 	/// </summary>
 	public static void Add(
 		DbContext context,
-		AppUserId actorId,
+		AppUserId? actorId,
 		Instant occurredAt,
 		string operation,
 		string entityType,

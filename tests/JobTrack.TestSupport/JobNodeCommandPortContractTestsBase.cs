@@ -63,7 +63,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			jobManagerId, new() { EntityType = "job_node", EntityId = branch.Id.Value });
+			new() { EntityType = "job_node", EntityId = branch.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("create-job-node");
@@ -230,7 +230,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "job_node", EntityId = leaf.Id.Value });
+			new() { EntityType = "job_node", EntityId = leaf.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle(e => e.Operation == "edit-job-node");
 	}
@@ -840,7 +840,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			jobManagerId, new() { EntityType = "job_node", EntityId = rootId.Value });
+			new() { EntityType = "job_node", EntityId = rootId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle(e => e.Operation == "import-subtree");
 	}
@@ -1229,7 +1229,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "job_node", EntityId = unassigned.Id.Value });
+			new() { EntityType = "job_node", EntityId = unassigned.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle(e => e.Operation == "pick-up-job-node");
 		audit.Events[0].ActorId.Should().Be(workerId);

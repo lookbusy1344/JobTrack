@@ -12,14 +12,17 @@ using Ports;
 /// </summary>
 public sealed class TokenCommands : ITokenCommands
 {
+	private readonly IClock _clock;
 	private readonly IPersonalAccessTokenPort _port;
 
 	/// <summary>Creates a <see cref="TokenCommands" /> over the given port.</summary>
-	public TokenCommands(IPersonalAccessTokenPort port)
+	public TokenCommands(IPersonalAccessTokenPort port, IClock clock)
 	{
 		ArgumentNullException.ThrowIfNull(port);
+		ArgumentNullException.ThrowIfNull(clock);
 
 		_port = port;
+		_clock = clock;
 	}
 
 	/// <inheritdoc />
@@ -31,6 +34,10 @@ public sealed class TokenCommands : ITokenCommands
 		return JobTrackOperation.TraceAsync(
 			"tokens.issue", request.Context, JobTrackOperation.WithUserId(request.TargetUserId),
 			async () => {
+				var now = _clock.GetCurrentInstant();
+				var expiresAt = request.Lifetime is Duration lifetime
+					? now + lifetime
+					: request.ExpiresAt ?? throw new ArgumentException("Token expiry or lifetime is required.", nameof(request));
 				var (plaintextToken, tokenHash) = PersonalAccessTokenSecretGenerator.Generate();
 				var persisted = await _port.IssueAsync(
 					new() {
@@ -38,8 +45,8 @@ public sealed class TokenCommands : ITokenCommands
 						TargetUserId = request.TargetUserId,
 						Label = request.Label,
 						TokenHash = tokenHash,
-						CreatedAt = SystemClock.Instance.GetCurrentInstant(),
-						ExpiresAt = request.ExpiresAt,
+						CreatedAt = now,
+						ExpiresAt = expiresAt,
 					},
 					cancellationToken).ConfigureAwait(false);
 

@@ -45,7 +45,7 @@ public sealed class EmergencyTwoFactorResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyTwoFactorReset.RunAsync(
-				console, userManager, identityContext, AdminCliProvider.Sqlite, "ada.reset-2fa", CancellationToken.None);
+				console, userManager, identityContext, AdminCliProvider.Sqlite, "ada.reset-2fa", SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(0);
 
@@ -89,7 +89,7 @@ public sealed class EmergencyTwoFactorResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyTwoFactorReset.RunAsync(
-				console, userManager, identityContext, AdminCliProvider.PostgreSql, "ada.reset-2fa", CancellationToken.None);
+				console, userManager, identityContext, AdminCliProvider.PostgreSql, "ada.reset-2fa", SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(0);
 
@@ -139,7 +139,8 @@ public sealed class EmergencyTwoFactorResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyTwoFactorReset.RunAsync(
-				console, userManager, identityContext, AdminCliProvider.Sqlite, "ada.reset-2fa-revokes", CancellationToken.None);
+				console, userManager, identityContext, AdminCliProvider.Sqlite, "ada.reset-2fa-revokes", SystemClock.Instance,
+				CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			var authenticated = await jobTrackClient.Tokens.TryAuthenticateAsync(
@@ -170,7 +171,7 @@ public sealed class EmergencyTwoFactorResetTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await EmergencyTwoFactorReset.RunAsync(
-				console, userManager, identityContext, AdminCliProvider.Sqlite, "no.such.user", CancellationToken.None);
+				console, userManager, identityContext, AdminCliProvider.Sqlite, "no.such.user", SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle(error => error.Contains("no.such.user", StringComparison.Ordinal));

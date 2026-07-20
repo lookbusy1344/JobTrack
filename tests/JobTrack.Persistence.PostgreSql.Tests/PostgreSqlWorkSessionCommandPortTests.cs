@@ -5,6 +5,7 @@ using Abstractions;
 using Application.Ports;
 using AwesomeAssertions;
 using Database;
+using NodaTime;
 using Npgsql;
 using TestSupport;
 
@@ -22,16 +23,19 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
-		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
-		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		CreateSessionPort(connectionString, SystemClock.Instance);
+
+	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock) =>
+		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), clock);
 
 	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	/// <summary>
 	///     There is no advisory lock domain for work sessions (ADR 0012): schema version 0007's GiST

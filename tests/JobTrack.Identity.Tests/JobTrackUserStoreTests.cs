@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 using TestSupport;
 
 /// <summary>
@@ -176,11 +177,11 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 		var user = await WithStoreAsync(store => CreatePersistedUserAsync(store, appUserId, "concurrent.writer"));
 
 		await using var contextA = CreateContext();
-		using var storeA = new JobTrackUserStore(contextA, dataProtectionProvider);
+		using var storeA = new JobTrackUserStore(contextA, dataProtectionProvider, SystemClock.Instance);
 		var userA = await storeA.FindByIdAsync(user.Id.ToString(CultureInfo.InvariantCulture), CancellationToken.None);
 
 		await using var contextB = CreateContext();
-		using var storeB = new JobTrackUserStore(contextB, dataProtectionProvider);
+		using var storeB = new JobTrackUserStore(contextB, dataProtectionProvider, SystemClock.Instance);
 		var userB = await storeB.FindByIdAsync(user.Id.ToString(CultureInfo.InvariantCulture), CancellationToken.None);
 
 		await storeA.SetSecurityStampAsync(userA!, "stamp-from-a", CancellationToken.None);
@@ -311,7 +312,7 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 	private async Task<T> WithStoreAsync<T>(Func<JobTrackUserStore, Task<T>> action)
 	{
 		await using var context = CreateContext();
-		using var store = new JobTrackUserStore(context, dataProtectionProvider);
+		using var store = new JobTrackUserStore(context, dataProtectionProvider, SystemClock.Instance);
 		return await action(store);
 	}
 

@@ -14,10 +14,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteRateQueryPort : IRateQueryPort
 {
+	private readonly IClock clock;
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteRateQueryPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteRateQueryPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<RateQueryResult> GetRatesAsync(
@@ -57,13 +62,13 @@ internal sealed class SqliteRateQueryPort : IRateQueryPort
 		return new() { ActorRoles = actorRoles, UserCostRates = [.. userCostRates], NodeRateOverrides = [.. nodeRateOverrides] };
 	}
 
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
+	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)

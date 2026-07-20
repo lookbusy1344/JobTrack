@@ -9,6 +9,7 @@ using Domain.Intervals;
 using Domain.Rates;
 using Domain.Schedules;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Shared;
 using Shared.Entities;
@@ -28,10 +29,22 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteCostQueryPort : ICostQueryPort
 {
+	private readonly IClock clock;
 	private readonly string connectionString;
+	private readonly IReadOnlyList<IInterceptor> interceptors = [];
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteCostQueryPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteCostQueryPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
+
+	/// <summary>Test-only seam for asserting bulk-query command and connection bounds.</summary>
+	internal SqliteCostQueryPort(
+		string connectionString, IClock clock, IReadOnlyList<IInterceptor> interceptors)
+		: this(connectionString, clock) =>
+		this.interceptors = interceptors;
 
 	/// <inheritdoc />
 	public async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
@@ -50,12 +63,12 @@ internal sealed class SqliteCostQueryPort : ICostQueryPort
 
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
-		var nodesById = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
+		var (nodesById, _) = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
 		if (!nodesById.ContainsKey(nodeId)) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 		}
 
-		var subtreeNodeCount = CostQueryAssembly.CountSubtreeNodes(nodeId, nodesById);
+		var subtreeNodeCount = CostQueryAssembly.CountSubtreeNodes([nodeId], nodesById);
 		if (subtreeNodeCount > maxHierarchyNodes) {
 			throw new ArgumentOutOfRangeException(
 				nameof(maxHierarchyNodes),
@@ -64,7 +77,7 @@ internal sealed class SqliteCostQueryPort : ICostQueryPort
 		}
 
 		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAsync(
-			context, nodeId, nodesById, asOf, cancellationToken).ConfigureAwait(false);
+			context, [nodeId], nodesById, asOf, cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 		return new() {
@@ -84,15 +97,48 @@ internal sealed class SqliteCostQueryPort : ICostQueryPort
 		return EquatableArray.CopyOf(ownerIds.Select(id => new AppUserId(id)));
 	}
 
-	private SqliteJobTrackDbContext CreateContext() => SqliteDbContextFactory.CreateContext(connectionString);
+	/// <inheritdoc />
+	public async Task<BulkCostQueryResult> GetBulkCostInputsAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> nodeIds, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default)
+	{
+		await using var context = CreateContext();
+		await using var transaction = await SqliteCostQuerySnapshot.BeginAsync(context, cancellationToken).ConfigureAwait(false);
 
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
+		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+
+		var (nodesById, ownersById) = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
+		var existingNodeIds = nodeIds.Where(nodesById.ContainsKey).ToArray();
+
+		var unionNodeCount = CostQueryAssembly.CountSubtreeNodes(existingNodeIds, nodesById);
+		if (unionNodeCount > maxHierarchyNodes) {
+			throw new ArgumentOutOfRangeException(
+				nameof(maxHierarchyNodes),
+				unionNodeCount,
+				$"These nodes' combined subtrees have {unionNodeCount} nodes, exceeding the {maxHierarchyNodes}-node maximum.");
+		}
+
+		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAsync(
+			context, existingNodeIds, nodesById, asOf, cancellationToken).ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+		return new() {
+			ActorRoles = actorRoles,
+			NodesById = EquatableDictionaryFactory.CopyOf(nodesById),
+			OwnerUserIdsById = EquatableDictionaryFactory.CopyOf(ownersById),
+			Bounds = bounds,
+			Workers = EquatableArray.CopyOf(workers),
+		};
+	}
+
+	private SqliteJobTrackDbContext CreateContext() => SqliteDbContextFactory.CreateContext(connectionString, interceptors);
+
+	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
@@ -116,10 +162,11 @@ internal sealed class SqliteCostQueryPort : ICostQueryPort
 /// </summary>
 internal static class CostQueryAssembly
 {
-	public static async Task<Dictionary<JobNodeId, HierarchyNode>> LoadNodesByIdAsync(DbContext context, CancellationToken cancellationToken)
+	public static async Task<(Dictionary<JobNodeId, HierarchyNode> NodesById, Dictionary<JobNodeId, AppUserId?> OwnersById)> LoadNodesByIdAsync(
+		DbContext context, CancellationToken cancellationToken)
 	{
 		var nodes = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Select(n => new { n.Id, n.ParentId })
+			.Select(n => new { n.Id, n.ParentId, n.OwnerUserId })
 			.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var achievements = await context.Set<LeafWorkEntity>().AsNoTracking()
@@ -130,20 +177,23 @@ internal static class CostQueryAssembly
 			.GroupBy(n => n.ParentId!.Value)
 			.ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(n => n.Id)));
 
-		return nodes.ToDictionary(
+		var nodesById = nodes.ToDictionary(
 			n => n.Id,
 			n => new HierarchyNode(
 				n.Id,
 				n.ParentId,
 				childrenByParent.TryGetValue(n.Id, out var children) ? children : [],
 				achievements.TryGetValue(n.Id, out var achievement) ? achievement : null));
+		var ownersById = nodes.ToDictionary(n => n.Id, n => n.OwnerUserId);
+
+		return (nodesById, ownersById);
 	}
 
 	public static async Task<(WorkInterval Bounds, List<WorkerCostInputs> Workers)> LoadWorkersAsync(
-		DbContext context, JobNodeId nodeId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		DbContext context, IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
 		Instant asOf, CancellationToken cancellationToken)
 	{
-		var requestedNodeIds = GetSubtreeIds(nodeId, nodesById);
+		var requestedNodeIds = GetSubtreeIds(rootIds, nodesById);
 		var requestedSessionStarts = await context.Set<WorkSessionEntity>().AsNoTracking()
 			.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
 			.Select(s => s.StartedAt)
@@ -236,16 +286,20 @@ internal static class CostQueryAssembly
 		return (bounds, workers);
 	}
 
-	public static int CountSubtreeNodes(JobNodeId nodeId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById) =>
-		GetSubtreeIds(nodeId, nodesById).Count;
+	public static int CountSubtreeNodes(IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById) =>
+		GetSubtreeIds(rootIds, nodesById).Count;
 
 	private static List<JobNodeId> GetSubtreeIds(
-		JobNodeId nodeId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
+		IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
 	{
 		var result = new List<JobNodeId>();
-		var pending = new Stack<JobNodeId>();
-		pending.Push(nodeId);
+		var seen = new HashSet<JobNodeId>();
+		var pending = new Stack<JobNodeId>(rootIds);
 		while (pending.TryPop(out var current)) {
+			if (!seen.Add(current)) {
+				continue;
+			}
+
 			result.Add(current);
 			foreach (var childId in nodesById[current].ChildIds) {
 				pending.Push(childId);

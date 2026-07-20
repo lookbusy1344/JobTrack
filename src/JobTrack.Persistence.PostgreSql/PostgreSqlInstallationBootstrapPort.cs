@@ -15,10 +15,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstrapPort
 {
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlInstallationBootstrapPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlInstallationBootstrapPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<BootstrapPersistenceResult> BootstrapAsync(
@@ -40,7 +45,7 @@ internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstr
 				"installation-already-initialised", "The installation has already been bootstrapped (ADR 0015).");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
+		var now = clock.GetCurrentInstant();
 		var canonicalZone = ScheduleZoneId.Resolve(request.IanaTimeZone);
 
 		var administrator = new AppUserEntity {

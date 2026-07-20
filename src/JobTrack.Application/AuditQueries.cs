@@ -10,7 +10,10 @@ using Ports;
 ///     projecting each event: a rate/cost-bearing event's before/after payload is withheld from a
 ///     caller who lacks <see cref="CostAccessPolicy" /> visibility, independent of whether they may
 ///     search audit history at all (spec §16's rate/cost permission is layered on top of, not a
-///     substitute for, the audit-search gate).
+///     substitute for, the audit-search gate). Bounds every search to a page of at most
+///     <see cref="AuditSearchPaging.MaxPageSize" /> events (fresh-eyes review §2.3): the port is always
+///     asked for one more row than the page size, so the extra row's presence -- never a second count
+///     query -- decides whether a continuation cursor is returned.
 /// </summary>
 public sealed class AuditQueries : IAuditQueries
 {
@@ -25,7 +28,7 @@ public sealed class AuditQueries : IAuditQueries
 	}
 
 	/// <inheritdoc />
-	public Task<IReadOnlyList<AuditEventResult>> SearchAuditEventsAsync(
+	public Task<AuditEventSearchResult> SearchAuditEventsAsync(
 		AuditEventSearchRequest request, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(request);
@@ -52,23 +55,46 @@ public sealed class AuditQueries : IAuditQueries
 		};
 	}
 
-	private Task<IReadOnlyList<AuditEventResult>> SearchAuditEventsCoreAsync(
+	private static int ResolvePageSize(int? requested) =>
+		requested is > 0 ? Math.Min(requested.Value, AuditSearchPaging.MaxPageSize) : AuditSearchPaging.DefaultPageSize;
+
+	private Task<AuditEventSearchResult> SearchAuditEventsCoreAsync(
 		AuditEventSearchRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"audit.search-events", request.Context, null,
 			async () => {
+				AuditEventSearchCursor? before = null;
+				if (request.Cursor is not null) {
+					if (!AuditEventCursorCodec.TryDecode(request.Cursor, out var decoded)) {
+						throw new ArgumentException("The audit search cursor is malformed.", nameof(request));
+					}
+
+					before = decoded;
+				}
+
 				var actorRoles = await _port.GetActorRolesAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
 
 				if (!AuditAccessPolicy.CanSearch(actorRoles)) {
 					throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not search audit history.");
 				}
 
-				var result = await _port.SearchAuditEventsAsync(request.Context.Actor, request.Filter, cancellationToken).ConfigureAwait(false);
+				var pageSize = ResolvePageSize(request.PageSize);
+				var result = await _port.SearchAuditEventsAsync(request.Filter, before, pageSize + 1, cancellationToken)
+					.ConfigureAwait(false);
 
 				// Audit search spans events across many unrelated nodes, not one queried node, so
 				// ADR 0040's ownership carve-out (scoped to a single node's ancestry) doesn't apply here.
 				var canViewCosts = CostAccessPolicy.CanView(actorRoles, false);
 
-				return (IReadOnlyList<AuditEventResult>)[.. result.Events.Select(record => Project(record, canViewCosts))];
+				var hasMore = result.Events.Count > pageSize;
+				var page = hasMore ? result.Events.Take(pageSize).ToArray() : [.. result.Events];
+				var continuationCursor = hasMore
+					? AuditEventCursorCodec.Encode(new() { OccurredAt = page[^1].OccurredAt, Id = page[^1].Id })
+					: null;
+
+				return new AuditEventSearchResult {
+					Events = [.. page.Select(record => Project(record, canViewCosts))],
+					ContinuationCursor = continuationCursor,
+				};
 			});
 }

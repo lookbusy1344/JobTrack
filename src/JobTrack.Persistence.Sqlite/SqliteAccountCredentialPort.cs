@@ -11,9 +11,14 @@ using Shared.Entities;
 
 internal sealed class SqliteAccountCredentialPort : IAccountCredentialPort
 {
+	private readonly IClock clock;
 	private readonly string connectionString;
 
-	public SqliteAccountCredentialPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteAccountCredentialPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	public async Task<SetTwoFactorStateResult> SetTwoFactorStateAsync(
 		SetTwoFactorStateRequest request, CancellationToken cancellationToken = default)
@@ -35,7 +40,7 @@ internal sealed class SqliteAccountCredentialPort : IAccountCredentialPort
 				"Two-factor authentication cannot be enabled without an authenticator key.");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
+		var now = clock.GetCurrentInstant();
 		identityUser.TwoFactorEnabled = request.Enabled;
 		identityUser.TwoFactorEnabledAt = request.Enabled ? now : null;
 		if (!request.Enabled) {

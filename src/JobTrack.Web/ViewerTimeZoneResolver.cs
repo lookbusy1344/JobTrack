@@ -13,6 +13,8 @@ public sealed class ViewerTimeZoneResolver(IJobTrackClient jobTrackClient) : IVi
 			new() { Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() }, TargetUserId = actorId },
 			cancellationToken).ConfigureAwait(false);
 
-		return DateTimeZoneProviders.Tzdb.GetZoneOrNull(profile.IanaTimeZone) ?? DateTimeZoneProviders.Tzdb["Etc/UTC"];
+		return DateTimeZoneProviders.Tzdb.GetZoneOrNull(profile.IanaTimeZone)
+			   ?? throw new UnknownStoredTimeZoneException(
+				   $"Employee {actorId} stores time zone '{profile.IanaTimeZone}', which the current TZDB no longer recognizes.");
 	}
 }

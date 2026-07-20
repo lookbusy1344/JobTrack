@@ -44,7 +44,7 @@ public static class IssueTokenCommand
 					Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() },
 					TargetUserId = user.AppUserId,
 					Label = label,
-					ExpiresAt = SystemClock.Instance.GetCurrentInstant() + lifetime,
+					Lifetime = lifetime,
 				},
 				cancellationToken).ConfigureAwait(false);
 

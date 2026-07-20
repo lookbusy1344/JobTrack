@@ -3,6 +3,7 @@ namespace JobTrack.Persistence.PostgreSql.Tests;
 using System.Data.Common;
 using Application.Ports;
 using Database;
+using NodaTime;
 using Npgsql;
 using TestSupport;
 
@@ -20,14 +21,14 @@ public sealed class PostgreSqlWorkSessionQueryPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
-		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override IWorkSessionCommandPort CreateSessionCommandPort(string connectionString) =>
-		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override IWorkSessionQueryPort CreateQueryPort(string connectionString) =>
-		new PostgreSqlWorkSessionQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlWorkSessionQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 }

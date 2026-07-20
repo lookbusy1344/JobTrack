@@ -17,6 +17,7 @@ JobTrack.Abstractions.AppUserId.Value.init -> void
 JobTrack.Abstractions.AuditEventId
 JobTrack.Abstractions.AuditEventId.AuditEventId() -> void
 JobTrack.Abstractions.AuditEventId.AuditEventId(long Value) -> void
+JobTrack.Abstractions.AuditEventId.CompareTo(JobTrack.Abstractions.AuditEventId other) -> int
 JobTrack.Abstractions.AuditEventId.Deconstruct(out long Value) -> void
 JobTrack.Abstractions.AuditEventId.Equals(JobTrack.Abstractions.AuditEventId other) -> bool
 JobTrack.Abstractions.AuditEventId.IsUnspecified.get -> bool
@@ -189,7 +190,11 @@ override JobTrack.Abstractions.PersonalAccessTokenId.GetHashCode() -> int
 static JobTrack.Abstractions.AppUserId.operator !=(JobTrack.Abstractions.AppUserId left, JobTrack.Abstractions.AppUserId right) -> bool
 static JobTrack.Abstractions.AppUserId.operator ==(JobTrack.Abstractions.AppUserId left, JobTrack.Abstractions.AppUserId right) -> bool
 static JobTrack.Abstractions.AuditEventId.operator !=(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
+static JobTrack.Abstractions.AuditEventId.operator <(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
+static JobTrack.Abstractions.AuditEventId.operator <=(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
 static JobTrack.Abstractions.AuditEventId.operator ==(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
+static JobTrack.Abstractions.AuditEventId.operator >(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
+static JobTrack.Abstractions.AuditEventId.operator >=(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
 static JobTrack.Abstractions.EquatableArray.CopyOf<T>(System.Collections.Generic.IEnumerable<T>! items) -> JobTrack.Abstractions.EquatableArray<T>
 static JobTrack.Abstractions.EquatableArray.CopyOf<T>(System.Collections.Immutable.ImmutableArray<T> items) -> JobTrack.Abstractions.EquatableArray<T>
 static JobTrack.Abstractions.EquatableArray.Create<T>(System.ReadOnlySpan<T> items) -> JobTrack.Abstractions.EquatableArray<T>

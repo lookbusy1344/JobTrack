@@ -20,7 +20,7 @@ public sealed class TokenCommandsTests
 		return port;
 	}
 
-	private static TokenCommands CreateSut(FakePersonalAccessTokenPort port) => new(port);
+	private static TokenCommands CreateSut(FakePersonalAccessTokenPort port, IClock? clock = null) => new(port, clock ?? SystemClock.Instance);
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 
@@ -40,6 +40,23 @@ public sealed class TokenCommandsTests
 
 		result.Token.Should().NotBeNullOrWhiteSpace();
 		result.Label.Should().Be("my-cli");
+	}
+
+	[Fact]
+	public async Task Issuing_a_token_from_a_lifetime_uses_one_fixed_clock_instant_for_its_timestamps()
+	{
+		var now = Instant.FromUtc(2026, 7, 20, 12, 0);
+		var sut = CreateSut(CreateSeededPort(), new FixedClock(now));
+
+		var result = await sut.IssueAsync(new() {
+			Context = ContextFor(WorkerId),
+			TargetUserId = WorkerId,
+			Label = "fixed-clock",
+			Lifetime = Duration.FromDays(30),
+		});
+
+		result.CreatedAt.Should().Be(now);
+		result.ExpiresAt.Should().Be(now + Duration.FromDays(30));
 	}
 
 	[Fact]
@@ -178,5 +195,10 @@ public sealed class TokenCommandsTests
 		var act = () => sut.ListAsync(new() { Context = ContextFor(WorkerId), TargetUserId = OtherWorkerId });
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	private sealed class FixedClock(Instant now) : IClock
+	{
+		public Instant GetCurrentInstant() => now;
 	}
 }

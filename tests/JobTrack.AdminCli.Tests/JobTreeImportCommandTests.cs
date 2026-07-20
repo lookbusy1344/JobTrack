@@ -57,7 +57,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.import", rootId, TreeJson, CancellationToken.None);
+				console, userManager, client, "ada.import", rootId, TreeJson, SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
@@ -90,7 +90,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.import", rootId, TreeJson, CancellationToken.None);
+				console, userManager, client, "ada.import", rootId, TreeJson, SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
@@ -132,7 +132,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.branch", branch.Id, SingleNodeJson, CancellationToken.None);
+				console, userManager, client, "ada.branch", branch.Id, SingleNodeJson, SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			var branchChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = branch.Id });
@@ -166,7 +166,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "no.such.user", rootId, TreeJson, CancellationToken.None);
+				console, userManager, client, "no.such.user", rootId, TreeJson, SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle(error => error.Contains("no.such.user", StringComparison.Ordinal));
@@ -198,7 +198,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.badjson", rootId, "not valid json", CancellationToken.None);
+				console, userManager, client, "ada.badjson", rootId, "not valid json", SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle();
@@ -244,7 +244,7 @@ public sealed class JobTreeImportCommandTests
 									   """;
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.rollback", rootId, InvalidJson, CancellationToken.None);
+				console, userManager, client, "ada.rollback", rootId, InvalidJson, SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle();
@@ -291,7 +291,7 @@ public sealed class JobTreeImportCommandTests
 
 			var before = SystemClock.Instance.GetCurrentInstant();
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.work", rootId, WorkJson, CancellationToken.None);
+				console, userManager, client, "ada.work", rootId, WorkJson, SystemClock.Instance, CancellationToken.None);
 			var after = SystemClock.Instance.GetCurrentInstant();
 
 			exitCode.Should().Be(0);
@@ -353,7 +353,7 @@ public sealed class JobTreeImportCommandTests
 										  """;
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.chrono", rootId, ImpossibleJson, CancellationToken.None);
+				console, userManager, client, "ada.chrono", rootId, ImpossibleJson, SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle();
@@ -391,7 +391,7 @@ public sealed class JobTreeImportCommandTests
 			const string BadWorkJson = """[ { "id": 1, "title": "Vague", "open": "a little while" } ]""";
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.badwork", rootId, BadWorkJson, CancellationToken.None);
+				console, userManager, client, "ada.badwork", rootId, BadWorkJson, SystemClock.Instance, CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle(error => error.Contains("open", StringComparison.Ordinal));

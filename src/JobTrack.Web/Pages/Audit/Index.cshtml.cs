@@ -42,9 +42,13 @@ public sealed class IndexModel(
 
 	[BindProperty(SupportsGet = true)] public string? To { get; init; }
 
+	[BindProperty(SupportsGet = true)] public string? Cursor { get; init; }
+
 	public string? ErrorMessage { get; private set; }
 
 	public IReadOnlyList<AuditEventResult> Events { get; private set; } = [];
+
+	public string? NextCursor { get; private set; }
 
 	/// <summary>
 	///     The signed-in actor's own time zone, for formatting every event's <c>OccurredAt</c> and parsing the <see cref="From" />/<see cref="To" />
@@ -61,19 +65,32 @@ public sealed class IndexModel(
 
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.AppUserId, cancellationToken);
 		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+		if (!BackdateInstant.TryParseOptional(From, ViewerZone, out var from)
+			|| !BackdateInstant.TryParseOptional(To, ViewerZone, out var to)) {
+			ErrorMessage = "Enter a valid date and time for each audit time filter.";
+			return Page();
+		}
 
 		try {
-			Events = await jobTrackClient.Audit.SearchAuditEventsAsync(new() {
+			var result = await jobTrackClient.Audit.SearchAuditEventsAsync(new() {
 				Context = context,
 				Filter = new() {
 					ActorId = ActorId.HasValue ? new AppUserId(ActorId.Value) : null,
 					EntityType = EntityType,
 					EntityId = EntityId,
 					CorrelationId = CorrelationId,
-					From = BackdateInstant.TryParse(From, ViewerZone, out var from) ? from : null,
-					To = BackdateInstant.TryParse(To, ViewerZone, out var to) ? to : null,
+					From = from,
+					To = to,
 				},
+				Cursor = Cursor,
 			}, cancellationToken);
+
+			Events = result.Events;
+			NextCursor = result.ContinuationCursor;
+		}
+		catch (ArgumentException) {
+			ErrorMessage = "The audit search page reference is invalid; start a new search.";
+			return Page();
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();

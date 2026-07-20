@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using NodaTime;
 
 /// <summary>
 ///     Atomically decomposes a currently-worked leaf into a branch (plan §8.5 slice 3, spec §3.5): the
@@ -20,7 +19,10 @@ using NodaTime;
 ///     discarding them.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
-public sealed class DecomposeModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class DecomposeModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	private const int MaxNewChildSlots = 5;
 
@@ -45,7 +47,8 @@ public sealed class DecomposeModel(IJobTrackClient jobTrackClient, UserManager<J
 
 		await LoadCurrentNodeAsync(actor.Value, cancellationToken);
 		await LoadOwnerOptionsAsync(actor.Value, cancellationToken);
-		if (CurrentNode is { } node) {
+		var node = CurrentNode;
+		if (node is not null) {
 			OriginalVersion = node.Node.Version;
 			if (node.Node.HasChildren) {
 				ErrorMessage = "Only a leaf holding existing work can be decomposed.";
@@ -73,21 +76,28 @@ public sealed class DecomposeModel(IJobTrackClient jobTrackClient, UserManager<J
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
-		var newChildren = Input.NewChildren
-			.Where(child => !string.IsNullOrWhiteSpace(child.Description))
-			.Select(child => new NewChildJobSpec {
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+		var newChildren = new List<NewChildJobSpec>();
+		foreach (var child in Input.NewChildren.Where(child => !string.IsNullOrWhiteSpace(child.Description))) {
+			if (!BackdateInstant.TryParseOptional(child.NeededStart, zone, out var childNeededStart)
+				|| !BackdateInstant.TryParseOptional(child.NeededFinish, zone, out var childNeededFinish)) {
+				ErrorMessage = "Enter a valid date and time for each new child.";
+				return Page();
+			}
+
+			newChildren.Add(new() {
 				Description = child.Description!,
 				WriteUp = child.WriteUp,
 				OwnerUserId = child.OwnerUserId.HasValue ? new AppUserId(child.OwnerUserId.Value) : null,
 				Priority = child.Priority,
 				ExpectedDurationHours = child.ExpectedDurationHours,
 				ExpectedCost = child.ExpectedCost.HasValue ? new Money(child.ExpectedCost.Value) : null,
-				NeededStart = child.NeededStart.HasValue ? Instant.FromDateTimeOffset(child.NeededStart.Value) : null,
-				NeededFinish = child.NeededFinish.HasValue ? Instant.FromDateTimeOffset(child.NeededFinish.Value) : null,
-			})
-			.ToArray();
+				NeededStart = childNeededStart,
+				NeededFinish = childNeededFinish,
+			});
+		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
 		var request = new DecomposeWorkedLeafRequest {
 			Context = context,
 			LeafNodeId = new(LeafNodeId),
@@ -119,7 +129,8 @@ public sealed class DecomposeModel(IJobTrackClient jobTrackClient, UserManager<J
 						   "The latest version is shown below — try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);
 			await LoadOwnerOptionsAsync(actor.Value, cancellationToken);
-			if (CurrentNode is { } refreshed) {
+			var refreshed = CurrentNode;
+			if (refreshed is not null) {
 				OriginalVersion = refreshed.Node.Version;
 			}
 
@@ -175,8 +186,8 @@ public sealed class DecomposeModel(IJobTrackClient jobTrackClient, UserManager<J
 
 		public decimal? ExpectedCost { get; set; }
 
-		public DateTimeOffset? NeededStart { get; set; }
+		public string? NeededStart { get; set; }
 
-		public DateTimeOffset? NeededFinish { get; set; }
+		public string? NeededFinish { get; set; }
 	}
 }

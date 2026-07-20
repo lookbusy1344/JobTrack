@@ -62,7 +62,7 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "user_schedule_version", EntityId = result.Id.Value });
+			new() { EntityType = "user_schedule_version", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("add-schedule-version");
@@ -331,7 +331,7 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "user_schedule_version", EntityId = added.Id.Value });
+			new() { EntityType = "user_schedule_version", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-schedule-version" && e.ActorId == workerId);
 	}
@@ -474,7 +474,7 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "user_schedule_exception", EntityId = added.Id.Value });
+			new() { EntityType = "user_schedule_exception", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-schedule-exception" && e.ActorId == workerId);
 	}

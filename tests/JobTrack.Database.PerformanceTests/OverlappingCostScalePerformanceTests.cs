@@ -62,7 +62,7 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 			"the cost-input session load must use an index, not a sequential scan of work_session");
 
 		var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
-		var port = new PostgreSqlCostQueryPort(dataSource);
+		var port = new PostgreSqlCostQueryPort(dataSource, SystemClock.Instance);
 		var costQueries = new CostQueries(port);
 		var context = new CommandContext { Actor = new(seed.OwnerActorId), CorrelationId = Guid.NewGuid() };
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
@@ -121,7 +121,7 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		seed.HeavyWorkerBranchId.Should().NotBeNull();
 		await GrantCostViewerRoleAsync(connection, seed.HeavyWorkerId!.Value);
 
-		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build());
+		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build(), SystemClock.Instance);
 		var costQueries = new CostQueries(port);
 		var context = new CommandContext { Actor = new(seed.HeavyWorkerId!.Value), CorrelationId = Guid.NewGuid() };
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
@@ -170,7 +170,7 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		PostgreSqlExplainPlan.ContainsIndexScanUsing(plan, "work_session_user_range_gist_idx").Should().BeTrue(
 			"a narrow query against a long-lived worker's history must use the GiST range index, not scan the whole history");
 
-		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build());
+		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build(), SystemClock.Instance);
 		var costQueries = new CostQueries(port);
 		var context = new CommandContext { Actor = new(seed.HeavyWorkerId!.Value), CorrelationId = Guid.NewGuid() };
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);

@@ -126,7 +126,7 @@ JobTrack.Application.AttachLeafWorkRequest.PartialCriteria.get -> string?
 JobTrack.Application.AttachLeafWorkRequest.PartialCriteria.init -> void
 JobTrack.Application.AuditEventResult
 JobTrack.Application.AuditEventResult.<Clone>$() -> JobTrack.Application.AuditEventResult!
-JobTrack.Application.AuditEventResult.ActorId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.AuditEventResult.ActorId.get -> JobTrack.Abstractions.AppUserId?
 JobTrack.Application.AuditEventResult.ActorId.init -> void
 JobTrack.Application.AuditEventResult.AfterData.get -> JobTrack.Abstractions.EquatableDictionary<string!, string?>?
 JobTrack.Application.AuditEventResult.AfterData.init -> void
@@ -150,6 +150,14 @@ JobTrack.Application.AuditEventResult.Operation.get -> string!
 JobTrack.Application.AuditEventResult.Operation.init -> void
 JobTrack.Application.AuditEventResult.Reason.get -> string?
 JobTrack.Application.AuditEventResult.Reason.init -> void
+JobTrack.Application.AuditEventSearchCursor
+JobTrack.Application.AuditEventSearchCursor.<Clone>$() -> JobTrack.Application.AuditEventSearchCursor!
+JobTrack.Application.AuditEventSearchCursor.AuditEventSearchCursor() -> void
+JobTrack.Application.AuditEventSearchCursor.Equals(JobTrack.Application.AuditEventSearchCursor? other) -> bool
+JobTrack.Application.AuditEventSearchCursor.Id.get -> JobTrack.Abstractions.AuditEventId
+JobTrack.Application.AuditEventSearchCursor.Id.init -> void
+JobTrack.Application.AuditEventSearchCursor.OccurredAt.get -> NodaTime.Instant
+JobTrack.Application.AuditEventSearchCursor.OccurredAt.init -> void
 JobTrack.Application.AuditEventSearchFilter
 JobTrack.Application.AuditEventSearchFilter.<Clone>$() -> JobTrack.Application.AuditEventSearchFilter!
 JobTrack.Application.AuditEventSearchFilter.ActorId.get -> JobTrack.Abstractions.AppUserId?
@@ -171,12 +179,60 @@ JobTrack.Application.AuditEventSearchRequest.<Clone>$() -> JobTrack.Application.
 JobTrack.Application.AuditEventSearchRequest.AuditEventSearchRequest() -> void
 JobTrack.Application.AuditEventSearchRequest.Context.get -> JobTrack.Application.CommandContext!
 JobTrack.Application.AuditEventSearchRequest.Context.init -> void
+JobTrack.Application.AuditEventSearchRequest.Cursor.get -> string?
+JobTrack.Application.AuditEventSearchRequest.Cursor.init -> void
 JobTrack.Application.AuditEventSearchRequest.Equals(JobTrack.Application.AuditEventSearchRequest? other) -> bool
 JobTrack.Application.AuditEventSearchRequest.Filter.get -> JobTrack.Application.AuditEventSearchFilter!
 JobTrack.Application.AuditEventSearchRequest.Filter.init -> void
+JobTrack.Application.AuditEventSearchRequest.PageSize.get -> int?
+JobTrack.Application.AuditEventSearchRequest.PageSize.init -> void
+JobTrack.Application.AuditEventSearchResult
+JobTrack.Application.AuditEventSearchResult.<Clone>$() -> JobTrack.Application.AuditEventSearchResult!
+JobTrack.Application.AuditEventSearchResult.AuditEventSearchResult() -> void
+JobTrack.Application.AuditEventSearchResult.ContinuationCursor.get -> string?
+JobTrack.Application.AuditEventSearchResult.ContinuationCursor.init -> void
+JobTrack.Application.AuditEventSearchResult.Equals(JobTrack.Application.AuditEventSearchResult? other) -> bool
+JobTrack.Application.AuditEventSearchResult.Events.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.AuditEventResult!>
+JobTrack.Application.AuditEventSearchResult.Events.init -> void
 JobTrack.Application.AuditQueries
 JobTrack.Application.AuditQueries.AuditQueries(JobTrack.Application.Ports.IAuditQueryPort! port) -> void
-JobTrack.Application.AuditQueries.SearchAuditEventsAsync(JobTrack.Application.AuditEventSearchRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<JobTrack.Application.AuditEventResult!>!>!
+JobTrack.Application.AuditQueries.SearchAuditEventsAsync(JobTrack.Application.AuditEventSearchRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.AuditEventSearchResult!>!
+JobTrack.Application.AuditSearchPaging
+JobTrack.Application.BulkNodeCostResult
+JobTrack.Application.BulkNodeCostResult.<Clone>$() -> JobTrack.Application.BulkNodeCostResult!
+JobTrack.Application.BulkNodeCostResult.BulkNodeCostResult() -> void
+JobTrack.Application.BulkNodeCostResult.DisplayedCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
+JobTrack.Application.BulkNodeCostResult.DisplayedCosts.init -> void
+JobTrack.Application.BulkNodeCostResult.Equals(JobTrack.Application.BulkNodeCostResult? other) -> bool
+JobTrack.Application.CostQueries.GetBulkNodeCostsAsync(JobTrack.Application.GetBulkNodeCostsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.BulkNodeCostResult!>!
+JobTrack.Application.GetBulkNodeCostsRequest
+JobTrack.Application.GetBulkNodeCostsRequest.<Clone>$() -> JobTrack.Application.GetBulkNodeCostsRequest!
+JobTrack.Application.GetBulkNodeCostsRequest.AsOf.get -> NodaTime.Instant
+JobTrack.Application.GetBulkNodeCostsRequest.AsOf.init -> void
+JobTrack.Application.GetBulkNodeCostsRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetBulkNodeCostsRequest.Context.init -> void
+JobTrack.Application.GetBulkNodeCostsRequest.Equals(JobTrack.Application.GetBulkNodeCostsRequest? other) -> bool
+JobTrack.Application.GetBulkNodeCostsRequest.GetBulkNodeCostsRequest() -> void
+JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
+JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.init -> void
+JobTrack.Application.ICostQueries.GetBulkNodeCostsAsync(JobTrack.Application.GetBulkNodeCostsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.BulkNodeCostResult!>!
+JobTrack.Application.Ports.BulkCostQueryResult
+JobTrack.Application.Ports.BulkCostQueryResult.<Clone>$() -> JobTrack.Application.Ports.BulkCostQueryResult!
+JobTrack.Application.Ports.BulkCostQueryResult.ActorRoles.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.EmployeeRole>
+JobTrack.Application.Ports.BulkCostQueryResult.ActorRoles.init -> void
+JobTrack.Application.Ports.BulkCostQueryResult.Bounds.get -> JobTrack.Domain.Intervals.WorkInterval
+JobTrack.Application.Ports.BulkCostQueryResult.Bounds.init -> void
+JobTrack.Application.Ports.BulkCostQueryResult.BulkCostQueryResult() -> void
+JobTrack.Application.Ports.BulkCostQueryResult.Equals(JobTrack.Application.Ports.BulkCostQueryResult? other) -> bool
+JobTrack.Application.Ports.BulkCostQueryResult.NodesById.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>
+JobTrack.Application.Ports.BulkCostQueryResult.NodesById.init -> void
+JobTrack.Application.Ports.BulkCostQueryResult.OwnerUserIdsById.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.AppUserId?>
+JobTrack.Application.Ports.BulkCostQueryResult.OwnerUserIdsById.init -> void
+JobTrack.Application.Ports.BulkCostQueryResult.Workers.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.Ports.WorkerCostInputs!>
+JobTrack.Application.Ports.BulkCostQueryResult.Workers.init -> void
+JobTrack.Application.Ports.ICostQueryPort.GetBulkCostInputsAsync(JobTrack.Abstractions.AppUserId actorId, JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId> nodeIds, NodaTime.Instant asOf, int maxHierarchyNodes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.Ports.BulkCostQueryResult!>!
+const JobTrack.Application.AuditSearchPaging.DefaultPageSize = 50 -> int
+const JobTrack.Application.AuditSearchPaging.MaxPageSize = 200 -> int
 JobTrack.Application.AuthenticatedPersonalAccessTokenResult
 JobTrack.Application.AuthenticatedPersonalAccessTokenResult.<Clone>$() -> JobTrack.Application.AuthenticatedPersonalAccessTokenResult!
 JobTrack.Application.AuthenticatedPersonalAccessTokenResult.AuthenticatedPersonalAccessTokenResult() -> void
@@ -531,6 +587,10 @@ JobTrack.Application.GetAwaitingProgressRequest.Context.get -> JobTrack.Applicat
 JobTrack.Application.GetAwaitingProgressRequest.Context.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Equals(JobTrack.Application.GetAwaitingProgressRequest? other) -> bool
 JobTrack.Application.GetAwaitingProgressRequest.GetAwaitingProgressRequest() -> void
+JobTrack.Application.GetAwaitingProgressRequest.Limit.get -> int?
+JobTrack.Application.GetAwaitingProgressRequest.Limit.init -> void
+JobTrack.Application.GetAwaitingProgressRequest.Offset.get -> int
+JobTrack.Application.GetAwaitingProgressRequest.Offset.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Ownership.get -> JobTrack.Domain.Hierarchy.OwnershipFilter!
 JobTrack.Application.GetAwaitingProgressRequest.Ownership.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.SubtreeRootId.get -> JobTrack.Abstractions.JobNodeId?
@@ -710,7 +770,7 @@ JobTrack.Application.HoldingAreaSummaryResult.Name.init -> void
 JobTrack.Application.IAccountCredentialCommands
 JobTrack.Application.IAccountCredentialCommands.SetTwoFactorStateAsync(JobTrack.Application.SetTwoFactorStateRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.SetTwoFactorStateResult!>!
 JobTrack.Application.IAuditQueries
-JobTrack.Application.IAuditQueries.SearchAuditEventsAsync(JobTrack.Application.AuditEventSearchRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<JobTrack.Application.AuditEventResult!>!>!
+JobTrack.Application.IAuditQueries.SearchAuditEventsAsync(JobTrack.Application.AuditEventSearchRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.AuditEventSearchResult!>!
 JobTrack.Application.IAuthenticationAuditCommands
 JobTrack.Application.IAuthenticationAuditCommands.RecordAsync(JobTrack.Application.RecordAuthenticationAuditEventRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 JobTrack.Application.ICostQueries
@@ -873,11 +933,13 @@ JobTrack.Application.IssuePersonalAccessTokenRequest.<Clone>$() -> JobTrack.Appl
 JobTrack.Application.IssuePersonalAccessTokenRequest.Context.get -> JobTrack.Application.CommandContext!
 JobTrack.Application.IssuePersonalAccessTokenRequest.Context.init -> void
 JobTrack.Application.IssuePersonalAccessTokenRequest.Equals(JobTrack.Application.IssuePersonalAccessTokenRequest? other) -> bool
-JobTrack.Application.IssuePersonalAccessTokenRequest.ExpiresAt.get -> NodaTime.Instant
+JobTrack.Application.IssuePersonalAccessTokenRequest.ExpiresAt.get -> NodaTime.Instant?
 JobTrack.Application.IssuePersonalAccessTokenRequest.ExpiresAt.init -> void
 JobTrack.Application.IssuePersonalAccessTokenRequest.IssuePersonalAccessTokenRequest() -> void
 JobTrack.Application.IssuePersonalAccessTokenRequest.Label.get -> string!
 JobTrack.Application.IssuePersonalAccessTokenRequest.Label.init -> void
+JobTrack.Application.IssuePersonalAccessTokenRequest.Lifetime.get -> NodaTime.Duration?
+JobTrack.Application.IssuePersonalAccessTokenRequest.Lifetime.init -> void
 JobTrack.Application.IssuePersonalAccessTokenRequest.TargetUserId.get -> JobTrack.Abstractions.AppUserId
 JobTrack.Application.IssuePersonalAccessTokenRequest.TargetUserId.init -> void
 JobTrack.Application.IssuedPersonalAccessTokenResult
@@ -1041,7 +1103,7 @@ JobTrack.Application.JobQueries.GetPrerequisitesAsync(JobTrack.Application.GetPr
 JobTrack.Application.JobQueries.GetRatesAsync(JobTrack.Application.GetRatesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.RateSnapshotResult!>!
 JobTrack.Application.JobQueries.GetReadinessAsync(JobTrack.Application.GetReadinessRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Domain.Hierarchy.ReadinessResult!>!
 JobTrack.Application.JobQueries.GetScheduleAsync(JobTrack.Application.GetScheduleRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ScheduleSnapshotResult!>!
-JobTrack.Application.JobQueries.JobQueries(JobTrack.Application.Ports.IEmployeeQueryPort! employeeQueryPort, JobTrack.Application.Ports.IReadinessQueryPort! readinessQueryPort, JobTrack.Application.Ports.IJobBrowseQueryPort! browseQueryPort, JobTrack.Application.Ports.IAwaitingProgressQueryPort! awaitingProgressQueryPort, JobTrack.Application.Ports.IWorkSessionQueryPort! workSessionQueryPort, JobTrack.Application.Ports.ILeafWorkQueryPort! leafWorkQueryPort, JobTrack.Application.Ports.IPrerequisiteQueryPort! prerequisiteQueryPort, JobTrack.Application.Ports.IScheduleQueryPort! scheduleQueryPort, JobTrack.Application.Ports.IRateQueryPort! rateQueryPort, JobTrack.Application.ICostQueries! costQueries) -> void
+JobTrack.Application.JobQueries.JobQueries(JobTrack.Application.Ports.IEmployeeQueryPort! employeeQueryPort, JobTrack.Application.Ports.IReadinessQueryPort! readinessQueryPort, JobTrack.Application.Ports.IJobBrowseQueryPort! browseQueryPort, JobTrack.Application.Ports.IAwaitingProgressQueryPort! awaitingProgressQueryPort, JobTrack.Application.Ports.IWorkSessionQueryPort! workSessionQueryPort, JobTrack.Application.Ports.ILeafWorkQueryPort! leafWorkQueryPort, JobTrack.Application.Ports.IPrerequisiteQueryPort! prerequisiteQueryPort, JobTrack.Application.Ports.IScheduleQueryPort! scheduleQueryPort, JobTrack.Application.Ports.IRateQueryPort! rateQueryPort, JobTrack.Application.ICostQueries! costQueries, NodaTime.IClock! clock) -> void
 JobTrack.Application.JobQueries.SearchJobNodesAsync(JobTrack.Application.SearchJobNodesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobNodeSummaryResult!>>!
 JobTrack.Application.JobRequestDetailResult
 JobTrack.Application.JobRequestDetailResult.<Clone>$() -> JobTrack.Application.JobRequestDetailResult!
@@ -1276,7 +1338,7 @@ JobTrack.Application.Ports.AccountStateQueryResult.ActorRoles.init -> void
 JobTrack.Application.Ports.AccountStateQueryResult.Equals(JobTrack.Application.Ports.AccountStateQueryResult? other) -> bool
 JobTrack.Application.Ports.AuditEventRecord
 JobTrack.Application.Ports.AuditEventRecord.<Clone>$() -> JobTrack.Application.Ports.AuditEventRecord!
-JobTrack.Application.Ports.AuditEventRecord.ActorId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.Ports.AuditEventRecord.ActorId.get -> JobTrack.Abstractions.AppUserId?
 JobTrack.Application.Ports.AuditEventRecord.ActorId.init -> void
 JobTrack.Application.Ports.AuditEventRecord.AfterData.get -> JobTrack.Abstractions.EquatableDictionary<string!, string?>?
 JobTrack.Application.Ports.AuditEventRecord.AfterData.init -> void
@@ -1302,8 +1364,6 @@ JobTrack.Application.Ports.AuditEventRecord.Reason.get -> string?
 JobTrack.Application.Ports.AuditEventRecord.Reason.init -> void
 JobTrack.Application.Ports.AuditSearchQueryResult
 JobTrack.Application.Ports.AuditSearchQueryResult.<Clone>$() -> JobTrack.Application.Ports.AuditSearchQueryResult!
-JobTrack.Application.Ports.AuditSearchQueryResult.ActorRoles.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.EmployeeRole>
-JobTrack.Application.Ports.AuditSearchQueryResult.ActorRoles.init -> void
 JobTrack.Application.Ports.AuditSearchQueryResult.AuditSearchQueryResult() -> void
 JobTrack.Application.Ports.AuditSearchQueryResult.Equals(JobTrack.Application.Ports.AuditSearchQueryResult? other) -> bool
 JobTrack.Application.Ports.AuditSearchQueryResult.Events.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.Ports.AuditEventRecord!>
@@ -1392,7 +1452,7 @@ JobTrack.Application.Ports.IAchievementCommandPort
 JobTrack.Application.Ports.IAchievementCommandPort.SetAchievementAsync(JobTrack.Application.SetAchievementRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.LeafWorkResult!>!
 JobTrack.Application.Ports.IAuditQueryPort
 JobTrack.Application.Ports.IAuditQueryPort.GetActorRolesAsync(JobTrack.Abstractions.AppUserId actorId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.EmployeeRole>>!
-JobTrack.Application.Ports.IAuditQueryPort.SearchAuditEventsAsync(JobTrack.Abstractions.AppUserId actorId, JobTrack.Application.AuditEventSearchFilter! filter, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.Ports.AuditSearchQueryResult!>!
+JobTrack.Application.Ports.IAuditQueryPort.SearchAuditEventsAsync(JobTrack.Application.AuditEventSearchFilter! filter, JobTrack.Application.AuditEventSearchCursor? before, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.Ports.AuditSearchQueryResult!>!
 JobTrack.Application.Ports.IAuthenticationAuditPort
 JobTrack.Application.Ports.IAuthenticationAuditPort.RecordAsync(JobTrack.Application.RecordAuthenticationAuditEventRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 JobTrack.Application.Ports.IAwaitingProgressQueryPort
@@ -1840,7 +1900,7 @@ JobTrack.Application.TokenCommands.IssueAsync(JobTrack.Application.IssuePersonal
 JobTrack.Application.TokenCommands.ListAsync(JobTrack.Application.ListPersonalAccessTokensRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.PersonalAccessTokenSummaryResult!>>!
 JobTrack.Application.TokenCommands.RevokeAllAsync(JobTrack.Application.RevokeAllPersonalAccessTokensRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 JobTrack.Application.TokenCommands.RevokeAsync(JobTrack.Application.RevokePersonalAccessTokenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-JobTrack.Application.TokenCommands.TokenCommands(JobTrack.Application.Ports.IPersonalAccessTokenPort! port) -> void
+JobTrack.Application.TokenCommands.TokenCommands(JobTrack.Application.Ports.IPersonalAccessTokenPort! port, NodaTime.IClock! clock) -> void
 JobTrack.Application.TokenCommands.TryAuthenticateAsync(JobTrack.Application.TryAuthenticatePersonalAccessTokenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.AuthenticatedPersonalAccessTokenResult?>!
 JobTrack.Application.TryAuthenticatePersonalAccessTokenRequest
 JobTrack.Application.TryAuthenticatePersonalAccessTokenRequest.<Clone>$() -> JobTrack.Application.TryAuthenticatePersonalAccessTokenRequest!
@@ -1924,12 +1984,18 @@ override JobTrack.Application.AttachLeafWorkRequest.ToString() -> string!
 override JobTrack.Application.AuditEventResult.Equals(object? obj) -> bool
 override JobTrack.Application.AuditEventResult.GetHashCode() -> int
 override JobTrack.Application.AuditEventResult.ToString() -> string!
+override JobTrack.Application.AuditEventSearchCursor.Equals(object? obj) -> bool
+override JobTrack.Application.AuditEventSearchCursor.GetHashCode() -> int
+override JobTrack.Application.AuditEventSearchCursor.ToString() -> string!
 override JobTrack.Application.AuditEventSearchFilter.Equals(object? obj) -> bool
 override JobTrack.Application.AuditEventSearchFilter.GetHashCode() -> int
 override JobTrack.Application.AuditEventSearchFilter.ToString() -> string!
 override JobTrack.Application.AuditEventSearchRequest.Equals(object? obj) -> bool
 override JobTrack.Application.AuditEventSearchRequest.GetHashCode() -> int
 override JobTrack.Application.AuditEventSearchRequest.ToString() -> string!
+override JobTrack.Application.AuditEventSearchResult.Equals(object? obj) -> bool
+override JobTrack.Application.AuditEventSearchResult.GetHashCode() -> int
+override JobTrack.Application.AuditEventSearchResult.ToString() -> string!
 override JobTrack.Application.AuthenticatedPersonalAccessTokenResult.Equals(object? obj) -> bool
 override JobTrack.Application.AuthenticatedPersonalAccessTokenResult.GetHashCode() -> int
 override JobTrack.Application.AuthenticatedPersonalAccessTokenResult.ToString() -> string!
@@ -1939,6 +2005,9 @@ override JobTrack.Application.BootstrapAdministratorRequest.ToString() -> string
 override JobTrack.Application.BootstrapAdministratorResult.Equals(object? obj) -> bool
 override JobTrack.Application.BootstrapAdministratorResult.GetHashCode() -> int
 override JobTrack.Application.BootstrapAdministratorResult.ToString() -> string!
+override JobTrack.Application.BulkNodeCostResult.Equals(object? obj) -> bool
+override JobTrack.Application.BulkNodeCostResult.GetHashCode() -> int
+override JobTrack.Application.BulkNodeCostResult.ToString() -> string!
 override JobTrack.Application.CommandContext.Equals(object? obj) -> bool
 override JobTrack.Application.CommandContext.GetHashCode() -> int
 override JobTrack.Application.CommandContext.ToString() -> string!
@@ -2002,6 +2071,9 @@ override JobTrack.Application.GetAllEmployeesRequest.ToString() -> string!
 override JobTrack.Application.GetAwaitingProgressRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetAwaitingProgressRequest.GetHashCode() -> int
 override JobTrack.Application.GetAwaitingProgressRequest.ToString() -> string!
+override JobTrack.Application.GetBulkNodeCostsRequest.Equals(object? obj) -> bool
+override JobTrack.Application.GetBulkNodeCostsRequest.GetHashCode() -> int
+override JobTrack.Application.GetBulkNodeCostsRequest.ToString() -> string!
 override JobTrack.Application.GetCostDetailsRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetCostDetailsRequest.GetHashCode() -> int
 override JobTrack.Application.GetCostDetailsRequest.ToString() -> string!
@@ -2149,6 +2221,9 @@ override JobTrack.Application.Ports.BootstrapPersistenceRequest.ToString() -> st
 override JobTrack.Application.Ports.BootstrapPersistenceResult.Equals(object? obj) -> bool
 override JobTrack.Application.Ports.BootstrapPersistenceResult.GetHashCode() -> int
 override JobTrack.Application.Ports.BootstrapPersistenceResult.ToString() -> string!
+override JobTrack.Application.Ports.BulkCostQueryResult.Equals(object? obj) -> bool
+override JobTrack.Application.Ports.BulkCostQueryResult.GetHashCode() -> int
+override JobTrack.Application.Ports.BulkCostQueryResult.ToString() -> string!
 override JobTrack.Application.Ports.CostQueryResult.Equals(object? obj) -> bool
 override JobTrack.Application.Ports.CostQueryResult.GetHashCode() -> int
 override JobTrack.Application.Ports.CostQueryResult.ToString() -> string!
@@ -2272,16 +2347,22 @@ static JobTrack.Application.AttachLeafWorkRequest.operator !=(JobTrack.Applicati
 static JobTrack.Application.AttachLeafWorkRequest.operator ==(JobTrack.Application.AttachLeafWorkRequest? left, JobTrack.Application.AttachLeafWorkRequest? right) -> bool
 static JobTrack.Application.AuditEventResult.operator !=(JobTrack.Application.AuditEventResult? left, JobTrack.Application.AuditEventResult? right) -> bool
 static JobTrack.Application.AuditEventResult.operator ==(JobTrack.Application.AuditEventResult? left, JobTrack.Application.AuditEventResult? right) -> bool
+static JobTrack.Application.AuditEventSearchCursor.operator !=(JobTrack.Application.AuditEventSearchCursor? left, JobTrack.Application.AuditEventSearchCursor? right) -> bool
+static JobTrack.Application.AuditEventSearchCursor.operator ==(JobTrack.Application.AuditEventSearchCursor? left, JobTrack.Application.AuditEventSearchCursor? right) -> bool
 static JobTrack.Application.AuditEventSearchFilter.operator !=(JobTrack.Application.AuditEventSearchFilter? left, JobTrack.Application.AuditEventSearchFilter? right) -> bool
 static JobTrack.Application.AuditEventSearchFilter.operator ==(JobTrack.Application.AuditEventSearchFilter? left, JobTrack.Application.AuditEventSearchFilter? right) -> bool
 static JobTrack.Application.AuditEventSearchRequest.operator !=(JobTrack.Application.AuditEventSearchRequest? left, JobTrack.Application.AuditEventSearchRequest? right) -> bool
 static JobTrack.Application.AuditEventSearchRequest.operator ==(JobTrack.Application.AuditEventSearchRequest? left, JobTrack.Application.AuditEventSearchRequest? right) -> bool
+static JobTrack.Application.AuditEventSearchResult.operator !=(JobTrack.Application.AuditEventSearchResult? left, JobTrack.Application.AuditEventSearchResult? right) -> bool
+static JobTrack.Application.AuditEventSearchResult.operator ==(JobTrack.Application.AuditEventSearchResult? left, JobTrack.Application.AuditEventSearchResult? right) -> bool
 static JobTrack.Application.AuthenticatedPersonalAccessTokenResult.operator !=(JobTrack.Application.AuthenticatedPersonalAccessTokenResult? left, JobTrack.Application.AuthenticatedPersonalAccessTokenResult? right) -> bool
 static JobTrack.Application.AuthenticatedPersonalAccessTokenResult.operator ==(JobTrack.Application.AuthenticatedPersonalAccessTokenResult? left, JobTrack.Application.AuthenticatedPersonalAccessTokenResult? right) -> bool
 static JobTrack.Application.BootstrapAdministratorRequest.operator !=(JobTrack.Application.BootstrapAdministratorRequest? left, JobTrack.Application.BootstrapAdministratorRequest? right) -> bool
 static JobTrack.Application.BootstrapAdministratorRequest.operator ==(JobTrack.Application.BootstrapAdministratorRequest? left, JobTrack.Application.BootstrapAdministratorRequest? right) -> bool
 static JobTrack.Application.BootstrapAdministratorResult.operator !=(JobTrack.Application.BootstrapAdministratorResult? left, JobTrack.Application.BootstrapAdministratorResult? right) -> bool
 static JobTrack.Application.BootstrapAdministratorResult.operator ==(JobTrack.Application.BootstrapAdministratorResult? left, JobTrack.Application.BootstrapAdministratorResult? right) -> bool
+static JobTrack.Application.BulkNodeCostResult.operator !=(JobTrack.Application.BulkNodeCostResult? left, JobTrack.Application.BulkNodeCostResult? right) -> bool
+static JobTrack.Application.BulkNodeCostResult.operator ==(JobTrack.Application.BulkNodeCostResult? left, JobTrack.Application.BulkNodeCostResult? right) -> bool
 static JobTrack.Application.CommandContext.operator !=(JobTrack.Application.CommandContext? left, JobTrack.Application.CommandContext? right) -> bool
 static JobTrack.Application.CommandContext.operator ==(JobTrack.Application.CommandContext? left, JobTrack.Application.CommandContext? right) -> bool
 static JobTrack.Application.CorrectNodeRateOverrideRequest.operator !=(JobTrack.Application.CorrectNodeRateOverrideRequest? left, JobTrack.Application.CorrectNodeRateOverrideRequest? right) -> bool
@@ -2324,6 +2405,8 @@ static JobTrack.Application.GetAllEmployeesRequest.operator !=(JobTrack.Applicat
 static JobTrack.Application.GetAllEmployeesRequest.operator ==(JobTrack.Application.GetAllEmployeesRequest? left, JobTrack.Application.GetAllEmployeesRequest? right) -> bool
 static JobTrack.Application.GetAwaitingProgressRequest.operator !=(JobTrack.Application.GetAwaitingProgressRequest? left, JobTrack.Application.GetAwaitingProgressRequest? right) -> bool
 static JobTrack.Application.GetAwaitingProgressRequest.operator ==(JobTrack.Application.GetAwaitingProgressRequest? left, JobTrack.Application.GetAwaitingProgressRequest? right) -> bool
+static JobTrack.Application.GetBulkNodeCostsRequest.operator !=(JobTrack.Application.GetBulkNodeCostsRequest? left, JobTrack.Application.GetBulkNodeCostsRequest? right) -> bool
+static JobTrack.Application.GetBulkNodeCostsRequest.operator ==(JobTrack.Application.GetBulkNodeCostsRequest? left, JobTrack.Application.GetBulkNodeCostsRequest? right) -> bool
 static JobTrack.Application.GetCostDetailsRequest.operator !=(JobTrack.Application.GetCostDetailsRequest? left, JobTrack.Application.GetCostDetailsRequest? right) -> bool
 static JobTrack.Application.GetCostDetailsRequest.operator ==(JobTrack.Application.GetCostDetailsRequest? left, JobTrack.Application.GetCostDetailsRequest? right) -> bool
 static JobTrack.Application.GetEmployeeDirectoryRequest.operator !=(JobTrack.Application.GetEmployeeDirectoryRequest? left, JobTrack.Application.GetEmployeeDirectoryRequest? right) -> bool
@@ -2422,6 +2505,8 @@ static JobTrack.Application.Ports.BootstrapPersistenceRequest.operator !=(JobTra
 static JobTrack.Application.Ports.BootstrapPersistenceRequest.operator ==(JobTrack.Application.Ports.BootstrapPersistenceRequest? left, JobTrack.Application.Ports.BootstrapPersistenceRequest? right) -> bool
 static JobTrack.Application.Ports.BootstrapPersistenceResult.operator !=(JobTrack.Application.Ports.BootstrapPersistenceResult? left, JobTrack.Application.Ports.BootstrapPersistenceResult? right) -> bool
 static JobTrack.Application.Ports.BootstrapPersistenceResult.operator ==(JobTrack.Application.Ports.BootstrapPersistenceResult? left, JobTrack.Application.Ports.BootstrapPersistenceResult? right) -> bool
+static JobTrack.Application.Ports.BulkCostQueryResult.operator !=(JobTrack.Application.Ports.BulkCostQueryResult? left, JobTrack.Application.Ports.BulkCostQueryResult? right) -> bool
+static JobTrack.Application.Ports.BulkCostQueryResult.operator ==(JobTrack.Application.Ports.BulkCostQueryResult? left, JobTrack.Application.Ports.BulkCostQueryResult? right) -> bool
 static JobTrack.Application.Ports.CostQueryResult.operator !=(JobTrack.Application.Ports.CostQueryResult? left, JobTrack.Application.Ports.CostQueryResult? right) -> bool
 static JobTrack.Application.Ports.CostQueryResult.operator ==(JobTrack.Application.Ports.CostQueryResult? left, JobTrack.Application.Ports.CostQueryResult? right) -> bool
 static JobTrack.Application.Ports.CreateEmployeePersistenceRequest.operator !=(JobTrack.Application.Ports.CreateEmployeePersistenceRequest? left, JobTrack.Application.Ports.CreateEmployeePersistenceRequest? right) -> bool
@@ -2488,3 +2573,6 @@ static JobTrack.Application.UserCostRateResult.operator !=(JobTrack.Application.
 static JobTrack.Application.UserCostRateResult.operator ==(JobTrack.Application.UserCostRateResult? left, JobTrack.Application.UserCostRateResult? right) -> bool
 static JobTrack.Application.WorkSessionResult.operator !=(JobTrack.Application.WorkSessionResult? left, JobTrack.Application.WorkSessionResult? right) -> bool
 static JobTrack.Application.WorkSessionResult.operator ==(JobTrack.Application.WorkSessionResult? left, JobTrack.Application.WorkSessionResult? right) -> bool
+JobTrack.Application.AwaitingProgressPaging
+const JobTrack.Application.AwaitingProgressPaging.DefaultPageSize = 50 -> int
+const JobTrack.Application.AwaitingProgressPaging.MaxPageSize = 200 -> int

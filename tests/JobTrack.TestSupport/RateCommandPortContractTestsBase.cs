@@ -62,7 +62,7 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			rateManagerId, new() { EntityType = "user_cost_rate", EntityId = result.Id.Value });
+			new() { EntityType = "user_cost_rate", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("add-user-cost-rate");
@@ -237,7 +237,7 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			rateManagerId, new() { EntityType = "user_cost_rate", EntityId = added.Id.Value });
+			new() { EntityType = "user_cost_rate", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-user-cost-rate" && e.ActorId == rateManagerId);
 	}
@@ -364,7 +364,7 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			administratorId, new() { EntityType = "node_rate_override", EntityId = added.Id.Value });
+			new() { EntityType = "node_rate_override", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-node-rate-override" && e.ActorId == administratorId);
 	}

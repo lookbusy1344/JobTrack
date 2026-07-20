@@ -1,6 +1,7 @@
 namespace JobTrack.Database;
 
 using System.Data.Common;
+using NodaTime;
 
 /// <summary>
 ///     Orchestrates one deployment run over a dedicated ADO.NET connection:
@@ -13,22 +14,32 @@ public sealed class SchemaDeployer
 {
 	private readonly string applicationVersion;
 	private readonly string appliedBy;
+	private readonly IClock clock;
 	private readonly DbConnection connection;
 	private readonly IDeploymentLockStrategy lockStrategy;
 	private readonly ISchemaVersionStore store;
 
+	/// <summary>
+	///     <paramref name="clock" /> defaults to <see cref="SystemClock.Instance" />, matching
+	///     <c>JobTrackPostgreSql.Create</c>/<c>JobTrackSqlite.Create</c>'s own default-binding shape
+	///     (ADR 0016) — <see cref="AppliedSchemaVersion.AppliedAtUtc" /> is deployment-tooling bookkeeping,
+	///     not a business-domain instant, so this constructor is itself a composition root rather than
+	///     needing every one of its many callers to thread a clock through.
+	/// </summary>
 	public SchemaDeployer(
 		DbConnection connection,
 		ISchemaVersionStore store,
 		IDeploymentLockStrategy lockStrategy,
 		string applicationVersion,
-		string appliedBy)
+		string appliedBy,
+		IClock? clock = null)
 	{
 		this.connection = connection;
 		this.store = store;
 		this.lockStrategy = lockStrategy;
 		this.applicationVersion = applicationVersion;
 		this.appliedBy = appliedBy;
+		this.clock = clock ?? SystemClock.Instance;
 	}
 
 	public async Task DeployAsync(IReadOnlyList<SchemaVersionScript> scripts, CancellationToken cancellationToken)
@@ -73,7 +84,7 @@ public sealed class SchemaDeployer
 			Checksum = script.Checksum,
 			ApplicationVersion = applicationVersion,
 			AppliedBy = appliedBy,
-			AppliedAtUtc = DateTimeOffset.UtcNow,
+			AppliedAtUtc = clock.GetCurrentInstant().ToDateTimeOffset(),
 		};
 
 		await store.RecordAppliedVersionAsync(connection, transaction, appliedVersion, cancellationToken)

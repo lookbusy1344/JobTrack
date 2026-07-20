@@ -61,11 +61,29 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "work_session", EntityId = result.Id.Value });
+			new() { EntityType = "work_session", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("start-work-session");
 		audit.Events[0].ActorId.Should().Be(workerId);
+	}
+
+	[Fact]
+	public async Task Starting_a_session_uses_one_clock_instant_for_the_entity_and_audit_event()
+	{
+		var operationInstant = Instant.FromUtc(2026, 7, 20, 12, 34, 56);
+		var clock = new AdjustableClock(operationInstant);
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString, clock);
+
+		var result = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var auditPort = CreateAuditQueryPort(database.ConnectionString);
+		var audit = await auditPort.SearchAuditEventsAsync(
+			new() { EntityType = "work_session", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+
+		clock.ReadCount.Should().Be(1);
+		result.StartedAt.Should().Be(operationInstant);
+		audit.Events.Should().ContainSingle().Which.OccurredAt.Should().Be(operationInstant);
 	}
 
 	[Fact]
@@ -527,6 +545,8 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	protected abstract IJobNodeCommandPort CreateJobNodePort(string connectionString);
 
 	protected abstract IWorkSessionCommandPort CreateSessionPort(string connectionString);
+
+	protected abstract IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock);
 
 	protected abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 

@@ -116,6 +116,48 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("does not exist");
 	}
 
+	/// <summary>§2.4: a malformed <c>AsOf</c> is rejected before the cost query runs, never silently defaulted to "now".</summary>
+	[Fact]
+	public async Task A_malformed_AsOf_is_rejected_without_running_the_report()
+	{
+		var administratorId = await SeedAdministratorAsync();
+		var workerId = await SeedEmployeeAsync("cost.malformed-asof-worker", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("cost.malformed-asof-viewer", EmployeeRole.CostViewer);
+		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId);
+		var authCookie = await SignInAsync("cost.malformed-asof-viewer");
+
+		var response = await GetAsync($"/Jobs/CostReport?nodeId={leafId.Value}&AsOf=not-a-local-date-time", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Enter a valid date and time.");
+		body.Should().NotContain("&#xA3;");
+	}
+
+	/// <summary>
+	///     §2.4: <c>AsOf</c> is a bare wall-clock string resolved in the viewing employee's own zone, not
+	///     the server process's own OS zone. The costed session runs 09:00-11:00 UTC; the viewer here is
+	///     seeded with <c>America/New_York</c> (UTC-5 in January), so <c>08:00</c> local resolves to
+	///     13:00 UTC -- after the session finished, so the full session is costed. Misreading that same
+	///     literal as a UTC time would land at 08:00 UTC, before the session even started, and see no
+	///     costed segments -- so this only passes if resolution actually used the viewer's zone.
+	/// </summary>
+	[Fact]
+	public async Task AsOf_is_resolved_in_the_viewing_employees_own_zone_not_the_server_process_zone()
+	{
+		var administratorId = await SeedAdministratorAsync();
+		var workerId = await SeedEmployeeAsync("cost.zoned-asof-worker", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("cost.zoned-asof-viewer", EmployeeRole.CostViewer, "America/New_York");
+		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId);
+		var authCookie = await SignInAsync("cost.zoned-asof-viewer");
+
+		var response = await GetAsync($"/Jobs/CostReport?nodeId={leafId.Value}&AsOf=2026-01-01T08:00", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain(">&#xA3;120.00<");
+	}
+
 	private async Task<JobNodeId> SeedLeafWithCostedSessionAsync(AppUserId administratorId, AppUserId workerId)
 	{
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
@@ -249,15 +291,16 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 
 	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
+	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
 
 		await using var insertAppUser = connection.CreateCommand();
 		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
+			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, $ianaTimeZone); SELECT last_insert_rowid();";
 		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
+		_ = insertAppUser.Parameters.AddWithValue("$ianaTimeZone", ianaTimeZone);
 		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
 		var placeholderUser = new JobTrackIdentityUser {

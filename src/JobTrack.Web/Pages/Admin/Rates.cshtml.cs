@@ -19,7 +19,10 @@ using NodaTime;
 ///     split. A RateManager therefore gets the write workflow without the read section.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.RateAdministration)]
-public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class RatesModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
@@ -43,6 +46,9 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 	public bool CanViewRates { get; private set; }
 
 	public bool CanManageRates { get; private set; }
+
+	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
+	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
 	[TempData] public string? ErrorMessage { get; set; }
 
@@ -71,15 +77,21 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 		// handler even though they were never posted -- validate only UserCostRateInput.
 		ModelState.Clear();
 		if (TryValidateModel(UserCostRateInput, nameof(UserCostRateInput))) {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParse(UserCostRateInput.EffectiveStart, zone, out var effectiveStart)
+				|| !BackdateInstant.TryParseOptional(UserCostRateInput.EffectiveEnd, zone, out var effectiveEnd)) {
+				ErrorMessage = "Enter a valid date and time.";
+				await LoadAsync(actor.Value, cancellationToken);
+				return Page();
+			}
+
 			try {
-				_ = await jobTrackClient.Rates.AddUserCostRateAsync(new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
-					UserId = new(UserId),
-					Rate = new(
-						new(UserCostRateInput.AmountPerHour),
-						ToInstant(UserCostRateInput.EffectiveStart),
-						UserCostRateInput.EffectiveEnd.HasValue ? ToInstant(UserCostRateInput.EffectiveEnd.Value) : null),
-				}, cancellationToken);
+				_ = await jobTrackClient.Rates.AddUserCostRateAsync(
+					new() {
+						Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+						UserId = new(UserId),
+						Rate = new(new(UserCostRateInput.AmountPerHour), effectiveStart, effectiveEnd),
+					}, cancellationToken);
 				SuccessMessage = "User cost rate added.";
 			}
 			catch (AuthorizationDeniedException) {
@@ -111,14 +123,20 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 
 		ModelState.Clear();
 		if (TryValidateModel(NodeRateOverrideInput, nameof(NodeRateOverrideInput))) {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParse(NodeRateOverrideInput.EffectiveStart, zone, out var effectiveStart)
+				|| !BackdateInstant.TryParseOptional(NodeRateOverrideInput.EffectiveEnd, zone, out var effectiveEnd)) {
+				ErrorMessage = "Enter a valid date and time.";
+				await LoadAsync(actor.Value, cancellationToken);
+				return Page();
+			}
+
 			try {
 				_ = await jobTrackClient.Rates.AddNodeRateOverrideAsync(new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 					UserId = new(UserId),
 					Override = new(
-						new(NodeRateOverrideInput.NodeId), new(NodeRateOverrideInput.AmountPerHour),
-						ToInstant(NodeRateOverrideInput.EffectiveStart),
-						NodeRateOverrideInput.EffectiveEnd.HasValue ? ToInstant(NodeRateOverrideInput.EffectiveEnd.Value) : null),
+						new(NodeRateOverrideInput.NodeId), new(NodeRateOverrideInput.AmountPerHour), effectiveStart, effectiveEnd),
 				}, cancellationToken);
 				SuccessMessage = "Node rate override added.";
 			}
@@ -144,6 +162,7 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
+		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var directory = await jobTrackClient.Query.GetAllEmployeesAsync(
 			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } },
 			cancellationToken);
@@ -174,13 +193,11 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 		return actor?.AppUserId;
 	}
 
-	private static Instant ToInstant(DateTimeOffset value) => Instant.FromDateTimeOffset(value);
-
 	public sealed class AddUserCostRateInput
 	{
-		[Required] public DateTimeOffset EffectiveStart { get; set; }
+		[Required] public string EffectiveStart { get; set; } = string.Empty;
 
-		public DateTimeOffset? EffectiveEnd { get; set; }
+		public string? EffectiveEnd { get; set; }
 
 		[Required] public decimal AmountPerHour { get; set; }
 	}
@@ -189,9 +206,9 @@ public sealed class RatesModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 	{
 		[Required] public long NodeId { get; set; }
 
-		[Required] public DateTimeOffset EffectiveStart { get; set; }
+		[Required] public string EffectiveStart { get; set; } = string.Empty;
 
-		public DateTimeOffset? EffectiveEnd { get; set; }
+		public string? EffectiveEnd { get; set; }
 
 		[Required] public decimal AmountPerHour { get; set; }
 	}

@@ -25,6 +25,7 @@
 			<div class="form-group">
 				<label asp-for="Input.FinishedAt">Finished (leave blank to leave the session active)</label>
 				<input asp-for="Input.FinishedAt" type="datetime-local" step="60" class="form-control"/>
+				<span asp-validation-for="Input.FinishedAt" class="text-danger"></span>
 			</div>
 			<div class="form-group">
 				<label asp-for="Input.Reason">Reason for this correction</label>

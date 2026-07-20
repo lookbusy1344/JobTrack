@@ -50,7 +50,7 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), "1.2.3", "test-runner");
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 
-		var bootstrapPort = new SqliteInstallationBootstrapPort(database.ConnectionString);
+		var bootstrapPort = new SqliteInstallationBootstrapPort(database.ConnectionString, SystemClock.Instance);
 		var bootstrap = await bootstrapPort.BootstrapAsync(new() {
 			DisplayName = "Ada Lovelace",
 			IanaTimeZone = "Europe/London",
@@ -60,10 +60,10 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 		});
 		var administratorContext = new CommandContext { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() };
 
-		var jobNodePort = new SqliteJobNodeCommandPort(database.ConnectionString);
-		var schedulePort = new SqliteScheduleCommandPort(database.ConnectionString);
-		var ratePort = new SqliteRateCommandPort(database.ConnectionString);
-		var sessionPort = new SqliteWorkSessionCommandPort(database.ConnectionString);
+		var jobNodePort = new SqliteJobNodeCommandPort(database.ConnectionString, SystemClock.Instance);
+		var schedulePort = new SqliteScheduleCommandPort(database.ConnectionString, SystemClock.Instance);
+		var ratePort = new SqliteRateCommandPort(database.ConnectionString, SystemClock.Instance);
+		var sessionPort = new SqliteWorkSessionCommandPort(database.ConnectionString, SystemClock.Instance);
 
 		var windowEnd = BaseInstant + Duration.FromTicks(Slot.Ticks * (LeavesPerWorker - 1 + OverlapDepth));
 		var asOf = windowEnd + Duration.FromHours(1);
@@ -122,7 +122,7 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 			}
 		}
 
-		var costQueries = new CostQueries(new SqliteCostQueryPort(database.ConnectionString));
+		var costQueries = new CostQueries(new SqliteCostQueryPort(database.ConnectionString, SystemClock.Instance));
 		var stopwatch = Stopwatch.StartNew();
 		var result = await costQueries.GetHierarchyTotalsAsync(new() { Context = administratorContext, NodeId = new(oneBranchId), AsOf = asOf });
 		stopwatch.Stop();

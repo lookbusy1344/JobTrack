@@ -19,10 +19,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteInstallationBootstrapPort : IInstallationBootstrapPort
 {
+	private readonly IClock clock;
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteInstallationBootstrapPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteInstallationBootstrapPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<BootstrapPersistenceResult> BootstrapAsync(
@@ -38,7 +43,7 @@ internal sealed class SqliteInstallationBootstrapPort : IInstallationBootstrapPo
 				"installation-already-initialised", "The installation has already been bootstrapped (ADR 0015).");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
+		var now = clock.GetCurrentInstant();
 		var canonicalZone = ScheduleZoneId.Resolve(request.IanaTimeZone);
 
 		var administrator = new AppUserEntity {

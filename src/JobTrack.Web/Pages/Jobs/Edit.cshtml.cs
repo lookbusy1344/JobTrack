@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using NodaTime;
 
 /// <summary>
 ///     Replaces a node's editable fields (plan §8.5 slice 3). Concurrency-conflict recovery:
@@ -20,7 +19,10 @@ using NodaTime;
 ///     version for another save attempt.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
-public sealed class EditModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class EditModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	private Dictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById = [];
 
@@ -59,15 +61,21 @@ public sealed class EditModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 
 		await LoadCurrentNodeAsync(actor.Value, cancellationToken);
 		await LoadOwnerOptionsAsync(actor.Value, cancellationToken);
-		if (CurrentNode is { } node) {
+		var node = CurrentNode;
+		if (node is not null) {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			Input.Description = node.Node.Description;
 			Input.WriteUp = node.Node.WriteUp;
 			Input.OwnerUserId = node.Node.OwnerUserId?.Value;
 			Input.Priority = node.Node.Priority;
 			Input.ExpectedDurationHours = node.Node.ExpectedDurationHours;
 			Input.ExpectedCost = node.Node.ExpectedCost?.Amount;
-			Input.NeededStart = node.Node.NeededStart?.ToDateTimeOffset();
-			Input.NeededFinish = node.Node.NeededFinish?.ToDateTimeOffset();
+			Input.NeededStart = node.Node.NeededStart.HasValue
+				? BackdateInstant.ToDateTimeLocalValue(node.Node.NeededStart.Value, zone)
+				: null;
+			Input.NeededFinish = node.Node.NeededFinish.HasValue
+				? BackdateInstant.ToDateTimeLocalValue(node.Node.NeededFinish.Value, zone)
+				: null;
 			OriginalVersion = node.Node.Version;
 		}
 
@@ -88,6 +96,13 @@ public sealed class EditModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 			return Page();
 		}
 
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+		if (!BackdateInstant.TryParseOptional(Input.NeededStart, zone, out var neededStart)
+			|| !BackdateInstant.TryParseOptional(Input.NeededFinish, zone, out var neededFinish)) {
+			ErrorMessage = "Enter a valid date and time.";
+			return Page();
+		}
+
 		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
 		var request = new EditJobNodeRequest {
 			Context = context,
@@ -97,8 +112,8 @@ public sealed class EditModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 			OwnerUserId = Input.OwnerUserId.HasValue ? new AppUserId(Input.OwnerUserId.Value) : null,
 			ExpectedDurationHours = Input.ExpectedDurationHours,
 			ExpectedCost = Input.ExpectedCost.HasValue ? new Money(Input.ExpectedCost.Value) : null,
-			NeededStart = Input.NeededStart.HasValue ? Instant.FromDateTimeOffset(Input.NeededStart.Value) : null,
-			NeededFinish = Input.NeededFinish.HasValue ? Instant.FromDateTimeOffset(Input.NeededFinish.Value) : null,
+			NeededStart = neededStart,
+			NeededFinish = neededFinish,
 			Priority = Input.Priority,
 			Version = OriginalVersion,
 		};
@@ -119,7 +134,8 @@ public sealed class EditModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 						   "The latest values are shown below — try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);
 			await LoadOwnerOptionsAsync(actor.Value, cancellationToken);
-			if (CurrentNode is { } refreshed) {
+			var refreshed = CurrentNode;
+			if (refreshed is not null) {
 				OriginalVersion = refreshed.Node.Version;
 			}
 
@@ -165,9 +181,9 @@ public sealed class EditModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 
 		public decimal? ExpectedCost { get; set; }
 
-		public DateTimeOffset? NeededStart { get; set; }
+		public string? NeededStart { get; set; }
 
-		public DateTimeOffset? NeededFinish { get; set; }
+		public string? NeededFinish { get; set; }
 
 		[Required] public Priority Priority { get; set; }
 	}

@@ -13,6 +13,7 @@ using Ports;
 /// </summary>
 internal sealed class FakeCostQueryPort : ICostQueryPort
 {
+	private readonly Dictionary<AppUserId, EquatableArray<EmployeeRole>> _bulkSnapshotRoles = [];
 	private readonly Dictionary<JobNodeId, HierarchyNode> _nodesById = [];
 	private readonly Dictionary<JobNodeId, AppUserId?> _ownerByNodeId = [];
 	private readonly Dictionary<AppUserId, EquatableArray<EmployeeRole>> _roles = [];
@@ -21,6 +22,8 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 	public int GetActorRolesCallCount { get; private set; }
 
 	public int GetCostInputsCallCount { get; private set; }
+
+	public int GetBulkCostInputsCallCount { get; private set; }
 
 	public Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		AppUserId actorId, CancellationToken cancellationToken = default)
@@ -49,6 +52,26 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 		return Task.FromResult(result);
 	}
 
+	public Task<BulkCostQueryResult> GetBulkCostInputsAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> nodeIds, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default)
+	{
+		GetBulkCostInputsCallCount++;
+		var roles = _roles.TryGetValue(actorId, out var actorRoles) ? actorRoles : [];
+		if (_bulkSnapshotRoles.TryGetValue(actorId, out var snapshotRoles)) {
+			roles = snapshotRoles;
+		}
+
+		var result = new BulkCostQueryResult {
+			ActorRoles = roles,
+			NodesById = EquatableDictionaryFactory.CopyOf(_nodesById),
+			OwnerUserIdsById = EquatableDictionaryFactory.CopyOf(_ownerByNodeId),
+			Bounds = new(Instant.MinValue, asOf),
+			Workers = EquatableArray.CopyOf(_workers),
+		};
+
+		return Task.FromResult(result);
+	}
+
 	public Task<EquatableArray<AppUserId>> GetAncestorOwnerIdsAsync(
 		JobNodeId nodeId, CancellationToken cancellationToken = default)
 	{
@@ -66,6 +89,8 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 	}
 
 	public void SeedRoles(AppUserId actorId, params EmployeeRole[] roles) => _roles[actorId] = [.. roles];
+
+	public void SeedBulkSnapshotRoles(AppUserId actorId, params EmployeeRole[] roles) => _bulkSnapshotRoles[actorId] = [.. roles];
 
 	public void SeedNode(HierarchyNode node) => _nodesById[node.Id] = node;
 

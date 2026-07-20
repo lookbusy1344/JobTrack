@@ -26,10 +26,13 @@ public sealed class SqlitePersonalAccessTokenPortTests()
 	}
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new SqliteInstallationBootstrapPort(connectionString);
+		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	protected override IPersonalAccessTokenPort CreatePort(string connectionString) =>
-		new SqlitePersonalAccessTokenPort(connectionString);
+		CreatePort(connectionString, SystemClock.Instance);
+
+	protected override IPersonalAccessTokenPort CreatePort(string connectionString, IClock clock) =>
+		new SqlitePersonalAccessTokenPort(connectionString, clock);
 
 	protected override object FormatInstantForRawSql(Instant instant) => instant.ToUnixTimeTicks();
 }

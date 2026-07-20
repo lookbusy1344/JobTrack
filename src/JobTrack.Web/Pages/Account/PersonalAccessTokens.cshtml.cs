@@ -23,7 +23,8 @@ using NodaTime;
 public sealed class PersonalAccessTokensModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	PendingPatDeliveryStore pendingDeliveryStore)
 	: PageModel
 {
 	[BindProperty] public IssueTokenInput Issue { get; set; } = new();
@@ -38,20 +39,34 @@ public sealed class PersonalAccessTokensModel(
 	[TempData] public string? SuccessMessage { get; set; }
 
 	/// <summary>
-	///     The newly issued plaintext token, rendered exactly once directly in this response. Never
-	///     written to <c>TempData</c>, a cookie, or a log -- a page refresh or navigation away loses it
-	///     permanently, matching the "shown once" contract (remediation §2.2/§2.4).
+	///     The newly issued plaintext token, rendered exactly once directly in this GET response after
+	///     <see cref="PendingPatDeliveryStore.TryConsume" /> hands it over. Never written to
+	///     <c>TempData</c>, a cookie, a URL, or a log -- a page refresh or navigation away loses it
+	///     permanently, matching the "shown once" contract (remediation §2.2/§2.4/§2.7).
 	/// </summary>
 	public string? IssuedPlaintextToken { get; private set; }
 
-	public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadTokensAsync(cancellationToken);
-
 	/// <summary>
-	///     Deliberately not converted to Post/Redirect/Get like every other mutating handler in this
-	///     codebase: <see cref="IssuedPlaintextToken" /> must render in this exact response and would be
-	///     lost across a redirect (see its own doc comment), so this one handler still risks a
-	///     resubmission warning on refresh in exchange for never persisting the secret past this request.
+	///     <paramref name="issued" />, when present, is the opaque handle from the redirect at the end
+	///     of <see cref="OnPostIssueAsync" />. It atomically consumes the one-use delivery slot (scoped
+	///     to the signed-in actor) so the plaintext renders exactly once, on this GET, never on the POST
+	///     response itself -- refreshing this page after a successful issuance re-runs a harmless read.
 	/// </summary>
+	public async Task OnGetAsync(string? issued, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is not null && issued is not null && Guid.TryParse(issued, out var handle)) {
+			if (pendingDeliveryStore.TryConsume(handle, actor.Value, out var label, out var plaintext)) {
+				IssuedPlaintextToken = plaintext;
+				SuccessMessage = $"Token \"{label}\" created. Copy it now — it will not be shown again.";
+			} else {
+				ErrorMessage = "That token's secret is no longer available to display. If you did not copy it, revoke it and issue a new one.";
+			}
+		}
+
+		await LoadTokensAsync(cancellationToken);
+	}
+
 	public async Task<IActionResult> OnPostIssueAsync(CancellationToken cancellationToken)
 	{
 		ModelState.Clear();
@@ -65,22 +80,34 @@ public sealed class PersonalAccessTokensModel(
 			return Challenge();
 		}
 
+		if (!pendingDeliveryStore.TryReserve(actor.Value, out var handle)) {
+			ErrorMessage = "Too many pending token deliveries right now. Wait a moment and try again.";
+			await LoadTokensAsync(cancellationToken);
+			return Page();
+		}
+
 		try {
 			var result = await jobTrackClient.Tokens.IssueAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				TargetUserId = actor.Value,
 				Label = Issue.Label,
-				ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(Issue.LifetimeDays),
+				Lifetime = Duration.FromDays(Issue.LifetimeDays),
 			}, cancellationToken);
 
-			IssuedPlaintextToken = result.Token;
-			SuccessMessage = $"Token \"{result.Label}\" created. Copy it now — it will not be shown again.";
+			pendingDeliveryStore.Publish(handle, result.Label, result.Token);
+			return RedirectToPage(null, new { issued = handle });
 		}
 		catch (AuthorizationDeniedException) {
+			pendingDeliveryStore.Release(handle);
 			return Forbid();
 		}
 		catch (InvariantViolationException ex) {
+			pendingDeliveryStore.Release(handle);
 			ErrorMessage = ex.Message;
+		}
+		catch {
+			pendingDeliveryStore.Release(handle);
+			throw;
 		}
 
 		Issue = new();

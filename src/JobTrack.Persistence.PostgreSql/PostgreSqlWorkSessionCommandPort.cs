@@ -24,10 +24,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 {
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlWorkSessionCommandPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlWorkSessionCommandPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<WorkSessionResult> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken = default)
@@ -40,13 +45,13 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			throw new EntityNotFoundException($"Job node {request.LeafWorkId} has no LeafWork attached.");
 		}
 
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
 
 		if (!await LeafReadiness.IsReadyAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
 			throw new PrerequisiteBlockedException($"Job node {request.LeafWorkId}'s prerequisites are not satisfied.");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var startedAt = request.StartedAt ?? now;
 		if (startedAt > now) {
 			throw new InvariantViolationException(
@@ -107,9 +112,9 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
 					   .FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var leafWork = await context.Set<LeafWorkEntity>()
 			.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false);
 		leafWork ??= await LeafWorkAttachSupport.CreateAsync(
@@ -189,12 +194,12 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		var session = await LoadTrackedSessionAsync(context, request.SessionId, cancellationToken).ConfigureAwait(false);
 		EnsureLeafMatchesOrThrow(session, request.LeafWorkId);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(session.RowVersion, request.Version);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var finishedAt = request.FinishedAt ?? now;
 		if (finishedAt <= session.StartedAt) {
 			throw new InvariantViolationException(
@@ -234,9 +239,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		var session = await LoadTrackedSessionAsync(context, request.SessionId, cancellationToken).ConfigureAwait(false);
 		EnsureLeafMatchesOrThrow(session, request.LeafWorkId);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(session.RowVersion, request.Version);
 
 		if (request.FinishedAt is Instant finishedAt && finishedAt <= request.StartedAt) {
@@ -251,7 +257,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 
 		session.StartedAt = request.StartedAt;
 		session.FinishedAt = request.FinishedAt;
-		session.ChangedAt = SystemClock.Instance.GetCurrentInstant();
+		session.ChangedAt = now;
 		session.RowVersion += 1;
 
 		AuditEventWriter.Add(
@@ -353,9 +359,9 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 	///     walk divergently) -- or hold Administrator/JobManager.
 	/// </summary>
 	private static async Task AuthorizeOrThrowAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, JobNodeId leafId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, JobNodeId leafId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -365,12 +371,12 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 	}
 
 	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)

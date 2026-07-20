@@ -1,3 +1,3 @@
 #nullable enable
 JobTrack.Persistence.PostgreSql.JobTrackPostgreSql
-static JobTrack.Persistence.PostgreSql.JobTrackPostgreSql.Create(Npgsql.NpgsqlDataSource! dataSource, Microsoft.AspNetCore.Identity.IPasswordHasher<JobTrack.Application.BootstrapCredentialSubject!>? passwordHasher = null, Microsoft.AspNetCore.Identity.IPasswordHasher<JobTrack.Application.EmployeeCredentialSubject!>? employeePasswordHasher = null) -> JobTrack.Application.IJobTrackClient!
+static JobTrack.Persistence.PostgreSql.JobTrackPostgreSql.Create(Npgsql.NpgsqlDataSource! dataSource, Microsoft.AspNetCore.Identity.IPasswordHasher<JobTrack.Application.BootstrapCredentialSubject!>? passwordHasher = null, Microsoft.AspNetCore.Identity.IPasswordHasher<JobTrack.Application.EmployeeCredentialSubject!>? employeePasswordHasher = null, NodaTime.IClock? clock = null) -> JobTrack.Application.IJobTrackClient!

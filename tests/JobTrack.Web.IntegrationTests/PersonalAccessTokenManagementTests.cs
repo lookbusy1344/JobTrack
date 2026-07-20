@@ -57,17 +57,44 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 		var authCookie = await SignInAsync("pat.issue");
 
 		var issueResponse = await PostIssueAsync(authCookie, "laptop", 30);
-		var issueBody = await issueResponse.Content.ReadAsStringAsync();
+		issueResponse.StatusCode.Should().Be(HttpStatusCode.Redirect, "PRG: a successful mutating POST never renders the result directly");
+		var issueLocation = issueResponse.Headers.Location!.OriginalString;
+		issueLocation.Should().NotContain("jtpat_", "the plaintext token is never carried in a URL");
 
-		issueResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-		issueBody.Should().Contain("jtpat_");
+		var revealResponse = await FollowRedirectAsync(issueResponse, authCookie);
+		var revealBody = await revealResponse.Content.ReadAsStringAsync();
+
+		revealResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		revealBody.Should().Contain("jtpat_");
+		revealBody.Should().Contain("laptop");
+
+		var refreshResponse = await FollowRedirectAsync(issueResponse, authCookie);
+		var refreshBody = await refreshResponse.Content.ReadAsStringAsync();
+
+		refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		refreshBody.Should().NotContain("jtpat_", "the one-use delivery slot was already consumed by the first GET");
+		refreshBody.Should().Contain("no longer available");
 
 		var listResponse = await GetPageAsync(authCookie);
 		var listBody = await listResponse.Content.ReadAsStringAsync();
 
 		listResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-		listBody.Should().NotContain("jtpat_", "the plaintext token is never shown again after the issuance response");
+		listBody.Should().NotContain("jtpat_", "the plaintext token is never shown again once its delivery slot is consumed");
 		listBody.Should().Contain("laptop");
+	}
+
+	[Fact]
+	public async Task Refreshing_the_issuance_redirect_does_not_mint_a_second_token()
+	{
+		_ = await SeedEmployeeAsync("pat.refresh", EmployeeRole.Worker);
+		var authCookie = await SignInAsync("pat.refresh");
+
+		var issueResponse = await PostIssueAsync(authCookie, "laptop", 30);
+		_ = await FollowRedirectAsync(issueResponse, authCookie);
+		_ = await FollowRedirectAsync(issueResponse, authCookie);
+
+		var tokenCount = await CountTokensAsync("pat.refresh");
+		tokenCount.Should().Be(1, "resubmitting the same redirect GET must never mint an additional credential");
 	}
 
 	[Fact]
@@ -77,9 +104,12 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 		var authCookie = await SignInAsync("pat.no-cache");
 
 		var issueResponse = await PostIssueAsync(authCookie, "laptop", 30);
-
 		issueResponse.Headers.CacheControl.Should().NotBeNull();
 		issueResponse.Headers.CacheControl!.NoStore.Should().BeTrue();
+
+		var revealResponse = await FollowRedirectAsync(issueResponse, authCookie);
+		revealResponse.Headers.CacheControl.Should().NotBeNull();
+		revealResponse.Headers.CacheControl!.NoStore.Should().BeTrue();
 	}
 
 	[Fact]
@@ -386,6 +416,21 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 							  WHERE au.display_name = $userName
 							  ORDER BY pat.created_at DESC
 							  LIMIT 1;
+							  """;
+		_ = command.Parameters.AddWithValue("$userName", userName);
+
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
+	private async Task<long> CountTokensAsync(string userName)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  SELECT COUNT(*) FROM personal_access_token pat
+							  JOIN app_user au ON au.id = pat.app_user_id
+							  WHERE au.display_name = $userName;
 							  """;
 		_ = command.Parameters.AddWithValue("$userName", userName);
 

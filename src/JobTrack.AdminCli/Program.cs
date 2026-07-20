@@ -72,6 +72,7 @@ public static class Program
 
 		var services = new ServiceCollection();
 		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
 		_ = options.Provider switch {
 			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
 			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
@@ -91,6 +92,7 @@ public static class Program
 	{
 		var services = new ServiceCollection();
 		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
 		_ = options.Provider switch {
 			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
 			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
@@ -104,13 +106,16 @@ public static class Program
 		var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<JobTrackIdentityUser>>();
 
 		return await EmergencyPasswordReset.RunAsync(
-			io, userManager, identityContext, passwordHasher, options.Provider, options.Username, CancellationToken.None).ConfigureAwait(false);
+				io, userManager, identityContext, passwordHasher, options.Provider, options.Username, SystemClock.Instance,
+				CancellationToken.None)
+			.ConfigureAwait(false);
 	}
 
 	private static async Task<int> RunResetTwoFactorAsync(ResetTwoFactorCommandOptions options, SystemConsoleIO io)
 	{
 		var services = new ServiceCollection();
 		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
 		_ = options.Provider switch {
 			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
 			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
@@ -123,13 +128,15 @@ public static class Program
 		var identityContext = scope.ServiceProvider.GetRequiredService<JobTrackIdentityDbContext>();
 
 		return await EmergencyTwoFactorReset.RunAsync(
-			io, userManager, identityContext, options.Provider, options.Username, CancellationToken.None).ConfigureAwait(false);
+				io, userManager, identityContext, options.Provider, options.Username, SystemClock.Instance, CancellationToken.None)
+			.ConfigureAwait(false);
 	}
 
 	private static async Task<int> RunIssueTokenAsync(IssueTokenCommandOptions options, SystemConsoleIO io)
 	{
 		var services = new ServiceCollection();
 		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
 		_ = options.Provider switch {
 			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
 			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
@@ -163,6 +170,7 @@ public static class Program
 
 		var services = new ServiceCollection();
 		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
 		_ = options.Provider switch {
 			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
 			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
@@ -175,7 +183,8 @@ public static class Program
 		var client = CreateClient(options.Provider, options.ConnectionString);
 
 		return await JobTreeImportCommand.RunAsync(
-				io, userManager, client, options.Username, new(options.ParentJobNodeId), jsonContent, CancellationToken.None)
+				io, userManager, client, options.Username, new(options.ParentJobNodeId), jsonContent, SystemClock.Instance,
+				CancellationToken.None)
 			.ConfigureAwait(false);
 	}
 
@@ -183,6 +192,7 @@ public static class Program
 	{
 		var services = new ServiceCollection();
 		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
 		_ = options.Provider switch {
 			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
 			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),

@@ -227,4 +227,135 @@ public sealed class CostQueriesTests
 
 		await act.Should().ThrowAsync<ArgumentNullException>();
 	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_prices_every_candidate_from_one_snapshot_matching_individual_hierarchy_totals()
+	{
+		var port = CreatePortWithNodes();
+		port.SeedWorker(new() {
+			Sessions = [new(Session1, LeafId, new(At(9), At(11)))],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		var sut = new CostQueries(port);
+
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeIds = [BranchId, LeafId, OtherLeafId],
+			AsOf = At(24),
+		});
+		var individualBranch = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var individualLeaf = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = LeafId, AsOf = At(24) });
+
+		bulk.DisplayedCosts[BranchId].Should().Be(individualBranch.DisplayedCosts[BranchId]);
+		bulk.DisplayedCosts[LeafId].Should().Be(individualLeaf.DisplayedCosts[LeafId]);
+		bulk.DisplayedCosts[OtherLeafId].Should().Be(new Money(0m));
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_makes_exactly_one_port_round_trip_regardless_of_candidate_count()
+	{
+		var port = CreatePortWithNodes();
+		port.SeedWorker(new() {
+			Sessions = [new(Session1, LeafId, new(At(9), At(11)))],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		var sut = new CostQueries(port);
+
+		_ = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeIds = [RootId, BranchId, LeafId, OtherLeafId],
+			AsOf = At(24),
+		});
+
+		// Fresh-eyes review §2.8: one snapshot regardless of how many candidates were requested.
+		port.GetActorRolesCallCount.Should().Be(0);
+		port.GetBulkCostInputsCallCount.Should().Be(1);
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_admits_a_worker_who_owns_an_ancestor_without_cost_viewing_permission()
+	{
+		var port = CreatePortWithNodes();
+		port.SeedOwner(BranchId, WorkerId);
+		port.SeedWorker(new() {
+			Sessions = [new(Session1, LeafId, new(At(9), At(11)))],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		var sut = new CostQueries(port);
+
+		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(WorkerId), NodeIds = [LeafId], AsOf = At(24) });
+
+		bulk.DisplayedCosts.Should().ContainKey(LeafId);
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_omits_a_candidate_the_actor_owns_neither_it_nor_an_ancestor_of()
+	{
+		var port = CreatePortWithNodes();
+		port.SeedWorker(new() {
+			Sessions = [new(Session1, LeafId, new(At(9), At(11)))],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		var sut = new CostQueries(port);
+
+		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(WorkerId), NodeIds = [LeafId], AsOf = At(24) });
+
+		bulk.DisplayedCosts.Should().NotContainKey(LeafId);
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_uses_snapshot_roles_when_the_actors_roles_change_during_the_operation()
+	{
+		var port = CreatePortWithNodes();
+		port.SeedBulkSnapshotRoles(CostViewerId, EmployeeRole.Worker);
+		var sut = new CostQueries(port);
+
+		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(CostViewerId), NodeIds = [LeafId], AsOf = At(24) });
+
+		bulk.DisplayedCosts.Should().NotContainKey(
+			LeafId, "authorization must use the roles read in the same snapshot as the cost inputs");
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_returns_an_empty_result_without_a_port_round_trip_for_no_candidates()
+	{
+		var port = CreatePortWithNodes();
+		var sut = new CostQueries(port);
+
+		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(CostViewerId), NodeIds = [], AsOf = At(24) });
+
+		bulk.DisplayedCosts.Should().BeEmpty();
+		port.GetActorRolesCallCount.Should().Be(0);
+		port.GetBulkCostInputsCallCount.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task GetBulkNodeCostsAsync_rejects_a_null_request()
+	{
+		var sut = new CostQueries(CreatePortWithNodes());
+
+		var act = () => sut.GetBulkNodeCostsAsync(null!);
+
+		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
 }

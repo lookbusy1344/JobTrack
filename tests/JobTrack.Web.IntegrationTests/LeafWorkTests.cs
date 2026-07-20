@@ -192,6 +192,23 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Starting_a_session_with_a_malformed_backdate_from_the_leaf_toolbar_does_not_start_work()
+	{
+		var workerId = await SeedEmployeeAsync("work.malformed-starter", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Malformed start leaf");
+		var authCookie = await SignInAsync("work.malformed-starter");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId, "not-a-local-date-time");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Enter a valid date and time.");
+		(await GetSessionsAsync(leaf.Id)).Should().BeEmpty();
+	}
+
+	[Fact]
 	public async Task A_worker_can_finish_a_session_with_a_backdated_time_from_the_sessions_panel()
 	{
 		var workerId = await SeedEmployeeAsync("work.backdate-finisher", EmployeeRole.Worker);
@@ -299,6 +316,54 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 		correctResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		correctResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Work");
+	}
+
+	[Fact]
+	public async Task Correcting_a_session_with_a_malformed_optional_finish_does_not_reopen_it()
+	{
+		var workerId = await SeedEmployeeAsync("work.malformed-correction", EmployeeRole.Worker);
+		var managerId = await SeedEmployeeAsync("work.malformed-correcting-manager", EmployeeRole.JobManager);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Malformed correction work");
+		var started = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var finished = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			SessionId = started.Id,
+			Version = started.Version,
+		});
+		var authCookie = await SignInAsync("work.malformed-correcting-manager");
+
+		var (cookie, token) = await GetCorrectFormAsync(authCookie, leaf.Id, workerId, finished.Id);
+		var response = await PostCorrectAsync(
+			authCookie, cookie, token, leaf.Id, workerId, finished.Id,
+			"2026-01-01T09:00", "not-a-local-date-time", "Correcting malformed input must fail.");
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("Enter a valid date and time.");
+		(await GetSessionsAsync(leaf.Id)).Should().ContainSingle().Which.FinishedAt.Should().NotBeNull();
+	}
+
+	[Fact]
+	public async Task A_viewer_with_an_unrecognized_persisted_time_zone_is_not_silently_treated_as_utc()
+	{
+		var workerId = await SeedEmployeeAsync("work.unknown-zone", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Unknown zone leaf");
+		await using (var connection = new SqliteConnection(database.ConnectionString)) {
+			await connection.OpenAsync();
+			await using var command = connection.CreateCommand();
+			command.CommandText = "UPDATE app_user SET iana_time_zone = 'Etc/No_Such_Zone' WHERE id = $id;";
+			_ = command.Parameters.AddWithValue("$id", workerId.Value);
+			_ = await command.ExecuteNonQueryAsync();
+		}
+
+		var authCookie = await SignInAsync("work.unknown-zone");
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&workedByUserId={workerId.Value}", authCookie);
+
+		response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
 	}
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
@@ -436,7 +501,8 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	private static async Task<(string CookieHeader, string Token)> ExtractFormAsync(HttpResponseMessage response, string previousAntiforgeryCookie)
 	{
 		var body = await response.Content.ReadAsStringAsync();
-		var cookie = FindSetCookie(response, "Antiforgery") is { } newCookie ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
+		var newCookie = FindSetCookie(response, "Antiforgery");
+		var cookie = newCookie is not null ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in response body.");

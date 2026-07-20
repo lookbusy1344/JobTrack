@@ -32,10 +32,16 @@ internal sealed class SqliteScheduleCommandPort : IScheduleCommandPort
 	/// </summary>
 	private const int SqliteConstraintErrorCode = 19;
 
+	private readonly IClock clock;
+
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteScheduleCommandPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteScheduleCommandPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<ScheduleVersionResult> AddScheduleVersionAsync(
@@ -45,10 +51,10 @@ internal sealed class SqliteScheduleCommandPort : IScheduleCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		await EnsureEmployeeExistsAsync(context, request.UserId, cancellationToken).ConfigureAwait(false);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.UserId, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.UserId, now, cancellationToken).ConfigureAwait(false);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var schedule = new ScheduleVersion(
 			ScheduleZoneId.Resolve(request.Schedule.Zone.Id),
 			request.Schedule.EffectiveStart,
@@ -112,11 +118,11 @@ internal sealed class SqliteScheduleCommandPort : IScheduleCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		await EnsureEmployeeExistsAsync(context, request.UserId, cancellationToken).ConfigureAwait(false);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.UserId, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.UserId, now, cancellationToken).ConfigureAwait(false);
 		await EnsureScheduleExceptionDoesNotAlreadyExistAsync(context, request, cancellationToken).ConfigureAwait(false);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var exception = new ScheduleExceptionEntity {
 			Id = default,
 			UserId = request.UserId,
@@ -172,12 +178,12 @@ internal sealed class SqliteScheduleCommandPort : IScheduleCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		var version = await LoadTrackedVersionAsync(context, request.VersionId, cancellationToken).ConfigureAwait(false);
 		EnsureUserMatchesOrThrow(version.UserId, request.UserId, request.VersionId.Value);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, version.UserId, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, version.UserId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(version.RowVersion, request.Version);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var schedule = new ScheduleVersion(
 			ScheduleZoneId.Resolve(request.Schedule.Zone.Id),
 			request.Schedule.EffectiveStart,
@@ -250,12 +256,12 @@ internal sealed class SqliteScheduleCommandPort : IScheduleCommandPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
+		var now = clock.GetCurrentInstant();
 		var exception = await LoadTrackedExceptionAsync(context, request.ExceptionId, cancellationToken).ConfigureAwait(false);
 		EnsureUserMatchesOrThrow(exception.UserId, request.UserId, request.ExceptionId.Value);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, exception.UserId, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, request.Context.Actor, exception.UserId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(exception.RowVersion, request.Version);
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var before = new Dictionary<string, string?> {
 			["started_at"] = exception.StartedAt.ToString(),
 			["finished_at"] = exception.FinishedAt.ToString(),
@@ -334,9 +340,9 @@ internal sealed class SqliteScheduleCommandPort : IScheduleCommandPort
 	}
 
 	private static async Task AuthorizeOrThrowAsync(
-		SqliteJobTrackDbContext context, AppUserId actorId, AppUserId targetUserId, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, AppUserId actorId, AppUserId targetUserId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 
 		if (!ScheduleAccessPolicy.CanManage(actorRoles, actorId == targetUserId)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage schedule data for {targetUserId}.");
@@ -365,12 +371,12 @@ internal sealed class SqliteScheduleCommandPort : IScheduleCommandPort
 	}
 
 	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)

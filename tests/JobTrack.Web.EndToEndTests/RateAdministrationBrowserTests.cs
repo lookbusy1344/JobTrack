@@ -86,7 +86,11 @@ public abstract class RateAdministrationBrowserTestsBase
 
 		await page.Keyboard.TypeAsync("42.50");
 		await page.Keyboard.PressAsync("Tab");
-		await page.Keyboard.TypeAsync("2026-01-01");
+		// A native datetime-local control's keyboard segment order (month/day/year/hour/minute/meridiem
+		// vs. year-first) is locale- and browser-dependent, so a blind digit sequence isn't a reliable
+		// way to assert a specific value -- fill the now-blank field directly instead (§2.4: no more
+		// DateTimeOffset default silently pre-filling a bogus "0001-01-01T00:00" time to type over).
+		await page.Locator("#UserCostRateInput_EffectiveStart").FillAsync("2026-01-01T00:00");
 		await page.Keyboard.PressAsync("Enter");
 
 		await page.WaitForSelectorAsync("text=User cost rate added.");

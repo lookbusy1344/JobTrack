@@ -25,7 +25,13 @@ CREATE TABLE audit_event
 (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     occurred_at   timestamptz NOT NULL DEFAULT now(),
-    actor_user_id bigint NOT NULL REFERENCES app_user (id) ON DELETE RESTRICT,
+    -- Nullable: an unknown-subject authentication failure (no matching app_user for the
+    -- attempted username) has no real actor to attribute the event to. Fabricating or
+    -- reusing a display-name-keyed "system" app_user row would let an administrator's
+    -- later, unrelated choice of employee display name collide with and silently
+    -- misattribute anonymous failures (fresh-eyes review §2.6) -- the redacted subject
+    -- marker lives in after_data instead.
+    actor_user_id bigint REFERENCES app_user (id) ON DELETE RESTRICT,
     operation     text NOT NULL,
     entity_type   text NOT NULL,
     entity_id     bigint NOT NULL,

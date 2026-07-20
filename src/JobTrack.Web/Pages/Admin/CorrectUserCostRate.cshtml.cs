@@ -8,14 +8,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using NodaTime;
 
 /// <summary>
 ///     Corrects a historical user cost rate's effective range and amount in place (ADR 0003), mirroring
 ///     <see cref="Jobs.CorrectSessionModel" />'s single-step form shape.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.RateAdministration)]
-public sealed class CorrectUserCostRateModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class CorrectUserCostRateModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long UserId { get; init; }
 
@@ -35,10 +37,14 @@ public sealed class CorrectUserCostRateModel(IJobTrackClient jobTrackClient, Use
 		}
 
 		await LoadRateAsync(actor.Value, cancellationToken);
-		if (Rate is { } rate) {
-			Input.AmountPerHour = rate.Rate.Rate.AmountPerHour;
-			Input.EffectiveStart = rate.Rate.EffectiveStart.ToDateTimeOffset();
-			Input.EffectiveEnd = rate.Rate.EffectiveEnd?.ToDateTimeOffset();
+		var result = Rate;
+		if (result is not null) {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			Input.AmountPerHour = result.Rate.Rate.AmountPerHour;
+			Input.EffectiveStart = BackdateInstant.ToDateTimeLocalValue(result.Rate.EffectiveStart, zone);
+			Input.EffectiveEnd = result.Rate.EffectiveEnd.HasValue
+				? BackdateInstant.ToDateTimeLocalValue(result.Rate.EffectiveEnd.Value, zone)
+				: null;
 		}
 
 		return Page();
@@ -56,6 +62,13 @@ public sealed class CorrectUserCostRateModel(IJobTrackClient jobTrackClient, Use
 			return Page();
 		}
 
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+		if (!BackdateInstant.TryParse(Input.EffectiveStart, zone, out var effectiveStart)
+			|| !BackdateInstant.TryParseOptional(Input.EffectiveEnd, zone, out var effectiveEnd)) {
+			ErrorMessage = "Enter a valid date and time.";
+			return Page();
+		}
+
 		try {
 			_ = await jobTrackClient.Rates.CorrectUserCostRateAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
@@ -63,10 +76,7 @@ public sealed class CorrectUserCostRateModel(IJobTrackClient jobTrackClient, Use
 				UserId = new AppUserId(UserId),
 				Version = Rate.Version,
 				Reason = Input.Reason,
-				Rate = new(
-					new(Input.AmountPerHour),
-					Instant.FromDateTimeOffset(Input.EffectiveStart),
-					Input.EffectiveEnd.HasValue ? Instant.FromDateTimeOffset(Input.EffectiveEnd.Value) : null),
+				Rate = new(new(Input.AmountPerHour), effectiveStart, effectiveEnd),
 			}, cancellationToken);
 
 			return RedirectToPage("/Admin/Rates", new { userId = UserId });
@@ -118,9 +128,9 @@ public sealed class CorrectUserCostRateModel(IJobTrackClient jobTrackClient, Use
 
 	public sealed class CorrectInput
 	{
-		[Required] public DateTimeOffset EffectiveStart { get; set; }
+		[Required] public string EffectiveStart { get; set; } = string.Empty;
 
-		public DateTimeOffset? EffectiveEnd { get; set; }
+		public string? EffectiveEnd { get; set; }
 
 		[Required] public decimal AmountPerHour { get; set; }
 

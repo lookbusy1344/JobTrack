@@ -3,6 +3,7 @@ namespace JobTrack.Persistence.PostgreSql.Tests;
 using System.Data.Common;
 using Application.Ports;
 using Database;
+using NodaTime;
 using Npgsql;
 using TestSupport;
 
@@ -20,10 +21,10 @@ public sealed class PostgreSqlLeafWorkQueryPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
-		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override ILeafWorkQueryPort CreateQueryPort(string connectionString) =>
 		new PostgreSqlLeafWorkQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());

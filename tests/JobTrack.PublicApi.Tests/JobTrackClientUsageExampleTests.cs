@@ -148,7 +148,7 @@ public sealed class JobTrackClientUsageExampleTests
 
 	private sealed class FakeAuditQueries : IAuditQueries
 	{
-		public Task<IReadOnlyList<AuditEventResult>> SearchAuditEventsAsync(
+		public Task<AuditEventSearchResult> SearchAuditEventsAsync(
 			AuditEventSearchRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 	}
@@ -210,6 +210,10 @@ public sealed class JobTrackClientUsageExampleTests
 
 		public Task<HierarchyTotalsResult> GetHierarchyTotalsAsync(
 			GetHierarchyTotalsRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<BulkNodeCostResult> GetBulkNodeCostsAsync(
+			GetBulkNodeCostsRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 	}
 

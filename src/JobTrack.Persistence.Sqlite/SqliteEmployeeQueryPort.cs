@@ -18,10 +18,16 @@ internal sealed class SqliteEmployeeQueryPort : IEmployeeQueryPort
 		(short)EmployeeRole.Administrator, (short)EmployeeRole.JobManager, (short)EmployeeRole.Worker,
 	];
 
+	private readonly IClock clock;
+
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteEmployeeQueryPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteEmployeeQueryPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
@@ -119,13 +125,13 @@ internal sealed class SqliteEmployeeQueryPort : IEmployeeQueryPort
 
 	private SqliteJobTrackDbContext CreateContext() => SqliteDbContextFactory.CreateContext(connectionString);
 
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
+	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		return await GetRolesForIdentityUserAsync(context, actorIdentityUser.Id, cancellationToken).ConfigureAwait(false);
 	}

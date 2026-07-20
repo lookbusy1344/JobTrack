@@ -4,6 +4,7 @@ using System.Data.Common;
 using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using TestSupport;
 
 public sealed class SqliteAwaitingProgressQueryPortTests()
@@ -25,13 +26,13 @@ public sealed class SqliteAwaitingProgressQueryPortTests()
 	}
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new SqliteInstallationBootstrapPort(connectionString);
+		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	protected override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
-		new SqliteJobNodeCommandPort(connectionString);
+		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
 	protected override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
-		new SqliteAchievementCommandPort(connectionString);
+		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
 
 	protected override IAwaitingProgressQueryPort CreatePort(string connectionString) =>
 		new SqliteAwaitingProgressQueryPort(connectionString);

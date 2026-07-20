@@ -43,8 +43,8 @@
 				@foreach (var rate in Model.Snapshot.UserCostRates) {
 					<tr>
 						<td>@rate.Rate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
-						<td>@rate.Rate.EffectiveStart</td>
-						<td>@(rate.Rate.EffectiveEnd?.ToString() ?? "current")</td>
+						<td>@InstantDisplay.Format(rate.Rate.EffectiveStart, Model.ViewerZone)</td>
+						<td>@(rate.Rate.EffectiveEnd.HasValue ? InstantDisplay.Format(rate.Rate.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
 						@if (Model.CanManageRates) {
 							<td>
 								<a asp-page="/Admin/CorrectUserCostRate" asp-route-userId="@Model.UserId"
@@ -80,8 +80,8 @@
 					<tr>
 						<td>@overrideResult.Override.NodeId.Value</td>
 						<td>@overrideResult.Override.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
-						<td>@overrideResult.Override.EffectiveStart</td>
-						<td>@(overrideResult.Override.EffectiveEnd?.ToString() ?? "current")</td>
+						<td>@InstantDisplay.Format(overrideResult.Override.EffectiveStart, Model.ViewerZone)</td>
+						<td>@(overrideResult.Override.EffectiveEnd.HasValue ? InstantDisplay.Format(overrideResult.Override.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
 						@if (Model.CanManageRates) {
 							<td>
 								<a asp-page="/Admin/CorrectNodeRateOverride" asp-route-userId="@Model.UserId"
@@ -109,12 +109,12 @@
 		</div>
 		<div class="form-group">
 			<label asp-for="UserCostRateInput.EffectiveStart"></label>
-			<input asp-for="UserCostRateInput.EffectiveStart" class="form-control"/>
+			<input asp-for="UserCostRateInput.EffectiveStart" type="datetime-local" step="60" class="form-control"/>
 			<span asp-validation-for="UserCostRateInput.EffectiveStart" class="text-danger"></span>
 		</div>
 		<div class="form-group">
 			<label asp-for="UserCostRateInput.EffectiveEnd">Effective end (leave blank if still current)</label>
-			<input asp-for="UserCostRateInput.EffectiveEnd" class="form-control"/>
+			<input asp-for="UserCostRateInput.EffectiveEnd" type="datetime-local" step="60" class="form-control"/>
 		</div>
 		<button type="submit" class="btn btn-primary">Add user cost rate</button>
 	</form>
@@ -134,12 +134,12 @@
 		</div>
 		<div class="form-group">
 			<label asp-for="NodeRateOverrideInput.EffectiveStart"></label>
-			<input asp-for="NodeRateOverrideInput.EffectiveStart" class="form-control"/>
+			<input asp-for="NodeRateOverrideInput.EffectiveStart" type="datetime-local" step="60" class="form-control"/>
 			<span asp-validation-for="NodeRateOverrideInput.EffectiveStart" class="text-danger"></span>
 		</div>
 		<div class="form-group">
 			<label asp-for="NodeRateOverrideInput.EffectiveEnd">Effective end (leave blank if still current)</label>
-			<input asp-for="NodeRateOverrideInput.EffectiveEnd" class="form-control"/>
+			<input asp-for="NodeRateOverrideInput.EffectiveEnd" type="datetime-local" step="60" class="form-control"/>
 		</div>
 		<button type="submit" class="btn btn-primary">Add node rate override</button>
 	</form>

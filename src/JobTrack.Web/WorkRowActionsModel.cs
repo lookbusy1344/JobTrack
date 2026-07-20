@@ -58,10 +58,10 @@ public sealed class WorkRowActionsModel
 
 	/// <summary>Hidden fields for a form acting on the active session (finish), including its version.</summary>
 	public IReadOnlyDictionary<string, string?> FinishFields =>
-		ActiveSession is { } session
+		ActiveSession is not null
 			? new Dictionary<string, string?>(PageStateFields) {
-				["sessionId"] = session.Id.Value.ToString(CultureInfo.InvariantCulture),
-				["version"] = session.Version.ToString(CultureInfo.InvariantCulture),
+				["sessionId"] = ActiveSession.Id.Value.ToString(CultureInfo.InvariantCulture),
+				["version"] = ActiveSession.Version.ToString(CultureInfo.InvariantCulture),
 			}
 			: throw new InvalidOperationException("There is no active session to finish.");
 

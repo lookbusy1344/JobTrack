@@ -22,10 +22,15 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 {
 	private const string CycleSqlState = "P0003";
 	private const string ConcurrencyConflictSqlState = "P0004";
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlJobRequestCommandPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
+	public PostgreSqlJobRequestCommandPort(NpgsqlDataSource dataSource, IClock clock)
+	{
+		this.dataSource = dataSource;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<JobRequestResult> SubmitAsync(SubmitJobRequestRequest request, CancellationToken cancellationToken = default)
@@ -33,7 +38,8 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 
 		var holdingArea = await context.Set<RequestHoldingAreaEntity>().AsNoTracking()
 							  .FirstOrDefaultAsync(h => h.Id == request.HoldingAreaId, cancellationToken).ConfigureAwait(false)
@@ -50,7 +56,6 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 				$"Actor {request.Context.Actor} may not submit a request into holding area {request.HoldingAreaId}.");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var node = new JobNodeEntity {
 			Id = default,
 			ParentId = holdingArea.JobNodeId,
@@ -96,7 +101,8 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await RequireRequesterJobAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		if (!JobNodeAccessPolicy.CanManage(actorRoles, ancestorOwnerIds.Contains(request.Context.Actor.Value))) {
@@ -116,7 +122,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 				cancellationToken).ConfigureAwait(false);
 
 			AuditEventWriter.Add(
-				context, request.Context.Actor, SystemClock.Instance.GetCurrentInstant(), "move-requester-job", "job_node",
+				context, request.Context.Actor, now, "move-requester-job", "job_node",
 				request.NodeId.Value, request.Context.CorrelationId, null,
 				new Dictionary<string, string?> { ["parent_id"] = oldParentId?.Value.ToString(CultureInfo.InvariantCulture) },
 				new Dictionary<string, string?> { ["parent_id"] = request.NewParentId.Value.ToString(CultureInfo.InvariantCulture) });
@@ -149,7 +155,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var dbContext = CreateContext();
 
-		_ = await GetActorRolesAsync(dbContext, context.Actor, cancellationToken).ConfigureAwait(false);
+		_ = await GetActorRolesAsync(dbContext, context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 
 		var rows = await (
 			from jobRequest in dbContext.Set<JobRequestEntity>().AsNoTracking()
@@ -172,7 +178,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var dbContext = CreateContext();
 
-		_ = await GetActorRolesAsync(dbContext, context.Actor, cancellationToken).ConfigureAwait(false);
+		_ = await GetActorRolesAsync(dbContext, context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 
 		var rows = await dbContext.Set<RequestHoldingAreaEntity>().AsNoTracking()
 			.Where(h => h.IsActive
@@ -191,7 +197,8 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await RequireRequesterJobAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		if (!JobNodeAccessPolicy.CanManage(actorRoles, ancestorOwnerIds.Contains(request.Context.Actor.Value))) {
@@ -211,7 +218,6 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 				$"Job request {request.NodeId} has already been acknowledged.");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		jobRequest.AcknowledgedAt = now;
 		jobRequest.AcknowledgedByUserId = request.Context.Actor;
 		jobRequest.RowVersion += 1;
@@ -235,7 +241,8 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		await using var context = CreateContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await RequireRequesterJobAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		var jobRequest = await context.Set<JobRequestEntity>().AsNoTracking()
@@ -254,7 +261,6 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not add a note to request {request.NodeId}.");
 		}
 
-		var now = SystemClock.Instance.GetCurrentInstant();
 		var note = new JobRequestNoteEntity {
 			Id = default,
 			JobNodeId = request.NodeId,
@@ -282,7 +288,8 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var context = CreateContext();
 
-		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, clock.GetCurrentInstant(), cancellationToken)
+			.ConfigureAwait(false);
 		var ancestorOwnerIds = await RequireRequesterJobAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		var jobRequest = await context.Set<JobRequestEntity>().AsNoTracking()
@@ -387,12 +394,12 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 	}
 
 	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)

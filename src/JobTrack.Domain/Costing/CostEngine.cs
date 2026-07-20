@@ -39,6 +39,31 @@ public static class CostEngine
 		=> Calculate(
 			nodeId, allocations, nodesById, scheduledWorkingIntervals, exceptions, nodeOverrides, userCostRates, userDefaultRate).ExactCosts;
 
+	/// <summary>
+	///     Computes each leaf's own exact cost contribution from <paramref name="allocations" />,
+	///     independent of any particular subtree root — the same one worker's allocations are later
+	///     aggregated under, potentially several times, by <see cref="HierarchicalCostAggregator.Aggregate" />
+	///     for however many candidate roots need this worker's contribution (fresh-eyes review §2.8): the
+	///     comparatively expensive per-segment rate resolution runs once per worker regardless of how many
+	///     roots are being costed, while only the cheap tree-walk aggregation repeats per root.
+	/// </summary>
+	public static IReadOnlyDictionary<JobNodeId, Money> ComputeLeafCosts(
+		IReadOnlyCollection<SessionSegmentAllocation> allocations,
+		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
+		IReadOnlyCollection<NodeRateOverride> nodeOverrides,
+		IReadOnlyCollection<UserCostRate> userCostRates,
+		HourlyRate? userDefaultRate) =>
+		allocations
+			.Select(allocation => (
+				allocation.NodeId,
+				Contribution: SegmentCostCalculator.Calculate(
+					allocation.Share,
+					RateResolver.Resolve(
+						allocation.NodeId, allocation.Segment.Start, nodesById, exceptions, nodeOverrides, userCostRates, userDefaultRate).Rate)))
+			.GroupBy(entry => entry.NodeId)
+			.ToDictionary(group => group.Key, group => new Money(group.Sum(entry => entry.Contribution.Amount)));
+
 	/// <summary>Computes exact hierarchy costs together with their canonical segment trace.</summary>
 	public static CostCalculation Calculate(
 		JobNodeId nodeId,

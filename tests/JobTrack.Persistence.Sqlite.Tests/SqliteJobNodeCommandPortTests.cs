@@ -6,6 +6,7 @@ using Application.Ports;
 using AwesomeAssertions;
 using Database;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using TestSupport;
 
 public sealed class SqliteJobNodeCommandPortTests()
@@ -27,13 +28,13 @@ public sealed class SqliteJobNodeCommandPortTests()
 	}
 
 	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new SqliteInstallationBootstrapPort(connectionString);
+		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	protected override IJobNodeCommandPort CreateCommandPort(string connectionString) =>
-		new SqliteJobNodeCommandPort(connectionString);
+		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
 	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new SqliteAuditQueryPort(connectionString);
+		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;
 

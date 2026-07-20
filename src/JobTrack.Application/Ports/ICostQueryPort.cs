@@ -37,4 +37,14 @@ public interface ICostQueryPort
 	/// </summary>
 	Task<EquatableArray<AppUserId>> GetAncestorOwnerIdsAsync(
 		JobNodeId nodeId, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Materializes the cost inputs for every candidate in <paramref name="nodeIds" />' subtrees, as a
+	///     single union snapshot, as of <paramref name="asOf" /> (fresh-eyes review §2.8: a bounded
+	///     listing page's cost enrichment must not open one connection per row). The provider rejects a
+	///     union larger than <paramref name="maxHierarchyNodes" /> before materializing worker sessions
+	///     and rate data.
+	/// </summary>
+	Task<BulkCostQueryResult> GetBulkCostInputsAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> nodeIds, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default);
 }

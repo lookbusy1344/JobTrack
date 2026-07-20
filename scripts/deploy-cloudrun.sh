@@ -22,7 +22,9 @@ repo="$(cd "$here/.." && pwd)"
 monorepo_root="$(cd "$repo/.." && pwd)"
 
 project="${1:?Usage: $0 <gcp-project-id> [region]}"
-region="${2:-europe-west2}"
+# europe-west1 (Belgium) is a Tier 1 GCP pricing region; europe-west2 (London) is Tier 2,
+# so the Always Free allowance and per-unit cost are both worse there for no functional gain.
+region="${2:-europe-west1}"
 service="jobtrack-web"
 repository="cloud-run-source-deploy"
 image="$region-docker.pkg.dev/$project/$repository/$service:latest"

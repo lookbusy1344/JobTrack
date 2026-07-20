@@ -9,12 +9,18 @@ using Abstractions;
 /// </summary>
 internal sealed class FakeCostQueries : ICostQueries
 {
+	private readonly Dictionary<JobNodeId, Money> _bulkCosts = [];
 	private readonly HashSet<AppUserId> _deniedActors = [];
 	private readonly Dictionary<JobNodeId, Exception> _hierarchyFailures = [];
 	private readonly Dictionary<JobNodeId, HierarchyTotalsResult> _totals = [];
 
 	/// <summary>Stage 6 efficiency guard: proves the subtree cost roll-up is one batched call, never per node.</summary>
 	public int GetHierarchyTotalsCallCount { get; private set; }
+
+	/// <summary>Fresh-eyes review §2.8 efficiency guard: proves listing enrichment is one batched call, never per row.</summary>
+	public int GetBulkNodeCostsCallCount { get; private set; }
+
+	public GetBulkNodeCostsRequest? LastBulkRequest { get; private set; }
 
 	public Task<CostDetailsResult> GetCostDetailsAsync(
 		GetCostDetailsRequest request, CancellationToken cancellationToken = default) =>
@@ -39,9 +45,22 @@ internal sealed class FakeCostQueries : ICostQueries
 		return Task.FromResult(result);
 	}
 
+	public Task<BulkNodeCostResult> GetBulkNodeCostsAsync(GetBulkNodeCostsRequest request, CancellationToken cancellationToken = default)
+	{
+		GetBulkNodeCostsCallCount++;
+		LastBulkRequest = request;
+		var displayed = request.NodeIds
+			.Where(_bulkCosts.ContainsKey)
+			.ToDictionary(nodeId => nodeId, nodeId => _bulkCosts[nodeId]);
+
+		return Task.FromResult(new BulkNodeCostResult { DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayed) });
+	}
+
 	public void SeedHierarchyTotals(JobNodeId nodeId, HierarchyTotalsResult result) => _totals[nodeId] = result;
 
 	public void DenyActor(AppUserId actorId) => _deniedActors.Add(actorId);
 
 	public void FailHierarchyTotals(JobNodeId nodeId, Exception exception) => _hierarchyFailures[nodeId] = exception;
+
+	public void SeedBulkCost(JobNodeId nodeId, Money cost) => _bulkCosts[nodeId] = cost;
 }

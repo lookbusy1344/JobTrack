@@ -56,9 +56,9 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var leafWorkAudit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "leaf_work", EntityId = bareLeafId.Value });
+			new() { EntityType = "leaf_work", EntityId = bareLeafId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 		var sessionAudit = await auditPort.SearchAuditEventsAsync(
-			workerId, new() { EntityType = "work_session", EntityId = result.Id.Value });
+			new() { EntityType = "work_session", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		leafWorkAudit.Events.Select(e => e.Operation).Should().BeEquivalentTo("attach-leaf-work", "set-achievement");
 		sessionAudit.Events.Select(e => e.Operation).Should().BeEquivalentTo("start-work-session");

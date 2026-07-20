@@ -10,10 +10,12 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using NodaTime;
 using Npgsql;
 using Persistence.PostgreSql;
 using Persistence.Sqlite;
 using IPNetwork = System.Net.IPNetwork;
+using SystemClock = NodaTime.SystemClock;
 
 // Not `static class`: WebApplicationFactory<Program> (JobTrack.Web.IntegrationTests) requires a
 // non-static entry-point type argument.
@@ -118,6 +120,8 @@ public sealed class Program
 				model.Filters.Add(new RequiresPasswordChangePageFilter())));
 
 		_ = builder.Services.AddScoped<IViewerTimeZoneResolver, ViewerTimeZoneResolver>();
+		_ = builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+		_ = builder.Services.AddSingleton(sp => new PendingPatDeliveryStore(sp.GetRequiredService<IClock>()));
 
 		var databaseProvider = builder.Configuration["Database:Provider"]
 							   ?? throw new InvalidOperationException("Database:Provider is not configured.");
@@ -137,10 +141,12 @@ public sealed class Program
 		switch (databaseProvider) {
 			case PostgreSqlProviderName:
 				_ = builder.Services.AddSingleton(_ => new NpgsqlDataSourceBuilder(identityConnectionString).UseNodaTime().Build());
-				_ = builder.Services.AddSingleton<IJobTrackClient>(sp => JobTrackPostgreSql.Create(sp.GetRequiredService<NpgsqlDataSource>()));
+				_ = builder.Services.AddSingleton<IJobTrackClient>(sp => JobTrackPostgreSql.Create(
+					sp.GetRequiredService<NpgsqlDataSource>(), clock: sp.GetRequiredService<IClock>()));
 				break;
 			case SqliteProviderName:
-				_ = builder.Services.AddSingleton<IJobTrackClient>(_ => JobTrackSqlite.Create(identityConnectionString));
+				_ = builder.Services.AddSingleton<IJobTrackClient>(sp =>
+					JobTrackSqlite.Create(identityConnectionString, clock: sp.GetRequiredService<IClock>()));
 				break;
 			default:
 				throw new InvalidOperationException($"Unknown Database:Provider '{databaseProvider}'.");

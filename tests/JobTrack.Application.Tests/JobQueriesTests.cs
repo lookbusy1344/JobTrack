@@ -5,6 +5,7 @@ using Abstractions;
 using AwesomeAssertions;
 using Domain.Hierarchy;
 using NodaTime;
+using TestSupport;
 
 public sealed class JobQueriesTests
 {
@@ -75,43 +76,43 @@ public sealed class JobQueriesTests
 	private static JobQueries CreateSut(FakeEmployeeQueryPort employeeQueryPort) =>
 		new(employeeQueryPort, new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeJobNodeCommandPort browseReadinessAndAwaitingProgressQueryPort) =>
 		new(new FakeEmployeeQueryPort(), browseReadinessAndAwaitingProgressQueryPort, browseReadinessAndAwaitingProgressQueryPort,
 			browseReadinessAndAwaitingProgressQueryPort, new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(),
-			new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(), new FakeRateQueryPort(), new FakeCostQueries());
+			new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(), new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeWorkSessionQueryPort workSessionQueryPort) =>
 		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			workSessionQueryPort, new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeLeafWorkQueryPort leafWorkQueryPort) =>
 		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), leafWorkQueryPort, new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakePrerequisiteQueryPort prerequisiteQueryPort) =>
 		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), prerequisiteQueryPort, new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeScheduleQueryPort scheduleQueryPort) =>
 		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), scheduleQueryPort,
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeRateQueryPort rateQueryPort) =>
 		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			rateQueryPort, new FakeCostQueries());
+			rateQueryPort, new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeJobNodeCommandPort browseReadinessAndAwaitingProgressQueryPort, FakeCostQueries costQueries) =>
 		new(EmployeePortMirroring(browseReadinessAndAwaitingProgressQueryPort), browseReadinessAndAwaitingProgressQueryPort,
 			browseReadinessAndAwaitingProgressQueryPort,
 			browseReadinessAndAwaitingProgressQueryPort, new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(),
-			new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(), new FakeRateQueryPort(), costQueries);
+			new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(), new FakeRateQueryPort(), costQueries, SystemClock.Instance);
 
 	/// <summary>
 	///     An employee port seeded with the same roles as <paramref name="source" />. The per-node cost
@@ -132,7 +133,7 @@ public sealed class JobQueriesTests
 	private static JobQueries CreateSut(FakeCostQueries costQueries) =>
 		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), costQueries);
+			new FakeRateQueryPort(), costQueries, SystemClock.Instance);
 
 	[Fact]
 	public async Task An_employee_can_view_their_own_profile()
@@ -261,7 +262,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			null!, new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -272,7 +273,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), null!, new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -283,7 +284,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), null!, new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -294,7 +295,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), null!,
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -305,7 +306,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			null!, new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -316,7 +317,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), null!, new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -327,7 +328,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), null!, new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -338,7 +339,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), null!,
-			new FakeRateQueryPort(), new FakeCostQueries());
+			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -349,7 +350,7 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			null!, new FakeCostQueries());
+			null!, new FakeCostQueries(), SystemClock.Instance);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -360,7 +361,18 @@ public sealed class JobQueriesTests
 		var act = () => new JobQueries(
 			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
-			new FakeRateQueryPort(), null!);
+			new FakeRateQueryPort(), null!, SystemClock.Instance);
+
+		act.Should().Throw<ArgumentNullException>();
+	}
+
+	[Fact]
+	public void Constructor_rejects_a_null_clock()
+	{
+		var act = () => new JobQueries(
+			CreateSeededPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
+			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
+			new FakeRateQueryPort(), new FakeCostQueries(), null!);
 
 		act.Should().Throw<ArgumentNullException>();
 	}
@@ -636,6 +648,45 @@ public sealed class JobQueriesTests
 		return port;
 	}
 
+	private static FakeJobNodeCommandPort CreateAwaitingProgressPort(AppUserId owner, int leafCount)
+	{
+		var port = new FakeJobNodeCommandPort();
+		port.SeedRoles(owner, EmployeeRole.Administrator);
+		var rootId = new JobNodeId(1);
+		port.SeedNode(new() {
+			Id = rootId,
+			ParentId = null,
+			Kind = NodeKind.Root,
+			Description = "Root",
+			PostedByUserId = owner,
+			OwnerUserId = owner,
+			Priority = Priority.Medium,
+			PostedAt = port.NowToReturn,
+			HasChildren = true,
+			HasLeafWork = false,
+			Version = 1,
+		});
+
+		for (var index = 0; index < leafCount; index++) {
+			var leafId = new JobNodeId(index + 2);
+			port.SeedNode(new() {
+				Id = leafId,
+				ParentId = rootId,
+				Kind = NodeKind.Leaf,
+				Description = $"Leaf {index:D3}",
+				PostedByUserId = owner,
+				OwnerUserId = owner,
+				Priority = Priority.Medium,
+				PostedAt = port.NowToReturn,
+				HasChildren = false,
+				HasLeafWork = false,
+				Version = 1,
+			});
+		}
+
+		return port;
+	}
+
 	private static JobNodeResult SubtreeNode(
 		JobNodeId id, JobNodeId? parentId, NodeKind kind, string description, AppUserId owner, Instant postedAt) =>
 		new() {
@@ -734,18 +785,8 @@ public sealed class JobQueriesTests
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, new(11), out _, out var branchId, out var leafId);
 		var costQueries = new FakeCostQueries();
-		costQueries.SeedHierarchyTotals(branchId, new() {
-			NodeId = branchId,
-			ExactCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [branchId] = new(90m) }),
-			DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [branchId] = new(90m) }),
-			TzdbVersion = "2025b",
-		});
-		costQueries.SeedHierarchyTotals(leafId, new() {
-			NodeId = leafId,
-			ExactCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [leafId] = new(45m) }),
-			DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [leafId] = new(45m) }),
-			TzdbVersion = "2025b",
-		});
+		costQueries.SeedBulkCost(branchId, new(90m));
+		costQueries.SeedBulkCost(leafId, new(45m));
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSummariesAsync(
@@ -753,7 +794,68 @@ public sealed class JobQueriesTests
 
 		result.Single(r => r.Id == branchId).Cost.Should().Be(new Money(90m));
 		result.Single(r => r.Id == leafId).Cost.Should().Be(new Money(45m));
-		costQueries.GetHierarchyTotalsCallCount.Should().Be(2);
+		// Fresh-eyes review §2.8: one bulk call prices every row, never one round trip per row.
+		costQueries.GetBulkNodeCostsCallCount.Should().Be(1);
+	}
+
+	[Fact]
+	public async Task GetJobSummariesAsync_captures_the_costing_instant_once_for_the_whole_operation()
+	{
+		var operationInstant = Instant.FromUtc(2026, 7, 20, 12, 34, 56);
+		var clock = new AdjustableClock(operationInstant);
+		var owner = new AppUserId(10);
+		var port = CreateSeededTree(owner, new(11), out _, out var branchId, out _);
+		var costQueries = new FakeCostQueries();
+		costQueries.SeedBulkCost(branchId, new(90m));
+		var sut = new JobQueries(
+			EmployeePortMirroring(port), port, port, port, new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(),
+			new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(), new FakeRateQueryPort(), costQueries, clock);
+
+		_ = await sut.GetJobSummariesAsync(new() { Context = ContextFor(owner), NodeIds = [branchId] });
+
+		clock.ReadCount.Should().Be(1);
+		costQueries.LastBulkRequest.Should().NotBeNull();
+		costQueries.LastBulkRequest!.AsOf.Should().Be(operationInstant);
+	}
+
+	[Fact]
+	public async Task GetJobSummariesAsync_cost_enrichment_makes_one_bulk_call_no_matter_how_wide_the_page_is()
+	{
+		const int leafCount = 25;
+		var owner = new AppUserId(10);
+		var port = new FakeJobNodeCommandPort();
+		port.SeedRoles(owner, EmployeeRole.Administrator);
+		var leafIds = new List<JobNodeId>();
+		for (var index = 0; index < leafCount; index++) {
+			var leafId = new JobNodeId(100 + index);
+			leafIds.Add(leafId);
+			port.SeedNode(new() {
+				Id = leafId,
+				ParentId = null,
+				Kind = NodeKind.Leaf,
+				Description = $"Leaf {index}",
+				PostedByUserId = owner,
+				OwnerUserId = owner,
+				Priority = Priority.Medium,
+				PostedAt = port.NowToReturn,
+				HasChildren = false,
+				HasLeafWork = false,
+				Version = 1,
+			});
+		}
+
+		var costQueries = new FakeCostQueries();
+		foreach (var leafId in leafIds) {
+			costQueries.SeedBulkCost(leafId, new(10m));
+		}
+
+		var sut = CreateSut(port, costQueries);
+
+		var result = await sut.GetJobSummariesAsync(new() { Context = ContextFor(owner), NodeIds = [.. leafIds] });
+
+		result.Should().HaveCount(leafCount);
+		result.Should().OnlyContain(summary => summary.Cost == new Money(10m));
+		costQueries.GetBulkNodeCostsCallCount.Should().Be(1);
 	}
 
 	[Fact]
@@ -1072,18 +1174,112 @@ public sealed class JobQueriesTests
 	}
 
 	[Fact]
+	public async Task GetAwaitingProgressAsync_pages_without_gaps_or_overlap_preserving_order()
+	{
+		const int leafCount = 5;
+		var owner = new AppUserId(10);
+		var port = new FakeJobNodeCommandPort();
+		port.SeedRoles(owner, EmployeeRole.Administrator);
+		var rootId = new JobNodeId(199);
+		port.SeedNode(new() {
+			Id = rootId,
+			ParentId = null,
+			Kind = NodeKind.Root,
+			Description = "Root",
+			PostedByUserId = owner,
+			OwnerUserId = owner,
+			Priority = Priority.Medium,
+			PostedAt = port.NowToReturn,
+			HasChildren = true,
+			HasLeafWork = false,
+			Version = 1,
+		});
+		var leafIds = new List<JobNodeId>();
+		for (var index = 0; index < leafCount; index++) {
+			var leafId = new JobNodeId(200 + index);
+			leafIds.Add(leafId);
+			port.SeedNode(new() {
+				Id = leafId,
+				ParentId = rootId,
+				Kind = NodeKind.Leaf,
+				Description = $"Leaf {index}",
+				PostedByUserId = owner,
+				OwnerUserId = owner,
+				Priority = Priority.Medium,
+				PostedAt = port.NowToReturn,
+				HasChildren = false,
+				HasLeafWork = false,
+				Version = 1,
+			});
+		}
+
+		var sut = CreateSut(port);
+
+		var firstPage = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Offset = 0, Limit = 2 });
+		var secondPage = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Offset = 2, Limit = 2 });
+		var thirdPage = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Offset = 4, Limit = 2 });
+		var unpaged = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
+
+		firstPage.Should().HaveCount(2);
+		secondPage.Should().HaveCount(2);
+		thirdPage.Should().ContainSingle();
+		var paged = firstPage.Concat(secondPage).Concat(thirdPage).Select(e => e.Id).ToArray();
+		paged.Should().Equal(unpaged.Select(e => e.Id));
+		paged.Distinct().Should().HaveCount(leafCount);
+	}
+
+	[Fact]
+	public async Task GetAwaitingProgressAsync_applies_a_bounded_default_when_limit_is_omitted()
+	{
+		var owner = new AppUserId(10);
+		var port = CreateAwaitingProgressPort(owner, AwaitingProgressPaging.DefaultPageSize + 1);
+		var sut = CreateSut(port);
+
+		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
+
+		result.Should().HaveCount(AwaitingProgressPaging.DefaultPageSize);
+	}
+
+	[Fact]
+	public async Task GetAwaitingProgressAsync_clamps_an_excessive_limit_to_the_maximum_page_size()
+	{
+		var owner = new AppUserId(10);
+		var port = CreateAwaitingProgressPort(owner, AwaitingProgressPaging.MaxPageSize + 1);
+		var sut = CreateSut(port);
+
+		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Limit = AwaitingProgressPaging.MaxPageSize + 1 });
+
+		result.Should().HaveCount(AwaitingProgressPaging.MaxPageSize);
+	}
+
+	[Fact]
+	public async Task GetAwaitingProgressAsync_rejects_a_negative_offset()
+	{
+		var sut = CreateSut(new FakeJobNodeCommandPort());
+
+		var act = () => sut.GetAwaitingProgressAsync(new() { Context = ContextFor(new(10)), Offset = -1 });
+
+		await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+	}
+
+	[Fact]
+	public async Task GetAwaitingProgressAsync_rejects_a_non_positive_explicit_limit()
+	{
+		var sut = CreateSut(new FakeJobNodeCommandPort());
+
+		var act = () => sut.GetAwaitingProgressAsync(new() { Context = ContextFor(new(10)), Limit = 0 });
+
+		await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+	}
+
+	[Fact]
 	public async Task GetAwaitingProgressAsync_includes_reconciled_costs_for_returned_leaves_when_the_actor_may_view_them()
 	{
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, new(11), out _, out _, out var leafId);
 		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
 		var costQueries = new FakeCostQueries();
-		costQueries.SeedHierarchyTotals(leafId, new() {
-			NodeId = leafId,
-			ExactCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [leafId] = new(90m) }),
-			DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [leafId] = new(90m) }),
-			TzdbVersion = "2025b",
-		});
+		costQueries.SeedBulkCost(leafId, new(90m));
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
@@ -1091,7 +1287,7 @@ public sealed class JobQueriesTests
 		result.Should().ContainSingle();
 		result[0].Id.Should().Be(leafId);
 		result[0].Cost.Should().Be(new Money(90m));
-		costQueries.GetHierarchyTotalsCallCount.Should().Be(1);
+		costQueries.GetBulkNodeCostsCallCount.Should().Be(1);
 	}
 
 	[Fact]

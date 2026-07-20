@@ -25,12 +25,22 @@ using NodaTime;
 public sealed class AwaitingProgressModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	IClock clock) : PageModel
 {
+	// Fresh-eyes review §2.8: this dashboard is not paginated by an external API contract, so a
+	// dashboard-appropriate fixed page size is enough -- no caller-supplied override.
+	public const int PageSize = AwaitingProgressPaging.DefaultPageSize;
+
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
 
+	/// <summary>Captured once per request, per ADR 0016's "one captured instant per operation".</summary>
+	public Instant Now { get; } = clock.GetCurrentInstant();
+
 	[BindProperty(SupportsGet = true)] public long? OwnerUserId { get; init; }
+
+	[BindProperty(SupportsGet = true)] public int Offset { get; init; }
 
 	/// <summary>
 	///     When set, overrides <see cref="OwnerUserId" /> to show only the unassigned pool
@@ -48,6 +58,9 @@ public sealed class AwaitingProgressModel(
 	public JobNodeDetailResult? SubtreeRoot { get; private set; }
 
 	public EquatableArray<AwaitingProgressEntry> Entries { get; private set; } = [];
+
+	/// <summary>Whether another page of entries exists past <see cref="Entries" /> (fresh-eyes review §2.8's bounded-result contract).</summary>
+	public bool HasMore { get; private set; }
 
 	public IReadOnlyDictionary<JobNodeId, WorkSessionResult> ActiveSessionByLeaf { get; private set; } =
 		new Dictionary<JobNodeId, WorkSessionResult>();
@@ -73,6 +86,7 @@ public sealed class AwaitingProgressModel(
 		["OwnerUserId"] = OwnerUserId?.ToString(CultureInfo.InvariantCulture),
 		["UnassignedOnly"] = UnassignedOnly.ToString(),
 		["SubtreeRootId"] = SubtreeRootId?.ToString(CultureInfo.InvariantCulture),
+		["Offset"] = Offset.ToString(CultureInfo.InvariantCulture),
 	};
 
 	/// <summary>
@@ -81,8 +95,8 @@ public sealed class AwaitingProgressModel(
 	///     it is; the actor's own needs no such label.
 	/// </summary>
 	public string? ActiveSessionWorkedByOther(WorkSessionResult? activeSession) =>
-		activeSession is { } session && session.WorkedByUserId != CurrentActorId
-			? DescribeOwner(session.WorkedByUserId)
+		activeSession is not null && activeSession.WorkedByUserId != CurrentActorId
+			? DescribeOwner(activeSession.WorkedByUserId)
 			: null;
 
 	/// <summary>
@@ -114,12 +128,17 @@ public sealed class AwaitingProgressModel(
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(CurrentRouteValues());
+			}
+
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 					JobNodeId = new(jobNodeId),
 					WorkedByUserId = actor.Value,
-					StartedAt = BackdateInstant.TryParse(startedAt, zone, out var startedAtInstant) ? startedAtInstant : null,
+					StartedAt = startedAtInstant,
 				}, cancellationToken);
 			SuccessMessage = "Work started.";
 		}
@@ -149,11 +168,16 @@ public sealed class AwaitingProgressModel(
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(CurrentRouteValues());
+			}
+
 			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				SessionId = new(sessionId),
 				Version = version,
-				FinishedAt = BackdateInstant.TryParse(finishedAt, zone, out var finishedAtInstant) ? finishedAtInstant : null,
+				FinishedAt = finishedAtInstant,
 			}, cancellationToken);
 			SuccessMessage = "Session finished.";
 		}
@@ -182,6 +206,7 @@ public sealed class AwaitingProgressModel(
 		["ownerUserId"] = OwnerUserId,
 		["unassignedOnly"] = UnassignedOnly,
 		["subtreeRootId"] = SubtreeRootId,
+		["offset"] = Offset,
 	};
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
@@ -207,13 +232,18 @@ public sealed class AwaitingProgressModel(
 				(false, null) => OwnershipFilter.All,
 			};
 
-			Entries = await jobTrackClient.Query.GetAwaitingProgressAsync(
+			var page = await jobTrackClient.Query.GetAwaitingProgressAsync(
 				new() {
 					Context = context,
 					Ownership = ownership,
 					SubtreeRootId = SubtreeRootId.HasValue ? new JobNodeId(SubtreeRootId.Value) : null,
+					Offset = Math.Max(0, Offset),
+					Limit = PageSize + 1,
 				},
 				cancellationToken);
+
+			HasMore = page.Count > PageSize;
+			Entries = HasMore ? [.. page.Take(PageSize)] : page;
 
 			await LoadActiveSessionsAsync(context, cancellationToken);
 		}

@@ -1,24 +1,34 @@
 namespace JobTrack.Persistence.Sqlite;
 
 using System.Data;
-using Abstractions;
 using Application;
 using Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared;
-using Shared.Entities;
 
 internal sealed class SqliteAuthenticationAuditPort : IAuthenticationAuditPort
 {
 	private const string KnownEntityType = "identity_user";
 	private const string UnknownEntityType = "authentication_attempt";
-	private const string SystemActorDisplayName = "JobTrack authentication audit";
-	private const string SystemActorTimeZone = "UTC";
+
+	/// <summary>
+	///     <c>entity_id</c> is a NOT NULL column with no unknown-subject case, unlike <c>actor_user_id</c>
+	///     -- an unknown-username failure names no real <c>identity_user</c> row, so this sentinel (below
+	///     every real generated id) stands in rather than falling back to an actor id that no longer
+	///     exists for this event (fresh-eyes review §2.6).
+	/// </summary>
+	private const long UnknownSubjectEntityId = 0;
+
+	private readonly IClock clock;
 
 	private readonly string connectionString;
 
-	public SqliteAuthenticationAuditPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteAuthenticationAuditPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	public async Task RecordAsync(RecordAuthenticationAuditEventRequest request, CancellationToken cancellationToken = default)
 	{
@@ -26,19 +36,18 @@ internal sealed class SqliteAuthenticationAuditPort : IAuthenticationAuditPort
 		await using var transaction = await context.Database
 			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
-		var actorUserId = request.ActorUserId ?? await GetOrCreateSystemActorAsync(context, cancellationToken).ConfigureAwait(false);
 		var entityType = request.IdentityUserId is null
 			? UnknownEntityType
 			: KnownEntityType;
-		var entityId = request.IdentityUserId ?? actorUserId.Value;
+		var entityId = request.IdentityUserId ?? UnknownSubjectEntityId;
 		var afterData = request.IdentityUserId is null
 			? new Dictionary<string, string?> { ["subject"] = "redacted" }
 			: null;
 
 		AuditEventWriter.Add(
 			context,
-			actorUserId,
-			SystemClock.Instance.GetCurrentInstant(),
+			request.ActorUserId,
+			clock.GetCurrentInstant(),
 			OperationFor(request.Kind),
 			entityType,
 			entityId,
@@ -49,28 +58,6 @@ internal sealed class SqliteAuthenticationAuditPort : IAuthenticationAuditPort
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-	}
-
-	private static async Task<AppUserId> GetOrCreateSystemActorAsync(
-		SqliteJobTrackDbContext context, CancellationToken cancellationToken)
-	{
-		var existing = await context.Set<AppUserEntity>().AsNoTracking()
-			.Where(user => user.DisplayName == SystemActorDisplayName)
-			.Select(user => user.Id)
-			.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-		if (!existing.IsUnspecified) {
-			return existing;
-		}
-
-		var systemActor = new AppUserEntity {
-			Id = default,
-			DisplayName = SystemActorDisplayName,
-			IanaTimeZone = SystemActorTimeZone,
-			RowVersion = 1,
-		};
-		_ = context.Add(systemActor);
-		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-		return systemActor.Id;
 	}
 
 	private static string OperationFor(AuthenticationAuditEventKind kind) =>

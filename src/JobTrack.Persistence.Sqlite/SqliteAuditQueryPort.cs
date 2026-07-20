@@ -21,10 +21,15 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteAuditQueryPort : IAuditQueryPort
 {
+	private readonly IClock clock;
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteAuditQueryPort(string connectionString) => this.connectionString = connectionString;
+	public SqliteAuditQueryPort(string connectionString, IClock clock)
+	{
+		this.connectionString = connectionString;
+		this.clock = clock;
+	}
 
 	/// <inheritdoc />
 	public async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
@@ -36,25 +41,24 @@ internal sealed class SqliteAuditQueryPort : IAuditQueryPort
 
 	/// <inheritdoc />
 	public async Task<AuditSearchQueryResult> SearchAuditEventsAsync(
-		AppUserId actorId, AuditEventSearchFilter filter, CancellationToken cancellationToken = default)
+		AuditEventSearchFilter filter, AuditEventSearchCursor? before, int limit, CancellationToken cancellationToken = default)
 	{
 		await using var context = CreateContext();
 
-		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
-		var events = await AuditQueryAssembly.SearchAsync(context, filter, cancellationToken).ConfigureAwait(false);
+		var events = await AuditQueryAssembly.SearchAsync(context, filter, before, limit, cancellationToken).ConfigureAwait(false);
 
-		return new() { ActorRoles = actorRoles, Events = EquatableArray.CopyOf(events) };
+		return new() { Events = EquatableArray.CopyOf(events) };
 	}
 
 	private SqliteJobTrackDbContext CreateContext() => SqliteDbContextFactory.CreateContext(connectionString);
 
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
+	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
 									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, SystemClock.Instance.GetCurrentInstant());
+		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
 			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
@@ -76,7 +80,7 @@ internal static class AuditQueryAssembly
 	private static readonly string[] SensitiveEntityTypes = ["user_cost_rate", "node_rate_override"];
 
 	public static async Task<List<AuditEventRecord>> SearchAsync(
-		DbContext context, AuditEventSearchFilter filter, CancellationToken cancellationToken)
+		DbContext context, AuditEventSearchFilter filter, AuditEventSearchCursor? before, int limit, CancellationToken cancellationToken)
 	{
 		var query = context.Set<AuditEventEntity>().AsNoTracking().AsQueryable();
 
@@ -84,8 +88,9 @@ internal static class AuditQueryAssembly
 			query = query.Where(e => e.ActorUserId == actorId);
 		}
 
-		if (filter.EntityType is { } entityType) {
-			query = query.Where(e => e.EntityType == entityType);
+		var type = filter.EntityType;
+		if (type is not null) {
+			query = query.Where(e => e.EntityType == type);
 		}
 
 		if (filter.EntityId is long entityId) {
@@ -104,9 +109,16 @@ internal static class AuditQueryAssembly
 			query = query.Where(e => e.OccurredAt < to);
 		}
 
+		if (before is not null) {
+			query = query.Where(e =>
+				e.OccurredAt < before.OccurredAt
+				|| (e.OccurredAt == before.OccurredAt && e.Id < before.Id));
+		}
+
 		var rows = await query
 			.OrderByDescending(e => e.OccurredAt)
 			.ThenByDescending(e => e.Id)
+			.Take(limit)
 			.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. rows.Select(ToRecord)];

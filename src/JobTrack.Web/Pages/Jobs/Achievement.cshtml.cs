@@ -40,9 +40,10 @@ public sealed class AchievementModel(IJobTrackClient jobTrackClient, UserManager
 		}
 
 		await LoadAsync(actor.Value, cancellationToken);
-		if (LeafWork is { } leafWork) {
-			Input.NewAchievement = leafWork.Achievement;
-			OriginalVersion = leafWork.Version;
+		var result = LeafWork;
+		if (result is not null) {
+			Input.NewAchievement = result.Achievement;
+			OriginalVersion = result.Version;
 		}
 
 		return Page();

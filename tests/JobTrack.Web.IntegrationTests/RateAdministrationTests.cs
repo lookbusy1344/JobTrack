@@ -7,6 +7,7 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
+using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -74,7 +75,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		var authCookie = await SignInAsync("rates.admin", KnownPassword);
 
 		var (rateCookie, rateToken) = await GetFormAsync(authCookie, workerId);
-		var rateResponse = await PostAddUserCostRateAsync(authCookie, rateCookie, rateToken, workerId, "25.00", "2026-01-01T00:00:00+00:00");
+		var rateResponse = await PostAddUserCostRateAsync(authCookie, rateCookie, rateToken, workerId, "25.00", "2026-01-01T00:00");
 		rateResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var rateReloaded = await FollowRedirectAsync(rateResponse, authCookie);
 		var rateBody = await rateReloaded.Content.ReadAsStringAsync();
@@ -83,7 +84,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 
 		var (overrideCookie, overrideToken) = await ExtractFormAsync(rateReloaded, rateCookie);
 		var overrideResponse = await PostAddNodeRateOverrideAsync(
-			authCookie, overrideCookie, overrideToken, workerId, rootJobNodeId, "30.00", "2026-01-01T00:00:00+00:00");
+			authCookie, overrideCookie, overrideToken, workerId, rootJobNodeId, "30.00", "2026-01-01T00:00");
 		overrideResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var overrideReloaded = await FollowRedirectAsync(overrideResponse, authCookie);
 		var overrideBody = await overrideReloaded.Content.ReadAsStringAsync();
@@ -99,7 +100,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		var authCookie = await SignInAsync("rates.manager", KnownPassword);
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
-		var response = await PostAddUserCostRateAsync(authCookie, cookie, token, workerId, "25.00", "2026-01-01T00:00:00+00:00");
+		var response = await PostAddUserCostRateAsync(authCookie, cookie, token, workerId, "25.00", "2026-01-01T00:00");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
@@ -164,7 +165,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 
 		var (cookie, token) = await GetFormAsync(authCookie, $"/Admin/CorrectUserCostRate?userId={workerId.Value}&rateId={added.Id.Value}");
 		var response = await PostCorrectUserCostRateAsync(
-			authCookie, cookie, token, workerId, added.Id, "30.00", "2026-01-01T00:00:00+00:00", "Corrected the agreed rate");
+			authCookie, cookie, token, workerId, added.Id, "30.00", "2026-01-01T00:00", "Corrected the agreed rate");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Admin/Rates");
@@ -186,10 +187,86 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		var (cookie, token) = await GetFormAsync(
 			authCookie, $"/Admin/CorrectNodeRateOverride?userId={workerId.Value}&overrideId={added.Id.Value}");
 		var response = await PostCorrectNodeRateOverrideAsync(
-			authCookie, cookie, token, workerId, added.Id, rootJobNodeId, "45.00", "2026-01-01T00:00:00+00:00", "Corrected the override rate");
+			authCookie, cookie, token, workerId, added.Id, rootJobNodeId, "45.00", "2026-01-01T00:00", "Corrected the override rate");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Admin/Rates");
+	}
+
+	/// <summary>
+	///     §2.4: the correction form's <c>EffectiveStart</c> round-trips a stored instant back to a
+	///     <c>datetime-local</c> string in the acting administrator's own zone on GET, and a malformed
+	///     resubmission is rejected without applying the correction.
+	/// </summary>
+	[Fact]
+	public async Task The_correct_user_cost_rate_form_prefills_in_the_actors_zone_and_rejects_a_malformed_resubmission()
+	{
+		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+		var workerId = await SeedEmployeeAsync("rates.correct-zoned-target", EmployeeRole.Worker);
+		var stored = CivilTimeResolver.ToInstant(new(2026, 1, 1, 9, 0, 0), newYork);
+		var added = await seedClient.Rates.AddUserCostRateAsync(new() {
+			Context = await CreateContextForAsync("admin.rate-tests"),
+			UserId = workerId,
+			Rate = new(new(25m), stored, null),
+		});
+		_ = await SeedEmployeeAsync("rates.correct-zoned-manager", EmployeeRole.Administrator, "America/New_York");
+		var authCookie = await SignInAsync("rates.correct-zoned-manager", KnownPassword);
+
+		var (cookie, token) = await GetFormAsync(authCookie, $"/Admin/CorrectUserCostRate?userId={workerId.Value}&rateId={added.Id.Value}");
+		var getResponse = await GetAsync(authCookie, $"/Admin/CorrectUserCostRate?userId={workerId.Value}&rateId={added.Id.Value}");
+		(await getResponse.Content.ReadAsStringAsync()).Should().Contain("value=\"2026-01-01T09:00\"");
+
+		var response = await PostCorrectUserCostRateAsync(
+			authCookie, cookie, token, workerId, added.Id, "30.00", "not-a-local-date-time", "Malformed correction");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Enter a valid date and time.");
+
+		var snapshot = await seedClient.Query.GetRatesAsync(
+			new() { Context = await CreateContextForAsync("admin.rate-tests"), UserId = workerId }, CancellationToken.None);
+		snapshot.UserCostRates.Single().Rate.EffectiveStart.Should().Be(stored);
+	}
+
+	/// <summary>§2.4: a malformed <c>EffectiveStart</c> is rejected before the rate command runs.</summary>
+	[Fact]
+	public async Task A_malformed_EffectiveStart_on_add_user_cost_rate_is_rejected_without_adding_the_rate()
+	{
+		var workerId = await SeedEmployeeAsync("rates.malformed-effective", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("rates.malformed-admin", EmployeeRole.Administrator);
+		var authCookie = await SignInAsync("rates.malformed-admin", KnownPassword);
+
+		var (cookie, token) = await GetFormAsync(authCookie, workerId);
+		var response = await PostAddUserCostRateAsync(authCookie, cookie, token, workerId, "25.00", "not-a-local-date-time");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Enter a valid date and time.");
+		body.Should().NotContain("User cost rate added");
+	}
+
+	/// <summary>
+	///     §2.4: <c>EffectiveStart</c> is a bare wall-clock string resolved in the acting administrator's
+	///     own zone, not the server process's own OS zone. The administrator here is seeded with
+	///     <c>America/New_York</c>, deliberately different from whatever zone this test process itself
+	///     runs in, so the assertion only holds if resolution actually used the actor's zone.
+	/// </summary>
+	[Fact]
+	public async Task EffectiveStart_is_resolved_in_the_acting_administrators_own_zone_not_the_server_process_zone()
+	{
+		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+		var workerId = await SeedEmployeeAsync("rates.zoned-effective", EmployeeRole.Worker);
+		var administratorId = await SeedEmployeeAsync("rates.zoned-admin", EmployeeRole.Administrator, "America/New_York");
+		var authCookie = await SignInAsync("rates.zoned-admin", KnownPassword);
+
+		var (cookie, token) = await GetFormAsync(authCookie, workerId);
+		var response = await PostAddUserCostRateAsync(authCookie, cookie, token, workerId, "25.00", "2026-06-15T09:00");
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var snapshot = await seedClient.Query.GetRatesAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, UserId = workerId }, CancellationToken.None);
+
+		snapshot.UserCostRates.Single().Rate.EffectiveStart.Should().Be(CivilTimeResolver.ToInstant(new(2026, 6, 15, 9, 0, 0), newYork));
 	}
 
 	private async Task<HttpResponseMessage> PostCorrectUserCostRateAsync(
@@ -261,6 +338,14 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		return await client.SendAsync(request);
 	}
 
+	private async Task<HttpResponseMessage> GetAsync(string authCookie, string path)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, path);
+		request.Headers.Add("Cookie", authCookie);
+
+		return await client.SendAsync(request);
+	}
+
 	private async Task<(string CookieHeader, string Token)> GetFormAsync(string authCookie, AppUserId userId) =>
 		await GetFormAsync(authCookie, $"/Admin/Rates?userId={userId.Value}");
 
@@ -301,7 +386,8 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	private static async Task<(string CookieHeader, string Token)> ExtractFormAsync(HttpResponseMessage response, string previousAntiforgeryCookie)
 	{
 		var body = await response.Content.ReadAsStringAsync();
-		var cookie = FindSetCookie(response, "Antiforgery") is { } newCookie ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
+		var newCookie = FindSetCookie(response, "Antiforgery");
+		var cookie = newCookie is not null ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in response body.");
@@ -368,15 +454,16 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
+	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
 
 		await using var insertAppUser = connection.CreateCommand();
 		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
+			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, $ianaTimeZone); SELECT last_insert_rowid();";
 		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
+		_ = insertAppUser.Parameters.AddWithValue("$ianaTimeZone", ianaTimeZone);
 		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
 		var placeholderUser = new JobTrackIdentityUser {

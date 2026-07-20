@@ -39,6 +39,26 @@ internal static class BackdateInstant
 		return true;
 	}
 
+	/// <summary>
+	///     Parses an optional <c>datetime-local</c> value. An omitted value is a valid absence;
+	///     a non-empty value must parse successfully and is never silently reinterpreted as absence.
+	/// </summary>
+	internal static bool TryParseOptional(string? rawDateTimeLocal, DateTimeZone zone, out Instant? instant)
+	{
+		if (string.IsNullOrEmpty(rawDateTimeLocal)) {
+			instant = null;
+			return true;
+		}
+
+		if (TryParse(rawDateTimeLocal, zone, out var parsed)) {
+			instant = parsed;
+			return true;
+		}
+
+		instant = null;
+		return false;
+	}
+
 	/// <summary>The inverse of <see cref="TryParse" />: pre-fills a <c>datetime-local</c> input from a stored <see cref="Instant" />.</summary>
 	internal static string ToDateTimeLocalValue(Instant instant, DateTimeZone zone) => Pattern.Format(instant.InZone(zone).LocalDateTime);
 }

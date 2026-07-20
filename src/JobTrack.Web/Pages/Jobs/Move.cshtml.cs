@@ -37,7 +37,8 @@ public sealed class MoveModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 		}
 
 		await LoadCurrentNodeAsync(actor.Value, cancellationToken);
-		if (CurrentNode is { } node) {
+		var node = CurrentNode;
+		if (node is not null) {
 			OriginalVersion = node.Node.Version;
 		}
 
@@ -84,7 +85,8 @@ public sealed class MoveModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 			ErrorMessage = "Someone else changed this node since the form was loaded. " +
 						   "The latest version is shown below — try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);
-			if (CurrentNode is { } refreshed) {
+			var refreshed = CurrentNode;
+			if (refreshed is not null) {
 				OriginalVersion = refreshed.Node.Version;
 			}
 

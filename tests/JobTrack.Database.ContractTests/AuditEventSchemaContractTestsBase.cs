@@ -67,6 +67,24 @@ public abstract class AuditEventSchemaContractTestsBase : IAsyncLifetime
 		id.Should().BePositive();
 	}
 
+	/// <summary>
+	///     Fresh-eyes review §2.6: an unknown-subject authentication failure has no real actor to
+	///     attribute the event to, so <c>actor_user_id</c> must accept <see langword="null" /> rather
+	///     than forcing a fabricated/reused "system" <c>app_user</c> row keyed by ordinary display-name
+	///     data.
+	/// </summary>
+	[Fact]
+	public async Task Inserting_an_audit_event_with_a_null_actor_succeeds()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+
+		var id = await InsertAuditEventAsync(
+			connection, null, "authentication.login-failed", "authentication_attempt", 0, Guid.NewGuid(), null, null,
+			"""{"subject":"redacted"}""");
+
+		id.Should().BePositive();
+	}
+
 	[Fact]
 	public async Task Inserting_an_audit_event_with_a_blank_operation_is_rejected()
 	{
@@ -131,7 +149,7 @@ public abstract class AuditEventSchemaContractTestsBase : IAsyncLifetime
 
 	protected abstract Task<long> InsertAuditEventAsync(
 		DbConnection connection,
-		long actorUserId,
+		long? actorUserId,
 		string operation,
 		string entityType,
 		long entityId,

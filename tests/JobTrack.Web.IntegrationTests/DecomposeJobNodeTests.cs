@@ -193,6 +193,32 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		saveBody.Should().Contain("Someone else changed this node");
 	}
 
+	/// <summary>
+	///     §2.4: a malformed <c>NeededStart</c> on a new child slot is rejected before the atomic
+	///     decompose command runs, even though the current form doesn't render that field — a raw HTTP
+	///     POST can still supply it.
+	/// </summary>
+	[Fact]
+	public async Task A_malformed_new_child_NeededStart_is_rejected_without_decomposing()
+	{
+		var managerId = await SeedEmployeeAsync("decompose.malformed-needed", EmployeeRole.JobManager);
+		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Leaf with malformed child needed-start");
+		var authCookie = await SignInAsync("decompose.malformed-needed");
+
+		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, leaf.Id);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, leaf.Id, leaf.Version, managerId,
+			"Deck project", "Existing framing work", "Add railings", "not-a-local-date-time");
+		var saveBody = await saveResponse.Content.ReadAsStringAsync();
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		saveBody.Should().Contain("Enter a valid date and time");
+
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id }, CancellationToken.None);
+		current.Node.HasChildren.Should().BeFalse("the decompose must not have run");
+	}
+
 	private async Task<JobNodeResult> AddWorkedLeafAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
@@ -214,7 +240,8 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	private async Task<HttpResponseMessage> PostAsync(
 		string authCookie, string antiforgeryCookie, string token,
 		JobNodeId leafNodeId, long version, AppUserId? newChildOwnerId,
-		string branchDescription, string existingWorkDescription, string firstNewChildDescription)
+		string branchDescription, string existingWorkDescription, string firstNewChildDescription,
+		string? firstNewChildNeededStart = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Decompose");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -230,6 +257,10 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 			form[$"Input.NewChildren[{i}].Description"] = i == 0 ? firstNewChildDescription : string.Empty;
 			form[$"Input.NewChildren[{i}].OwnerUserId"] = newChildOwnerId?.Value.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
 			form[$"Input.NewChildren[{i}].Priority"] = nameof(Priority.Medium);
+		}
+
+		if (firstNewChildNeededStart is not null) {
+			form["Input.NewChildren[0].NeededStart"] = firstNewChildNeededStart;
 		}
 
 		request.Content = new FormUrlEncodedContent(form);

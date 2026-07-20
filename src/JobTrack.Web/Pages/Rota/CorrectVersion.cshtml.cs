@@ -41,12 +41,13 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 		}
 
 		await LoadVersionAsync(actor.Value, cancellationToken);
-		if (Version is { } version) {
-			Input.IanaTimeZone = version.Schedule.Zone.Id;
-			Input.EffectiveStart = ToDateOnly(version.Schedule.EffectiveStart);
-			Input.EffectiveEnd = version.Schedule.EffectiveEnd.HasValue ? ToDateOnly(version.Schedule.EffectiveEnd.Value) : null;
+		var result = Version;
+		if (result is not null) {
+			Input.IanaTimeZone = result.Schedule.Zone.Id;
+			Input.EffectiveStart = ToDateOnly(result.Schedule.EffectiveStart);
+			Input.EffectiveEnd = result.Schedule.EffectiveEnd.HasValue ? ToDateOnly(result.Schedule.EffectiveEnd.Value) : null;
 			Input.WeeklyIntervals = [
-				.. version.Schedule.WeeklyIntervals.Select(interval =>
+				.. result.Schedule.WeeklyIntervals.Select(interval =>
 					new IndexModel.WeeklyIntervalSlotInput {
 						Day = interval.Day, Start = ToTimeOnly(interval.Start), End = ToTimeOnly(interval.End),
 					}),

@@ -70,7 +70,7 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			jobManagerId, new() { EntityType = "leaf_work", EntityId = leafId.Value });
+			new() { EntityType = "leaf_work", EntityId = leafId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		// AttachLeafWorkAsync (SeedReadyLeafAsync) also writes a leaf_work audit event, so filter
 		// down to the transition this test actually performed.

@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using NodaTime;
 
 /// <summary>
 ///     Creates a child node under a chosen parent (plan §8.5 slice 3). Carries no page-level
@@ -19,7 +18,10 @@ using NodaTime;
 ///     deny it.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
-public sealed class CreateModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class CreateModel(
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
 {
 	private const string ParentHasLeafWorkMessage =
 		"This parent already has work attached. Create children only under a node without leaf work.";
@@ -74,6 +76,13 @@ public sealed class CreateModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			return Page();
 		}
 
+		var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+		if (!BackdateInstant.TryParseOptional(Input.NeededStart, zone, out var neededStart)
+			|| !BackdateInstant.TryParseOptional(Input.NeededFinish, zone, out var neededFinish)) {
+			ErrorMessage = "Enter a valid date and time.";
+			return Page();
+		}
+
 		var request = new CreateJobNodeRequest {
 			Context = context,
 			ParentId = new(ParentId),
@@ -82,8 +91,8 @@ public sealed class CreateModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			OwnerUserId = Input.OwnerUserId.HasValue ? new AppUserId(Input.OwnerUserId.Value) : null,
 			ExpectedDurationHours = Input.ExpectedDurationHours,
 			ExpectedCost = Input.ExpectedCost.HasValue ? new Money(Input.ExpectedCost.Value) : null,
-			NeededStart = Input.NeededStart.HasValue ? Instant.FromDateTimeOffset(Input.NeededStart.Value) : null,
-			NeededFinish = Input.NeededFinish.HasValue ? Instant.FromDateTimeOffset(Input.NeededFinish.Value) : null,
+			NeededStart = neededStart,
+			NeededFinish = neededFinish,
 			Priority = Input.Priority,
 		};
 
@@ -151,9 +160,9 @@ public sealed class CreateModel(IJobTrackClient jobTrackClient, UserManager<JobT
 
 		public decimal? ExpectedCost { get; set; }
 
-		public DateTimeOffset? NeededStart { get; set; }
+		public string? NeededStart { get; set; }
 
-		public DateTimeOffset? NeededFinish { get; set; }
+		public string? NeededFinish { get; set; }
 
 		[Required] public Priority Priority { get; set; }
 	}

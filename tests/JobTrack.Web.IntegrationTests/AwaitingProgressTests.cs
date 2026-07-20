@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using NodaTime.Text;
+using Pages.Jobs;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -109,7 +110,32 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("Fresh leaf awaiting assignment");
-		body.Should().Contain("No work attached");
+		body.Should().Contain("None");
+	}
+
+	[Fact]
+	public async Task A_dashboard_wider_than_the_page_size_offers_a_next_page_link_that_advances_the_offset()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.paging");
+		var rootId = bootstrappedRootId!.Value;
+		for (var index = 0; index < AwaitingProgressModel.PageSize + 1; index++) {
+			_ = await AddChildAsync(rootId, workerId, $"Leaf {index}", adminId);
+		}
+
+		var authCookie = await SignInAsync("awaiting.paging");
+
+		var firstResponse = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var firstBody = await firstResponse.Content.ReadAsStringAsync();
+
+		firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		firstBody.Should().Contain("Next page");
+		firstBody.Should().Contain($"Offset={AwaitingProgressModel.PageSize}");
+
+		var secondResponse = await GetAsync($"/Jobs/AwaitingProgress?offset={AwaitingProgressModel.PageSize}", authCookie);
+		var secondBody = await secondResponse.Content.ReadAsStringAsync();
+
+		secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		secondBody.Should().NotContain("Next page");
 	}
 
 	[Fact]
@@ -293,6 +319,24 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("in the future");
+	}
+
+	[Fact]
+	public async Task Starting_a_session_with_a_malformed_backdate_from_the_dashboard_row_does_not_start_work()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.malformed-start");
+		var rootId = bootstrappedRootId!.Value;
+		var leafId = await AddChildAsync(rootId, workerId, "Malformed dashboard start", adminId);
+		var authCookie = await SignInAsync("awaiting.malformed-start");
+
+		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
+		var response = await PostStartWorkAsync(authCookie, formCookie, token, leafId, "not-a-local-date-time");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Enter a valid date and time.");
+		(await GetSessionsAsync(leafId, adminId)).Should().BeEmpty();
 	}
 
 	[Fact]
@@ -642,7 +686,8 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	private static async Task<(string CookieHeader, string Token)> ExtractFormAsync(HttpResponseMessage response, string previousAntiforgeryCookie)
 	{
 		var body = await response.Content.ReadAsStringAsync();
-		var cookie = FindSetCookie(response, "Antiforgery") is { } newCookie ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
+		var newCookie = FindSetCookie(response, "Antiforgery");
+		var cookie = newCookie is not null ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in response body.");
