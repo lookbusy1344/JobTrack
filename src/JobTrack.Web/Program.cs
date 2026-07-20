@@ -239,7 +239,14 @@ public sealed class Program
 		_ = builder.Services.ConfigureApplicationCookie(options => {
 			options.Cookie.HttpOnly = true;
 			options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-			options.Cookie.SameSite = SameSiteMode.Strict;
+			// Lax, not Strict: Strict withholds the auth cookie on every externally-initiated top-level
+			// navigation -- a password manager opening the saved URL, an emailed/bookmarked link, and in
+			// some browsers the post-login redirect itself -- so an already-signed-in user arrives
+			// looking anonymous and is bounced to the login page. Lax still sends the cookie on top-level
+			// GET navigations while withholding it from cross-site POSTs; CSRF on state-changing requests
+			// is enforced by the antiforgery token (spec §7.1 threat model row 6), not by this cookie's
+			// SameSite mode, so relaxing it to Lax does not widen the CSRF surface.
+			options.Cookie.SameSite = SameSiteMode.Lax;
 			options.ExpireTimeSpan = TimeSpan.FromHours(AuthenticationCookieExpirationHours);
 			options.SlidingExpiration = true;
 			options.LoginPath = "/Account/Login";

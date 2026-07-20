@@ -63,7 +63,11 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		authCookie.Should().NotBeNull();
 		authCookie.Should().ContainEquivalentOf("secure");
 		authCookie.Should().ContainEquivalentOf("httponly");
-		authCookie.Should().ContainEquivalentOf("samesite=strict");
+		// Lax (not Strict) so the cookie survives externally-initiated top-level navigations -- a
+		// password manager opening the saved URL, following an emailed link, or the post-login
+		// redirect itself -- which is what left users bounced back to the login page. CSRF on
+		// state-changing requests stays covered by the antiforgery token, not the cookie's SameSite.
+		authCookie.Should().ContainEquivalentOf("samesite=lax");
 		auditOperation.Should().Be("authentication.login-success");
 	}
 
