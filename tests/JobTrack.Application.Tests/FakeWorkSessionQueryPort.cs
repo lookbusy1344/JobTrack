@@ -10,6 +10,7 @@ using Ports;
 /// </summary>
 internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 {
+	private readonly HashSet<(AppUserId ActorId, JobNodeId LeafWorkId)> _controlled = [];
 	private readonly HashSet<JobNodeId> _leaves = [];
 	private readonly Dictionary<AppUserId, EquatableArray<EmployeeRole>> _roles = [];
 	private readonly Dictionary<(JobNodeId LeafWorkId, AppUserId WorkedByUserId), List<WorkSessionResult>> _sessions = [];
@@ -60,9 +61,23 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 		return Task.FromResult(new WorkSessionQueryResult { ActorRoles = actorRoles, Sessions = [.. sessions] });
 	}
 
+	public Task<WorkSessionManageCapabilityQueryResult> GetManageCapabilitiesAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> leafWorkIds, CancellationToken cancellationToken = default)
+	{
+		if (!_roles.TryGetValue(actorId, out var actorRoles)) {
+			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
+		}
+
+		var controlled = leafWorkIds.Where(id => _controlled.Contains((actorId, id))).ToArray();
+
+		return Task.FromResult(new WorkSessionManageCapabilityQueryResult { ActorRoles = actorRoles, ControlledLeafWorkIds = [.. controlled] });
+	}
+
 	public void SeedRoles(AppUserId actorId, params EmployeeRole[] roles) => _roles[actorId] = [.. roles];
 
 	public void SeedLeaf(JobNodeId leafWorkId) => _leaves.Add(leafWorkId);
+
+	public void SeedControl(AppUserId actorId, JobNodeId leafWorkId) => _controlled.Add((actorId, leafWorkId));
 
 	public void SeedSession(WorkSessionResult session)
 	{

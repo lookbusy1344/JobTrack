@@ -1,12 +1,13 @@
 @page
+@using JobTrack.Abstractions
 @model WorkModel
 @{
-	ViewData["Title"] = "Leaf work";
+	ViewData["Title"] = "Sessions";
 }
 
 <div class="jt-page-head">
-	<p class="jt-eyebrow">Work sessions</p>
-	<h1>Leaf work</h1>
+	<p class="jt-eyebrow">Job activity</p>
+	<h1>Sessions</h1>
 </div>
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
@@ -14,38 +15,42 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (Model.CurrentNode is not null) {
-	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Leaf</span><strong
-			class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Leaf</span><a
+			class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+			asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
 
-	var activeSession = Model.Panel?.Sessions.FirstOrDefault(session => session.FinishedAt is null);
+	var toolbarActions = Model.ToolbarActions;
 	BackdateDisclosureModel? toolbarBackdate = null;
+	@if (toolbarActions.ActiveSessions.Count > 0 || toolbarActions.IsStartClosed) {
+		<div class="mb-3">
+			<partial name="_ActiveSincePill" model="@(new ActiveSessionSummaryModel {
+				                                        ActiveSessions = toolbarActions.ActiveSessions,
+				                                        ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+				                                        DescribeWorker = Model.DescribeWorker,
+				                                        ViewerZone = Model.ViewerZone,
+				                                        Now = Model.Now,
+				                                        Compact = false,
+				                                        StartClosed = toolbarActions.IsStartClosed,
+			                                        })"/>
+		</div>
+	}
+
 	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
-		@if (activeSession is not null) {
-			var finishFields = Model.SessionFields(activeSession);
-			<span
-				class="status-pill status-pill-ready">Active since @InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone, Model.Now)</span>
+		@if (toolbarActions.ViewerSession is { } viewerSession) {
 			<form method="post" asp-page-handler="Finish" class="inline-form">
-				@foreach (var field in finishFields) {
+				@foreach (var field in toolbarActions.FinishFieldsFor(viewerSession)) {
 					<input type="hidden" name="@field.Key" value="@field.Value"/>
 				}
 				<button type="submit" class="btn btn-secondary">
 					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 						<use href="#jt-icon-finish"></use>
 					</svg>
-					Finish work
+					Finish / pause
 				</button>
 			</form>
-			toolbarBackdate = new() {
-				Handler = "Finish",
-				FieldName = "finishedAt",
-				Label = "Finished at",
-				SubmitText = "Finish at this time",
-				AccessibleName = "Backdate finish",
-				HiddenFields = finishFields,
-				RowId = "backdate-work-panel",
-			};
+			toolbarBackdate = toolbarActions.FinishBackdateFor(viewerSession);
 			<partial name="_BackdateTrigger" model="toolbarBackdate"/>
-		} else {
+		} else if (!toolbarActions.IsStartClosed) {
 			<form method="post" asp-page-handler="Start" class="inline-form">
 				@foreach (var field in Model.ToolbarStateFields) {
 					<input type="hidden" name="@field.Key" value="@field.Value"/>
@@ -54,24 +59,34 @@
 					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 						<use href="#jt-icon-start"></use>
 					</svg>
-					Start work
+					Start session
 				</button>
 			</form>
-			toolbarBackdate = new() {
-				Handler = "Start",
-				FieldName = "startedAt",
-				Label = "Started at",
-				SubmitText = "Start at this time",
-				AccessibleName = "Backdate start",
-				HiddenFields = Model.ToolbarStateFields,
-				SubmitClass = "btn btn-primary",
-				RowId = "backdate-work-panel",
-			};
+			toolbarBackdate = toolbarActions.StartBackdate;
 			<partial name="_BackdateTrigger" model="toolbarBackdate"/>
+		}
+		@{ var soloOther = toolbarActions.SoloOtherSession; }
+		@if (soloOther is not null) {
+			<form method="post" asp-page-handler="Finish" class="inline-form">
+				@foreach (var field in toolbarActions.FinishFieldsFor(soloOther)) {
+					<input type="hidden" name="@field.Key" value="@field.Value"/>
+				}
+				<button type="submit" class="btn btn-secondary">
+					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+						<use href="#jt-icon-finish"></use>
+					</svg>
+					Finish / pause
+				</button>
+			</form>
+		}
+		@if (toolbarActions.CanManage && !toolbarActions.IsStartClosed) {
+			<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
 		}
 		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Back to Browse</a>
 	</div>
-	<partial name="_BackdatePanel" model="toolbarBackdate"/>
+	@if (toolbarBackdate is not null) {
+		<partial name="_BackdatePanel" model="toolbarBackdate"/>
+	}
 
 	@if (Model.Panel is { } panel) {
 		<partial name="_LeafWorkSessions" model="panel"/>

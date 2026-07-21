@@ -17,6 +17,8 @@ using Microsoft.Playwright;
 /// </remarks>
 public abstract class JobBrowseBrowserTestsBase
 {
+	private const int RequiredSimultaneousWorkerCount = 3;
+
 	// Representative viewport matrix (plan §8.5/§8.7, fix-plan §2.5): small phone, large phone,
 	// tablet, and desktop. 320 is WCAG 1.4.10 Reflow's minimum content-reflow width -- the
 	// automatable equivalent of "400% zoom on a 1280px-wide desktop view" the plan asks for,
@@ -245,6 +247,30 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
 		(await desktopRow.Locator(".jt-col-secondary").First.IsVisibleAsync()).Should().BeTrue("the columns come back when there is room for them");
+	}
+
+	[Fact]
+	public async Task The_active_column_reflows_off_phone_width_while_session_actions_remain_available()
+	{
+		_ = await fixture.SeedActiveSessionsAsync("Responsive active worker leaf", RequiredSimultaneousWorkerCount);
+
+		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
+		var phone = await phoneContext.NewPageAsync();
+		await SignInAsync(phone);
+		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
+
+		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
+		(await phoneRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeFalse();
+		(await phoneRow.GetByRole(AriaRole.Link, new() { Name = "Sessions", Exact = true }).IsVisibleAsync()).Should().BeTrue();
+
+		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var desktop = await desktopContext.NewPageAsync();
+		await SignInAsync(desktop);
+		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={fixture.RootJobNodeId.Value}");
+
+		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
+		(await desktopRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
+		(await desktopRow.GetByText($"{RequiredSimultaneousWorkerCount} active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]

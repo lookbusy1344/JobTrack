@@ -7,6 +7,7 @@ using Application;
 using Application.Ports;
 using AwesomeAssertions;
 using Database;
+using NodaTime;
 
 /// <summary>
 ///     Shared contract for <see cref="IAchievementCommandPort" /> (impl plan §7.4 step 3, §7.3 slice 7:
@@ -266,6 +267,44 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 		});
 
 		result.Achievement.Should().Be(Achievement.Waiting);
+	}
+
+	[Fact]
+	public async Task Transitioning_to_a_terminal_achievement_while_a_session_is_active_is_rejected()
+	{
+		// ADR 0044: import a leaf carrying an already-open (FinishedAt null) session, then attempt the
+		// terminal transition through the public command surface rather than a raw-SQL bypass.
+		var (rootId, jobManagerId, workerId, _) = await SeedReadyLeafAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var achievementPort = CreateAchievementPort(database.ConnectionString);
+		var now = SystemClock.Instance.GetCurrentInstant();
+
+		var imported = await jobNodePort.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = [
+				new() {
+					LocalId = 1,
+					Description = "Actively worked leaf",
+					OwnerUserId = workerId,
+					Priority = Priority.Medium,
+					LeafWork = new() {
+						WorkedByUserId = workerId, StartedAt = now - Duration.FromHours(1), FinishedAt = null, Achievement = Achievement.InProgress,
+					},
+				},
+			],
+		});
+
+		var act = () => achievementPort.SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = imported.Nodes.Single().JobNodeId,
+			NewAchievement = Achievement.Success,
+			Reason = "Marking done",
+			Version = 1,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("leaf-closure-active-sessions");
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);

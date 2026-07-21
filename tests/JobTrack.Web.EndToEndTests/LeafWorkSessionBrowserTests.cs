@@ -7,7 +7,7 @@ using Microsoft.Playwright;
 
 /// <summary>
 ///     Real-browser evidence for the leaf work / session workflow (plan §8.5 slice 4, fix-plan §2.5):
-///     the one-click "Start work" composite (ADR 0038) is the representative round trip; the
+///     the one-click "Start session" composite (ADR 0038) is the representative round trip; the
 ///     correction page gets an accessibility scan as a supplement to those checks, not a replacement.
 /// </summary>
 /// <remarks>
@@ -16,6 +16,8 @@ using Microsoft.Playwright;
 /// </remarks>
 public abstract class LeafWorkSessionBrowserTestsBase
 {
+	private const int RequiredSimultaneousWorkerCount = 3;
+
 	// Representative viewport matrix (plan §8.5/§8.7, fix-plan §2.5): small phone, large phone,
 	// tablet, and desktop -- matches JobBrowseBrowserTests' matrix.
 	private const int SmallPhoneWidth = 375;
@@ -70,7 +72,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Start work" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() { Name = "Start session" }).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -85,15 +87,57 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.EvaluateAsync("document.body.focus()");
-		await TabToButtonAsync(page, "Start work", 20);
+		await TabToButtonAsync(page, "Start session", 20);
 
 		var focusBoxShadow = await page.EvaluateAsync<string>("window.getComputedStyle(document.activeElement).boxShadow");
 		focusBoxShadow.Should().NotBe("none", "a keyboard-focused control must have a visible focus indicator (plan §8.5 keyboard evidence)");
 
 		await page.Keyboard.PressAsync("Enter");
-		await page.WaitForSelectorAsync("text=Work started.");
+		await page.WaitForSelectorAsync("text=Session started.");
 
 		(await page.Locator("text=Active").First.IsVisibleAsync()).Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task Start_for_native_disclosure_reveals_the_form_without_requiring_JavaScript()
+	{
+		var (leafId, _, _) = await fixture.SeedFinishedSessionAsync("Start-for disclosure leaf");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		var disclosure = page.Locator("details.jt-start-for-disclosure");
+		var trigger = disclosure.Locator("summary");
+		(await disclosure.GetAttributeAsync("open")).Should().BeNull();
+
+		await trigger.ClickAsync();
+
+		(await disclosure.GetAttributeAsync("open")).Should().NotBeNull();
+		(await disclosure.Locator("select[name=\"StartForUserId\"]").IsVisibleAsync()).Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task The_sessions_summary_names_all_three_active_workers_and_remains_accessible()
+	{
+		var (leafId, workerNames) = await fixture.SeedActiveSessionsAsync(
+			"Three active worker leaf", RequiredSimultaneousWorkerCount);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		(await page.GetByText($"{RequiredSimultaneousWorkerCount} active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
+		foreach (var workerName in workerNames) {
+			(await page.GetByText(workerName, new() { Exact = false }).First.IsVisibleAsync()).Should().BeTrue();
+		}
+
+		(await page.GetByText("more", new() { Exact = false }).CountAsync()).Should().Be(0, "the Sessions summary must not cap its worker list");
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work with three active workers");
 	}
 
 	[Fact]

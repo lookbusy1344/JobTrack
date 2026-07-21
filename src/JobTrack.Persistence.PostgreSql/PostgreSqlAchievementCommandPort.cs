@@ -18,12 +18,18 @@ using Shared.Entities;
 ///     current roles and subtree ownership and applying <see cref="AchievementAccessPolicy" /> and
 ///     <see cref="AchievementTransitions" /> itself, then -- for a transition into a completed state --
 ///     rechecking prerequisite readiness, the same shape as
-///     <see cref="PostgreSqlWorkSessionCommandPort.StartSessionAsync" />. Achievement is not one of ADR
-///     0012's lock domains: the state machine is enforced purely application-side against a single
-///     tracked <c>leaf_work</c> row guarded by its own concurrency token, not by a database trigger.
+///     <see cref="PostgreSqlWorkSessionCommandPort.StartSessionAsync" />. The transition state machine
+///     itself is enforced purely application-side against a single tracked <c>leaf_work</c> row guarded
+///     by its own concurrency token, not by a database trigger. The one exception is ADR 0044: a
+///     transition into a terminal value additionally rechecks (and, under a race, is backstopped by
+///     schema version 0007's deferred constraint trigger, which takes ADR 0012's "leaf session closure"
+///     lock domain) that no <c>work_session</c> on the leaf is still active.
 /// </summary>
 internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 {
+	/// <summary>ADR 0044: schema version 0007's leaf-closure deferred constraint triggers' distinct SQLSTATE.</summary>
+	private const string ActiveSessionsSqlState = "P0008";
+
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
@@ -55,9 +61,15 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 				$"Cannot transition from {leafWork.Achievement} to {request.NewAchievement}.");
 		}
 
-		if (AchievementTransitions.IsCompletedState(request.NewAchievement)
-			&& !await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
-			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
+		if (AchievementTransitions.IsCompletedState(request.NewAchievement)) {
+			if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+				throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
+			}
+
+			if (await LeafSessionClosure.HasActiveSessionAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+				throw new InvariantViolationException(
+					"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.");
+			}
 		}
 
 		var previousAchievement = leafWork.Achievement;
@@ -79,9 +91,20 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for job node {request.JobNodeId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (FindActiveSessionsViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.", ex);
+		}
 
 		return ToResult(leafWork);
 	}
+
+	private static PostgresException? FindActiveSessionsViolation(Exception? ex) =>
+		ex switch {
+			null => null,
+			PostgresException pg when pg.SqlState == ActiveSessionsSqlState => pg,
+			_ => FindActiveSessionsViolation(ex.InnerException),
+		};
 
 	private PostgreSqlJobTrackDbContext CreateContext()
 	{

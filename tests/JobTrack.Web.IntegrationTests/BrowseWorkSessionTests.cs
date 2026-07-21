@@ -79,7 +79,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
-		body.Should().Contain("Work started");
+		body.Should().Contain("Session started");
 		body.Should().Contain("Active since");
 	}
 
@@ -142,7 +142,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
-		body.Should().Contain("Work started");
+		body.Should().Contain("Session started");
 	}
 
 	[Fact]
@@ -245,7 +245,278 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		afterResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		afterBody.Should().Contain("Active since");
-		afterBody.Should().NotContain("#jt-icon-start");
+		// Plan §4.1: the viewer's own one-click Start is replaced by Finish/pause, but the
+		// authorized "Start for..." disclosure (also drawn with jt-icon-start) for another worker is
+		// never removed -- only the viewer's own primary action toggles.
+		afterBody.Should().NotContain("title=\"Start session\"");
+	}
+
+	[Fact]
+	public async Task An_owner_can_start_a_session_for_another_worker_through_the_start_for_disclosure()
+	{
+		var ownerId = await SeedEmployeeAsync("browse.startfor.owner", EmployeeRole.Worker);
+		var otherWorkerId = await SeedEmployeeAsync("browse.startfor.target", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Start-for leaf");
+		var authCookie = await SignInAsync("browse.startfor.owner");
+
+		var (cookie, token) = await GetBrowseFormAsync(authCookie);
+		var response = await PostStartForAsync(authCookie, cookie, token, leaf.Id, otherWorkerId, null);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Session started.");
+	}
+
+	[Fact]
+	public async Task A_non_controlling_worker_cannot_start_a_session_for_another_worker()
+	{
+		var ownerId = await SeedEmployeeAsync("browse.startfor.bystander-owner", EmployeeRole.Worker);
+		var bystanderId = await SeedEmployeeAsync("browse.startfor.bystander", EmployeeRole.Worker);
+		var otherWorkerId = await SeedEmployeeAsync("browse.startfor.bystander-target", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Bystander start-for leaf");
+		var authCookie = await SignInAsync("browse.startfor.bystander");
+
+		var (cookie, token) = await GetBrowseFormAsync(authCookie);
+		var response = await PostStartForAsync(authCookie, cookie, token, leaf.Id, otherWorkerId, null);
+
+		// Razor Pages' cookie-auth Forbid() redirects to the access-denied path rather than a raw 403
+		// (matching this suite's existing convention for a page-handler denial, unlike the JSON API's
+		// direct 403).
+		response.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Found);
+	}
+
+	[Fact]
+	public async Task The_start_for_disclosure_is_rendered_for_an_owner_but_not_for_a_non_controlling_worker()
+	{
+		var ownerId = await SeedEmployeeAsync("browse.startfor.render-owner", EmployeeRole.Worker);
+		var bystanderId = await SeedEmployeeAsync("browse.startfor.render-bystander", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Render start-for leaf");
+
+		var ownerCookie = await SignInAsync("browse.startfor.render-owner");
+		var ownerResponse = await GetLeafDetailAsync(ownerCookie, leaf.Id);
+		var ownerBody = await ownerResponse.Content.ReadAsStringAsync();
+		ownerBody.Should().Contain("Start for…");
+
+		var bystanderCookie = await SignInAsync("browse.startfor.render-bystander");
+		var bystanderResponse = await GetLeafDetailAsync(bystanderCookie, leaf.Id);
+		var bystanderBody = await bystanderResponse.Content.ReadAsStringAsync();
+		bystanderBody.Should().NotContain("Start for…");
+	}
+
+	[Fact]
+	public async Task The_start_for_disclosure_uses_a_native_control_that_works_without_JavaScript()
+	{
+		var ownerId = await SeedEmployeeAsync("browse.startfor.no-script-owner", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "No-script start-for leaf");
+		var authCookie = await SignInAsync("browse.startfor.no-script-owner");
+
+		var response = await GetLeafDetailAsync(authCookie, leaf.Id);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain($"<details class=\"jt-start-for-disclosure\" id=\"start-for-{leaf.Id.Value}\">");
+		// The leaf-detail toolbar renders the labelled summary variant (a peer to Start session), not
+		// the icon-only summary the dense per-row cell keeps -- either way still a native details/summary.
+		body.Should().Contain("<summary class=\"btn btn-secondary jt-start-for-summary\">");
+		body.Should().Contain("name=\"StartForUserId\"");
+	}
+
+	private async Task<HttpResponseMessage> PostStartForAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, AppUserId startForUserId, string? startedAt)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=StartFor");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		var fields = new Dictionary<string, string> {
+			["leafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
+			["StartForUserId"] = startForUserId.Value.ToString(CultureInfo.InvariantCulture),
+			["__RequestVerificationToken"] = token,
+		};
+		if (startedAt is not null) {
+			fields["startedAt"] = startedAt;
+		}
+
+		request.Content = new FormUrlEncodedContent(fields);
+
+		return await client.SendAsync(request);
+	}
+
+	[Fact]
+	public async Task Three_simultaneous_active_workers_are_all_named_never_collapsed_to_one()
+	{
+		// Plan §2.4/§6 test matrix: a two-row fixture can accidentally pass code that treats one
+		// session as "primary" -- this leaf has three concurrently active workers, none of them
+		// collapsed away, and the viewer's own labelled "You" ahead of the others.
+		var viewerId = await SeedEmployeeAsync("browse.threeactive.viewer", EmployeeRole.Worker);
+		var aliceId = await SeedEmployeeAsync("browse.threeactive.alice", EmployeeRole.Worker);
+		var bobId = await SeedEmployeeAsync("browse.threeactive.bob", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Three active leaf");
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = viewerId,
+		});
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = aliceId,
+		});
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = bobId,
+		});
+		var authCookie = await SignInAsync("browse.threeactive.viewer");
+
+		var response = await GetLeafDetailAsync(authCookie, leaf.Id);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("3 active");
+		body.Should().Contain("You");
+		body.Should().Contain("browse.threeactive.alice");
+		body.Should().Contain("browse.threeactive.bob");
+	}
+
+	[Fact]
+	public async Task Other_workers_sessions_are_never_finishable_inline_only_via_the_Sessions_page()
+	{
+		var ownerId = await SeedEmployeeAsync("browse.finish-target.owner", EmployeeRole.Worker);
+		var aliceId = await SeedEmployeeAsync("browse.finish-target.alice", EmployeeRole.Worker);
+		var bobId = await SeedEmployeeAsync("browse.finish-target.bob", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Exact finish targets");
+		foreach (var workerId in new[] { aliceId, bobId }) {
+			_ = await seedClient.Work.StartSessionAsync(new() {
+				Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+				LeafWorkId = leaf.Id,
+				WorkedByUserId = workerId,
+			});
+		}
+
+		var authCookie = await SignInAsync("browse.finish-target.owner");
+
+		var response = await GetLeafDetailAsync(authCookie, rootId);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// With two or more workers the row never sprouts a finish button per worker (confusing, and
+		// unbounded). The viewer is not working, so there is no inline finish at all here; every
+		// worker's session is managed on the leaf's own Sessions page (the always-present link).
+		body.Should().NotContain("Finish / pause");
+		body.Should().NotContain("'s session\"");
+		body.Should().Contain("title=\"Sessions\"");
+		body.Should().Contain($"leafNodeId={leaf.Id.Value}");
+	}
+
+	[Fact]
+	public async Task A_lone_other_session_stays_finishable_inline_for_a_permitted_manager()
+	{
+		var ownerId = await SeedEmployeeAsync("browse.lone.owner", EmployeeRole.Worker);
+		var aliceId = await SeedEmployeeAsync("browse.lone.alice", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Lone other session leaf");
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = aliceId,
+		});
+		var authCookie = await SignInAsync("browse.lone.owner");
+
+		var response = await GetLeafDetailAsync(authCookie, rootId);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// Exactly one active session, owned by someone else: the leaf owner (a permitted manager) keeps
+		// an inline "Finish / pause" for it, because one session is unambiguous.
+		body.Should().Contain("title=\"Finish / pause\"");
+	}
+
+	[Fact]
+	public async Task A_lone_other_session_is_not_finishable_inline_without_manage_permission()
+	{
+		var ownerId = await SeedEmployeeAsync("browse.lone-noperm.owner", EmployeeRole.Worker);
+		var aliceId = await SeedEmployeeAsync("browse.lone-noperm.alice", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("browse.lone-noperm.bystander", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Lone other no-permission leaf");
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = aliceId,
+		});
+		var authCookie = await SignInAsync("browse.lone-noperm.bystander");
+
+		var response = await GetLeafDetailAsync(authCookie, rootId);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// A worker who neither owns nor may manage the leaf sees no inline finish for another worker's
+		// lone session -- "if the person has appropriate permissions" gates the inline control.
+		body.Should().NotContain("Finish / pause");
+	}
+
+	[Fact]
+	public async Task With_several_active_workers_a_browse_row_still_finishes_only_the_viewers_own_session()
+	{
+		var viewerId = await SeedEmployeeAsync("browse.myfinish.viewer", EmployeeRole.Worker);
+		var aliceId = await SeedEmployeeAsync("browse.myfinish.alice", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Mixed active leaf");
+		foreach (var workerId in new[] { viewerId, aliceId }) {
+			_ = await seedClient.Work.StartSessionAsync(new() {
+				Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+				LeafWorkId = leaf.Id,
+				WorkedByUserId = workerId,
+			});
+		}
+
+		var authCookie = await SignInAsync("browse.myfinish.viewer");
+
+		var response = await GetLeafDetailAsync(authCookie, rootId);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// "Finish / pause" for me, "Sessions" for everyone else: the viewer's own finish stays inline;
+		// no other worker's finish appears.
+		body.Should().Contain("title=\"Finish / pause\"");
+		body.Should().NotContain("'s session\"");
+		body.Should().Contain("title=\"Sessions\"");
+	}
+
+	[Fact]
+	public async Task Two_active_workers_show_a_count_pill_naming_both()
+	{
+		var viewerId = await SeedEmployeeAsync("browse.twoactive.viewer", EmployeeRole.Worker);
+		var aliceId = await SeedEmployeeAsync("browse.twoactive.alice", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Two active leaf");
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = viewerId,
+		});
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = aliceId,
+		});
+		var authCookie = await SignInAsync("browse.twoactive.viewer");
+
+		var response = await GetLeafDetailAsync(authCookie, leaf.Id);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("2 active");
+		body.Should().NotContain("Active since", "the singular pill wording is reserved for exactly one active worker");
+	}
+
+	[Fact]
+	public async Task A_single_active_worker_who_is_not_the_viewer_is_named_in_the_singular_pill()
+	{
+		var viewerId = await SeedEmployeeAsync("browse.singleother.viewer", EmployeeRole.Worker);
+		var aliceId = await SeedEmployeeAsync("browse.singleother.alice", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Single other active leaf");
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = aliceId,
+		});
+		var authCookie = await SignInAsync("browse.singleother.viewer");
+
+		var response = await GetLeafDetailAsync(authCookie, leaf.Id);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("Active since");
+		body.Should().Contain("browse.singleother.alice");
 	}
 
 	[Fact]
@@ -319,6 +590,88 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		body.Should().Contain($"value=\"{otherWorkerId.Value}\">work.selector.other");
 	}
 
+	[Fact]
+	public async Task A_terminal_leaf_marks_its_closure_with_a_pill_without_rendering_start_controls()
+	{
+		var workerId = await SeedEmployeeAsync("browse.closed-terminal", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Completed leaf");
+		await SetAchievementAsync(leaf.Id, Achievement.Success);
+		var authCookie = await SignInAsync("browse.closed-terminal");
+
+		var browseResponse = await GetLeafDetailAsync(authCookie, leaf.Id);
+		var browseBody = await browseResponse.Content.ReadAsStringAsync();
+		var workResponse = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var workBody = await workResponse.Content.ReadAsStringAsync();
+
+		foreach (var body in new[] { browseBody, workBody }) {
+			// The Active state is a concise "Closed" pill, never the verbose closure sentence -- and
+			// never in the Actions cell, which is buttons only.
+			body.Should().Contain("status-pill-closed");
+			body.Should().NotContain("Reopen it before starting another session");
+			body.Should().NotContain(">Start session</button>");
+			body.Should().NotContain("Start for…");
+			body.Should().Contain("Sessions");
+		}
+	}
+
+	[Fact]
+	public async Task An_archived_leaf_marks_its_closure_with_a_pill_without_rendering_start_controls()
+	{
+		var workerId = await SeedEmployeeAsync("browse.closed-archived", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Archived leaf");
+		var current = await seedClient.Query.GetJobNodeAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			NodeId = leaf.Id,
+		});
+		_ = await seedClient.Jobs.ArchiveAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			NodeId = leaf.Id,
+			Version = current.Node.Version,
+		});
+		var authCookie = await SignInAsync("browse.closed-archived");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("status-pill-closed");
+		body.Should().NotContain("Restore it before starting another session");
+		body.Should().NotContain(">Start session</button>");
+		body.Should().NotContain("Start for…");
+		body.Should().Contain("Sessions");
+	}
+
+	[Fact]
+	public async Task A_browse_session_mutation_preserves_unassigned_and_history_filters_through_prg()
+	{
+		var workerId = await SeedEmployeeAsync("browse.preserve-filters", EmployeeRole.Worker);
+		var historyWorkerId = await SeedEmployeeAsync("browse.preserve-history", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Preserve Browse state");
+		var authCookie = await SignInAsync("browse.preserve-filters");
+		var initial = await GetAsync(
+			$"/Jobs/Browse?nodeId={leaf.Id.Value}&unassignedOnly=true&workedByUserId={historyWorkerId.Value}", authCookie);
+		var initialBody = await initial.Content.ReadAsStringAsync();
+		var (antiforgeryCookie, token) = await ExtractFormAsync(initial, string.Empty);
+
+		initialBody.Should().Contain("name=\"UnassignedOnly\" value=\"True\"");
+		initialBody.Should().Contain($"name=\"WorkedByUserId\" value=\"{historyWorkerId.Value}\"");
+
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=Start");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["leafNodeId"] = leaf.Id.Value.ToString(CultureInfo.InvariantCulture),
+			["NodeId"] = leaf.Id.Value.ToString(CultureInfo.InvariantCulture),
+			["UnassignedOnly"] = bool.TrueString,
+			["WorkedByUserId"] = historyWorkerId.Value.ToString(CultureInfo.InvariantCulture),
+			["__RequestVerificationToken"] = token,
+		});
+
+		var response = await client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Contain("unassignedOnly=True");
+		response.Headers.Location.OriginalString.Should().Contain($"workedByUserId={historyWorkerId.Value}");
+	}
+
 	/// <summary>
 	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
@@ -336,9 +689,12 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
 		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
-	private async Task<HttpResponseMessage> GetLeafDetailAsync(string authCookie, JobNodeId nodeId)
+	private async Task<HttpResponseMessage> GetLeafDetailAsync(string authCookie, JobNodeId nodeId) =>
+		await GetAsync($"/Jobs/Browse?nodeId={nodeId.Value}", authCookie);
+
+	private async Task<HttpResponseMessage> GetAsync(string requestUri, string authCookie)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Browse?nodeId={nodeId.Value}");
+		using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 		request.Headers.Add("Cookie", authCookie);
 
 		return await client.SendAsync(request);
@@ -371,6 +727,28 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		});
 
 		return leaf;
+	}
+
+	private async Task SetAchievementAsync(JobNodeId leafId, Achievement achievement)
+	{
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+		});
+		var inProgress = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Seed terminal leaf",
+			Version = leafWork.Version,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+			NewAchievement = achievement,
+			Reason = "Seed terminal leaf",
+			Version = inProgress.Version,
+		});
 	}
 
 	private async Task<HttpResponseMessage> PostStartAsync(

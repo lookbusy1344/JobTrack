@@ -6,6 +6,7 @@ using Application;
 using Application.Ports;
 using Domain.Authorization;
 using Domain.Hierarchy;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared;
@@ -17,12 +18,21 @@ using Shared.Entities;
 ///     connection/transaction per call; SQLite has no advisory lock or stored function, so
 ///     <see cref="IsolationLevel.Serializable" /> starts a <c>BEGIN IMMEDIATE</c> transaction that
 ///     serializes concurrent writes through SQLite's single-writer model (matches
-///     <see cref="SqliteWorkSessionCommandPort" />'s established use of the same technique). The state
-///     machine is enforced purely application-side against a single tracked <c>leaf_work</c> row
-///     guarded by its own concurrency token, not by a trigger.
+///     <see cref="SqliteWorkSessionCommandPort" />'s established use of the same technique). The
+///     transition state machine itself is enforced purely application-side against a single tracked
+///     <c>leaf_work</c> row guarded by its own concurrency token, not by a trigger. The one exception
+///     is ADR 0044: a transition into a terminal value additionally rechecks (and, under a race, is
+///     backstopped by schema version 0007's immediate trigger) that no <c>work_session</c> on the leaf
+///     is still active.
 /// </summary>
 internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 {
+	/// <summary>
+	///     ADR 0044: the literal message <c>leaf_work_no_active_sessions_on_terminal_achievement</c>
+	///     (schema version 0007) raises via <c>RAISE(ABORT, ...)</c>.
+	/// </summary>
+	private const string ActiveSessionsMessage = "leaf-closure-active-sessions";
+
 	private readonly IClock clock;
 	private readonly string connectionString;
 
@@ -55,9 +65,15 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 				$"Cannot transition from {leafWork.Achievement} to {request.NewAchievement}.");
 		}
 
-		if (AchievementTransitions.IsCompletedState(request.NewAchievement)
-			&& !await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
-			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
+		if (AchievementTransitions.IsCompletedState(request.NewAchievement)) {
+			if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+				throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
+			}
+
+			if (await LeafSessionClosure.HasActiveSessionAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+				throw new InvariantViolationException(
+					"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.");
+			}
 		}
 
 		var previousAchievement = leafWork.Achievement;
@@ -79,9 +95,20 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for job node {request.JobNodeId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (FindActiveSessionsViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.", ex);
+		}
 
 		return ToResult(leafWork);
 	}
+
+	private static SqliteException? FindActiveSessionsViolation(Exception? ex) =>
+		ex switch {
+			null => null,
+			SqliteException sqlite when sqlite.Message.Contains(ActiveSessionsMessage, StringComparison.Ordinal) => sqlite,
+			_ => FindActiveSessionsViolation(ex.InnerException),
+		};
 
 	private Task<SqliteJobTrackDbContext> CreateOpenContextAsync(CancellationToken cancellationToken) =>
 		SqliteDbContextFactory.CreateOpenContextAsync(connectionString, cancellationToken);

@@ -21,9 +21,13 @@ public interface IWorkCommands
 	/// <exception cref="InvariantViolationException">
 	///     The worker already has an active session for this leaf (<c>ConstraintId</c>
 	///     <c>"work-session-already-active"</c>, spec §4.4); a supplied <see cref="StartSessionRequest.StartedAt" />
-	///     is in the future (<c>ConstraintId</c> <c>"work-session-start-in-future"</c>, ADR 0028); or a
+	///     is in the future (<c>ConstraintId</c> <c>"work-session-start-in-future"</c>, ADR 0028); a
 	///     supplied <see cref="StartSessionRequest.StartedAt" /> would overlap another session for the
-	///     same worker and leaf (<c>ConstraintId</c> <c>"work-session-overlap"</c>).
+	///     same worker and leaf (<c>ConstraintId</c> <c>"work-session-overlap"</c>); the leaf is
+	///     currently closed to new sessions — terminal achievement or archived (<c>ConstraintId</c>
+	///     <c>"work-session-leaf-closed"</c>, ADR 0044); or <see cref="StartSessionRequest.WorkedByUserId" />
+	///     names a worker who is disabled, locked, or holds no eligible workflow role (<c>ConstraintId</c>
+	///     <c>"work-session-target-not-eligible"</c>, ADR 0044 Stage 6).
 	/// </exception>
 	/// <exception cref="PrerequisiteBlockedException">The leaf's prerequisites are not satisfied (spec §6).</exception>
 	Task<WorkSessionResult> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken = default);
@@ -46,9 +50,13 @@ public interface IWorkCommands
 	///     <c>"job-node-is-root-cannot-attach-leaf-work"</c> or <c>"job-node-has-children-cannot-attach-leaf-work"</c>);
 	///     the worker already has an active session for this leaf (<c>ConstraintId</c>
 	///     <c>"work-session-already-active"</c>); a supplied <see cref="StartWorkRequest.StartedAt" /> is
-	///     in the future (<c>ConstraintId</c> <c>"work-session-start-in-future"</c>); or a supplied
+	///     in the future (<c>ConstraintId</c> <c>"work-session-start-in-future"</c>); a supplied
 	///     <see cref="StartWorkRequest.StartedAt" /> would overlap another session for the same worker
-	///     and leaf (<c>ConstraintId</c> <c>"work-session-overlap"</c>).
+	///     and leaf (<c>ConstraintId</c> <c>"work-session-overlap"</c>); the leaf is currently closed
+	///     to new sessions — terminal achievement or archived (<c>ConstraintId</c>
+	///     <c>"work-session-leaf-closed"</c>, ADR 0044); or <see cref="StartWorkRequest.WorkedByUserId" />
+	///     names a worker who is disabled, locked, or holds no eligible workflow role (<c>ConstraintId</c>
+	///     <c>"work-session-target-not-eligible"</c>, ADR 0044 Stage 6).
 	/// </exception>
 	/// <exception cref="PrerequisiteBlockedException">The leaf's prerequisites are not satisfied (spec §6).</exception>
 	Task<WorkSessionResult> StartWorkAsync(StartWorkRequest request, CancellationToken cancellationToken = default);
@@ -78,9 +86,12 @@ public interface IWorkCommands
 	/// <exception cref="EntityNotFoundException">The session does not exist.</exception>
 	/// <exception cref="ConcurrencyConflictException">The supplied version is stale.</exception>
 	/// <exception cref="InvariantViolationException">
-	///     The corrected interval is invalid (<c>ConstraintId</c> <c>"work-session-invalid-interval"</c>)
-	///     or would overlap another session for the same worker and leaf (<c>ConstraintId</c>
-	///     <c>"work-session-overlap"</c>).
+	///     The corrected interval is invalid (<c>ConstraintId</c> <c>"work-session-invalid-interval"</c>);
+	///     it would overlap another session for the same worker and leaf (<c>ConstraintId</c>
+	///     <c>"work-session-overlap"</c>); or it would leave the session active while the leaf is
+	///     currently closed — terminal achievement or archived (<c>ConstraintId</c>
+	///     <c>"work-session-leaf-closed"</c>, ADR 0044); a correction that keeps an already-finished
+	///     session finished remains permitted on a closed leaf.
 	/// </exception>
 	Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default);
 
@@ -94,7 +105,9 @@ public interface IWorkCommands
 	/// <exception cref="ConcurrencyConflictException">The supplied version is stale.</exception>
 	/// <exception cref="InvariantViolationException">
 	///     The requested transition is not permitted from the current state (<c>ConstraintId</c>
-	///     <c>"achievement-transition-not-permitted"</c>, ADR 0001).
+	///     <c>"achievement-transition-not-permitted"</c>, ADR 0001); or the transition enters a terminal
+	///     state while a session on the leaf is still active (<c>ConstraintId</c>
+	///     <c>"leaf-closure-active-sessions"</c>, ADR 0044).
 	/// </exception>
 	/// <exception cref="PrerequisiteBlockedException">
 	///     The transition enters a completed state while the leaf's prerequisites are unsatisfied (spec §6).

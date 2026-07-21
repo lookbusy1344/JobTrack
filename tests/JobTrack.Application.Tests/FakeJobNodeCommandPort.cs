@@ -472,7 +472,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		// dependent leaf's gate is evaluated only after its prerequisites have already been closed.
 		foreach (var spec in request.Nodes
 					 .Where(n => n.LeafWork is not null)
-					 .OrderBy(n => n.LeafWork!.StartedAt)
+					 .OrderBy(n => EarliestImportedSessionStart(n.LeafWork!))
 					 .ThenBy(n => n.LocalId)) {
 			var nodeId = createdByLocalId[spec.LocalId];
 			var work = spec.LeafWork!;
@@ -521,6 +521,9 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			Prerequisites = [.. prerequisites],
 		});
 	}
+
+	private static Instant EarliestImportedSessionStart(ImportSubtreeLeafWorkSpec work) =>
+		work.AdditionalSessions.Select(session => session.StartedAt).Prepend(work.StartedAt).Min();
 
 	public void SeedRoles(AppUserId actorId, params EmployeeRole[] roles) => _roles[actorId] = [.. roles];
 

@@ -49,6 +49,13 @@ public sealed class Program
 	private const int LockoutMinutes = 15;
 	private const int AuthenticationCookieExpirationHours = 8;
 
+	// Server-side session backs remembered per-page filter selections (FilterMemory). Idle timeout
+	// tracks the authentication cookie's own lifetime so a filter choice survives exactly as long as
+	// the sign-in it belongs to. The store is in-process (AddDistributedMemoryCache): filter prefs are
+	// non-durable convenience state, so losing them on restart or across instances is acceptable.
+	private const int SessionIdleTimeoutHours = AuthenticationCookieExpirationHours;
+	private const string SessionCookieName = "JobTrack.Session";
+
 	// Threat-model row 5 (XSS, TC-WEB-AUTHN-007; plan §8.2: "restrictive Content Security Policy,
 	// frame restrictions, MIME sniffing protection, referrer policy"). The site has no inline
 	// scripts/styles and no third-party origins (_Layout.cshtml: only same-origin site.css/site.js),
@@ -122,6 +129,20 @@ public sealed class Program
 		_ = builder.Services.AddScoped<IViewerTimeZoneResolver, ViewerTimeZoneResolver>();
 		_ = builder.Services.AddSingleton<IClock>(SystemClock.Instance);
 		_ = builder.Services.AddSingleton(sp => new PendingPatDeliveryStore(sp.GetRequiredService<IClock>()));
+
+		// Backing store for remembered per-page filter selections. Same cookie hardening as the
+		// authentication cookie (HttpOnly, Secure always, SameSite=Lax); IsEssential so it is not
+		// suppressed by any future cookie-consent policy, since a lost session silently drops the
+		// user's filter memory.
+		_ = builder.Services.AddDistributedMemoryCache();
+		_ = builder.Services.AddSession(options => {
+			options.Cookie.Name = SessionCookieName;
+			options.Cookie.HttpOnly = true;
+			options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+			options.Cookie.SameSite = SameSiteMode.Lax;
+			options.Cookie.IsEssential = true;
+			options.IdleTimeout = TimeSpan.FromHours(SessionIdleTimeoutHours);
+		});
 
 		var databaseProvider = builder.Configuration["Database:Provider"]
 							   ?? throw new InvalidOperationException("Database:Provider is not configured.");
@@ -356,7 +377,21 @@ public sealed class Program
 
 		// Configure the HTTP request pipeline.
 		if (!app.Environment.IsDevelopment()) {
-			_ = app.UseExceptionHandler("/Error");
+			// StatusCodeSelector: without it, ExceptionHandlerMiddleware forces every unhandled
+			// exception -- including Kestrel's own BadHttpRequestException for a body exceeding
+			// MaxRequestBodySize mid-read -- to 500, misreporting a legitimate client-side rejection
+			// as a server fault. BadHttpRequestException carries the status code Kestrel itself would
+			// have used (400/413) had the exception not been intercepted here first. It surfaces one
+			// level down the chain, not as the top-level exception: antiforgery validation reads the
+			// request form to locate the token, so an oversized POST throws
+			// AntiforgeryValidationException with the BadHttpRequestException as its InnerException.
+			_ = app.UseExceptionHandler(new ExceptionHandlerOptions {
+				ExceptionHandlingPath = "/Error",
+				StatusCodeSelector = exception => (exception is BadHttpRequestException ? exception : exception.InnerException) is
+					BadHttpRequestException badHttpRequestException
+						? badHttpRequestException.StatusCode
+						: StatusCodes.Status500InternalServerError,
+			});
 			// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
 			_ = app.UseHsts();
 		}
@@ -424,6 +459,10 @@ public sealed class Program
 		_ = app.UseAuthorization();
 		_ = app.UseAntiforgery();
 		_ = app.UseRequestTimeouts();
+
+		// After routing/auth, before the endpoints that read it: page models resolve remembered filter
+		// selections from HttpContext.Session (FilterMemory).
+		_ = app.UseSession();
 
 		_ = app.MapStaticAssets();
 		app.MapJobTrackApi();

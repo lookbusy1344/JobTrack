@@ -112,30 +112,43 @@ public interface IJobQueries
 		GetAwaitingProgressRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	///     Retrieves a worker's sessions on a leaf, most recent first (plan §8.5 slice 4). The actor may
-	///     always view their own sessions; viewing another worker's requires
-	///     <see cref="EmployeeRole.Administrator" /> or <see cref="EmployeeRole.JobManager" /> (see
-	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy" />).
+	///     Retrieves sessions on a leaf, most recent first (plan §8.5 slice 4). A
+	///     <see langword="null" /> <see cref="GetLeafSessionsRequest.WorkedByUserId" /> returns every
+	///     worker's sessions; setting it filters the read to that worker. Recorded work is job data that
+	///     every operational employee may view regardless of worker or node control (ADR 0041; see
+	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanView" />).
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">
-	///     The actor may not view <see cref="GetLeafSessionsRequest.WorkedByUserId" />'s sessions.
+	///     The actor holds no operational employee role permitted to view job data.
 	/// </exception>
 	/// <exception cref="EntityNotFoundException">The leaf does not exist.</exception>
 	Task<EquatableArray<WorkSessionResult>> GetLeafSessionsAsync(
 		GetLeafSessionsRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	///     Retrieves the actor's own unfinished sessions among the given leaves, for an inline
-	///     "active session" indicator on job-tree browsing (plan §8.5 slice 2: no per-row N+1 lookups),
-	///     mirroring <see cref="GetJobSummariesAsync" />'s batch-by-ids shape. Never throws for a leaf id
-	///     that no longer resolves — see <see cref="GetJobSummariesRequest" />.
+	///     Retrieves every worker's unfinished sessions among the given leaves, for the plural active-
+	///     session presentation on job-tree browsing (ADR 0041; browse-sessions plan §2.4), mirroring
+	///     <see cref="GetJobSummariesAsync" />'s batch-by-ids shape so rendering performs no per-row
+	///     lookup. Never throws for a leaf id that no longer resolves — see
+	///     <see cref="GetJobSummariesRequest" />.
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">
-	///     The actor holds none of <see cref="EmployeeRole.Administrator" />, <see cref="EmployeeRole.JobManager" />,
-	///     or <see cref="EmployeeRole.Worker" /> (see <see cref="Domain.Authorization.WorkSessionAccessPolicy" />).
+	///     The actor holds no operational employee role permitted by
+	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanView" />.
 	/// </exception>
 	Task<EquatableArray<WorkSessionResult>> GetActiveSessionsAsync(
 		GetActiveSessionsRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Retrieves, for each of the given leaves, whether the actor may currently manage sessions on
+	///     it (ADR 0044 Stage 4: a batched rendering capability, one round trip regardless of leaf
+	///     count, backing the "Start for…" disclosure and authorized other-worker finish action). Never
+	///     throws for a leaf id that no longer resolves — see <see cref="GetJobSummariesRequest" />. This
+	///     is a rendering hint only; the authoritative gate remains each command's own re-check.
+	/// </summary>
+	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>
+	Task<EquatableArray<LeafSessionManageCapabilityResult>> GetSessionManageCapabilitiesAsync(
+		GetSessionManageCapabilitiesRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
 	///     Retrieves a leaf's current <c>LeafWork</c> (plan §8.5 slice 5). Carries no ownership-based

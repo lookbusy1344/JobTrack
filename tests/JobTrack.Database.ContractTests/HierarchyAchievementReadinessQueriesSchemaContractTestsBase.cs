@@ -139,6 +139,24 @@ public abstract class HierarchyAchievementReadinessQueriesSchemaContractTestsBas
 	}
 
 	[Fact]
+	public async Task Controlled_leaf_ids_returns_only_requested_leaves_owned_by_the_actor_or_an_ancestor()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (actorId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var (otherUserId, _) = await SeedAppUserAsync(connection, "Bob Example");
+		var otherRootId = await InsertNodeAsync(connection, otherUserId, null);
+		var actorOwnedBranchId = await InsertNodeAsync(connection, actorId, otherRootId);
+		var leafControlledByBranchId = await InsertNodeAsync(connection, otherUserId, actorOwnedBranchId);
+		var actorOwnedLeafId = await InsertNodeAsync(connection, actorId, otherRootId);
+		var uncontrolledLeafId = await InsertNodeAsync(connection, otherUserId, otherRootId);
+
+		var controlledIds = await ControlledLeafIdsAsync(
+			connection, actorId, [leafControlledByBranchId, actorOwnedLeafId, uncontrolledLeafId]);
+
+		controlledIds.Should().BeEquivalentTo([leafControlledByBranchId, actorOwnedLeafId]);
+	}
+
+	[Fact]
 	public async Task A_node_with_no_prerequisites_is_ready()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
@@ -217,6 +235,10 @@ public abstract class HierarchyAchievementReadinessQueriesSchemaContractTestsBas
 
 	/// <summary>PostgreSQL invokes the <c>job_node_descendants</c> stored function; SQLite issues the equivalent raw recursive query.</summary>
 	protected abstract Task<IReadOnlyList<long>> DescendantsAsync(DbConnection connection, long nodeId);
+
+	/// <summary>PostgreSQL invokes the canonical stored function; SQLite issues the equivalent raw recursive query.</summary>
+	protected abstract Task<IReadOnlyList<long>> ControlledLeafIdsAsync(
+		DbConnection connection, long actorId, IReadOnlyList<long> leafIds);
 
 	/// <summary>PostgreSQL invokes the <c>job_node_ready</c> stored function; SQLite issues the equivalent raw recursive query.</summary>
 	protected abstract Task<bool> NodeReadyAsync(DbConnection connection, long nodeId);

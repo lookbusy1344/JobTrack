@@ -1,46 +1,56 @@
 namespace JobTrack.Web;
 
 using System.Globalization;
+using Abstractions;
 using Application;
+using Domain.Hierarchy;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using NodaTime;
 
 /// <summary>
 ///     The <c>_WorkRowActions</c> partial's model: one leaf row's start/finish cell, as rendered in
 ///     every table that lists leaves (Browse's subtree and children tables, the awaiting-progress
-///     dashboard). The cell is a closed either/or — a leaf with an active session offers finish, one
-///     without offers start — and each side carries its own backdate disclosure, so the whole thing
-///     is decided by whether <see cref="ActiveSession" /> is present.
+///     dashboard) and the current-leaf toolbar. Takes the leaf's full active-session collection
+///     (never a single "representative" session, plan §2.4) plus the viewer's own id and a
+///     server-computed <see cref="CanManage" /> rendering hint, and derives the viewer's own action,
+///     every other active worker's exact finish action, and (when authorized) a "Start for…"
+///     disclosure — it never infers a target worker from collection order.
 /// </summary>
 public sealed class WorkRowActionsModel
 {
 	/// <summary>The leaf this row is for.</summary>
 	public required long LeafNodeId { get; init; }
 
-	/// <summary>
-	///     The active session for <see cref="LeafNodeId" />, or <c>null</c> when the leaf has none and
-	///     the row should offer to start work instead.
-	/// </summary>
-	public WorkSessionResult? ActiveSession { get; init; }
+	/// <summary>The signed-in actor, to separate their own session from every other worker's.</summary>
+	public required AppUserId ViewerId { get; init; }
+
+	/// <summary>Every active session on this leaf, viewer's own included (plan §2.4: never collapsed to one).</summary>
+	public required EquatableArray<WorkSessionResult> ActiveSessions { get; init; }
 
 	/// <summary>
-	///     <see cref="ActiveSession" />'s worker, when it is not the viewing actor's own session --
-	///     surfaced when a privileged actor (Administrator/JobManager, ADR 0032) sees another worker's
-	///     active session here and can finish it. <see langword="null" /> for the actor's own session,
-	///     which needs no such label.
+	///     Whether the viewer may manage sessions on this leaf — for another worker's exact finish and
+	///     the "Start for…" disclosure (<see cref="IJobQueries.GetSessionManageCapabilitiesAsync" />, a
+	///     rendering hint only; the command itself re-validates authorization at write time).
 	/// </summary>
-	public string? ActiveSessionWorkedByOther { get; init; }
+	public required bool CanManage { get; init; }
 
-	/// <summary>The viewing employee's own time zone, for formatting <see cref="ActiveSession" />'s start time (<see cref="InstantDisplay" />).</summary>
+	/// <summary>The leaf's current achievement, used only to suppress invalid start affordances on terminal leaves.</summary>
+	public Achievement? Achievement { get; init; }
+
+	/// <summary>Whether the leaf node is archived, used only to suppress invalid start affordances.</summary>
+	public bool IsArchived { get; init; }
+
+	/// <summary>The viewing employee's own time zone, for formatting each active session's start time (<see cref="InstantDisplay" />).</summary>
 	public required DateTimeZone ViewerZone { get; init; }
 
 	/// <summary>
-	///     The Razor Pages handler the start form posts to — <c>Start</c> on Browse,
+	///     The Razor Pages handler the one-click start form posts to — <c>Start</c> on Browse,
 	///     <c>StartWork</c> on the awaiting-progress dashboard.
 	/// </summary>
 	public required string StartHandler { get; init; }
 
 	/// <summary>
-	///     The field name the start handler binds the leaf id from — <c>leafNodeId</c> on Browse,
+	///     The field name the start handlers bind the leaf id from — <c>leafNodeId</c> on Browse,
 	///     <c>jobNodeId</c> on the awaiting-progress dashboard.
 	/// </summary>
 	public required string StartNodeFieldName { get; init; }
@@ -52,43 +62,88 @@ public sealed class WorkRowActionsModel
 	/// </summary>
 	public required IReadOnlyDictionary<string, string?> PageStateFields { get; init; }
 
-	/// <summary>Hidden fields for a form acting on the leaf itself (start).</summary>
+	/// <summary>
+	///     Every enabled workflow employee for the "Start for…" worker picker — empty (and the
+	///     disclosure omitted) when <see cref="CanManage" /> is <see langword="false" />.
+	/// </summary>
+	public required IReadOnlyList<SelectListItem> StartForWorkerOptions { get; init; }
+
+	/// <summary>
+	///     Whether the "Start for…" disclosure renders a visible text label — <see langword="true" />
+	///     for the standalone Work/Browse toolbars, where it sits among other labelled buttons;
+	///     <see langword="false" /> (the default) for the dense per-row cell, which is icon-only so it
+	///     does not out-shout each row's own name.
+	/// </summary>
+	public bool StartForLabelled { get; init; }
+
+	private ActiveSessionPresentation Presentation => ActiveSessionPresentation.Derive(ActiveSessions, ViewerId);
+
+	/// <summary>
+	///     The viewer's own active session on this leaf, if any — the one session these row/toolbar
+	///     controls can finish directly. Every other worker's session is managed on the leaf's Sessions
+	///     page instead (a leaf may have many simultaneous workers, so an inline finish per worker does
+	///     not scale); the plural presentation lives in <see cref="ActiveSessionSummaryModel" />.
+	/// </summary>
+	public WorkSessionResult? ViewerSession => Presentation.ViewerSession;
+
+	/// <summary>
+	///     The one other worker's session that is still finishable inline: present only when the viewer
+	///     can manage sessions, is not themselves working, and exactly one session is active on the leaf.
+	///     A single session is unambiguous, so it keeps a plain "Finish / pause"; with two or more, every
+	///     other worker's session is delegated to the leaf's Sessions page instead (a finish button per
+	///     worker does not scale). The viewer's own session is always finished via <see cref="ViewerSession" />.
+	/// </summary>
+	public WorkSessionResult? SoloOtherSession =>
+		CanManage && ViewerSession is null && Presentation.Count == 1 ? Presentation.OtherSessions[0] : null;
+
+	/// <summary>Whether current leaf state prohibits creating or reopening an active session (ADR 0044).</summary>
+	public bool IsStartClosed => IsArchived || (Achievement.HasValue && AchievementTransitions.IsCompletedState(Achievement.Value));
+
+	/// <summary>Hidden fields for the viewer's own one-click start.</summary>
 	public IReadOnlyDictionary<string, string?> StartFields =>
 		new Dictionary<string, string?>(PageStateFields) { [StartNodeFieldName] = LeafNodeId.ToString(CultureInfo.InvariantCulture) };
 
-	/// <summary>Hidden fields for a form acting on the active session (finish), including its version.</summary>
-	public IReadOnlyDictionary<string, string?> FinishFields =>
-		ActiveSession is not null
-			? new Dictionary<string, string?>(PageStateFields) {
-				["sessionId"] = ActiveSession.Id.Value.ToString(CultureInfo.InvariantCulture),
-				["version"] = ActiveSession.Version.ToString(CultureInfo.InvariantCulture),
-			}
-			: throw new InvalidOperationException("There is no active session to finish.");
+	/// <summary>The backdate control for the viewer's own one-click start.</summary>
+	public BackdateDisclosureModel StartBackdate => new() {
+		Handler = StartHandler,
+		FieldName = "startedAt",
+		Label = "Started at",
+		SubmitText = "Start session at this time",
+		AccessibleName = "Backdate start",
+		HiddenFields = StartFields,
+		SubmitClass = "btn btn-primary",
+		RowId = $"backdate-start-{LeafNodeId.ToString(CultureInfo.InvariantCulture)}",
+	};
+
+	/// <summary>The "Start for…" disclosure, when <see cref="CanManage" /> permits it.</summary>
+	public StartForDisclosureModel StartFor => new() {
+		Handler = "StartFor",
+		RowId = $"start-for-{LeafNodeId.ToString(CultureInfo.InvariantCulture)}",
+		NodeFieldName = StartNodeFieldName,
+		LeafNodeId = LeafNodeId,
+		WorkerOptions = StartForWorkerOptions,
+		PageStateFields = PageStateFields,
+		Labelled = StartForLabelled,
+	};
 
 	/// <summary>
-	///     The backdate control for whichever branch (start or finish) this row is currently offering —
-	///     the pair to <see cref="_BackdateRow" />/<see cref="_BackdateTrigger" />. <see cref="LeafNodeId" />
-	///     alone makes the row id stable and unique: a leaf offers only one of start or finish at a time.
+	///     Hidden fields for a form finishing <paramref name="session" /> — the viewer's own or, when <see cref="CanManage" />, another worker's exact
+	///     session.
 	/// </summary>
-	public BackdateDisclosureModel Backdate =>
-		ActiveSession is not null
-			? new() {
-				Handler = "Finish",
-				FieldName = "finishedAt",
-				Label = "Finished at",
-				SubmitText = "Finish at this time",
-				AccessibleName = "Backdate finish",
-				HiddenFields = FinishFields,
-				RowId = $"backdate-finish-{LeafNodeId.ToString(CultureInfo.InvariantCulture)}",
-			}
-			: new BackdateDisclosureModel {
-				Handler = StartHandler,
-				FieldName = "startedAt",
-				Label = "Started at",
-				SubmitText = "Start at this time",
-				AccessibleName = "Backdate start",
-				HiddenFields = StartFields,
-				SubmitClass = "btn btn-primary",
-				RowId = $"backdate-start-{LeafNodeId.ToString(CultureInfo.InvariantCulture)}",
-			};
+	public IReadOnlyDictionary<string, string?> FinishFieldsFor(WorkSessionResult session) =>
+		new Dictionary<string, string?>(PageStateFields) {
+			["sessionId"] = session.Id.Value.ToString(CultureInfo.InvariantCulture),
+			["version"] = session.Version.ToString(CultureInfo.InvariantCulture),
+		};
+
+	/// <summary>The backdate control for finishing <paramref name="session" />.</summary>
+	public BackdateDisclosureModel FinishBackdateFor(WorkSessionResult session) => new() {
+		Handler = "Finish",
+		FieldName = "finishedAt",
+		Label = "Finished at",
+		SubmitText = "Finish at this time",
+		AccessibleName = "Backdate finish",
+		HiddenFields = FinishFieldsFor(session),
+		RowId = $"backdate-finish-{session.Id.Value.ToString(CultureInfo.InvariantCulture)}",
+	};
 }

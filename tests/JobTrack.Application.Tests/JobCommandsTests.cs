@@ -892,6 +892,22 @@ public sealed class JobCommandsTests
 	}
 
 	[Fact]
+	public async Task Importing_a_batch_whose_additional_session_finishes_before_it_starts_throws_an_invariant_violation()
+	{
+		var sut = new JobCommands(CreateSeededPort());
+		var work = WorkFrom(ThreeDaysAgo, TwoDaysAgo) with {
+			AdditionalSessions = [
+				new() { WorkedByUserId = OwnerWorkerId, StartedAt = OneDayAgo, FinishedAt = TwoDaysAgo },
+			],
+		};
+
+		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([WorkedNode(1, null, work)]));
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("import-subtree-invalid-work-interval");
+	}
+
+	[Fact]
 	public async Task Importing_a_batch_that_completes_work_with_no_finish_instant_throws_an_invariant_violation()
 	{
 		var sut = new JobCommands(CreateSeededPort());
@@ -899,6 +915,22 @@ public sealed class JobCommandsTests
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
 			WorkedNode(1, null, WorkFrom(TwoDaysAgo, null) with { Achievement = Achievement.Success }),
 		]));
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("import-subtree-unfinished-completed-work");
+	}
+
+	[Fact]
+	public async Task Importing_a_completed_leaf_with_an_active_additional_session_throws_an_invariant_violation()
+	{
+		var sut = new JobCommands(CreateSeededPort());
+		var work = WorkFrom(ThreeDaysAgo, TwoDaysAgo) with {
+			AdditionalSessions = [
+				new() { WorkedByUserId = OtherWorkerId, StartedAt = OneDayAgo, FinishedAt = null },
+			],
+		};
+
+		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([WorkedNode(1, null, work)]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("import-subtree-unfinished-completed-work");

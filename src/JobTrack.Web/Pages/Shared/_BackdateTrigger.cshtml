@@ -3,9 +3,9 @@
    A plain icon button rather than a labelled one: correcting a time is the rare case sitting beside
    the action people actually take, and a labelled control in every row would out-shout it. Clicking
    it reveals the matching _BackdateRow/_BackdatePanel elsewhere on the page (site.js toggle), not a
-   floating popup. *@
+   floating popup (site.js's shared data-jt-disclosure-toggle hook). *@
 <button type="button" class="jt-icon-button jt-backdate-trigger" title="@Model.AccessibleName"
-        data-jt-backdate-toggle="@Model.RowId" aria-controls="@Model.RowId" aria-expanded="false">
+        data-jt-disclosure-toggle="@Model.RowId" aria-controls="@Model.RowId" aria-expanded="false">
 	<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 		<use href="#jt-icon-backdate"></use>
 	</svg>

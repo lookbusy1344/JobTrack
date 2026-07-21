@@ -14,8 +14,9 @@
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 	@if (Model.Parent is not null) {
-		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Parent</span><strong
-				class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.Parent.Node)</strong></p>
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Parent</span><a
+				class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+				asp-route-nodeId="@Model.ParentId">@JobNodeDisplay.Title(Model.Parent.Node)</a></p>
 
 		@if (Model.Parent.Node.HasLeafWork) {
 			<p class="jt-empty">This parent already has work attached.</p>

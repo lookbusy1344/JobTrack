@@ -25,6 +25,10 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	private const string ConcurrencyConflictSqlState = "P0004";
 	private const string PrerequisiteCycleSqlState = "P0005";
 	private const string PrerequisiteHierarchyEdgeSqlState = "P0006";
+
+	/// <summary>ADR 0044: schema version 0007's leaf-closure deferred constraint triggers' distinct SQLSTATE.</summary>
+	private const string ActiveSessionsSqlState = "P0008";
+
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
@@ -176,6 +180,13 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.NodeId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(node.RowVersion, request.Version);
 
+		// ADR 0044: rejected while any session on this node's LeafWork (if it has one) is still
+		// active; the deferred trigger below is the race backstop.
+		if (await LeafSessionClosure.HasActiveSessionAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				"leaf-closure-active-sessions", "This leaf cannot be archived while a session is active on it.");
+		}
+
 		var wasArchivedAt = node.ArchivedAt;
 		node.ArchivedAt = now;
 		node.RowVersion += 1;
@@ -186,7 +197,13 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			new Dictionary<string, string?> { ["archived_at"] = wasArchivedAt?.ToString() },
 			new Dictionary<string, string?> { ["archived_at"] = node.ArchivedAt?.ToString() });
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+		try {
+			await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+		}
+		catch (InvariantViolationException ex) when (FindActiveSessionsViolation(ex.InnerException) is not null) {
+			throw new InvariantViolationException(
+				"leaf-closure-active-sessions", "This leaf cannot be archived while a session is active on it.", ex.InnerException!);
+		}
 
 		return await JobNodeStructuralProjection.ToResultAsync(context, node, cancellationToken).ConfigureAwait(false);
 	}
@@ -428,6 +445,13 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		return new() { Nodes = [.. created.Select(c => new ImportedJobNode { LocalId = c.LocalId, JobNodeId = c.Entity.Id })] };
 	}
 
+	private static PostgresException? FindActiveSessionsViolation(Exception? ex) =>
+		ex switch {
+			null => null,
+			PostgresException pg when pg.SqlState == ActiveSessionsSqlState => pg,
+			_ => FindActiveSessionsViolation(ex.InnerException),
+		};
+
 	/// <summary>
 	///     Creates <paramref name="request" />'s already-ordered node batch (parents-before-children —
 	///     <see cref="IJobCommands.ImportSubtreeAsync" /> guarantees this before calling the port) one at
@@ -497,12 +521,12 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 	/// <summary>
 	///     Records each <see cref="ImportSubtreeNodeSpec.LeafWork" /> in the batch -- attaching
-	///     <c>LeafWork</c>, writing its single <c>work_session</c>, and setting its achievement -- inside
+	///     <c>LeafWork</c>, writing all supplied <c>work_session</c> rows, and setting its achievement -- inside
 	///     the import's own transaction, so a tree imported with history behaves as if the equivalent
 	///     start/finish/set-achievement commands had been replayed against it, without splitting the
 	///     import across several transactions.
 	///     <para>
-	///         Work is applied in <see cref="ImportSubtreeLeafWorkSpec.StartedAt" /> order, which is
+	///         Work is applied in earliest supplied session-start order, which is
 	///         exactly prerequisite order: <c>SubtreeImportPlanner</c> has already rejected any batch in
 	///         which a leaf starts before a prerequisite of its finished, so replaying chronologically
 	///         guarantees a dependent's gate is evaluated only once its prerequisites are already
@@ -528,7 +552,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	{
 		var workedSpecs = request.Nodes
 			.Where(spec => spec.LeafWork is not null)
-			.OrderBy(spec => spec.LeafWork!.StartedAt)
+			.OrderBy(spec => ImportedSessions(spec.LeafWork!).Min(session => session.StartedAt))
 			.ThenBy(spec => spec.LocalId)
 			.ToList();
 
@@ -536,28 +560,33 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			var node = createdByLocalId[spec.LocalId];
 			var work = spec.LeafWork!;
 
-			if (work.StartedAt > now) {
-				throw new InvariantViolationException(
-					"work-session-start-in-future", "A session's start instant must not be in the future.");
-			}
+			var sessions = ImportedSessions(work).ToList();
+			foreach (var session in sessions) {
+				if (session.StartedAt > now) {
+					throw new InvariantViolationException(
+						"work-session-start-in-future", "A session's start instant must not be in the future.");
+				}
 
-			if (work.FinishedAt is Instant finishedAt && finishedAt > now) {
-				throw new InvariantViolationException(
-					"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+				if (session.FinishedAt is Instant finishedAt && finishedAt > now) {
+					throw new InvariantViolationException(
+						"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+				}
 			}
 
 			var leafWork = await LeafWorkAttachSupport.CreateAsync(
 				context, node, now, request.Context, null, null, cancellationToken).ConfigureAwait(false);
 
-			_ = context.Add(new WorkSessionEntity {
-				Id = default,
-				LeafWorkId = node.Id,
-				WorkedByUserId = work.WorkedByUserId,
-				StartedAt = work.StartedAt,
-				FinishedAt = work.FinishedAt,
-				ChangedAt = now,
-				RowVersion = 1,
-			});
+			foreach (var session in sessions) {
+				_ = context.Add(new WorkSessionEntity {
+					Id = default,
+					LeafWorkId = node.Id,
+					WorkedByUserId = session.WorkedByUserId,
+					StartedAt = session.StartedAt,
+					FinishedAt = session.FinishedAt,
+					ChangedAt = now,
+					RowVersion = 1,
+				});
+			}
 
 			leafWork.Achievement = work.Achievement;
 			leafWork.ChangedAt = now;
@@ -575,6 +604,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 				request.Context.CorrelationId, null, null,
 				new Dictionary<string, string?> {
 					["achievement"] = work.Achievement.ToString(),
+					["session_count"] = sessions.Count.ToString(CultureInfo.InvariantCulture),
 					["worked_by_user_id"] = work.WorkedByUserId.Value.ToString(CultureInfo.InvariantCulture),
 					["started_at"] = work.StartedAt.ToString(),
 					["finished_at"] = work.FinishedAt?.ToString(),
@@ -583,6 +613,15 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		if (workedSpecs.Count > 0) {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+		}
+	}
+
+	private static IEnumerable<(AppUserId WorkedByUserId, Instant StartedAt, Instant? FinishedAt)> ImportedSessions(
+		ImportSubtreeLeafWorkSpec work)
+	{
+		yield return (work.WorkedByUserId, work.StartedAt, work.FinishedAt);
+		foreach (var session in work.AdditionalSessions) {
+			yield return (session.WorkedByUserId, session.StartedAt, session.FinishedAt);
 		}
 	}
 

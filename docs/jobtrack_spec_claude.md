@@ -162,6 +162,20 @@ sessions; managers/admins any session. Every correction requires a reason and an
 audit record with before/after values, and revalidates ordering, same-leaf
 overlap, authorization, and optimistic concurrency. No second-person approval.
 
+**Closed-leaf start prohibition (ADR 0044).** A leaf is closed to new active sessions once
+`achievement` is terminal (`Success`/`Cancelled`/`Unsuccessful`) or `job_node.archived_at` is set.
+`StartSessionAsync`/`StartWorkAsync` reject a new session — backdated or not — against a currently
+closed leaf; the instant being recorded never overrides current closure state. A correction may fix
+an already-finished session's fields on a closed leaf but must not leave it active. An archived leaf
+rejects any new row outright (active or already finished); a merely terminal-achievement leaf rejects
+only a new active row, so subtree import can still insert an already-finished historical session
+alongside setting the leaf's terminal achievement in one transaction. Conversely,
+transitioning `achievement` into a terminal value, or archiving the leaf's node, is rejected while
+any session on that leaf is still active, for any worker; finishing an active session is always
+permitted, and a finish racing a closure attempt serializes to one committed outcome rather than
+stranding an unfinishable session. Concurrently active sessions for *different* users on the same
+leaf remain fully valid and must never be collapsed to one representative session by a read or UI.
+
 ### 3.5 Decomposing a worked leaf
 
 If a leaf that already has `LeafWork` is genuinely decomposed, one atomic op:

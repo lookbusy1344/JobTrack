@@ -1,0 +1,27 @@
+@model StartForDisclosureModel
+@* The Start-for form inside _StartForTrigger's native disclosure. Posts a distinct StartForUserId
+   field (never WorkedByUserId,
+   which remains the Sessions history filter elsewhere on the page) plus an optional backdated start
+   instant, using the same civil-time resolver as every other start/finish field. *@
+<form method="post" asp-page-handler="@Model.Handler" class="jt-backdate-form">
+	@foreach (var field in Model.PageStateFields) {
+		<input type="hidden" name="@field.Key" value="@field.Value"/>
+	}
+	<input type="hidden" name="@Model.NodeFieldName" value="@Model.LeafNodeId"/>
+	<div class="form-group mb-0">
+		<label for="@(Model.RowId)-worker">Worker</label>
+		<select id="@(Model.RowId)-worker" name="@StartForDisclosureModel.StartForFieldName" class="form-control" asp-items="Model.WorkerOptions">
+			<option value="">Choose a worker…</option>
+		</select>
+	</div>
+	<div class="form-group mb-0">
+		<label for="@(Model.RowId)-input">Started at (leave blank for now)</label>
+		<input type="datetime-local" id="@(Model.RowId)-input" name="startedAt" class="form-control" step="60"/>
+	</div>
+	<button type="submit" class="btn btn-secondary">
+		<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+			<use href="#jt-icon-start"></use>
+		</svg>
+		Start session for worker
+	</button>
+</form>

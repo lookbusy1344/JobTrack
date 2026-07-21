@@ -197,6 +197,38 @@ moment from live achievement state, not read from a cache; the database's own pr
 enforce the edge graph's structural invariants — acyclicity, no ancestor/descendant edge — not the
 readiness gate.) See spec §6 for the normative statement.
 
+Starting a session gates on a second, independent condition: the leaf must also be **open**. A leaf
+is closed to a new active session once its achievement is terminal (`Success`, `Cancelled`,
+`Unsuccessful`) or its node is archived (ADR 0044) — readiness says work *may* begin;
+open/closed says the leaf hasn't already been declared finished or put away. Both conditions are
+checked independently and both must hold: reopening a terminal achievement back to `Waiting` is not
+enough on its own if the node is also archived, and vice versa. This is enforced the same way as the
+readiness gate — inside the write transaction, backstopped by a database trigger on both providers —
+so a request can't reactivate a closed leaf by any route.
+
+## Sessions, concurrent workers, and starting for others
+
+A leaf's recorded work is presented in the browser as **Sessions** (the noun, not a renamed type —
+`WorkSession`, `LeafWork`, and the `/Jobs/Work` route are unchanged). Every leaf-listing page (Browse
+rows, the Awaiting Progress dashboard, and Browse's own current-leaf toolbar) shows a Sessions link
+to the leaf's complete history, and reports how many workers currently have the clock running on it.
+
+More than one worker can be actively clocked in on the same leaf at once — this is a legitimate,
+supported state, not a fixable inconsistency. The UI never picks one active worker as "the" session
+to show: zero active workers shows nothing, exactly one shows a compact "Active since…" pill, and two
+or more show a count (`N active`) plus a capped, stable preview of who they are — the viewer's own
+session first if they have one, then every other worker in start order. The complete list is always
+one click away via Sessions, regardless of how many rows are capped in a dense table view.
+
+A user who owns a leaf (or an ancestor of it) may start a session **on behalf of another worker**
+through the "Start for…" disclosure beside the ordinary one-click Start, using the same worker
+picker and backdating controls everywhere else in the app. This does not change who may *view*
+recorded work — session history has been visible to every employee role since ADR 0041 — only who
+may create or finish a session for someone other than themselves, which remains gated by
+`WorkSessionAccessPolicy.CanManage` (Administrator/JobManager unconditionally, or a Worker who
+controls the leaf) and is re-checked by the command at write time regardless of what the page
+rendered a moment earlier.
+
 ## External HTTP API
 
 Beyond the server-rendered Razor Pages, `JobTrack.Web` exposes a resource-oriented JSON API under
@@ -551,7 +583,7 @@ Each row in the JSON file is:
 
 A row may also record work already done against it, so a bulk-authored tree arrives with the history
 its author already knows about instead of uniformly untouched. The import attaches `LeafWork`,
-records one work session, and sets the achievement — all inside the same transaction that creates
+records one or more work sessions, and sets the achievement — all inside the same transaction that creates
 the nodes, so the "everything or nothing" guarantee still holds.
 
 There are two spellings, and a row uses one or the other, never both:

@@ -28,6 +28,9 @@ public sealed class AchievementModel(IJobTrackClient jobTrackClient, UserManager
 
 	public LeafWorkResult? LeafWork { get; private set; }
 
+	/// <summary>The affected leaf, named and linked back to Browse by the page context.</summary>
+	public JobNodeDetailResult? CurrentNode { get; private set; }
+
 	public string? ErrorMessage { get; private set; }
 
 	public string? SuccessMessage { get; private set; }
@@ -96,8 +99,11 @@ public sealed class AchievementModel(IJobTrackClient jobTrackClient, UserManager
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		try {
+			var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
+				new() { Context = context, NodeId = new(JobNodeId) }, cancellationToken);
 			LeafWork = await jobTrackClient.Query.GetLeafWorkAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, JobNodeId = new(JobNodeId) }, cancellationToken);
+				new() { Context = context, JobNodeId = new(JobNodeId) }, cancellationToken);
 			OriginalVersion = LeafWork.Version;
 		}
 		catch (EntityNotFoundException) {

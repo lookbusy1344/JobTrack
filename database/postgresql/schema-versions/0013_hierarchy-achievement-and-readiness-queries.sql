@@ -67,6 +67,27 @@ $$
     SELECT id FROM subtree;
 $$ LANGUAGE sql STABLE;
 
+-- For each requested leaf, determine whether p_actor_id owns that leaf or
+-- any ancestor. The origin id keeps all ancestry walks in one set-based
+-- invocation; callers use this to derive per-row session-management
+-- capabilities without one ancestor query per leaf (ADR 0044).
+CREATE FUNCTION job_node_controlled_leaf_ids(p_actor_id bigint, p_leaf_ids bigint[])
+RETURNS TABLE(controlled_leaf_id bigint) AS
+$$
+    WITH RECURSIVE ancestors(origin_leaf_id, id, owner_user_id, parent_id) AS (
+        SELECT jn.id, jn.id, jn.owner_user_id, jn.parent_id
+        FROM job_node jn
+        WHERE jn.id = ANY(p_leaf_ids)
+        UNION ALL
+        SELECT a.origin_leaf_id, jn.id, jn.owner_user_id, jn.parent_id
+        FROM job_node jn
+        JOIN ancestors a ON jn.id = a.parent_id
+    )
+    SELECT DISTINCT a.origin_leaf_id AS controlled_leaf_id
+    FROM ancestors a
+    WHERE a.owner_user_id = p_actor_id;
+$$ LANGUAGE sql STABLE;
+
 -- Readiness (spec §6): p_node_id is ready iff every prerequisite declared
 -- directly on it or inherited from any ancestor has a succeeded required
 -- job.

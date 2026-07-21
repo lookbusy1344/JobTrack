@@ -44,6 +44,43 @@ public sealed class WorkModel(
 
 	public LeafWorkSessionsPanelModel? Panel { get; private set; }
 
+	/// <summary>The signed-in actor, so the toolbar can tell their own active session apart from another worker's.</summary>
+	public AppUserId? CurrentActorId { get; private set; }
+
+	/// <summary>
+	///     Every active session on this leaf, never collapsed to one representative (plan §2.4) -- unlike <see cref="Panel" />'s history, which the
+	///     worker filter narrows.
+	/// </summary>
+	public EquatableArray<WorkSessionResult> ActiveSessions { get; private set; } = [];
+
+	/// <summary>
+	///     Whether the actor may manage sessions on this leaf (<see cref="IJobQueries.GetSessionManageCapabilitiesAsync" />) -- a rendering hint for
+	///     the "Start for…" disclosure and another worker's exact finish.
+	/// </summary>
+	public bool CanManage { get; private set; }
+
+	/// <summary>The leaf's current achievement, when work is attached.</summary>
+	public Achievement? CurrentAchievement { get; private set; }
+
+	/// <summary>Every enabled workflow employee, for the "Start for…" worker picker.</summary>
+	public IReadOnlyList<SelectListItem> StartForWorkerOptions { get; private set; } = [];
+
+	/// <summary>The one leaf this page is for, as a <see cref="WorkRowActionsModel" /> so the toolbar shares Browse's exact start/finish/start-for logic.</summary>
+	public WorkRowActionsModel ToolbarActions => new() {
+		LeafNodeId = LeafNodeId,
+		ViewerId = CurrentActorId ?? new AppUserId(0),
+		ActiveSessions = ActiveSessions,
+		CanManage = CanManage,
+		Achievement = CurrentAchievement,
+		IsArchived = CurrentNode?.Node.ArchivedAt is not null,
+		ViewerZone = ViewerZone,
+		StartHandler = "Start",
+		StartNodeFieldName = "leafNodeId",
+		PageStateFields = ToolbarStateFields,
+		StartForWorkerOptions = StartForWorkerOptions,
+		StartForLabelled = true,
+	};
+
 	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
 	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
@@ -59,6 +96,9 @@ public sealed class WorkModel(
 		["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture),
 		["WorkedByUserId"] = Panel?.DisplayedWorkedByUserId?.ToString(CultureInfo.InvariantCulture),
 	};
+
+	/// <summary>Formats a worker id for display (<see cref="EmployeeDirectoryDisplay.Describe" />), for the plural Active-column summary.</summary>
+	public string DescribeWorker(AppUserId workerId) => EmployeeDirectoryDisplay.Describe(_employeeDirectoryById, workerId.Value);
 
 	/// <summary>
 	///     <see cref="ToolbarStateFields" /> plus the identity and version of <paramref name="session" />,
@@ -81,7 +121,7 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
-		await LoadAsync(actor.Value, WorkedByUserId.HasValue ? new AppUserId(WorkedByUserId.Value) : null, cancellationToken);
+		await LoadAsync(actor.Value, cancellationToken);
 		return Page();
 	}
 
@@ -92,7 +132,53 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
-		var workedByUserId = WorkedByUserId.HasValue ? new(WorkedByUserId.Value) : actor.Value;
+		// Always the viewer's own one-click start -- WorkedByUserId is the Sessions history filter
+		// only and must never double as a mutation target (plan §2.5 rule 4). Starting for another
+		// worker goes through OnPostStartForAsync's distinct StartForUserId field.
+		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			}
+
+			_ = await jobTrackClient.Work.StartWorkAsync(
+				new() {
+					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					JobNodeId = new(LeafNodeId),
+					WorkedByUserId = actor.Value,
+					StartedAt = startedAtInstant,
+				}, cancellationToken);
+			SuccessMessage = "Session started.";
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "That job node does not exist.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = "This leaf's prerequisites are not satisfied.";
+		}
+
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+	}
+
+	/// <summary>Starts a session for <paramref name="startForUserId" /> rather than the signed-in actor -- mirrors <c>Browse</c>'s <c>StartFor</c> handler.</summary>
+	public async Task<IActionResult> OnPostStartForAsync(long? startForUserId, string? startedAt, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		if (startForUserId is not long targetUserId) {
+			ErrorMessage = "Choose a worker to start for.";
+			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		}
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
@@ -105,16 +191,16 @@ public sealed class WorkModel(
 				new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 					JobNodeId = new(LeafNodeId),
-					WorkedByUserId = workedByUserId,
+					WorkedByUserId = new(targetUserId),
 					StartedAt = startedAtInstant,
 				}, cancellationToken);
-			SuccessMessage = "Work started.";
+			SuccessMessage = "Session started.";
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
 		}
 		catch (EntityNotFoundException) {
-			ErrorMessage = "That job node does not exist.";
+			ErrorMessage = "That job node or worker does not exist.";
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
@@ -165,14 +251,16 @@ public sealed class WorkModel(
 		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 	}
 
-	private async Task LoadAsync(AppUserId actor, AppUserId? workedByUserId, CancellationToken cancellationToken)
+	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
+		CurrentActorId = actor;
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
 
 		_employeeDirectory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
 			new() { Context = context }, cancellationToken);
 		_employeeDirectoryById = _employeeDirectory.ToDictionary(entry => entry.Id);
+		StartForWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory);
 
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = new JobNodeId(LeafNodeId) },
@@ -183,9 +271,22 @@ public sealed class WorkModel(
 			return;
 		}
 
+		var leafId = new JobNodeId(LeafNodeId);
+		ActiveSessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [leafId] }, cancellationToken);
+		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
+			new() { Context = context, LeafWorkIds = [leafId] }, cancellationToken);
+		CanManage = capabilities.FirstOrDefault(c => c.LeafWorkId == leafId)?.CanManage ?? false;
+		if (CurrentNode.Node.HasLeafWork) {
+			var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
+				new() { Context = context, JobNodeId = leafId }, cancellationToken);
+			CurrentAchievement = leafWork.Achievement;
+		}
+
+		var workedByUserId = ResolveWorkerFilter(leafId, actor);
+
 		try {
 			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
-				new() { Context = context, LeafWorkId = new(LeafNodeId), WorkedByUserId = workedByUserId }, cancellationToken);
+				new() { Context = context, LeafWorkId = leafId, WorkedByUserId = workedByUserId }, cancellationToken);
 
 			Panel = new() {
 				LeafNodeId = LeafNodeId,
@@ -203,6 +304,26 @@ public sealed class WorkModel(
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "You may not view that worker's sessions on this leaf.";
 		}
+	}
+
+	/// <summary>
+	///     The effective worker filter for this leaf's Sessions panel, honoring remembered choices
+	///     (browse-sessions filter memory): an explicit <c>WorkedByUserId</c> query value is used and
+	///     remembered (empty = "Everyone"); with no query value the last remembered choice for this
+	///     leaf is recalled; failing that the default is "Everyone" when the viewer may manage this
+	///     leaf's sessions, else their own sessions (a plain worker may not read everyone's). This is
+	///     why returning here after correcting a session no longer snaps back to the corrected worker —
+	///     the redirect carries no filter, so the remembered choice (or the default) applies instead.
+	/// </summary>
+	private AppUserId? ResolveWorkerFilter(JobNodeId leafId, AppUserId actor)
+	{
+		var key = FormattableString.Invariant($"Jobs.Work.WorkedBy.{leafId.Value}");
+		// Default when nothing is remembered: Everyone (null) when the viewer may manage this leaf's
+		// sessions, else their own (a plain worker may not read everyone's).
+		var fallback = CanManage ? (long?)null : actor.Value;
+		var resolved = FilterMemory.Resolve(
+			HttpContext.Session, key, Request.Query.ContainsKey(nameof(WorkedByUserId)), WorkedByUserId, fallback);
+		return resolved.HasValue ? new AppUserId(resolved.Value) : null;
 	}
 
 	/// <summary>

@@ -6,6 +6,7 @@ using Abstractions;
 using Application;
 using Application.Ports;
 using Domain.Authorization;
+using Domain.Hierarchy;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
@@ -20,7 +21,8 @@ using Shared.Entities;
 ///     serializes concurrent writes through SQLite's single-writer model (matches
 ///     <see cref="SqliteJobNodeCommandPort" />'s established use of the same technique). Same-user/
 ///     same-leaf overlap is enforced by schema version 0007's immediate triggers plus a partial unique
-///     index, not by a lock.
+///     index, not by a lock; ADR 0044's closed-leaf check is enforced the same way (immediate triggers,
+///     serialized by the same <c>BEGIN IMMEDIATE</c> transaction, no separate lock).
 /// </summary>
 internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 {
@@ -40,6 +42,14 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 	///     general-overlap violation below (both share the base <see cref="SqliteConstraintErrorCode" />).
 	/// </summary>
 	private const int SqliteUniqueConstraintErrorCode = 2067;
+
+	/// <summary>
+	///     ADR 0044: the literal message <c>work_session_leaf_not_closed_on_insert/on_update</c>
+	///     (schema version 0007) raise via <c>RAISE(ABORT, ...)</c> -- SQLite gives triggers no distinct
+	///     extended error code the way the unique index above gets one, so this backstop disambiguates
+	///     by message content instead.
+	/// </summary>
+	private const string LeafClosedMessage = "work-session-leaf-closed";
 
 	private readonly IClock clock;
 
@@ -66,6 +76,13 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
+		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
+
+		if (await LeafSessionClosure.IsClosedAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).");
+		}
 
 		if (!await LeafReadiness.IsReadyAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
 			throw new PrerequisiteBlockedException($"Job node {request.LeafWorkId}'s prerequisites are not satisfied.");
@@ -114,6 +131,10 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			throw new InvariantViolationException(
 				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
 		}
+		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
+		}
 		catch (Exception ex) when (FindOverlapException(ex) is not null) {
 			throw new InvariantViolationException(
 				"work-session-overlap", "This session would overlap another session for the same worker and leaf.", ex);
@@ -134,11 +155,18 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
+		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
 			.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false);
 		leafWork ??= await LeafWorkAttachSupport.CreateAsync(
 			context, node, now, request.Context, null, null, cancellationToken).ConfigureAwait(false);
+
+		if (AchievementTransitions.IsCompletedState(leafWork.Achievement) || node.ArchivedAt is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).");
+		}
 
 		if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
@@ -199,6 +227,10 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 		catch (Exception ex) when (FindActiveSessionUniqueViolation(ex) is not null) {
 			throw new InvariantViolationException(
 				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
+		}
+		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
 		}
 		catch (Exception ex) when (FindOverlapException(ex) is not null) {
 			throw new InvariantViolationException(
@@ -272,6 +304,13 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
 		}
 
+		if (request.FinishedAt is null
+			&& await LeafSessionClosure.IsClosedAsync(context, session.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed",
+				"This correction would leave the session active on a leaf that is closed (terminal achievement or archived).");
+		}
+
 		var before = new Dictionary<string, string?> {
 			["started_at"] = session.StartedAt.ToString(),
 			["finished_at"] = session.FinishedAt?.ToString(),
@@ -294,6 +333,11 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 		catch (DbUpdateConcurrencyException ex) {
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for work session {request.SessionId} did not match its current version.", ex);
+		}
+		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed",
+				"This correction would leave the session active on a leaf that is closed (terminal achievement or archived).", ex);
 		}
 		catch (Exception ex) when (FindOverlapException(ex) is not null) {
 			throw new InvariantViolationException(
@@ -329,6 +373,18 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			null => null,
 			SqliteException sqlite when sqlite.SqliteExtendedErrorCode == SqliteUniqueConstraintErrorCode => sqlite,
 			_ => FindActiveSessionUniqueViolation(ex.InnerException),
+		};
+
+	/// <summary>
+	///     ADR 0044's <see cref="LeafClosedMessage" /> backstop: SQLite gives triggers no distinct
+	///     extended error code, so this walks the chain checking message content instead of an error
+	///     code, unlike <see cref="FindActiveSessionUniqueViolation" />/<see cref="FindOverlapException" />.
+	/// </summary>
+	private static SqliteException? FindLeafClosedViolation(Exception? ex) =>
+		ex switch {
+			null => null,
+			SqliteException sqlite when sqlite.Message.Contains(LeafClosedMessage, StringComparison.Ordinal) => sqlite,
+			_ => FindLeafClosedViolation(ex.InnerException),
 		};
 
 	private Task<SqliteJobTrackDbContext> CreateOpenContextAsync(CancellationToken cancellationToken) =>
@@ -385,6 +441,42 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
+	}
+
+	/// <summary>
+	///     ADR 0044 Stage 6/plan §2.5 rule 6: starting a session for a worker other than the actor
+	///     (the "Start for…" disclosure) must re-validate the target at write time, not merely trust
+	///     the picker's render-time snapshot -- a target disabled, locked, or role-revoked since the
+	///     page was rendered is rejected here rather than silently starting a session for them anyway.
+	///     A no-op when the target is the actor themselves, since <see cref="GetActorRolesAsync" />
+	///     already re-validated that account.
+	/// </summary>
+	private static async Task EnsureTargetWorkerEligibleAsync(
+		SqliteJobTrackDbContext context, AppUserId actorId, AppUserId targetId, Instant now, CancellationToken cancellationToken)
+	{
+		if (targetId == actorId) {
+			return;
+		}
+
+		var targetIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
+									 .FirstOrDefaultAsync(iu => iu.AppUserId == targetId, cancellationToken).ConfigureAwait(false)
+								 ?? throw new EntityNotFoundException($"Worker {targetId} does not exist.");
+
+		if (!targetIdentityUser.IsEnabled
+			|| (targetIdentityUser.LockoutEnabled && targetIdentityUser.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
+			throw new InvariantViolationException(
+				"work-session-target-not-eligible", $"Worker {targetId} is disabled and cannot be started for.");
+		}
+
+		var targetRoles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
+			.Where(ur => ur.IdentityUserId == targetIdentityUser.Id)
+			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
+			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+
+		if (!targetRoles.Any(role => role is EmployeeRole.Administrator or EmployeeRole.JobManager or EmployeeRole.Worker)) {
+			throw new InvariantViolationException(
+				"work-session-target-not-eligible", $"Worker {targetId} is not an eligible workflow employee.");
+		}
 	}
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)

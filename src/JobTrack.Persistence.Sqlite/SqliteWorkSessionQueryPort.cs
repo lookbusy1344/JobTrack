@@ -4,6 +4,7 @@ using Abstractions;
 using Application;
 using Application.Ports;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Shared;
 using Shared.Entities;
@@ -14,14 +15,21 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteWorkSessionQueryPort : IWorkSessionQueryPort
 {
+	private readonly IReadOnlyList<IInterceptor> _interceptors;
 	private readonly IClock clock;
 	private readonly string connectionString;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
-	public SqliteWorkSessionQueryPort(string connectionString, IClock clock)
+	public SqliteWorkSessionQueryPort(string connectionString, IClock clock) : this(connectionString, clock, [])
+	{
+	}
+
+	/// <summary>Test-only seam (Stage 4 efficiency guards) for attaching a command-count interceptor.</summary>
+	internal SqliteWorkSessionQueryPort(string connectionString, IClock clock, IReadOnlyList<IInterceptor> interceptors)
 	{
 		this.connectionString = connectionString;
 		this.clock = clock;
+		_interceptors = interceptors;
 	}
 
 	/// <inheritdoc />
@@ -86,7 +94,25 @@ internal sealed class SqliteWorkSessionQueryPort : IWorkSessionQueryPort
 		return new() { ActorRoles = actorRoles, Sessions = [.. sessions] };
 	}
 
-	private SqliteJobTrackDbContext CreateContext() => SqliteDbContextFactory.CreateContext(connectionString);
+	/// <inheritdoc />
+	public async Task<WorkSessionManageCapabilityQueryResult> GetManageCapabilitiesAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> leafWorkIds, CancellationToken cancellationToken = default)
+	{
+		await using var context = CreateContext();
+
+		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+
+		if (leafWorkIds.Count == 0) {
+			return new() { ActorRoles = actorRoles, ControlledLeafWorkIds = [] };
+		}
+
+		var controlledIds = await SqliteControlledLeafQuery.GetControlledLeafIdsAsync(
+			context, actorId.Value, [.. leafWorkIds.Select(id => id.Value)], cancellationToken).ConfigureAwait(false);
+
+		return new() { ActorRoles = actorRoles, ControlledLeafWorkIds = [.. controlledIds.Select(id => new JobNodeId(id))] };
+	}
+
+	private SqliteJobTrackDbContext CreateContext() => SqliteDbContextFactory.CreateContext(connectionString, _interceptors);
 
 	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		SqliteJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)

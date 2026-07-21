@@ -31,4 +31,8 @@ public sealed class PostgreSqlWorkSessionQueryPortTests()
 
 	protected override IWorkSessionQueryPort CreateQueryPort(string connectionString) =>
 		new PostgreSqlWorkSessionQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+
+	protected override IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor) =>
+		new PostgreSqlWorkSessionQueryPort(
+			new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance, [interceptor]);
 }

@@ -90,7 +90,7 @@ internal static class SubtreeImportPlanner
 	///     Rejects any <see cref="ImportSubtreeNodeSpec.LeafWork" /> the batch could not produce as a
 	///     real history, before a single row is written: work recorded against a node that is a parent
 	///     within the batch, an achievement that contradicts having worked at all, a session that
-	///     finishes before it starts, a leaf closed while its only session is still open, and — the
+	///     finishes before it starts, a leaf closed while any imported session is still open, and — the
 	///     prerequisite gate (spec §6) evaluated over the batch's own edges — work on a leaf whose
 	///     prerequisites never reach <see cref="Achievement.Success" />, or which starts before those
 	///     prerequisites finished.
@@ -131,10 +131,11 @@ internal static class SubtreeImportPlanner
 
 				// An achieved prerequisite is necessarily closed, so its subtree has a finish instant.
 				var requiredFinish = latestFinish[requiredLocalId]!.Value;
-				if (node.LeafWork!.StartedAt < requiredFinish) {
+				var earliestStart = Sessions(node.LeafWork!).Min(session => session.StartedAt);
+				if (earliestStart < requiredFinish) {
 					throw new InvariantViolationException(
 						"import-subtree-work-precedes-prerequisite",
-						$"Node {node.LocalId}'s work starts at {node.LeafWork.StartedAt}, before its prerequisite "
+						$"Node {node.LocalId}'s work starts at {earliestStart}, before its prerequisite "
 						+ $"{requiredLocalId} finished at {requiredFinish}.");
 				}
 			}
@@ -163,13 +164,15 @@ internal static class SubtreeImportPlanner
 				$"Node {node.LocalId} records work, so its achievement cannot be {work.Achievement}.");
 		}
 
-		if (work.FinishedAt is Instant finishedAt && finishedAt <= work.StartedAt) {
-			throw new InvariantViolationException(
-				"import-subtree-invalid-work-interval",
-				$"Node {node.LocalId}'s work finishes at {finishedAt}, which is not after its start at {work.StartedAt}.");
+		foreach (var session in Sessions(work)) {
+			if (session.FinishedAt is Instant finishedAt && finishedAt <= session.StartedAt) {
+				throw new InvariantViolationException(
+					"import-subtree-invalid-work-interval",
+					$"Node {node.LocalId}'s work finishes at {finishedAt}, which is not after its start at {session.StartedAt}.");
+			}
 		}
 
-		if (AchievementTransitions.IsCompletedState(work.Achievement) && work.FinishedAt is null) {
+		if (AchievementTransitions.IsCompletedState(work.Achievement) && Sessions(work).Any(session => session.FinishedAt is null)) {
 			throw new InvariantViolationException(
 				"import-subtree-unfinished-completed-work",
 				$"Node {node.LocalId} reaches {work.Achievement} but its session never finishes.");
@@ -195,7 +198,9 @@ internal static class SubtreeImportPlanner
 
 			if (!childrenByParent.TryGetValue(node.LocalId, out var children)) {
 				achieved[node.LocalId] = node.LeafWork?.Achievement == Achievement.Success;
-				latestFinish[node.LocalId] = node.LeafWork?.FinishedAt;
+				latestFinish[node.LocalId] = node.LeafWork is null
+					? null
+					: Sessions(node.LeafWork).Select(session => session.FinishedAt).Max();
 				continue;
 			}
 
@@ -205,6 +210,15 @@ internal static class SubtreeImportPlanner
 		}
 
 		return (achieved, latestFinish);
+	}
+
+	private static IEnumerable<(AppUserId WorkedByUserId, Instant StartedAt, Instant? FinishedAt)> Sessions(
+		ImportSubtreeLeafWorkSpec work)
+	{
+		yield return (work.WorkedByUserId, work.StartedAt, work.FinishedAt);
+		foreach (var session in work.AdditionalSessions) {
+			yield return (session.WorkedByUserId, session.StartedAt, session.FinishedAt);
+		}
 	}
 
 	/// <summary>

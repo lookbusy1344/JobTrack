@@ -36,4 +36,7 @@ public sealed class SqliteWorkSessionQueryPortTests()
 
 	protected override IWorkSessionQueryPort CreateQueryPort(string connectionString) =>
 		new SqliteWorkSessionQueryPort(connectionString, SystemClock.Instance);
+
+	protected override IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor) =>
+		new SqliteWorkSessionQueryPort(connectionString, SystemClock.Instance, [interceptor]);
 }

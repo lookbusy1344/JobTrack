@@ -26,6 +26,7 @@ authoritative — this table is a navigation aid, not a second source of truth.
 | [`2026-07-14-security-audit-remediation-plan.md`](2026-07-14-security-audit-remediation-plan.md) | Remediated | Fresh security audit remediation: requester account self-service, partitioned login/2FA throttling, authentication audit events, and self-service 2FA credential-transition consistency. |
 | [`2026-07-15-browse-multi-level-subtree-plan.md`](2026-07-15-browse-multi-level-subtree-plan.md) | Implemented | Multi-level Browse tree: bounded-depth adjacency-list subtree query, cost roll-up read-out, and the computed interval visualization (DB→library→API→web, TDD; ADR 0039/0040). |
 | [`2026-07-19-fresh-eyes-code-review-remediation-plan.md`](2026-07-19-fresh-eyes-code-review-remediation-plan.md) | Implemented | Fresh-eyes findings spanning civil-time correctness, injected clocks, authentication-audit integrity, bounded queries, PRG-safe PAT delivery, and cost-query fan-out. |
+| [`2026-07-21-browse-sessions-navigation-and-closure-plan.md`](2026-07-21-browse-sessions-navigation-and-closure-plan.md) | Implemented | Makes Browse the job-workflow centre, exposes Sessions consistently, handles concurrent workers without collapsing them, and prevents new sessions on terminal or archived leaves; final 2,634-test solution suite verified. |
 
 ## Review checklist item
 

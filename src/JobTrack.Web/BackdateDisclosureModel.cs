@@ -13,7 +13,7 @@ public sealed class BackdateDisclosureModel
 
 	/// <summary>
 	///     Stable id of the row/panel this backdate control expands into, and the value its trigger's
-	///     <c>aria-controls</c>/<c>data-jt-backdate-toggle</c> point at. Only one of a row's Start/Finish
+	///     <c>aria-controls</c>/<c>data-jt-disclosure-toggle</c> point at. Only one of a row's Start/Finish
 	///     branches is ever active at once, so a per-leaf or per-session id never collides.
 	/// </summary>
 	public required string RowId { get; init; }
@@ -24,7 +24,7 @@ public sealed class BackdateDisclosureModel
 	/// <summary>The visible label above the input, e.g. "Started at".</summary>
 	public required string Label { get; init; }
 
-	/// <summary>The submit button's text, e.g. "Start at this time".</summary>
+	/// <summary>The submit button's text, e.g. "Start session at this time".</summary>
 	public required string SubmitText { get; init; }
 
 	/// <summary>

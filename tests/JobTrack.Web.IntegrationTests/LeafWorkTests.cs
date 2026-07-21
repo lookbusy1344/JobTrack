@@ -92,7 +92,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await startReloaded.Content.ReadAsStringAsync();
-		startBody.Should().Contain("Work started");
+		startBody.Should().Contain("Session started");
 		startBody.Should().Contain("Active");
 	}
 
@@ -143,6 +143,8 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var beforeResponse = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&workedByUserId={workerId.Value}", authCookie);
 		var beforeBody = await beforeResponse.Content.ReadAsStringAsync();
 		beforeBody.Should().Contain("#jt-icon-start");
+		beforeBody.Should().Contain("Start session");
+		beforeBody.Should().NotContain("Start work");
 
 		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
 		var startResponse = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId);
@@ -150,8 +152,11 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await startReloaded.Content.ReadAsStringAsync();
-		startBody.Should().Contain("Finish work");
-		startBody.Should().NotContain("#jt-icon-start");
+		startBody.Should().Contain("Finish / pause");
+		// Plan §4.1: the viewer's own one-click Start is replaced by Finish/pause, but the
+		// authorized "Start for..." disclosure (also drawn with jt-icon-start) for another worker is
+		// never removed -- only the viewer's own primary action toggles.
+		startBody.Should().NotContain("title=\"Start session\"");
 	}
 
 	[Fact]
@@ -168,7 +173,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
-		body.Should().Contain("Work started");
+		body.Should().Contain("Session started");
 
 		var sessions = await GetSessionsAsync(leaf.Id);
 		sessions.Should().ContainSingle().Which.StartedAt.Should().Be(Instant.FromDateTimeOffset(backdatedAt));
@@ -251,7 +256,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("#jt-icon-finish");
 		// The panel's row action is icon-only; the page toolbar above it keeps its label.
-		body.Should().Contain("Finish work");
+		body.Should().Contain("Finish / pause");
 		body.Should().NotContain("btn btn-secondary\">Finish / pause");
 	}
 
@@ -315,7 +320,123 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 			"2026-01-01T09:00", "2026-01-01T10:00", "Forgot to clock out on time.");
 
 		correctResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		correctResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Work");
+		// Returns to Work without forcing the corrected worker as the filter -- Work restores the
+		// viewer's remembered choice (or its permission-aware default) instead.
+		correctResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Work").And.NotContain("orkedByUserId");
+	}
+
+	[Fact]
+	public async Task Work_defaults_to_everyone_when_the_viewer_may_manage_the_leaf()
+	{
+		var ownerId = await SeedEmployeeAsync("work.default-all.owner", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Default-all leaf");
+		var authCookie = await SignInAsync("work.default-all.owner");
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Work?leafNodeId={leaf.Id.Value}");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain("Sessions worked by", "an owner may manage the leaf, so the unfiltered Everyone view is the default");
+	}
+
+	[Fact]
+	public async Task Work_defaults_to_the_viewers_own_sessions_when_they_may_not_manage()
+	{
+		var ownerId = await SeedEmployeeAsync("work.default-self.owner", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("work.default-self.viewer", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Default-self leaf");
+		var authCookie = await SignInAsync("work.default-self.viewer");
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Work?leafNodeId={leaf.Id.Value}");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Sessions worked by work.default-self.viewer",
+			"a viewer who may not manage the leaf falls back to their own sessions, never an authorization error");
+	}
+
+	[Fact]
+	public async Task Work_remembers_the_last_chosen_worker_filter_across_a_return_visit()
+	{
+		var ownerId = await SeedEmployeeAsync("work.filtermem.owner", EmployeeRole.Worker);
+		var otherWorkerId = await SeedEmployeeAsync("work.filtermem.other", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Filter memory leaf");
+		var authCookie = await SignInAsync("work.filtermem.owner");
+
+		// Explicitly filter to the other worker; capture the session that now remembers the choice.
+		using var chooseRequest = new HttpRequestMessage(
+			HttpMethod.Get, $"/Jobs/Work?leafNodeId={leaf.Id.Value}&WorkedByUserId={otherWorkerId.Value}");
+		chooseRequest.Headers.Add("Cookie", authCookie);
+		var chooseResponse = await client.SendAsync(chooseRequest);
+		var sessionCookie = ExtractCookiePair(
+			FindSetCookie(chooseResponse, "JobTrack.Session") ?? throw new InvalidOperationException("No session cookie was set."));
+
+		// Return with no filter param: the remembered worker applies, even though the owner's default
+		// would otherwise be Everyone.
+		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Work?leafNodeId={leaf.Id.Value}");
+		returnRequest.Headers.Add("Cookie", $"{authCookie}; {sessionCookie}");
+		var returnResponse = await client.SendAsync(returnRequest);
+		var body = await returnResponse.Content.ReadAsStringAsync();
+
+		returnResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Sessions worked by work.filtermem.other");
+	}
+
+	[Fact]
+	public async Task Clear_finished_time_reopens_the_session_in_one_step_when_a_reason_is_given()
+	{
+		var workerId = await SeedEmployeeAsync("work.clearfinish", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("work.clearfinish-manager", EmployeeRole.JobManager);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Clear finish work");
+		var started = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var finished = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			SessionId = started.Id,
+			Version = started.Version,
+		});
+		var authCookie = await SignInAsync("work.clearfinish-manager");
+
+		var (cookie, token) = await GetCorrectFormAsync(authCookie, leaf.Id, workerId, finished.Id);
+		var response = await PostClearFinishAsync(
+			authCookie, cookie, token, leaf.Id, workerId, finished.Id, "2026-01-01T09:00", "Left the session running.");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Contain("/Jobs/Work");
+		(await GetSessionsAsync(leaf.Id)).Should().ContainSingle().Which.FinishedAt.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Clear_finished_time_still_requires_a_reason()
+	{
+		var workerId = await SeedEmployeeAsync("work.clearfinish-noreason", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("work.clearfinish-noreason-manager", EmployeeRole.JobManager);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Clear finish no reason work");
+		var started = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var finished = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			SessionId = started.Id,
+			Version = started.Version,
+		});
+		var authCookie = await SignInAsync("work.clearfinish-noreason-manager");
+
+		var (cookie, token) = await GetCorrectFormAsync(authCookie, leaf.Id, workerId, finished.Id);
+		var response = await PostClearFinishAsync(
+			authCookie, cookie, token, leaf.Id, workerId, finished.Id, "2026-01-01T09:00", string.Empty);
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		(await GetSessionsAsync(leaf.Id)).Should().ContainSingle().Which.FinishedAt.Should().NotBeNull();
 	}
 
 	[Fact]
@@ -467,6 +588,27 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 			["SessionId"] = sessionId.Value.ToString(CultureInfo.InvariantCulture),
 			["Input.StartedAt"] = startedAt,
 			["Input.FinishedAt"] = finishedAt,
+			["Input.Reason"] = reason,
+			["__RequestVerificationToken"] = token,
+		});
+
+		return await client.SendAsync(request);
+	}
+
+	private async Task<HttpResponseMessage> PostClearFinishAsync(
+		string authCookie, string antiforgeryCookie, string token,
+		JobNodeId leafNodeId, AppUserId workedByUserId, WorkSessionId sessionId,
+		string startedAt, string reason)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/CorrectSession?handler=ClearFinish");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["LeafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
+			["WorkedByUserId"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
+			["SessionId"] = sessionId.Value.ToString(CultureInfo.InvariantCulture),
+			["Input.StartedAt"] = startedAt,
+			// A finished time is still posted (the field is populated); ClearFinish must ignore it.
+			["Input.FinishedAt"] = "2026-01-01T17:00",
 			["Input.Reason"] = reason,
 			["__RequestVerificationToken"] = token,
 		});

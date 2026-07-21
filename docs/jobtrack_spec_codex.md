@@ -149,11 +149,29 @@ Starting work creates a session. Pausing or stopping work finishes that session.
 
 `Pause`, `stop`, and `finish session` are user-interface descriptions of the same domain operation: setting `FinishedAt` on the active session. They do not imply different persisted session states. A later resume always creates a new session.
 
-At most one session for the same user and `LeafWork` may be active at once. Sessions for the same user and `LeafWork` shall not overlap. Sessions for the same user on different leaves may overlap intentionally and participate in concurrent allocation.
+At most one session for the same user and `LeafWork` may be active at once. Sessions for the same user and `LeafWork` shall not overlap. Sessions for the same user on different leaves may overlap intentionally and participate in concurrent allocation. Sessions for different users on the same `LeafWork` may be concurrently active; this is a legitimate representation of multiple workers on one job and shall never be collapsed to a single "representative" active session by any read, projection, or user interface.
 
 Workers may correct their own historical sessions, including start and finish instants. Job managers and administrators may correct any session. Every historical correction requires a reason and an audit record containing the previous and replacement values. Corrections shall revalidate interval ordering, same-leaf overlap, schedule-independent session rules, authorization, and optimistic concurrency. No second-person approval is required.
 
 An unfinished session is costed to the current instant supplied by the application or reporting operation. Business logic shall use an injected clock rather than reading system time throughout the calculation.
+
+#### 4.4.1 Closed leaves reject new active work
+
+A leaf is closed to new active sessions when its `Achievement` is a terminal value (`Success`,
+`Cancelled`, `Unsuccessful`) or its `JobNode.ArchivedAt` is set. Starting a session, including a
+backdated one, shall be rejected against a currently closed leaf regardless of whether the supplied
+instant predates the closure; current state governs, not the instant being recorded. Correcting an
+already-finished historical session on a closed leaf remains permitted, but a correction shall not
+leave a session active while the leaf is closed. An archived leaf rejects any brand-new `WorkSession`
+row outright, active or already finished at insert; a leaf whose achievement is merely terminal (not
+archived) rejects only a new active row — a new already-finished row remains insertable, which is
+what lets subtree import insert already-completed historical sessions and set the leaf's terminal
+achievement inside one transaction. Transitioning a leaf's `Achievement` into a
+terminal value, and archiving a leaf's node, shall each be rejected while any `WorkSession` on that
+leaf is still active, regardless of which user holds it; finishing an already-active session remains
+permitted at all times, and a race between a finish and a closure attempt shall serialize to exactly
+one committed outcome, never an orphaned unfinishable session. See ADR 0044 for the exact predicate,
+stable failure identifiers, and database serialization mechanism.
 
 ### 4.5 Decomposing a leaf after work has begun
 

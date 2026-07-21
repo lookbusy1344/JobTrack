@@ -184,6 +184,15 @@ public sealed class JobQueries : IJobQueries
 	}
 
 	/// <inheritdoc />
+	public Task<EquatableArray<LeafSessionManageCapabilityResult>> GetSessionManageCapabilitiesAsync(
+		GetSessionManageCapabilitiesRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetSessionManageCapabilitiesCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
 	public Task<LeafWorkResult> GetLeafWorkAsync(GetLeafWorkRequest request, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(request);
@@ -560,16 +569,36 @@ public sealed class JobQueries : IJobQueries
 					throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view active sessions.");
 				}
 
-				// Administrator/JobManager may manage any leaf's session unconditionally
-				// (WorkSessionAccessPolicy.CanManage, ADR 0032), so the dashboard shows them a finish/
-				// pause control for someone else's active session too, not only their own — the same
-				// elevation that already lets them submit that Finish. A plain Worker sees only their
-				// own active sessions here, matching who they may actually finish.
-				var seesEveryWorkersSessions = WorkSessionAccessPolicy.CanManage(result.ActorRoles, false);
+				// ADR 0041 already made viewing recorded work unqualified for any baseline employee
+				// role -- the same "recorded work is job data" reasoning applies here, not only to
+				// GetLeafSessionsAsync's history read. Narrowing this batch to "sessions I can manage"
+				// would silently hide a leaf's other active workers from a plain Worker's Browse/
+				// Awaiting-Progress view, defeating the plan §2.4 "never collapse multiple active
+				// sessions" guarantee for the common case. CanManage still gates every mutation
+				// (start/finish/correct); it plays no role in this read.
+				return result.Sessions;
+			});
 
-				return seesEveryWorkersSessions
-					? result.Sessions
-					: [.. result.Sessions.Where(session => session.WorkedByUserId == request.Context.Actor)];
+	private Task<EquatableArray<LeafSessionManageCapabilityResult>> GetSessionManageCapabilitiesCoreAsync(
+		GetSessionManageCapabilitiesRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-session-manage-capabilities", request.Context, null,
+			async () => {
+				if (request.LeafWorkIds.Count == 0) {
+					return [];
+				}
+
+				var result = await _workSessionQueryPort
+					.GetManageCapabilitiesAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
+					.ConfigureAwait(false);
+				var controlled = result.ControlledLeafWorkIds.ToHashSet();
+				EquatableArray<LeafSessionManageCapabilityResult> capabilities = [
+					.. request.LeafWorkIds.Select(id => new LeafSessionManageCapabilityResult {
+						LeafWorkId = id, CanManage = WorkSessionAccessPolicy.CanManage(result.ActorRoles, controlled.Contains(id)),
+					}),
+				];
+
+				return capabilities;
 			});
 
 	private Task<LeafWorkResult> GetLeafWorkCoreAsync(GetLeafWorkRequest request, CancellationToken cancellationToken) =>

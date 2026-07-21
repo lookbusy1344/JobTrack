@@ -15,7 +15,7 @@ using NodaTime;
 /// <summary>
 ///     The flat "jobs awaiting progress" dashboard: leaves only, in priority/deadline order, for one
 ///     employee or everyone, optionally scoped to a subtree (linked from <c>Browse</c>'s toolbar), with
-///     a one-click "Start work" per row (<see cref="IWorkCommands.StartWorkAsync" />) since this page is
+///     a one-click "Start session" per row (<see cref="IWorkCommands.StartWorkAsync" />) since this page is
 ///     precisely where a leaf needing exactly that action is surfaced. Viewing job data carries no
 ///     ownership-based authorization gate (spec §7.3), so the page uses the broad "any employee" policy,
 ///     matching <c>Browse</c>; the start-work handler carries no additional page-level policy either —
@@ -32,13 +32,19 @@ public sealed class AwaitingProgressModel(
 	// dashboard-appropriate fixed page size is enough -- no caller-supplied override.
 	public const int PageSize = AwaitingProgressPaging.DefaultPageSize;
 
+	// Browse-sessions filter memory: the owner selector's last "person or Everyone" choice is
+	// remembered per session under this key so returning to the dashboard restores it.
+	private const string OwnerFilterSessionKey = "Jobs.AwaitingProgress.Owner";
+
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
 
 	/// <summary>Captured once per request, per ADR 0016's "one captured instant per operation".</summary>
 	public Instant Now { get; } = clock.GetCurrentInstant();
 
-	[BindProperty(SupportsGet = true)] public long? OwnerUserId { get; init; }
+	// Settable so LoadAsync can replace an omitted value with the remembered choice (or the default),
+	// which the owner <select> (asp-for) and every replayed filter/route value then reflect.
+	[BindProperty(SupportsGet = true)] public long? OwnerUserId { get; set; }
 
 	[BindProperty(SupportsGet = true)] public int Offset { get; init; }
 
@@ -62,15 +68,30 @@ public sealed class AwaitingProgressModel(
 	/// <summary>Whether another page of entries exists past <see cref="Entries" /> (fresh-eyes review §2.8's bounded-result contract).</summary>
 	public bool HasMore { get; private set; }
 
-	public IReadOnlyDictionary<JobNodeId, WorkSessionResult> ActiveSessionByLeaf { get; private set; } =
-		new Dictionary<JobNodeId, WorkSessionResult>();
+	/// <summary>
+	///     Every active session on each rendered leaf, never collapsed to one representative
+	///     (<see cref="ActiveSessionGrouping.Group" />). <see cref="WorkRowActionsModel" /> derives the
+	///     viewer's own session, every other worker's, and the count from this per row.
+	/// </summary>
+	public IReadOnlyDictionary<JobNodeId, EquatableArray<WorkSessionResult>> ActiveSessionsByLeaf { get; private set; } =
+		new Dictionary<JobNodeId, EquatableArray<WorkSessionResult>>();
+
+	/// <summary>
+	///     Whether the actor may manage sessions on each rendered leaf (<see cref="IJobQueries.GetSessionManageCapabilitiesAsync" />,
+	///     ADR 0044 Stage 4/6) — a batched rendering hint for another worker's exact finish and the
+	///     "Start for…" disclosure; the command itself remains the authoritative gate.
+	/// </summary>
+	public IReadOnlyDictionary<JobNodeId, bool> CanManageByLeaf { get; private set; } = new Dictionary<JobNodeId, bool>();
 
 	/// <summary>
 	///     The signed-in actor, so a row can tell its own active session apart from one
-	///     <see cref="ActiveSessionByLeaf" /> surfaced because the actor may manage any leaf's session
+	///     <see cref="ActiveSessionsByLeaf" /> surfaced because the actor may manage any leaf's session
 	///     (Administrator/JobManager, ADR 0032) rather than because it is theirs.
 	/// </summary>
 	public AppUserId? CurrentActorId { get; private set; }
+
+	/// <summary>Every enabled workflow employee, for the "Start for…" worker picker (plan §2.5).</summary>
+	public IReadOnlyList<SelectListItem> StartForWorkerOptions { get; private set; } = [];
 
 	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
 	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
@@ -90,14 +111,22 @@ public sealed class AwaitingProgressModel(
 	};
 
 	/// <summary>
-	///     <paramref name="activeSession" />'s worker, formatted for display, but only when it is not
-	///     <see cref="CurrentActorId" /> -- an admin managing another worker's session should see whose
-	///     it is; the actor's own needs no such label.
+	///     Builds a <see cref="WorkRowActionsModel" /> for <paramref name="leafId" />, sourcing its active-session collection and manage capability
+	///     from the batched loads above.
 	/// </summary>
-	public string? ActiveSessionWorkedByOther(WorkSessionResult? activeSession) =>
-		activeSession is not null && activeSession.WorkedByUserId != CurrentActorId
-			? DescribeOwner(activeSession.WorkedByUserId)
-			: null;
+	public WorkRowActionsModel WorkRowActionsFor(JobNodeId leafId, Achievement? achievement) => new() {
+		LeafNodeId = leafId.Value,
+		ViewerId = CurrentActorId ?? new AppUserId(0),
+		ActiveSessions = ActiveSessionsByLeaf.GetValueOrDefault(leafId, []),
+		CanManage = CanManageByLeaf.GetValueOrDefault(leafId, false),
+		Achievement = achievement,
+		IsArchived = false,
+		ViewerZone = ViewerZone,
+		StartHandler = "StartWork",
+		StartNodeFieldName = "jobNodeId",
+		PageStateFields = RowStateFields,
+		StartForWorkerOptions = StartForWorkerOptions,
+	};
 
 	/// <summary>
 	///     Formats an owner id for display: display name and username when it resolves in
@@ -140,13 +169,64 @@ public sealed class AwaitingProgressModel(
 					WorkedByUserId = actor.Value,
 					StartedAt = startedAtInstant,
 				}, cancellationToken);
-			SuccessMessage = "Work started.";
+			SuccessMessage = "Session started.";
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = "This leaf's prerequisites are not satisfied.";
+		}
+
+		return RedirectToPage(CurrentRouteValues());
+	}
+
+	/// <summary>
+	///     Starts a session for <paramref name="startForUserId" /> rather than the signed-in actor
+	///     (plan §2.5 "Starting for another worker") — mirrors <c>Browse</c>'s <c>StartFor</c> handler.
+	///     Authorization is not rechecked here beyond signing in; <c>StartWorkAsync</c> re-evaluates
+	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanManage" /> for the acting user.
+	/// </summary>
+	public async Task<IActionResult> OnPostStartForAsync(
+		long jobNodeId, long? startForUserId, string? startedAt, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		if (startForUserId is not long targetUserId) {
+			ErrorMessage = "Choose a worker to start for.";
+			return RedirectToPage(CurrentRouteValues());
+		}
+
+		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(CurrentRouteValues());
+			}
+
+			_ = await jobTrackClient.Work.StartWorkAsync(
+				new() {
+					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					JobNodeId = new(jobNodeId),
+					WorkedByUserId = new(targetUserId),
+					StartedAt = startedAtInstant,
+				}, cancellationToken);
+			SuccessMessage = "Session started.";
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "That job node or worker does not exist.";
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
@@ -215,10 +295,16 @@ public sealed class AwaitingProgressModel(
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
 
+		// Owner filter is remembered across visits; the whole tree is browsable, so the default when
+		// nothing is remembered is "Everyone" (no permission-scoped fallback like Work's).
+		OwnerUserId = FilterMemory.Resolve(
+			HttpContext.Session, OwnerFilterSessionKey, Request.Query.ContainsKey(nameof(OwnerUserId)), OwnerUserId, null);
+
 		var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
 			new() { Context = context }, cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Everyone", string.Empty));
+		StartForWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(directory);
 
 		try {
 			if (SubtreeRootId.HasValue) {
@@ -256,7 +342,8 @@ public sealed class AwaitingProgressModel(
 	{
 		var leafIds = Entries.Select(entry => entry.Id).ToArray();
 		if (leafIds.Length == 0) {
-			ActiveSessionByLeaf = new Dictionary<JobNodeId, WorkSessionResult>();
+			ActiveSessionsByLeaf = new Dictionary<JobNodeId, EquatableArray<WorkSessionResult>>();
+			CanManageByLeaf = new Dictionary<JobNodeId, bool>();
 			return;
 		}
 
@@ -264,11 +351,15 @@ public sealed class AwaitingProgressModel(
 			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [.. leafIds] },
 				cancellationToken);
 
-			ActiveSessionByLeaf = WorkRowActiveSessions.ByLeaf(sessions);
+			ActiveSessionsByLeaf = ActiveSessionGrouping.Group(sessions);
 		}
 		catch (AuthorizationDeniedException) {
-			ActiveSessionByLeaf = new Dictionary<JobNodeId, WorkSessionResult>();
+			ActiveSessionsByLeaf = new Dictionary<JobNodeId, EquatableArray<WorkSessionResult>>();
 		}
+
+		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
+			new() { Context = context, LeafWorkIds = [.. leafIds] }, cancellationToken);
+		CanManageByLeaf = capabilities.ToDictionary(c => c.LeafWorkId, c => c.CanManage);
 	}
 
 	private async Task<AppUserId?> ResolveActorAsync()

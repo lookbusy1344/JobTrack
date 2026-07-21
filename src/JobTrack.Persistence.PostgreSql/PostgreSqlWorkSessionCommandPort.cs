@@ -5,6 +5,7 @@ using Abstractions;
 using Application;
 using Application.Ports;
 using Domain.Authorization;
+using Domain.Hierarchy;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Npgsql;
@@ -16,14 +17,19 @@ using Shared.Entities;
 ///     start, finish, resume, and correct work sessions). One <see cref="PostgreSqlJobTrackDbContext" />
 ///     /connection/transaction per call, reloading the actor's current roles and whether the session
 ///     is (or will be) their own and applying <see cref="WorkSessionAccessPolicy" /> itself inside that
-///     transaction, per the port's own contract. There is no advisory lock domain for work sessions
-///     (ADR 0012 lists only schema-deployment, subtree-move/decomposition, bootstrap, and
-///     prerequisite-graph-writes): same-user/same-leaf overlap is enforced purely by schema version
-///     0007's GiST exclusion constraint and partial unique index, so a concurrent conflict is caught by
-///     translating the resulting <see cref="PostgresException" />, not by taking a lock.
+///     transaction, per the port's own contract. Same-user/same-leaf overlap is enforced purely by
+///     schema version 0007's GiST exclusion constraint and partial unique index, so a concurrent
+///     conflict is caught by translating the resulting <see cref="PostgresException" />, not by taking
+///     a lock. Closed-leaf session creation (ADR 0044) is the one exception: it does use ADR 0012's
+///     "leaf session closure" advisory-lock domain, taken by schema version 0007's own deferred
+///     constraint triggers (not by this port directly) to serialize against a concurrent terminal
+///     achievement transition or archive on the same leaf.
 /// </summary>
 internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 {
+	/// <summary>ADR 0044: schema version 0007's leaf-closed deferred constraint triggers' distinct SQLSTATE.</summary>
+	private const string LeafClosedSqlState = "P0007";
+
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
@@ -47,6 +53,13 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
+		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
+
+		if (await LeafSessionClosure.IsClosedAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).");
+		}
 
 		if (!await LeafReadiness.IsReadyAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
 			throw new PrerequisiteBlockedException($"Job node {request.LeafWorkId}'s prerequisites are not satisfied.");
@@ -95,6 +108,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			throw new InvariantViolationException(
 				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
 		}
+		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
+		}
 		catch (Exception ex) when (FindGeneralOverlapViolation(ex) is not null) {
 			throw new InvariantViolationException(
 				"work-session-overlap", "This session would overlap another session for the same worker and leaf.", ex);
@@ -114,11 +131,18 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
+		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
 			.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false);
 		leafWork ??= await LeafWorkAttachSupport.CreateAsync(
 			context, node, now, request.Context, null, null, cancellationToken).ConfigureAwait(false);
+
+		if (AchievementTransitions.IsCompletedState(leafWork.Achievement) || node.ArchivedAt is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).");
+		}
 
 		if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
@@ -179,6 +203,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		catch (Exception ex) when (FindActiveSessionUniqueViolation(ex) is not null) {
 			throw new InvariantViolationException(
 				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
+		}
+		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
 		}
 		catch (Exception ex) when (FindGeneralOverlapViolation(ex) is not null) {
 			throw new InvariantViolationException(
@@ -250,6 +278,13 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
 		}
 
+		if (request.FinishedAt is null
+			&& await LeafSessionClosure.IsClosedAsync(context, session.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed",
+				"This correction would leave the session active on a leaf that is closed (terminal achievement or archived).");
+		}
+
 		var before = new Dictionary<string, string?> {
 			["started_at"] = session.StartedAt.ToString(),
 			["finished_at"] = session.FinishedAt?.ToString(),
@@ -272,6 +307,11 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		catch (DbUpdateConcurrencyException ex) {
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for work session {request.SessionId} did not match its current version.", ex);
+		}
+		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed",
+				"This correction would leave the session active on a leaf that is closed (terminal achievement or archived).", ex);
 		}
 		catch (Exception ex) when (FindOverlapException(ex) is not null) {
 			throw new InvariantViolationException(
@@ -314,6 +354,18 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			null => null,
 			PostgresException pg when pg.SqlState == PostgresErrorCodes.UniqueViolation => pg,
 			_ => FindActiveSessionUniqueViolation(ex.InnerException),
+		};
+
+	/// <summary>
+	///     Schema version 0007's <c>work_session_leaf_not_closed_on_insert/on_update</c> deferred
+	///     constraint triggers (ADR 0044) report a distinct SQLSTATE (<c>P0007</c>) so this race backstop
+	///     never gets confused with the overlap constraints above.
+	/// </summary>
+	private static PostgresException? FindLeafClosedViolation(Exception? ex) =>
+		ex switch {
+			null => null,
+			PostgresException pg when pg.SqlState == LeafClosedSqlState => pg,
+			_ => FindLeafClosedViolation(ex.InnerException),
 		};
 
 	/// <inheritdoc cref="FindActiveSessionUniqueViolation" />
@@ -384,6 +436,42 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
+	}
+
+	/// <summary>
+	///     ADR 0044 Stage 6/plan §2.5 rule 6: starting a session for a worker other than the actor
+	///     (the "Start for…" disclosure) must re-validate the target at write time, not merely trust
+	///     the picker's render-time snapshot -- a target disabled, locked, or role-revoked since the
+	///     page was rendered is rejected here rather than silently starting a session for them anyway.
+	///     A no-op when the target is the actor themselves, since <see cref="GetActorRolesAsync" />
+	///     already re-validated that account.
+	/// </summary>
+	private static async Task EnsureTargetWorkerEligibleAsync(
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, AppUserId targetId, Instant now, CancellationToken cancellationToken)
+	{
+		if (targetId == actorId) {
+			return;
+		}
+
+		var targetIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
+									 .FirstOrDefaultAsync(iu => iu.AppUserId == targetId, cancellationToken).ConfigureAwait(false)
+								 ?? throw new EntityNotFoundException($"Worker {targetId} does not exist.");
+
+		if (!targetIdentityUser.IsEnabled
+			|| (targetIdentityUser.LockoutEnabled && targetIdentityUser.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
+			throw new InvariantViolationException(
+				"work-session-target-not-eligible", $"Worker {targetId} is disabled and cannot be started for.");
+		}
+
+		var targetRoles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
+			.Where(ur => ur.IdentityUserId == targetIdentityUser.Id)
+			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
+			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+
+		if (!targetRoles.Any(role => role is EmployeeRole.Administrator or EmployeeRole.JobManager or EmployeeRole.Worker)) {
+			throw new InvariantViolationException(
+				"work-session-target-not-eligible", $"Worker {targetId} is not an eligible workflow employee.");
+		}
 	}
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)

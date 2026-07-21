@@ -216,6 +216,18 @@ JobTrack.Application.GetBulkNodeCostsRequest.GetBulkNodeCostsRequest() -> void
 JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
 JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.init -> void
 JobTrack.Application.ICostQueries.GetBulkNodeCostsAsync(JobTrack.Application.GetBulkNodeCostsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.BulkNodeCostResult!>!
+JobTrack.Application.ImportSubtreeLeafWorkSpec.AdditionalSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ImportSubtreeWorkSessionSpec!>
+JobTrack.Application.ImportSubtreeLeafWorkSpec.AdditionalSessions.init -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec
+JobTrack.Application.ImportSubtreeWorkSessionSpec.<Clone>$() -> JobTrack.Application.ImportSubtreeWorkSessionSpec!
+JobTrack.Application.ImportSubtreeWorkSessionSpec.Equals(JobTrack.Application.ImportSubtreeWorkSessionSpec? other) -> bool
+JobTrack.Application.ImportSubtreeWorkSessionSpec.FinishedAt.get -> NodaTime.Instant?
+JobTrack.Application.ImportSubtreeWorkSessionSpec.FinishedAt.init -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec.ImportSubtreeWorkSessionSpec() -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec.StartedAt.get -> NodaTime.Instant
+JobTrack.Application.ImportSubtreeWorkSessionSpec.StartedAt.init -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.ImportSubtreeWorkSessionSpec.WorkedByUserId.init -> void
 JobTrack.Application.Ports.BulkCostQueryResult
 JobTrack.Application.Ports.BulkCostQueryResult.<Clone>$() -> JobTrack.Application.Ports.BulkCostQueryResult!
 JobTrack.Application.Ports.BulkCostQueryResult.ActorRoles.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.EmployeeRole>
@@ -2140,6 +2152,9 @@ override JobTrack.Application.ImportSubtreeResult.ToString() -> string!
 override JobTrack.Application.ImportedJobNode.Equals(object? obj) -> bool
 override JobTrack.Application.ImportedJobNode.GetHashCode() -> int
 override JobTrack.Application.ImportedJobNode.ToString() -> string!
+override JobTrack.Application.ImportSubtreeWorkSessionSpec.Equals(object? obj) -> bool
+override JobTrack.Application.ImportSubtreeWorkSessionSpec.GetHashCode() -> int
+override JobTrack.Application.ImportSubtreeWorkSessionSpec.ToString() -> string!
 override JobTrack.Application.IssuePersonalAccessTokenRequest.Equals(object? obj) -> bool
 override JobTrack.Application.IssuePersonalAccessTokenRequest.GetHashCode() -> int
 override JobTrack.Application.IssuePersonalAccessTokenRequest.ToString() -> string!
@@ -2451,6 +2466,8 @@ static JobTrack.Application.ImportSubtreeResult.operator !=(JobTrack.Application
 static JobTrack.Application.ImportSubtreeResult.operator ==(JobTrack.Application.ImportSubtreeResult? left, JobTrack.Application.ImportSubtreeResult? right) -> bool
 static JobTrack.Application.ImportedJobNode.operator !=(JobTrack.Application.ImportedJobNode? left, JobTrack.Application.ImportedJobNode? right) -> bool
 static JobTrack.Application.ImportedJobNode.operator ==(JobTrack.Application.ImportedJobNode? left, JobTrack.Application.ImportedJobNode? right) -> bool
+static JobTrack.Application.ImportSubtreeWorkSessionSpec.operator !=(JobTrack.Application.ImportSubtreeWorkSessionSpec? left, JobTrack.Application.ImportSubtreeWorkSessionSpec? right) -> bool
+static JobTrack.Application.ImportSubtreeWorkSessionSpec.operator ==(JobTrack.Application.ImportSubtreeWorkSessionSpec? left, JobTrack.Application.ImportSubtreeWorkSessionSpec? right) -> bool
 static JobTrack.Application.IssuePersonalAccessTokenRequest.operator !=(JobTrack.Application.IssuePersonalAccessTokenRequest? left, JobTrack.Application.IssuePersonalAccessTokenRequest? right) -> bool
 static JobTrack.Application.IssuePersonalAccessTokenRequest.operator ==(JobTrack.Application.IssuePersonalAccessTokenRequest? left, JobTrack.Application.IssuePersonalAccessTokenRequest? right) -> bool
 static JobTrack.Application.IssuedPersonalAccessTokenResult.operator !=(JobTrack.Application.IssuedPersonalAccessTokenResult? left, JobTrack.Application.IssuedPersonalAccessTokenResult? right) -> bool
@@ -2576,3 +2593,45 @@ static JobTrack.Application.WorkSessionResult.operator ==(JobTrack.Application.W
 JobTrack.Application.AwaitingProgressPaging
 const JobTrack.Application.AwaitingProgressPaging.DefaultPageSize = 50 -> int
 const JobTrack.Application.AwaitingProgressPaging.MaxPageSize = 200 -> int
+JobTrack.Application.GetSessionManageCapabilitiesRequest
+JobTrack.Application.GetSessionManageCapabilitiesRequest.<Clone>$() -> JobTrack.Application.GetSessionManageCapabilitiesRequest!
+JobTrack.Application.GetSessionManageCapabilitiesRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetSessionManageCapabilitiesRequest.Context.init -> void
+JobTrack.Application.GetSessionManageCapabilitiesRequest.Equals(JobTrack.Application.GetSessionManageCapabilitiesRequest? other) -> bool
+JobTrack.Application.GetSessionManageCapabilitiesRequest.GetSessionManageCapabilitiesRequest() -> void
+JobTrack.Application.GetSessionManageCapabilitiesRequest.LeafWorkIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
+JobTrack.Application.GetSessionManageCapabilitiesRequest.LeafWorkIds.init -> void
+JobTrack.Application.IJobQueries.GetSessionManageCapabilitiesAsync(JobTrack.Application.GetSessionManageCapabilitiesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.LeafSessionManageCapabilityResult!>>!
+JobTrack.Application.JobQueries.GetSessionManageCapabilitiesAsync(JobTrack.Application.GetSessionManageCapabilitiesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.LeafSessionManageCapabilityResult!>>!
+JobTrack.Application.LeafSessionManageCapabilityResult
+JobTrack.Application.LeafSessionManageCapabilityResult.<Clone>$() -> JobTrack.Application.LeafSessionManageCapabilityResult!
+JobTrack.Application.LeafSessionManageCapabilityResult.CanManage.get -> bool
+JobTrack.Application.LeafSessionManageCapabilityResult.CanManage.init -> void
+JobTrack.Application.LeafSessionManageCapabilityResult.Equals(JobTrack.Application.LeafSessionManageCapabilityResult? other) -> bool
+JobTrack.Application.LeafSessionManageCapabilityResult.LeafSessionManageCapabilityResult() -> void
+JobTrack.Application.LeafSessionManageCapabilityResult.LeafWorkId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.LeafSessionManageCapabilityResult.LeafWorkId.init -> void
+JobTrack.Application.Ports.IWorkSessionQueryPort.GetManageCapabilitiesAsync(JobTrack.Abstractions.AppUserId actorId, JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId> leafWorkIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult!>!
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.<Clone>$() -> JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult!
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.ActorRoles.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.EmployeeRole>
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.ActorRoles.init -> void
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.ControlledLeafWorkIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.ControlledLeafWorkIds.init -> void
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.Equals(JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult? other) -> bool
+JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.WorkSessionManageCapabilityQueryResult() -> void
+override JobTrack.Application.GetSessionManageCapabilitiesRequest.Equals(object? obj) -> bool
+override JobTrack.Application.GetSessionManageCapabilitiesRequest.GetHashCode() -> int
+override JobTrack.Application.GetSessionManageCapabilitiesRequest.ToString() -> string!
+override JobTrack.Application.LeafSessionManageCapabilityResult.Equals(object? obj) -> bool
+override JobTrack.Application.LeafSessionManageCapabilityResult.GetHashCode() -> int
+override JobTrack.Application.LeafSessionManageCapabilityResult.ToString() -> string!
+override JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.Equals(object? obj) -> bool
+override JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.GetHashCode() -> int
+override JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.ToString() -> string!
+static JobTrack.Application.GetSessionManageCapabilitiesRequest.operator !=(JobTrack.Application.GetSessionManageCapabilitiesRequest? left, JobTrack.Application.GetSessionManageCapabilitiesRequest? right) -> bool
+static JobTrack.Application.GetSessionManageCapabilitiesRequest.operator ==(JobTrack.Application.GetSessionManageCapabilitiesRequest? left, JobTrack.Application.GetSessionManageCapabilitiesRequest? right) -> bool
+static JobTrack.Application.LeafSessionManageCapabilityResult.operator !=(JobTrack.Application.LeafSessionManageCapabilityResult? left, JobTrack.Application.LeafSessionManageCapabilityResult? right) -> bool
+static JobTrack.Application.LeafSessionManageCapabilityResult.operator ==(JobTrack.Application.LeafSessionManageCapabilityResult? left, JobTrack.Application.LeafSessionManageCapabilityResult? right) -> bool
+static JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.operator !=(JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult? left, JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult? right) -> bool
+static JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult.operator ==(JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult? left, JobTrack.Application.Ports.WorkSessionManageCapabilityQueryResult? right) -> bool

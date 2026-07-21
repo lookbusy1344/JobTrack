@@ -95,6 +95,43 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
+	public async Task Browse_remembers_the_owner_filter_across_a_return_visit()
+	{
+		var workerId = await SeedEmployeeAsync("browse-nav.filtermem", EmployeeRole.Worker);
+		_ = await AddChildAsync(rootId, "Admin owned child");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		// Explicitly filter root's children to the worker (who owns nothing here); capture the session
+		// that now remembers the choice, and sanity-check the filter actually hides the admin's child.
+		using var chooseRequest = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Browse?ownerUserId={workerId.Value}");
+		chooseRequest.Headers.Add("Cookie", authCookie);
+		var chooseResponse = await client.SendAsync(chooseRequest);
+		(await ReadNormalizedBodyAsync(chooseResponse)).Should().NotContain("Admin owned child");
+		var sessionCookie = ExtractCookiePair(
+			FindSetCookie(chooseResponse, "JobTrack.Session") ?? throw new InvalidOperationException("No session cookie was set."));
+
+		// Return with no owner param: the remembered worker filter still hides the admin's child.
+		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/Browse");
+		returnRequest.Headers.Add("Cookie", $"{authCookie}; {sessionCookie}");
+		var returnResponse = await client.SendAsync(returnRequest);
+		var returnBody = await ReadNormalizedBodyAsync(returnResponse);
+
+		returnBody.Should().NotContain("Admin owned child");
+	}
+
+	[Fact]
+	public async Task Browse_defaults_to_all_owners_when_nothing_is_remembered()
+	{
+		_ = await AddChildAsync(rootId, "Admin owned child");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync("/Jobs/Browse", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain("Admin owned child", "with nothing remembered Browse defaults to all owners");
+	}
+
+	[Fact]
 	public async Task Browsing_a_direct_child_of_root_shows_a_breadcrumb_link_to_root()
 	{
 		var branchId = await AddChildAsync(rootId, "Kitchen renovation");
@@ -192,6 +229,131 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		body.Should().NotContain($"Job {requiredLeafId.Value}</span>");
 	}
 
+	// Stage 5 navigation audit: every node-presenting specialist page links that node's name back to
+	// Browse (plan §2.1 rule 2), rather than showing it as unlinked plain text.
+
+	[Fact]
+	public async Task Move_page_links_the_moved_nodes_own_name_to_browse()
+	{
+		var branchId = await AddChildAsync(rootId, "Kitchen renovation");
+		var leafId = await AddChildAsync(branchId, "Fit cabinets");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Move?nodeId={leafId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={branchId.Value}\"");
+	}
+
+	[Fact]
+	public async Task Decompose_page_links_the_decomposed_leafs_own_name_to_browse()
+	{
+		var leafId = await AddChildAsync(rootId, "Pour foundation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leafId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
+	}
+
+	[Fact]
+	public async Task Delete_page_links_the_targeted_nodes_own_name_to_browse()
+	{
+		var leafId = await AddChildAsync(rootId, "Pour foundation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Delete?nodeId={leafId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
+	}
+
+	[Fact]
+	public async Task CostReport_page_links_the_reported_nodes_own_name_to_browse()
+	{
+		var leafId = await AddChildAsync(rootId, "Pour foundation");
+		await SeedEmployeeAsync("browse-nav.cost-viewer", EmployeeRole.CostViewer);
+		var authCookie = await SignInAsync("browse-nav.cost-viewer");
+
+		var response = await GetAsync($"/Jobs/CostReport?nodeId={leafId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
+	}
+
+	[Fact]
+	public async Task Work_page_links_the_leafs_own_name_to_browse_and_titles_the_page_sessions()
+	{
+		var leafId = await AddChildAsync(rootId, "Pour foundation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leafId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
+		body.Should().Contain("<h1>Sessions</h1>");
+		body.Should().NotContain("Leaf work");
+	}
+
+	[Fact]
+	public async Task Create_page_links_the_named_parent_to_browse()
+	{
+		var parentId = await AddChildAsync(rootId, "Kitchen renovation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Create?parentId={parentId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={parentId.Value}\">Kitchen renovation (ID {parentId.Value})</a>");
+	}
+
+	[Fact]
+	public async Task Edit_page_names_the_target_node_and_links_it_to_browse()
+	{
+		var nodeId = await AddChildAsync(rootId, "Kitchen renovation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Edit?nodeId={nodeId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={nodeId.Value}\">Kitchen renovation (ID {nodeId.Value})</a>");
+	}
+
+	[Fact]
+	public async Task Achievement_page_names_the_target_leaf_and_links_it_to_browse()
+	{
+		var leafId = await AddChildAsync(rootId, "Pour foundation");
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+			WorkedByUserId = adminId,
+		});
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Achievement?jobNodeId={leafId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Pour foundation (ID {leafId.Value})</a>");
+	}
+
+	[Fact]
+	public async Task Browse_leaf_toolbar_and_row_both_render_a_sessions_link_with_the_shared_icon()
+	{
+		var leafId = await AddChildAsync(rootId, "Pour foundation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var leafResponse = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var leafBody = await ReadNormalizedBodyAsync(leafResponse);
+		leafBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}\"");
+		leafBody.Should().Contain("#jt-icon-sessions");
+
+		var rootResponse = await GetAsync("/Jobs/Browse", authCookie);
+		var rootBody = await ReadNormalizedBodyAsync(rootResponse);
+		rootBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}\"");
+	}
+
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
@@ -237,7 +399,9 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		return await client.SendAsync(request);
 	}
 
-	private async Task<string> SignInAsync(string userName)
+	private Task<string> SignInAsync(string userName) => SignInAsync(userName, KnownPassword);
+
+	private async Task<string> SignInAsync(string userName, string password)
 	{
 		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
@@ -245,7 +409,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		request.Headers.Add("Cookie", antiforgeryCookie);
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
 			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
+			["Input.Password"] = password,
 			["__RequestVerificationToken"] = token,
 		});
 
@@ -297,7 +461,9 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 	}
 
-	private async Task SeedWorkerEmployeeAsync(string userName)
+	private Task<AppUserId> SeedWorkerEmployeeAsync(string userName) => SeedEmployeeAsync(userName, EmployeeRole.Worker);
+
+	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
@@ -339,8 +505,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		insertRole.CommandText =
 			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
 		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)EmployeeRole.Worker);
+		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
 		_ = await insertRole.ExecuteNonQueryAsync();
+
+		return new(appUserId);
 	}
 
 	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>

@@ -7,7 +7,7 @@
 
 <div class="jt-page-narrow">
 	<div class="jt-page-head">
-		<p class="jt-eyebrow">Leaf work</p>
+		<p class="jt-eyebrow">Job progress</p>
 		<h1>Update achievement</h1>
 	</div>
 
@@ -16,6 +16,12 @@
 	<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 	@if (Model.LeafWork is not null) {
+		@if (Model.CurrentNode is not null) {
+			<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Leaf</span><a
+					class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+					asp-route-nodeId="@Model.JobNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
+		}
+
 		<p class="jt-context d-flex flex-wrap align-items-center gap-2">
 			<span>Current achievement</span>
 			<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = Model.LeafWork.Achievement })"/>

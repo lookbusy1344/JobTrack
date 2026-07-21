@@ -35,4 +35,17 @@ public interface IWorkSessionQueryPort
 	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>
 	Task<WorkSessionQueryResult> GetActiveSessionsAsync(
 		AppUserId actorId, EquatableArray<JobNodeId> leafWorkIds, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Loads the actor's current roles and, among <paramref name="leafWorkIds" />, which ones the
+	///     actor directly owns or has an owning ancestor of, in one round trip regardless of how many
+	///     leaf ids are given (ADR 0044/Stage 4 of the browse-sessions plan: the batched read model
+	///     backing a per-leaf <c>CanManageSessions</c> capability, so Razor can decide what to render
+	///     without a per-row ancestor-ownership query). <see cref="JobQueries" /> combines this with
+	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanManage" /> per leaf — this port
+	///     applies no policy of its own, only loads the facts.
+	/// </summary>
+	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>
+	Task<WorkSessionManageCapabilityQueryResult> GetManageCapabilitiesAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> leafWorkIds, CancellationToken cancellationToken = default);
 }

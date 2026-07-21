@@ -6,7 +6,7 @@
 
 <div class="jt-page-narrow">
 	<div class="jt-page-head">
-		<p class="jt-eyebrow">Work sessions</p>
+		<p class="jt-eyebrow">Job activity</p>
 		<h1>Correct session</h1>
 	</div>
 
@@ -34,8 +34,10 @@
 			</div>
 			<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 				<button type="submit" class="btn btn-primary">Save</button>
-				<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId"
-				   asp-route-workedByUserId="@Model.WorkedByUserId">Cancel</a>
+				@if (Model.Session.FinishedAt.HasValue) {
+					<button type="submit" asp-page-handler="ClearFinish" class="btn btn-secondary">Clear finished time</button>
+				}
+				<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId">Cancel</a>
 			</div>
 		</form>
 	}

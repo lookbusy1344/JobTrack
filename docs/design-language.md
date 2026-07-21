@@ -145,6 +145,37 @@ Two rules keep it compact and honest:
 The plain dot lead survives only on pills that report something *other* than readiness — "Active
 since…", which is a running session, not a state that stops or permits work.
 
+### Sessions and the eye icon
+
+**Sessions** is the browser noun for a leaf's work-session collection everywhere it is named or
+linked — page title, heading, links, buttons, empty states — never "Leaf work" or "Work sessions",
+which are retired browser copy (the underlying `WorkSession`/`LeafWork` domain types, `/Jobs/Work`
+route, and JSON field names are unaffected; this is a display-copy rule only).
+
+`jt-icon-sessions` (an outline eye, drawn in the same stroke-outline family as Start/Backdate since
+it is an affordance the viewer takes, not a state) means **only** "view this leaf's sessions." It is
+never repurposed for start, finish, active state, or generic visibility elsewhere — one glyph, one
+meaning, everywhere in the sprite. A standalone toolbar action (Browse's current-leaf toolbar) shows
+the icon plus the word "Sessions"; a dense per-row action (`_WorkRowActions`, used by every leaf row
+in Browse and Awaiting Progress) is icon-only with a `title` and a visually-hidden name, matching the
+existing Start/Finish icon-button convention in that partial.
+
+Multiple simultaneous active workers on one leaf are never collapsed to a single row candidate: the
+Active column reports the total count and a stable, capped worker preview (never readiness red/green
+— active time is operational state, not the stop/go prerequisite vocabulary this section documents
+above), and the neighbouring Sessions action always opens the complete history.
+
+`.status-pill-active` (amber — `--jt-amber-100`/`--jt-amber-700`) is the dedicated colour for this,
+replacing the green `.status-pill-ready` an active-session pill used to borrow before this rule was
+written down: amber is otherwise unclaimed (blocked moved from amber to red, per "Stop and go"
+above), so "someone is clocked in right now" never visually doubles as "this may proceed." Zero
+active workers renders nothing in the column; exactly one keeps the familiar compact stopwatch pill
+(worker named only when it is not the viewer); two or more render a `status-pill-active` "N active"
+pill followed by a stable, wrapping (`d-inline-flex flex-wrap`) name list — the viewer's own session
+labelled "You" first, then every other worker in start order, capped at
+`ActiveSessionSummaryModel.PreviewLimit` in the dense per-row form only (the toolbar/Sessions-page
+summary always names everyone, since it has the width).
+
 ### The tree row
 
 Browse's subtree table is the one place hierarchy is drawn rather than described, so it reads like a

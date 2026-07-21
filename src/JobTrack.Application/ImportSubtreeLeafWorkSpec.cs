@@ -12,8 +12,9 @@ using NodaTime;
 ///     <see cref="IWorkCommands.FinishSessionAsync" />/<see cref="IWorkCommands.SetAchievementAsync" />
 ///     call by call, which would split one logical write across several transactions.
 ///     <para>
-///         The import attaches <c>LeafWork</c>, records exactly one <c>work_session</c> spanning
-///         <see cref="StartedAt" /> to <see cref="FinishedAt" />, and sets the leaf's
+///         The import attaches <c>LeafWork</c>, records the primary <c>work_session</c> spanning
+///         <see cref="StartedAt" /> to <see cref="FinishedAt" /> plus any
+///         <see cref="AdditionalSessions" />, and sets the leaf's
 ///         <see cref="Achievement" /> — all subject to the same prerequisite gate (spec §6) and
 ///         achievement state machine (ADR 0001) the individual commands enforce.
 ///     </para>
@@ -37,12 +38,18 @@ public sealed record ImportSubtreeLeafWorkSpec
 	public Instant? FinishedAt { get; init; }
 
 	/// <summary>
+	///     Further historical sessions on the same leaf. They are inserted in the same transaction as
+	///     the primary session and final achievement; every interval is validated independently.
+	/// </summary>
+	public EquatableArray<ImportSubtreeWorkSessionSpec> AdditionalSessions { get; init; } = [];
+
+	/// <summary>
 	///     The achievement the leaf ends the import in. Must be <see cref="Abstractions.Achievement.InProgress" />,
 	///     <see cref="Abstractions.Achievement.Success" />, <see cref="Abstractions.Achievement.Cancelled" />, or
 	///     <see cref="Abstractions.Achievement.Unsuccessful" /> — <see cref="Abstractions.Achievement.None" /> and
 	///     <see cref="Abstractions.Achievement.Waiting" /> both describe a leaf that has had no work, which
 	///     contradicts recording a session at all. A terminal achievement additionally requires
-	///     <see cref="FinishedAt" />: a leaf cannot be closed while its only session is still open.
+	///     every imported session to have a finish instant: a leaf cannot close with an active session.
 	/// </summary>
 	public required Achievement Achievement { get; init; }
 }

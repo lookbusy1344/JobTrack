@@ -63,11 +63,11 @@ public sealed class TrustedProxyProductionSecuritySmokeTests : IClassFixture<Tru
 		var result = await act.Should().NotThrowAsync(
 			"Kestrel/ASP.NET Core should complete the exchange with a rejection response, not merely reset the connection");
 
-		// Unlike the Content-Length-aware middleware check (Program.cs), which returns 413, Kestrel's
-		// own MaxRequestBodySize guard rejects a body exceeding the limit mid-read as a 400 Bad
-		// Request -- this is the real Kestrel behavior this fixture exists to prove, not the
-		// documented middleware's status code.
-		result.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+		// Same status as the Content-Length-aware middleware check (Program.cs): Kestrel's own
+		// MaxRequestBodySize guard rejects a body exceeding the limit mid-read with
+		// BadHttpRequestException.StatusCode 413, not 400 -- this is the real Kestrel behavior this
+		// fixture exists to prove.
+		result.Which.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge,
 			"Kestrel's own MaxRequestBodySize guard (Program.cs) must reject an oversized body even without a declared Content-Length");
 	}
 

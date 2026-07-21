@@ -14,8 +14,9 @@
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 	@if (Model.CurrentNode is not null) {
-		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Decomposing</span><strong
-				class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong>
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Decomposing</span><a
+				class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+				asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a>
 		</p>
 
 		<form method="post" class="jt-form-card">

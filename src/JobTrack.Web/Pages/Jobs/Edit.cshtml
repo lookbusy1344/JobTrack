@@ -14,6 +14,10 @@
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 	@if (Model.CurrentNode is not null) {
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Job node</span><a
+				class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+				asp-route-nodeId="@Model.NodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
+
 		<form method="post" class="jt-form-card">
 			<input type="hidden" asp-for="NodeId"/>
 			<input type="hidden" asp-for="OriginalVersion"/>

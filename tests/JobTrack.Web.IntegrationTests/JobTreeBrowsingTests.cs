@@ -427,7 +427,9 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("Fit oak cabinets");
-		body.Should().Contain(">&#xA3;200.00<");
+		// Unlike the leaf/branch detail views, the search results table renders the cost directly
+		// inside the table cell rather than inside a wrapping <span>, so this isn't tag-delimited.
+		body.Should().Contain("&#xA3;200.00");
 	}
 
 	[Fact]

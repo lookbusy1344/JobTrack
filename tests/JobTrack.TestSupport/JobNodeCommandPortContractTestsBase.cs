@@ -950,6 +950,112 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		(await CountSessionsAsync(openId, false)).Should().Be(1);
 	}
 
+	[Theory]
+	[InlineData(Achievement.Cancelled)]
+	[InlineData(Achievement.Unsuccessful)]
+	public async Task Importing_a_closed_leaf_preserves_multiple_finished_sessions(Achievement achievement)
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var now = SystemClock.Instance.GetCurrentInstant();
+
+		var result = await port.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = [
+				new() {
+					LocalId = 1,
+					Description = "Closed leaf with history",
+					OwnerUserId = workerId,
+					Priority = Priority.Medium,
+					LeafWork = new() {
+						WorkedByUserId = workerId,
+						StartedAt = now - Duration.FromDays(4),
+						FinishedAt = now - Duration.FromDays(3),
+						Achievement = achievement,
+						AdditionalSessions = [
+							new() { WorkedByUserId = workerId, StartedAt = now - Duration.FromDays(2), FinishedAt = now - Duration.FromDays(1) },
+						],
+					},
+				},
+			],
+		});
+
+		var leafId = result.Nodes.Single().JobNodeId;
+		(await ReadAchievementIdAsync(leafId)).Should().Be((long)achievement);
+		(await CountSessionsAsync(leafId, true)).Should().Be(2);
+		(await CountSessionsAsync(leafId, false)).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Importing_multiple_sessions_rolls_back_the_batch_when_an_additional_session_is_invalid()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var now = SystemClock.Instance.GetCurrentInstant();
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		var act = () => port.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = [
+				new() {
+					LocalId = 1,
+					Description = "Invalid historical leaf",
+					OwnerUserId = workerId,
+					Priority = Priority.Medium,
+					LeafWork = new() {
+						WorkedByUserId = workerId,
+						StartedAt = now - Duration.FromDays(2),
+						FinishedAt = now - Duration.FromDays(1),
+						Achievement = Achievement.Success,
+						AdditionalSessions = [
+							new() { WorkedByUserId = workerId, StartedAt = now + Duration.FromDays(1), FinishedAt = null },
+						],
+					},
+				},
+			],
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-start-in-future");
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+	}
+
+	[Fact]
+	public async Task Archiving_a_leaf_with_an_active_session_is_rejected()
+	{
+		// ADR 0044: import a leaf carrying an already-open (FinishedAt null) session, then attempt to
+		// archive its node -- exercising the same closure invariant through the public command surface
+		// rather than a raw-SQL bypass.
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var now = SystemClock.Instance.GetCurrentInstant();
+
+		var imported = await port.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = [
+				new() {
+					LocalId = 1,
+					Description = "Actively worked leaf",
+					OwnerUserId = workerId,
+					Priority = Priority.Medium,
+					LeafWork = new() {
+						WorkedByUserId = workerId, StartedAt = now - Duration.FromHours(1), FinishedAt = null, Achievement = Achievement.InProgress,
+					},
+				},
+			],
+		});
+		var leafId = imported.Nodes.Single().JobNodeId;
+		var version = await ReadNodeVersionAsync(leafId);
+
+		var act = () => port.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = leafId, Version = version });
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("leaf-closure-active-sessions");
+	}
+
 	[Fact]
 	public async Task Importing_worked_leaves_under_a_blocked_parent_creates_nothing()
 	{
@@ -1030,6 +1136,15 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT achievement_id FROM leaf_work WHERE job_node_id = @leafId;";
 		AddParameter(command, "@leafId", leafId.Value);
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
+	private async Task<long> ReadNodeVersionAsync(JobNodeId nodeId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT row_version FROM job_node WHERE id = @nodeId;";
+		AddParameter(command, "@nodeId", nodeId.Value);
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 

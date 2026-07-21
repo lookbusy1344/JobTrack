@@ -107,6 +107,23 @@ same user *on different leaves* are explicitly allowed to overlap — a user can
 several active sessions at once, and this is exactly what drives the concurrent cost-allocation
 rule below.
 
+**Cardinality**: one `leaf_work` row has **zero or more** `work_session` rows, and more than one of
+those can be active (`finished_at IS NULL`) *simultaneously*, as long as each belongs to a different
+`worked_by_user_id` — the per-user exclusion constraint above scopes non-overlap to one user, not to
+the leaf as a whole. Several employees clocked in on the same leaf at once is a legitimate, supported
+state; no query or view may assume "at most one active session per leaf."
+
+**Closed-leaf creation guard (ADR 0044)**: a `work_session` row cannot be inserted or reactivated
+(an update leaving `finished_at NULL`) while its leaf is **closed** — `leaf_work.achievement_id` is
+terminal (`Success`/`Cancelled`/`Unsuccessful`) or the owning `job_node.archived_at` is set. An
+*archived* leaf rejects any new row outright, active or already finished; a merely
+terminal-achievement leaf rejects only a new active row (a new finished row remains insertable,
+which is what lets subtree import record already-completed historical work and set the leaf's
+terminal achievement in one transaction). Enforced by named deferred constraint triggers on both
+providers, serialized per leaf against a concurrent terminal-achievement transition or archive via
+one advisory-lock domain on PostgreSQL (ADR 0012) and SQLite's existing single-writer transaction
+model — never by an application-only pre-check.
+
 ## Dependencies: `job_prerequisite`
 
 A directed edge `(from_id, to_id)` means `from_id` is *required by* `to_id` — `RequiredJob →

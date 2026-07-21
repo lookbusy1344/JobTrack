@@ -68,6 +68,17 @@
     --jt-font-display: "Avenir Next", "Mulish", ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
     --bs-body-font-size: 0.9375rem;
     --bs-body-line-height: 1.6;
+    /* Sub-body sizes reused verbatim across unrelated components (table secondary columns, pill/tag
+       labels, form micro-copy, table headers) — named here so every call site says what step of the
+       scale it's on instead of repeating the same literal. Not a full scale: only sizes that were
+       already exact duplicates before this was added. */
+    --jt-font-size-sm: 0.8125rem;
+    --jt-font-size-xs: 0.7rem;
+    --jt-font-size-xxs: 0.6875rem;
+    /* Title/heading step of the same scale — h1/h2 read these rather than a literal, and the xl
+       breakpoint below only overrides these two variables instead of restating the element rules. */
+    --jt-font-size-title: 2.15rem;
+    --jt-font-size-heading: 1.45rem;
 
     /* Colour — burnt orange over warm neutral paper. */
     --jt-ink: #241c14;
@@ -213,15 +224,12 @@ html {
         --bs-border-radius: 0.75rem;
         --bs-border-radius-sm: 0.5rem;
         --jt-radius-lg: 1.125rem;
+        --jt-font-size-title: 1.9rem;
+        --jt-font-size-heading: 1.3rem;
     }
 
     h1 {
-        font-size: 1.9rem;
         margin-bottom: var(--jt-space-3);
-    }
-
-    h2 {
-        font-size: 1.3rem;
     }
 
     h3,
@@ -301,7 +309,7 @@ h4 {
 h1 {
     margin: var(--jt-space-2) 0 var(--jt-space-4);
     font-family: var(--jt-font-display);
-    font-size: 2.15rem;
+    font-size: var(--jt-font-size-title);
     font-weight: 800;
     letter-spacing: -0.035em;
     line-height: 1.05;
@@ -310,7 +318,7 @@ h1 {
 h2 {
     margin: var(--jt-space-4) 0 var(--jt-space-3);
     font-family: var(--jt-font-display);
-    font-size: 1.45rem;
+    font-size: var(--jt-font-size-heading);
     font-weight: 750;
     letter-spacing: -0.025em;
 }
@@ -323,7 +331,7 @@ h4 {
     align-items: center;
     gap: var(--jt-space-2);
     margin: var(--jt-space-4) 0 var(--jt-space-3);
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -355,7 +363,7 @@ p {
     gap: var(--jt-space-2);
     margin-bottom: var(--jt-space-2);
     font-family: var(--bs-font-monospace);
-    font-size: 0.6875rem;
+    font-size: var(--jt-font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -614,7 +622,7 @@ main[role="main"] {
 .jt-metric-label {
     display: block;
     font-family: var(--bs-font-monospace);
-    font-size: 0.6875rem;
+    font-size: var(--jt-font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -640,7 +648,7 @@ main[role="main"] {
 .jt-metric-sub {
     display: block;
     margin-top: var(--jt-space-1);
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
     color: var(--jt-faint);
 }
 
@@ -663,7 +671,7 @@ dl {
 }
 
 dt {
-    font-size: 0.6875rem;
+    font-size: var(--jt-font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -733,7 +741,7 @@ form.inline-form {
 .form-label {
     display: block;
     margin-bottom: var(--jt-space-1);
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
     font-weight: 600;
     color: var(--jt-ink-soft);
 }
@@ -778,7 +786,7 @@ fieldset legend {
     width: auto;
     padding: 0 var(--jt-space-2);
     margin-bottom: 0;
-    font-size: 0.6875rem;
+    font-size: var(--jt-font-size-xxs);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -790,7 +798,7 @@ fieldset legend {
     display: inline-block;
     margin-top: var(--jt-space-1);
     color: var(--jt-red-700) !important;
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
 }
 
 /* ---- Buttons ------------------------------------------------------------------------------ */
@@ -949,7 +957,7 @@ fieldset legend {
    from letting it break. */
 .status-pill--compact {
     padding: var(--jt-space-1) var(--jt-space-2);
-    font-size: 0.6875rem;
+    font-size: var(--jt-font-size-xxs);
     white-space: nowrap;
 }
 
@@ -957,6 +965,15 @@ fieldset legend {
     background-color: var(--jt-green-100);
     color: var(--jt-green-700);
     border-color: rgb(23 115 74 / 25%);
+}
+
+/* Active session count/since is operational state, not the stop/go readiness vocabulary (browse-
+   sessions plan §2.4) -- amber, not the green .status-pill-ready an active leaf used to borrow,
+   keeps "someone is clocked in right now" visually distinct from "this may proceed." */
+.status-pill-active {
+    background-color: var(--jt-amber-100);
+    color: var(--jt-amber-700);
+    border-color: rgb(138 86 6 / 25%);
 }
 
 /* Blocked is red, not the amber it used to be: the pill now carries a raised-palm stop sign, and a
@@ -967,6 +984,15 @@ fieldset legend {
     background-color: var(--jt-red-100);
     color: var(--jt-red-700);
     border-color: rgb(179 38 30 / 25%);
+}
+
+/* Closed is neutral, not a stop/go signal: a leaf that is done (terminal achievement) or archived can
+   accept no new session, but that is a settled, unalarming end-state — slate keeps it distinct from
+   the amber "someone is working now", the red "blocked", and the green "may proceed". */
+.status-pill-closed {
+    background-color: var(--jt-slate-100);
+    color: var(--jt-slate-600);
+    border-color: rgb(71 88 106 / 25%);
 }
 
 /* ---- Node-kind icon (Root / Branch / Leaf) -------------------------------------------------- */
@@ -993,7 +1019,7 @@ fieldset legend {
 
 .jt-kind-icon-label {
     font-family: var(--bs-font-monospace);
-    font-size: 0.7rem;
+    font-size: var(--jt-font-size-xs);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1057,7 +1083,7 @@ fieldset legend {
 }
 
 .jt-achievement-icon-label {
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
     font-weight: 600;
 }
 
@@ -1256,9 +1282,21 @@ fieldset legend {
 }
 
 .jt-icon-button:hover,
-.jt-backdate-trigger[aria-expanded="true"] {
+.jt-backdate-trigger[aria-expanded="true"],
+.jt-start-for-disclosure[open] > summary {
     color: var(--jt-orange-600);
     border-color: var(--jt-orange-600);
+}
+
+.jt-start-for-disclosure > summary::-webkit-details-marker {
+    display: none;
+}
+
+/* The labelled variant (standalone toolbars) is a .btn, which carries no marker suppression of its
+   own; the icon variant gets `list-style: none` from .jt-icon-button. Suppress the default disclosure
+   triangle for either summary here so both read as ordinary controls, not expandable list rows. */
+.jt-start-for-disclosure > summary {
+    list-style: none;
 }
 
 /* Start is the action the row exists for, so it carries the accent at rest rather than only on
@@ -1273,7 +1311,7 @@ fieldset legend {
     height: 1rem;
 }
 
-/* The same glyph inside a labelled button, so a toolbar's "Start work" and a row's icon-only start
+/* The same glyph inside a labelled button, so a toolbar's "Start session" and a row's icon-only start
    are recognisably one action rather than two unrelated controls. It takes the button's own colour
    by inheritance and is purely redundant with the adjacent label, hence aria-hidden at every use. */
 .jt-btn-glyph {
@@ -1333,12 +1371,12 @@ fieldset legend {
 
     .jt-backdate-form .form-control {
         padding: 0.35rem 0.5rem;
-        font-size: 0.7rem;
+        font-size: var(--jt-font-size-xs);
     }
 
     .jt-backdate-form .btn {
         padding: 0.35rem 0.55rem;
-        font-size: 0.7rem;
+        font-size: var(--jt-font-size-xs);
     }
 
     .jt-backdate-form .jt-btn-glyph {
@@ -1474,7 +1512,7 @@ nav[aria-label="breadcrumb"] ol {
     list-style: none;
     padding: var(--jt-space-2) var(--jt-space-3);
     margin: 0;
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
     background: var(--jt-surface);
     border: 1px solid var(--jt-line);
     border-radius: 2rem;
@@ -1530,7 +1568,7 @@ nav[aria-label="breadcrumb"] li + li::before {
     background: var(--jt-surface-2);
     border-bottom: 1px solid var(--jt-line-strong);
     padding: 0.75rem 1rem;
-    font-size: 0.6875rem;
+    font-size: var(--jt-font-size-xxs);
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
@@ -1561,6 +1599,20 @@ nav[aria-label="breadcrumb"] li + li::before {
 .jt-amount {
     font-family: var(--bs-font-monospace);
     font-variant-numeric: tabular-nums;
+}
+
+/* Owner and Cost carry less reading weight than the row's own name/description, so they run a size
+   smaller than the table body default — same treatment on the Browse tree/search tables and the
+   awaiting-progress dashboard, which both reuse these column classes. */
+.table td.jt-col-secondary,
+.table td.jt-col-cost {
+    font-size: var(--jt-font-size-sm);
+}
+
+/* Owner carries even less reading weight than the other secondary columns above (Archived,
+   Deadline), so it steps down one more tier and overrides the rule above. */
+.table td.jt-col-owner {
+    font-size: var(--jt-font-size-xs);
 }
 
 /* Utility: preserve line breaks/spacing in free-form text (titles, writeups, notes) that would
@@ -1623,6 +1675,13 @@ nav[aria-label="breadcrumb"] li + li::before {
     margin: 0 0 var(--jt-space-4);
     padding: 0;
     max-width: 44rem;
+}
+
+/* The inherited-blockers list isn't split into a two-column grid like Requires/Depends-on above
+   it, so the narrow-content cap those share would leave it looking stranded on wide screens
+   instead of filling the full-width card it sits in. */
+.jt-list--wide {
+    max-width: none;
 }
 
 /* Wrapping/alignment/gap come from Bootstrap's d-flex flex-wrap align-items-center
@@ -1742,7 +1801,7 @@ nav[aria-label="breadcrumb"] li + li::before {
 
 .jt-history-label {
     font-family: var(--bs-font-monospace);
-    font-size: 0.6875rem;
+    font-size: var(--jt-font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1757,7 +1816,7 @@ nav[aria-label="breadcrumb"] li + li::before {
     display: flex;
     flex-wrap: wrap;
     gap: 0.125rem var(--jt-space-3);
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
     line-height: 1.4;
 }
 
@@ -1767,7 +1826,7 @@ nav[aria-label="breadcrumb"] li + li::before {
 
 .jt-history-empty {
     color: var(--jt-faint);
-    font-size: 0.8125rem;
+    font-size: var(--jt-font-size-sm);
 }
 
 .jt-disclosure-summary {

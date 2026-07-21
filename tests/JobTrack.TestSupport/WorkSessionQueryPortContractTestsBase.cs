@@ -204,6 +204,95 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		result.ActorRoles.Should().Contain(EmployeeRole.Administrator);
 	}
 
+	[Fact]
+	public async Task GetManageCapabilitiesAsync_reports_the_owning_workers_control_of_their_own_leaf()
+	{
+		var (_, workerId, leafId) = await SeedWorkedLeafAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetManageCapabilitiesAsync(workerId, [leafId]);
+
+		result.ControlledLeafWorkIds.Should().Contain(leafId);
+	}
+
+	[Fact]
+	public async Task GetManageCapabilitiesAsync_does_not_report_control_for_a_worker_who_does_not_own_the_leaf()
+	{
+		var (_, _, leafId) = await SeedWorkedLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.capability", EmployeeRole.Worker);
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetManageCapabilitiesAsync(otherWorkerId, [leafId]);
+
+		result.ControlledLeafWorkIds.Should().NotContain(leafId);
+	}
+
+	[Fact]
+	public async Task GetManageCapabilitiesAsync_returns_the_actors_current_roles()
+	{
+		var (administratorId, _, leafId) = await SeedWorkedLeafAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetManageCapabilitiesAsync(administratorId, [leafId]);
+
+		result.ActorRoles.Should().Contain(EmployeeRole.Administrator);
+	}
+
+	[Fact]
+	public async Task GetManageCapabilitiesAsync_with_no_leaves_returns_an_empty_result_without_throwing()
+	{
+		var (_, workerId, _) = await SeedWorkedLeafAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetManageCapabilitiesAsync(workerId, []);
+
+		result.ControlledLeafWorkIds.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task GetManageCapabilitiesAsync_throws_for_a_nonexistent_actor()
+	{
+		var (administratorId, _, leafId) = await SeedWorkedLeafAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var act = () => port.GetManageCapabilitiesAsync(new(administratorId.Value + 999), [leafId]);
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	/// <summary>
+	///     ADR 0044/Stage 4: the batched ancestor-ownership walk backing this capability must stay at a
+	///     fixed round-trip count as the number of requested leaves grows, never scaling per leaf (no
+	///     N+1 -- the exact defect a per-row <c>CanManage</c> re-check would reintroduce).
+	/// </summary>
+	[Fact]
+	public async Task GetManageCapabilitiesAsync_executes_a_fixed_number_of_round_trips_regardless_of_leaf_count()
+	{
+		var (administratorId, workerId, firstLeafId) = await SeedWorkedLeafAsync();
+		var jobCommandPort = CreateJobCommandPort(database.ConnectionString);
+		var rootId = await FindRootAsync();
+		var leafIds = new List<JobNodeId> { firstLeafId };
+		for (var i = 0; i < 10; i++) {
+			var node = await jobCommandPort.AddChildAsync(new() {
+				Context = ContextFor(administratorId),
+				ParentId = rootId,
+				Description = $"Additional leaf {i}",
+				OwnerUserId = workerId,
+				Priority = Priority.Medium,
+			});
+			_ = await jobCommandPort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = node.Id });
+			leafIds.Add(node.Id);
+		}
+
+		var interceptor = new CommandCountInterceptor();
+		var port = CreateQueryPortWithCommandCounter(database.ConnectionString, interceptor);
+
+		_ = await port.GetManageCapabilitiesAsync(workerId, [.. leafIds]);
+
+		interceptor.Count.Should().Be(
+			3, "two queries for the actor's identity/roles and one batched ancestor-ownership walk, regardless of leaf count");
+	}
+
 	protected abstract DbConnection CreateConnection(string connectionString);
 
 	protected abstract ISchemaVersionStore CreateStore();
@@ -220,6 +309,9 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 	protected abstract IWorkSessionCommandPort CreateSessionCommandPort(string connectionString);
 
 	protected abstract IWorkSessionQueryPort CreateQueryPort(string connectionString);
+
+	/// <summary>Stage 4 efficiency-guard seam: a query port wired with <paramref name="interceptor" /> attached to its <c>DbContext</c>.</summary>
+	protected abstract IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor);
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 
@@ -323,6 +415,14 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		_ = await roleCommand.ExecuteNonQueryAsync();
 
 		return appUserId;
+	}
+
+	private async Task<JobNodeId> FindRootAsync()
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT id FROM job_node WHERE parent_id IS NULL;";
+		return new(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
 
 	private async Task<DbConnection> OpenExistingConnectionAsync()

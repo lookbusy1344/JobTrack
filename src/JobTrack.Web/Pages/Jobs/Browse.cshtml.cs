@@ -32,6 +32,9 @@ public sealed class BrowseModel(
 	IClock clock)
 	: PageModel
 {
+	// Browse-sessions filter memory: the owner selector's last "person or All owners" choice is
+	// remembered per session under this key so returning to Browse (any node) restores it.
+	private const string OwnerFilterSessionKey = "Jobs.Browse.Owner";
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
 
 	/// <summary>Captured once per request, per ADR 0016's "one captured instant per operation".</summary>
@@ -39,7 +42,9 @@ public sealed class BrowseModel(
 
 	[BindProperty(SupportsGet = true)] public long? NodeId { get; init; }
 
-	[BindProperty(SupportsGet = true)] public long? OwnerUserId { get; init; }
+	// Settable so LoadAsync can replace an omitted value with the remembered choice (browse-sessions
+	// filter memory); the owner <select> (asp-for) and every replayed filter/route value then reflect it.
+	[BindProperty(SupportsGet = true)] public long? OwnerUserId { get; set; }
 
 	/// <summary>
 	///     When set, overrides <see cref="OwnerUserId" /> to show only the unassigned pool
@@ -121,12 +126,24 @@ public sealed class BrowseModel(
 
 	public EquatableArray<JobNodeSummaryResult> RequiredBy { get; private set; } = [];
 
-	public IReadOnlyDictionary<JobNodeId, WorkSessionResult> ActiveSessionByLeaf { get; private set; } =
-		new Dictionary<JobNodeId, WorkSessionResult>();
+	/// <summary>
+	///     Every active session on each rendered leaf, never collapsed to one representative
+	///     (<see cref="ActiveSessionGrouping.Group" />). <see cref="WorkRowActionsModel" /> derives the
+	///     viewer's own session, every other worker's, and the count from this per row.
+	/// </summary>
+	public IReadOnlyDictionary<JobNodeId, EquatableArray<WorkSessionResult>> ActiveSessionsByLeaf { get; private set; } =
+		new Dictionary<JobNodeId, EquatableArray<WorkSessionResult>>();
+
+	/// <summary>
+	///     Whether the actor may manage sessions on each rendered leaf (<see cref="IJobQueries.GetSessionManageCapabilitiesAsync" />,
+	///     ADR 0044 Stage 4/6) — a batched rendering hint for another worker's exact finish and the
+	///     "Start for…" disclosure; the command itself remains the authoritative gate.
+	/// </summary>
+	public IReadOnlyDictionary<JobNodeId, bool> CanManageByLeaf { get; private set; } = new Dictionary<JobNodeId, bool>();
 
 	/// <summary>
 	///     The signed-in actor, so a row can tell its own active session apart from one
-	///     <see cref="ActiveSessionByLeaf" /> surfaced because the actor may manage any leaf's session
+	///     <see cref="ActiveSessionsByLeaf" /> surfaced because the actor may manage any leaf's session
 	///     (Administrator/JobManager, ADR 0032) rather than because it is theirs.
 	/// </summary>
 	public AppUserId? CurrentActorId { get; private set; }
@@ -166,6 +183,9 @@ public sealed class BrowseModel(
 	/// </summary>
 	public IReadOnlyList<SelectListItem> OwnerFilterOptions { get; private set; } = [];
 
+	/// <summary>Every enabled workflow employee, for the "Start for…" worker picker (plan §2.5).</summary>
+	public IReadOnlyList<SelectListItem> StartForWorkerOptions { get; private set; } = [];
+
 	/// <summary>
 	///     The current actor's configured home node (see <see cref="EmployeeProfileResult.HomeNodeId" />),
 	///     for showing/hiding the "Set as home node"/"Reset to root" toolbar actions below.
@@ -182,19 +202,32 @@ public sealed class BrowseModel(
 	public IReadOnlyDictionary<string, string?> RowStateFields => new Dictionary<string, string?> {
 		["NodeId"] = NodeId?.ToString(CultureInfo.InvariantCulture),
 		["OwnerUserId"] = OwnerUserId?.ToString(CultureInfo.InvariantCulture),
+		["UnassignedOnly"] = UnassignedOnly.ToString(CultureInfo.InvariantCulture),
 		["ArchiveFilter"] = ArchiveFilter.ToString(),
 		["SearchText"] = SearchText,
+		["WorkedByUserId"] = WorkedByUserId?.ToString(CultureInfo.InvariantCulture),
 	};
 
 	/// <summary>
-	///     <paramref name="activeSession" />'s worker, formatted for display, but only when it is not
-	///     <see cref="CurrentActorId" /> -- an admin managing another worker's session should see whose
-	///     it is; the actor's own needs no such label.
+	///     Builds a <see cref="WorkRowActionsModel" /> for <paramref name="leafId" />, sourcing its active-session collection and manage capability
+	///     from the batched loads above.
 	/// </summary>
-	public string? ActiveSessionWorkedByOther(WorkSessionResult? activeSession) =>
-		activeSession is not null && activeSession.WorkedByUserId != CurrentActorId
-			? DescribeOwner(activeSession.WorkedByUserId)
-			: null;
+	public WorkRowActionsModel WorkRowActionsFor(
+		JobNodeId leafId, string startHandler, string startNodeFieldName, Achievement? achievement, bool isArchived,
+		bool startForLabelled = false) => new() {
+			LeafNodeId = leafId.Value,
+			ViewerId = CurrentActorId ?? new AppUserId(0),
+			ActiveSessions = ActiveSessionsByLeaf.GetValueOrDefault(leafId, []),
+			CanManage = CanManageByLeaf.GetValueOrDefault(leafId, false),
+			Achievement = achievement,
+			IsArchived = isArchived,
+			ViewerZone = ViewerZone,
+			StartHandler = startHandler,
+			StartNodeFieldName = startNodeFieldName,
+			PageStateFields = RowStateFields,
+			StartForWorkerOptions = StartForWorkerOptions,
+			StartForLabelled = startForLabelled,
+		};
 
 	/// <summary>
 	///     <paramref name="node" />'s nested-set span (ADR 0039 decision 3) as a left offset and width
@@ -241,7 +274,7 @@ public sealed class BrowseModel(
 				WorkedByUserId = actor.Value,
 				StartedAt = startedAtInstant,
 			}, cancellationToken);
-			SuccessMessage = "Work started.";
+			SuccessMessage = "Session started.";
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -293,6 +326,60 @@ public sealed class BrowseModel(
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+
+		return RedirectToPage(CurrentRouteValues());
+	}
+
+	/// <summary>
+	///     Starts a session for <paramref name="startForUserId" /> rather than the signed-in actor
+	///     (plan §2.5 "Starting for another worker") — a distinct handler/field from
+	///     <see cref="OnPostStartAsync" /> so the "Start for…" disclosure can never be confused with the
+	///     one-click Start. <see cref="StartForDisclosureModel.StartForFieldName" /> is a mutation
+	///     target, never the <see cref="WorkedByUserId" /> history filter. Authorization is not
+	///     rechecked here beyond signing in — <c>StartWorkAsync</c> itself re-evaluates
+	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanManage" /> for the acting user
+	///     against this leaf and rejects an unauthorized actor with <see cref="AuthorizationDeniedException" />.
+	/// </summary>
+	public async Task<IActionResult> OnPostStartForAsync(
+		long leafNodeId, long? startForUserId, string? startedAt, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		if (startForUserId is not long targetUserId) {
+			ErrorMessage = "Choose a worker to start for.";
+			return RedirectToPage(CurrentRouteValues());
+		}
+
+		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(CurrentRouteValues());
+			}
+
+			_ = await jobTrackClient.Work.StartWorkAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				JobNodeId = new(leafNodeId),
+				WorkedByUserId = new(targetUserId),
+				StartedAt = startedAtInstant,
+			}, cancellationToken);
+			SuccessMessage = "Session started.";
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "That job node or worker does not exist.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = "This leaf's prerequisites are not satisfied.";
 		}
 
 		return RedirectToPage(CurrentRouteValues());
@@ -369,8 +456,10 @@ public sealed class BrowseModel(
 	private RouteValueDictionary CurrentRouteValues() => new() {
 		["nodeId"] = NodeId,
 		["ownerUserId"] = OwnerUserId,
+		["unassignedOnly"] = UnassignedOnly,
 		["archiveFilter"] = ArchiveFilter,
 		["searchText"] = SearchText,
+		["workedByUserId"] = WorkedByUserId,
 	};
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
@@ -378,6 +467,12 @@ public sealed class BrowseModel(
 		CurrentActorId = actor;
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+
+		// Owner filter is remembered across visits (the whole tree is browsable, so the default when
+		// nothing is remembered is "All owners"). UnassignedOnly still overrides it below when set.
+		OwnerUserId = FilterMemory.Resolve(
+			HttpContext.Session, OwnerFilterSessionKey, Request.Query.ContainsKey(nameof(OwnerUserId)), OwnerUserId, null);
+
 		var ownerFilter = (UnassignedOnly, OwnerUserId) switch {
 			(true, _) => OwnershipFilter.Unassigned,
 			(false, { } ownerUserId) => OwnershipFilter.OwnedBy(new(ownerUserId)),
@@ -451,7 +546,8 @@ public sealed class BrowseModel(
 			? Children.Where(c => !c.HasChildren).Select(c => c.Id).ToArray()
 			: Subtree?.Nodes.Where(n => !n.HasChildren).Select(n => n.Id).ToArray() ?? [];
 		if (leafIds.Length == 0) {
-			ActiveSessionByLeaf = new Dictionary<JobNodeId, WorkSessionResult>();
+			ActiveSessionsByLeaf = new Dictionary<JobNodeId, EquatableArray<WorkSessionResult>>();
+			CanManageByLeaf = new Dictionary<JobNodeId, bool>();
 			return;
 		}
 
@@ -459,11 +555,17 @@ public sealed class BrowseModel(
 			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [.. leafIds] },
 				cancellationToken);
 
-			ActiveSessionByLeaf = WorkRowActiveSessions.ByLeaf(sessions);
+			ActiveSessionsByLeaf = ActiveSessionGrouping.Group(sessions);
 		}
 		catch (AuthorizationDeniedException) {
-			ActiveSessionByLeaf = new Dictionary<JobNodeId, WorkSessionResult>();
+			ActiveSessionsByLeaf = new Dictionary<JobNodeId, EquatableArray<WorkSessionResult>>();
 		}
+
+		// Batched rendering hint for the "Start for..." disclosure and another worker's exact finish
+		// (ADR 0044 Stage 4/6) -- one round trip regardless of leaf count, never re-derived per row.
+		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
+			new() { Context = context, LeafWorkIds = [.. leafIds] }, cancellationToken);
+		CanManageByLeaf = capabilities.ToDictionary(c => c.LeafWorkId, c => c.CanManage);
 	}
 
 	private async Task LoadEmployeeDirectoryAsync(CommandContext context, CancellationToken cancellationToken)
@@ -473,6 +575,7 @@ public sealed class BrowseModel(
 
 		EmployeeDirectoryById = _employeeDirectory.ToDictionary(entry => entry.Id);
 		OwnerFilterOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory, new SelectListItem("All owners", string.Empty));
+		StartForWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory);
 	}
 
 	private async Task LoadCurrentNodeAchievementAsync(CommandContext context, JobNodeResult node, CancellationToken cancellationToken)
@@ -509,6 +612,7 @@ public sealed class BrowseModel(
 				ExtraHiddenFields = new Dictionary<string, string?> {
 					["NodeId"] = NodeId?.ToString(CultureInfo.InvariantCulture),
 					["OwnerUserId"] = OwnerUserId?.ToString(CultureInfo.InvariantCulture),
+					["UnassignedOnly"] = UnassignedOnly.ToString(CultureInfo.InvariantCulture),
 					["ArchiveFilter"] = ArchiveFilter.ToString(),
 					["SearchText"] = SearchText,
 				},

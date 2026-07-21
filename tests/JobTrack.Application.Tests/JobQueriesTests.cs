@@ -1524,8 +1524,16 @@ public sealed class JobQueriesTests
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
 
+	/// <summary>
+	///     ADR 0041 already made viewing recorded work unqualified for any baseline employee role; the
+	///     same "recorded work is job data" reasoning applies to this batch, not only
+	///     <see cref="GetLeafSessionsAsync" />'s history read (browse-sessions plan §2.4: the Active
+	///     column must never collapse away another worker's session for the common plain-Worker
+	///     viewer). <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanManage" /> still gates
+	///     whether this worker may finish that session — it plays no role in whether they can see it.
+	/// </summary>
 	[Fact]
-	public async Task GetActiveSessionsAsync_filters_out_another_workers_session_for_a_plain_worker()
+	public async Task GetActiveSessionsAsync_includes_another_workers_session_for_a_plain_worker_who_does_not_control_the_leaf()
 	{
 		var worker = new AppUserId(20);
 		var otherWorker = new AppUserId(21);
@@ -1545,7 +1553,7 @@ public sealed class JobQueriesTests
 		var result = await sut.GetActiveSessionsAsync(
 			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
 
-		result.Should().BeEmpty("a plain Worker may not manage another worker's session, so the dashboard offers them Start, not Finish, for it");
+		result.Should().ContainSingle(s => s.Id == new WorkSessionId(1));
 	}
 
 	/// <summary>
@@ -1584,6 +1592,93 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(new FakeWorkSessionQueryPort());
 
 		var act = () => sut.GetActiveSessionsAsync(null!);
+
+		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
+
+	[Fact]
+	public async Task GetSessionManageCapabilitiesAsync_reports_true_for_an_administrator_regardless_of_ownership()
+	{
+		var administrator = new AppUserId(20);
+		var leaf = new JobNodeId(30);
+		var port = new FakeWorkSessionQueryPort();
+		port.SeedRoles(administrator, EmployeeRole.Administrator);
+		var sut = CreateSut(port);
+
+		var result = await sut.GetSessionManageCapabilitiesAsync(
+			new() { Context = ContextFor(administrator), LeafWorkIds = [leaf] });
+
+		result.Should().ContainSingle().Which.Should().BeEquivalentTo(new { LeafWorkId = leaf, CanManage = true });
+	}
+
+	[Fact]
+	public async Task GetSessionManageCapabilitiesAsync_reports_true_for_a_worker_who_controls_the_leaf()
+	{
+		var worker = new AppUserId(20);
+		var leaf = new JobNodeId(30);
+		var port = new FakeWorkSessionQueryPort();
+		port.SeedRoles(worker, EmployeeRole.Worker);
+		port.SeedControl(worker, leaf);
+		var sut = CreateSut(port);
+
+		var result = await sut.GetSessionManageCapabilitiesAsync(
+			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
+
+		result.Should().ContainSingle().Which.CanManage.Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task GetSessionManageCapabilitiesAsync_reports_false_for_a_worker_who_does_not_control_the_leaf()
+	{
+		var worker = new AppUserId(20);
+		var leaf = new JobNodeId(30);
+		var port = new FakeWorkSessionQueryPort();
+		port.SeedRoles(worker, EmployeeRole.Worker);
+		var sut = CreateSut(port);
+
+		var result = await sut.GetSessionManageCapabilitiesAsync(
+			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
+
+		result.Should().ContainSingle().Which.CanManage.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task GetSessionManageCapabilitiesAsync_reports_one_result_per_requested_leaf_regardless_of_control()
+	{
+		var worker = new AppUserId(20);
+		var controlledLeaf = new JobNodeId(30);
+		var uncontrolledLeaf = new JobNodeId(31);
+		var port = new FakeWorkSessionQueryPort();
+		port.SeedRoles(worker, EmployeeRole.Worker);
+		port.SeedControl(worker, controlledLeaf);
+		var sut = CreateSut(port);
+
+		var result = await sut.GetSessionManageCapabilitiesAsync(
+			new() { Context = ContextFor(worker), LeafWorkIds = [controlledLeaf, uncontrolledLeaf] });
+
+		result.Should().HaveCount(2);
+		result.Single(r => r.LeafWorkId == controlledLeaf).CanManage.Should().BeTrue();
+		result.Single(r => r.LeafWorkId == uncontrolledLeaf).CanManage.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task GetSessionManageCapabilitiesAsync_with_no_leaves_returns_an_empty_result_without_querying_the_port()
+	{
+		var worker = new AppUserId(20);
+		var sut = CreateSut(new FakeWorkSessionQueryPort());
+
+		var result = await sut.GetSessionManageCapabilitiesAsync(
+			new() { Context = ContextFor(worker), LeafWorkIds = [] });
+
+		result.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task GetSessionManageCapabilitiesAsync_rejects_a_null_request()
+	{
+		var sut = CreateSut(new FakeWorkSessionQueryPort());
+
+		var act = () => sut.GetSessionManageCapabilitiesAsync(null!);
 
 		await act.Should().ThrowAsync<ArgumentNullException>();
 	}

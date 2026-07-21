@@ -26,6 +26,12 @@ using Program = Program;
 /// </summary>
 public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 {
+	public enum ClosedLeafKind
+	{
+		Terminal,
+		Archived,
+	}
+
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
@@ -340,6 +346,130 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 			$"/api/jobs/{leafId.Value}/sessions", issued.Token, $$"""{ "workedByUserId": {{workerId.Value}} }""");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Created);
+	}
+
+	[Theory]
+	[InlineData(ClosedLeafKind.Terminal)]
+	[InlineData(ClosedLeafKind.Archived)]
+	public async Task Starting_on_a_closed_leaf_maps_identically_for_cookie_and_bearer_authentication(ClosedLeafKind closure)
+	{
+		var workerId = await SeedEmployeeAsync($"sessions.closed.{closure.ToString().ToLowerInvariant()}");
+		var leafId = await AddChildAsync(rootId, workerId, $"{closure} leaf");
+		await CloseLeafAsync(leafId, closure);
+		var authCookie = await SignInAsync($"sessions.closed.{closure.ToString().ToLowerInvariant()}");
+		var (antiforgeryCookie, antiforgeryToken) = await GetAntiforgeryTokenAsync(authCookie);
+		var issued = await IssueTokenAsync(workerId, $"closed-{closure.ToString().ToLowerInvariant()}");
+		var requestBody = $$"""{ "workedByUserId": {{workerId.Value}} }""";
+
+		var cookieResponse = await PostJsonAsync(
+			$"/api/jobs/{leafId.Value}/sessions", authCookie, antiforgeryCookie, antiforgeryToken, requestBody);
+		var bearerResponse = await PostJsonWithBearerAsync($"/api/jobs/{leafId.Value}/sessions", issued.Token, requestBody);
+
+		await AssertInvariantConflictAsync(cookieResponse);
+		await AssertInvariantConflictAsync(bearerResponse);
+	}
+
+	[Theory]
+	[InlineData(ClosedLeafKind.Terminal)]
+	[InlineData(ClosedLeafKind.Archived)]
+	public async Task Finished_session_history_can_be_corrected_and_listed_after_the_leaf_closes(ClosedLeafKind closure)
+	{
+		var userName = $"sessions.closed-history.{closure.ToString().ToLowerInvariant()}";
+		var workerId = await SeedEmployeeAsync(userName);
+		var leafId = await AddChildAsync(rootId, workerId, $"{closure} history leaf");
+		var started = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+			StartedAt = Instant.FromUtc(2026, 1, 1, 9, 0),
+		});
+		var finished = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = started.Id,
+			Version = started.Version,
+			FinishedAt = Instant.FromUtc(2026, 1, 1, 10, 0),
+		});
+		await CloseLeafAsync(leafId, closure);
+		var authCookie = await SignInAsync(userName);
+		var (antiforgeryCookie, antiforgeryToken) = await GetAntiforgeryTokenAsync(authCookie);
+
+		var correctionResponse = await PostJsonAsync(
+			$"/api/jobs/{leafId.Value}/sessions/{finished.Id.Value}/correct",
+			authCookie,
+			antiforgeryCookie,
+			antiforgeryToken,
+			$$"""
+			  {
+			    "startedAt": "2026-01-01T08:45:00+00:00",
+			    "finishedAt": "2026-01-01T10:15:00+00:00",
+			    "reason": "Correct historical interval after closure",
+			    "version": {{finished.Version}}
+			  }
+			  """);
+		var listResponse = await GetAsync($"/api/jobs/{leafId.Value}/sessions?workedByUserId={workerId.Value}", authCookie);
+		var listed = JsonDocument.Parse(await listResponse.Content.ReadAsStringAsync());
+
+		correctionResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		listResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		listed.RootElement.GetProperty("items").EnumerateArray().Should().ContainSingle()
+			.Which.GetProperty("finishedAt").ValueKind.Should().Be(JsonValueKind.String);
+	}
+
+	private async Task CloseLeafAsync(JobNodeId leafId, ClosedLeafKind closure)
+	{
+		switch (closure) {
+			case ClosedLeafKind.Terminal:
+				var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
+					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					JobNodeId = leafId,
+				});
+				var inProgress = await seedClient.Work.SetAchievementAsync(new() {
+					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					JobNodeId = leafId,
+					NewAchievement = Achievement.InProgress,
+					Reason = "Prepare terminal API fixture",
+					Version = leafWork.Version,
+				});
+				_ = await seedClient.Work.SetAchievementAsync(new() {
+					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					JobNodeId = leafId,
+					NewAchievement = Achievement.Success,
+					Reason = "Close terminal API fixture",
+					Version = inProgress.Version,
+				});
+				break;
+			case ClosedLeafKind.Archived:
+				var node = await seedClient.Query.GetJobNodeAsync(new() {
+					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					NodeId = leafId,
+				});
+				_ = await seedClient.Jobs.ArchiveAsync(new() {
+					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					NodeId = leafId,
+					Version = node.Node.Version,
+				});
+				break;
+			default:
+				throw new ArgumentOutOfRangeException(nameof(closure), closure, "Unsupported closed-leaf fixture kind.");
+		}
+	}
+
+	private async Task<IssuedPersonalAccessTokenResult> IssueTokenAsync(AppUserId workerId, string label) =>
+		await seedClient.Tokens.IssueAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			TargetUserId = workerId,
+			Label = label,
+			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
+		});
+
+	private static async Task AssertInvariantConflictAsync(HttpResponseMessage response)
+	{
+		var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+		response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+		response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+		problem.RootElement.GetProperty("type").GetString().Should().Be("/problems/invariant-violation");
+		problem.RootElement.GetProperty("title").GetString().Should().Be("Invariant violation");
 	}
 
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)

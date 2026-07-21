@@ -1,18 +1,22 @@
-@model ActiveSincePillModel
+@model ActiveSessionSummaryModel
 @* Renders nothing when there is no running session: the column is empty for that row rather than
    carrying a placeholder, since "not currently being worked on" is the ordinary case and a mark on
    every such row would bury the few rows that are live.
 
-   In the compact (per-row) form the stopwatch carries the meaning, so "Active since" is dropped from
-   the visible pill and kept for assistive tech — a bare "14:40" read aloud with no noun would say
-   nothing. The worked-by name goes the same way there: it would force the column wide enough to hold
-   a full display name on the rare row that has one, so it stays in the accessible name and the
-   tooltip. The toolbar form has the width to say all of it outright. *@
-@if (Model.ActiveSession is { } activeSession) {
-	var since = InstantDisplay.FormatCompact(activeSession.StartedAt, Model.ViewerZone, Model.Now);
-	var workedBy = Model.ActiveSessionWorkedByOther is { } other ? $" · worked by {other}" : string.Empty;
+   Zero/one/several are three distinct presentations (plan §2.4), never a collapsed "pick one":
+   - zero: nothing here (the outer @if below), unless the leaf is closed -- then a neutral "Closed"
+     pill, so a done/archived leaf reads as settled rather than merely idle. The verbose "reopen it
+     before starting another session" sentence this replaces never belonged in the Actions cell.
+   - one: the familiar compact stopwatch pill, worker named only when it is not the viewer.
+   - two or more: a prominent "N active" pill, followed by the stable preview (You first, then every
+     other worker by start order), capped at ActiveSessionSummaryModel.PreviewLimit only in the dense
+     per-row form -- the full collection is always still reachable via Sessions, never truly lost. *@
+@if (Model.Count == 1) {
+	var entry = Model.PreviewEntries[0];
+	var since = InstantDisplay.FormatCompact(entry.Session.StartedAt, Model.ViewerZone, Model.Now);
+	var workedBy = entry.IsViewer ? string.Empty : $" · worked by {entry.DisplayName}";
 	@if (Model.Compact) {
-		<span class="status-pill status-pill-ready status-pill--compact" title="Active since @since@workedBy">
+		<span class="status-pill status-pill-active status-pill--compact" title="Active since @since@workedBy">
 			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 				<use href="#jt-icon-active"></use>
 			</svg>
@@ -23,11 +27,26 @@
 			}
 		</span>
 	} else {
-		<span class="status-pill status-pill-ready">
+		<span class="status-pill status-pill-active">
 			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 				<use href="#jt-icon-active"></use>
 			</svg>
 			Active since @since@workedBy
 		</span>
 	}
+} else if (Model.Count > 1) {
+	<span class="d-inline-flex flex-wrap align-items-center gap-1">
+		<span class="status-pill status-pill-active">
+			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-active"></use>
+			</svg>
+			@Model.Count active
+		</span>
+		<span class="jt-muted">
+			<span class="visually-hidden">Active workers:</span>
+			@string.Join(", ", Model.PreviewEntries.Select(e => e.DisplayName))@(Model.HiddenCount > 0 ? $" +{Model.HiddenCount} more" : "")
+		</span>
+	</span>
+} else if (Model.StartClosed) {
+	<span class="status-pill status-pill-closed@(Model.Compact ? " status-pill--compact" : string.Empty)">Closed</span>
 }

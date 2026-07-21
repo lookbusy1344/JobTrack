@@ -174,7 +174,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
-		body.Should().Contain("Work started");
+		body.Should().Contain("Session started");
 		body.Should().Contain("Fresh leaf via dashboard");
 		body.Should().Contain("In Progress");
 	}
@@ -194,6 +194,50 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("Worker job");
 		body.Should().NotContain("Admin job");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_owner_filter_across_a_return_visit()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.filtermem");
+		var rootId = bootstrappedRootId!.Value;
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Worker job", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, adminId, "Admin job", adminId);
+		var authCookie = await SignInAsync("awaiting.filtermem");
+
+		// Explicitly filter to the worker; capture the session that now remembers the choice.
+		using var chooseRequest = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/AwaitingProgress?ownerUserId={workerId.Value}");
+		chooseRequest.Headers.Add("Cookie", authCookie);
+		var chooseResponse = await client.SendAsync(chooseRequest);
+		var sessionCookie = ExtractCookiePair(
+			FindSetCookie(chooseResponse, "JobTrack.Session") ?? throw new InvalidOperationException("No session cookie was set."));
+
+		// Return with no owner param: the remembered worker filter still applies.
+		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/AwaitingProgress");
+		returnRequest.Headers.Add("Cookie", $"{authCookie}; {sessionCookie}");
+		var returnResponse = await client.SendAsync(returnRequest);
+		var body = await returnResponse.Content.ReadAsStringAsync();
+
+		returnResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Worker job");
+		body.Should().NotContain("Admin job");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_defaults_to_all_owners_when_nothing_is_remembered()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.default-all");
+		var rootId = bootstrappedRootId!.Value;
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Worker job", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, adminId, "Admin job", adminId);
+		var authCookie = await SignInAsync("awaiting.default-all");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Worker job");
+		body.Should().Contain("Admin job", "with nothing remembered the dashboard defaults to every owner");
 	}
 
 	[Fact]
@@ -229,7 +273,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await reloaded.Content.ReadAsStringAsync();
 		startBody.Should().Contain("Finish / pause");
-		startBody.Should().NotContain("#jt-icon-start");
+		// Plan §4.1: the viewer's own one-click Start is replaced by Finish/pause, but the
+		// authorized "Start for..." disclosure for another worker is never removed -- only the
+		// viewer's own primary action toggles.
+		startBody.Should().NotContain("title=\"Start session\"");
 	}
 
 	[Fact]
@@ -296,7 +343,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
-		body.Should().Contain("Work started");
+		body.Should().Contain("Session started");
 		body.Should().Contain("Finish / pause");
 
 		var sessions = await GetSessionsAsync(leafId, adminId);
@@ -488,7 +535,14 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("Paused costed leaf");
 		body.Should().Contain("Active costed leaf");
 		body.Should().Contain(">&#xA3;200.00<");
-		body.Should().Contain(">&#xA3;25.00<");
+
+		// The active leaf's session is still running: its accrued cost grows with real elapsed time
+		// between the `now` captured above and this request actually rendering, so an exact string match
+		// is a wall-clock race. £25/hour accrues a penny every 1.44s of drift, so tolerate a few minutes
+		// of slack rather than pinning an exact value.
+		var activeLeafCosts = MoneyAmountPattern().Matches(body)
+			.Select(match => decimal.Parse(match.Groups["amount"].Value, CultureInfo.InvariantCulture));
+		activeLeafCosts.Should().Contain(amount => amount >= 25.00m && amount <= 25.50m);
 	}
 
 	[Fact]
@@ -761,6 +815,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			: null;
 
 	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
+
+	[GeneratedRegex(">&#xA3;(?<amount>[0-9]+\\.[0-9]{2})<")]
+	private static partial Regex MoneyAmountPattern();
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();

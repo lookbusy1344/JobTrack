@@ -123,24 +123,19 @@
 	BackdateDisclosureModel? toolbarBackdate = null;
 	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
 		@if (!Model.CurrentNode.Node.HasChildren && Model.CurrentNode.Node.Kind != NodeKind.Root) {
-			var toolbarActions = new WorkRowActionsModel {
-				LeafNodeId = Model.CurrentNode.Node.Id.Value,
-				ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(Model.CurrentNode.Node.Id),
-				ViewerZone = Model.ViewerZone,
-				StartHandler = "Start",
-				StartNodeFieldName = "leafNodeId",
-				PageStateFields = Model.RowStateFields,
-			};
-			@if (toolbarActions.ActiveSession is { } currentNodeActiveSession) {
-				<partial name="_ActiveSincePill" model="@(new ActiveSincePillModel {
-					                                        ActiveSession = currentNodeActiveSession,
-					                                        ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(currentNodeActiveSession),
-					                                        ViewerZone = Model.ViewerZone,
-					                                        Now = Model.Now,
-					                                        Compact = false,
-				                                        })"/>
+			var toolbarActions = Model.WorkRowActionsFor(Model.CurrentNode.Node.Id, "Start", "leafNodeId", Model.CurrentNodeAchievement, Model.CurrentNode.Node.ArchivedAt is not null, true);
+			<partial name="_ActiveSincePill" model="@(new ActiveSessionSummaryModel {
+				                                        ActiveSessions = toolbarActions.ActiveSessions,
+				                                        ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+				                                        DescribeWorker = id => Model.DescribeOwner(id),
+				                                        ViewerZone = Model.ViewerZone,
+				                                        Now = Model.Now,
+				                                        Compact = false,
+				                                        StartClosed = toolbarActions.IsStartClosed,
+			                                        })"/>
+			@if (toolbarActions.ViewerSession is { } viewerSession) {
 				<form method="post" asp-page-handler="Finish" class="inline-form">
-					@foreach (var field in toolbarActions.FinishFields) {
+					@foreach (var field in toolbarActions.FinishFieldsFor(viewerSession)) {
 						<input type="hidden" name="@field.Key" value="@field.Value"/>
 					}
 					<button type="submit" class="btn btn-secondary">
@@ -150,9 +145,9 @@
 						Finish / pause
 					</button>
 				</form>
-				toolbarBackdate = toolbarActions.Backdate;
+				toolbarBackdate = toolbarActions.FinishBackdateFor(viewerSession);
 				<partial name="_BackdateTrigger" model="toolbarBackdate"/>
-			} else {
+			} else if (!toolbarActions.IsStartClosed) {
 				<form method="post" asp-page-handler="Start" class="inline-form">
 					@foreach (var field in toolbarActions.StartFields) {
 						<input type="hidden" name="@field.Key" value="@field.Value"/>
@@ -161,13 +156,38 @@
 						<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 							<use href="#jt-icon-start"></use>
 						</svg>
-						Start work
+						Start session
 					</button>
 				</form>
-				toolbarBackdate = toolbarActions.Backdate;
+				toolbarBackdate = toolbarActions.StartBackdate;
 				<partial name="_BackdateTrigger" model="toolbarBackdate"/>
 			}
 
+			var soloOther = toolbarActions.SoloOtherSession;
+			@if (soloOther is not null) {
+				<form method="post" asp-page-handler="Finish" class="inline-form">
+					@foreach (var field in toolbarActions.FinishFieldsFor(soloOther)) {
+						<input type="hidden" name="@field.Key" value="@field.Value"/>
+					}
+					<button type="submit" class="btn btn-secondary">
+						<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+							<use href="#jt-icon-finish"></use>
+						</svg>
+						Finish / pause
+					</button>
+				</form>
+			}
+
+			@if (toolbarActions.CanManage && !toolbarActions.IsStartClosed) {
+				<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
+			}
+
+			<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.CurrentNode.Node.Id.Value">
+				<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-sessions"></use>
+				</svg>
+				Sessions
+			</a>
 			<a class="btn btn-outline-danger"
 			   asp-page="/Jobs/Delete"
 			   asp-route-nodeId="@Model.CurrentNode.Node.Id.Value"
@@ -228,7 +248,9 @@
 		}
 	</div>
 	@if (toolbarBackdate is not null) {
-		<partial name="_BackdatePanel" model="toolbarBackdate"/>
+		@if (toolbarBackdate is not null) {
+			<partial name="_BackdatePanel" model="toolbarBackdate"/>
+		}
 	}
 
 	@if (Model.LeafWorkSessions is { } leafWorkSessions) {
@@ -295,9 +317,9 @@
 		</div>
 
 		@if (Model.AncestorBlockers.Count > 0) {
-			<details class="jt-card" open>
+			<details class="jt-card">
 				<summary class="jt-disclosure-summary">Inherited blockers (from ancestor prerequisites)</summary>
-				<ul class="jt-list">
+				<ul class="jt-list jt-list--wide">
 					@foreach (var blocker in Model.AncestorBlockers) {
 						<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
 							<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
@@ -328,26 +350,18 @@
 				<tr>
 					<th scope="col">Description</th>
 					<th scope="col">Kind</th>
-					<th scope="col" class="jt-col-secondary">Owner</th>
+					<th scope="col" class="jt-col-secondary jt-col-owner">Owner</th>
 					<th scope="col" class="jt-col-active">Active</th>
-					<th scope="col" class="jt-col-cost">Cost</th>
+					<th scope="col" class="jt-col-cost text-end">Cost</th>
 					<th scope="col" class="jt-col-secondary">Archived</th>
-					<th scope="col">Work</th>
+					<th scope="col" class="text-end">Actions</th>
 				</tr>
 				</thead>
 				<tbody>
 				@foreach (var child in Model.Children) {
 					var childActions = child.HasChildren
 						? null
-						: new WorkRowActionsModel {
-							LeafNodeId = child.Id.Value,
-							ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(child.Id),
-							ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(Model.ActiveSessionByLeaf.GetValueOrDefault(child.Id)),
-							ViewerZone = Model.ViewerZone,
-							StartHandler = "Start",
-							StartNodeFieldName = "leafNodeId",
-							PageStateFields = Model.RowStateFields,
-						};
+						: Model.WorkRowActionsFor(child.Id, "Start", "leafNodeId", child.Achievement, child.ArchivedAt is not null);
 					<tr>
 						<td>
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
@@ -361,7 +375,7 @@
 						<td>
 							<partial name="_KindIcon" model="@(new KindIconModel { Kind = child.Kind, ShowLabel = false })"/>
 						</td>
-						<td class="jt-col-secondary">
+						<td class="jt-col-secondary jt-col-owner">
 							@if (child.OwnerUserId is { } childOwnerUserId) {
 								@Model.DescribeOwner(childOwnerUserId)
 							} else {
@@ -378,11 +392,18 @@
 						</td>
 						<td class="jt-col-active">
 							<partial name="_ActiveSincePill"
-							         model="@(new ActiveSincePillModel { ActiveSession = childActions?.ActiveSession, ActiveSessionWorkedByOther = childActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone, Now = Model.Now })"/>
+							         model="@(new ActiveSessionSummaryModel {
+								                ActiveSessions = childActions?.ActiveSessions ?? [],
+								                ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+								                DescribeWorker = id => Model.DescribeOwner(id),
+								                ViewerZone = Model.ViewerZone,
+								                Now = Model.Now,
+								                StartClosed = childActions?.IsStartClosed ?? false,
+							                })"/>
 						</td>
-						<td class="jt-col-cost">
+						<td class="jt-col-cost text-end">
 							@if (child.Cost is { } cost) {
-								<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
+								@MoneyDisplay.Format(cost)
 							}
 						</td>
 						<td class="jt-col-secondary">@(child.ArchivedAt is not null ? "yes" : "no")</td>
@@ -393,7 +414,8 @@
 						</td>
 					</tr>
 					@if (childActions is not null) {
-						<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = childActions.Backdate, ColumnCount = 7 })"/>
+						<partial name="_BackdateRow"
+						         model="@(new BackdateRowModel { Disclosure = childActions.ViewerSession is { } childViewerSession ? childActions.FinishBackdateFor(childViewerSession) : childActions.StartBackdate, ColumnCount = 7 })"/>
 					}
 				}
 				</tbody>
@@ -419,14 +441,14 @@
 					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
 					   archived row is flagged in place beside its name. *@
 					<th scope="col">Description</th>
-					<th scope="col" class="jt-col-secondary">Owner</th>
+					<th scope="col" class="jt-col-secondary jt-col-owner">Owner</th>
 					<th scope="col" class="jt-col-active">Active</th>
-					<th scope="col" class="jt-col-cost">Cost</th>
+					<th scope="col" class="jt-col-cost text-end">Cost</th>
 					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
 					   the width of the bar it labels, so with it visible the column can never narrow to
 					   the bar's own size however small the bar gets. Assistive tech still gets the name. *@
 					<th scope="col" class="jt-col-secondary jt-col-span"><span class="visually-hidden">Position</span></th>
-					<th scope="col">Work</th>
+					<th scope="col" class="text-end">Actions</th>
 				</tr>
 				</thead>
 				<tbody>
@@ -434,15 +456,7 @@
 					var (leftPct, widthPct) = Model.SubtreeSpanPercent(node);
 					var nodeActions = node.HasChildren
 						? null
-						: new WorkRowActionsModel {
-							LeafNodeId = node.Id.Value,
-							ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(node.Id),
-							ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(Model.ActiveSessionByLeaf.GetValueOrDefault(node.Id)),
-							ViewerZone = Model.ViewerZone,
-							StartHandler = "Start",
-							StartNodeFieldName = "leafNodeId",
-							PageStateFields = Model.RowStateFields,
-						};
+						: Model.WorkRowActionsFor(node.Id, "Start", "leafNodeId", node.Achievement, node.ArchivedAt is not null);
 					<tr>
 						<td class="jt-tree-cell" data-jt-depth="@node.Depth">
 							<span class="jt-tree-guide" aria-hidden="true">
@@ -493,7 +507,7 @@
 								</span>
 							</span>
 						</td>
-						<td class="jt-col-secondary">
+						<td class="jt-col-secondary jt-col-owner">
 							@if (node.OwnerUserId is { } nodeOwnerUserId) {
 								@Model.DescribeOwner(nodeOwnerUserId)
 							} else {
@@ -510,11 +524,18 @@
 						</td>
 						<td class="jt-col-active">
 							<partial name="_ActiveSincePill"
-							         model="@(new ActiveSincePillModel { ActiveSession = nodeActions?.ActiveSession, ActiveSessionWorkedByOther = nodeActions?.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone, Now = Model.Now })"/>
+							         model="@(new ActiveSessionSummaryModel {
+								                ActiveSessions = nodeActions?.ActiveSessions ?? [],
+								                ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+								                DescribeWorker = id => Model.DescribeOwner(id),
+								                ViewerZone = Model.ViewerZone,
+								                Now = Model.Now,
+								                StartClosed = nodeActions?.IsStartClosed ?? false,
+							                })"/>
 						</td>
-						<td class="jt-col-cost">
+						<td class="jt-col-cost text-end">
 							@if (node.Cost is { } cost) {
-								<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
+								@MoneyDisplay.Format(cost)
 							}
 						</td>
 						<td class="jt-col-secondary jt-col-span">
@@ -537,7 +558,8 @@
 						</td>
 					</tr>
 					@if (nodeActions is not null) {
-						<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = nodeActions.Backdate, ColumnCount = 6 })"/>
+						<partial name="_BackdateRow"
+						         model="@(new BackdateRowModel { Disclosure = nodeActions.ViewerSession is { } nodeViewerSession ? nodeActions.FinishBackdateFor(nodeViewerSession) : nodeActions.StartBackdate, ColumnCount = 6 })"/>
 					}
 				}
 				</tbody>

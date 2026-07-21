@@ -13,8 +13,9 @@
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 	@if (Model.CurrentNode is not null) {
-		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Deleting</span><strong
-				class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong></p>
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Deleting</span><a
+				class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+				asp-route-nodeId="@Model.NodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
 
 		<div class="jt-notice">
 			<p>

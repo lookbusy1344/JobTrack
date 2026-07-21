@@ -13,12 +13,18 @@
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 	@if (Model.CurrentNode is not null) {
-		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Moving</span><strong
-				class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node)</strong><span>and its subtree</span>
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Moving</span><a
+				class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+				asp-route-nodeId="@Model.NodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a><span>and its subtree</span>
 		</p>
 		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2">
-			<span>Current parent</span><strong
-				class="jt-preserve-whitespace">@(Model.CurrentNode.Ancestors.Count > 0 ? JobNodeDisplay.Title(Model.CurrentNode.Ancestors[^1]) : "none (this is the root)")</strong>
+			<span>Current parent</span>
+			@if (Model.CurrentNode.Ancestors.Count > 0) {
+				var parent = Model.CurrentNode.Ancestors[^1];
+				<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse" asp-route-nodeId="@parent.Id.Value">@JobNodeDisplay.Title(parent)</a>
+			} else {
+				<strong>none (this is the root)</strong>
+			}
 		</p>
 
 		<form method="post" class="jt-form-card">

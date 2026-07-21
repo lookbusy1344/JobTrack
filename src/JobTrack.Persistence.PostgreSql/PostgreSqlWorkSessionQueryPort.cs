@@ -4,6 +4,7 @@ using Abstractions;
 using Application;
 using Application.Ports;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
 using Shared;
@@ -15,14 +16,21 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlWorkSessionQueryPort : IWorkSessionQueryPort
 {
+	private readonly IReadOnlyList<IInterceptor> _interceptors;
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlWorkSessionQueryPort(NpgsqlDataSource dataSource, IClock clock)
+	public PostgreSqlWorkSessionQueryPort(NpgsqlDataSource dataSource, IClock clock) : this(dataSource, clock, [])
+	{
+	}
+
+	/// <summary>Test-only seam (Stage 4 efficiency guards) for attaching a command-count interceptor.</summary>
+	internal PostgreSqlWorkSessionQueryPort(NpgsqlDataSource dataSource, IClock clock, IReadOnlyList<IInterceptor> interceptors)
 	{
 		this.dataSource = dataSource;
 		this.clock = clock;
+		_interceptors = interceptors;
 	}
 
 	/// <inheritdoc />
@@ -87,13 +95,37 @@ internal sealed class PostgreSqlWorkSessionQueryPort : IWorkSessionQueryPort
 		return new() { ActorRoles = actorRoles, Sessions = [.. sessions] };
 	}
 
+	/// <inheritdoc />
+	public async Task<WorkSessionManageCapabilityQueryResult> GetManageCapabilitiesAsync(
+		AppUserId actorId, EquatableArray<JobNodeId> leafWorkIds, CancellationToken cancellationToken = default)
+	{
+		await using var context = CreateContext();
+
+		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+
+		if (leafWorkIds.Count == 0) {
+			return new() { ActorRoles = actorRoles, ControlledLeafWorkIds = [] };
+		}
+
+		var leafWorkIdValues = leafWorkIds.Select(id => id.Value).ToArray();
+		var controlledIds = await context.Database.SqlQuery<long>(
+			$"""
+			 SELECT controlled_leaf_id AS "Value"
+			 FROM job_node_controlled_leaf_ids({actorId.Value}, {leafWorkIdValues})
+			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+		return new() { ActorRoles = actorRoles, ControlledLeafWorkIds = [.. controlledIds.Select(id => new JobNodeId(id))] };
+	}
+
 	private PostgreSqlJobTrackDbContext CreateContext()
 	{
-		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, o => o.UseNodaTime())
-			.Options;
+		var optionsBuilder = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
+			.UseNpgsql(dataSource, o => o.UseNodaTime());
+		if (_interceptors.Count > 0) {
+			optionsBuilder = optionsBuilder.AddInterceptors(_interceptors);
+		}
 
-		return new(options);
+		return new(optionsBuilder.Options);
 	}
 
 	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(

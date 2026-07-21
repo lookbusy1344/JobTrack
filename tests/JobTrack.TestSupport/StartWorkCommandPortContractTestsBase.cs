@@ -195,6 +195,156 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 			.Which.ConstraintId.Should().Be("job-node-has-children-cannot-attach-leaf-work");
 	}
 
+	[Fact]
+	public async Task Starting_work_on_an_archived_leaf_throws_an_invariant_violation()
+	{
+		// ADR 0044: archiving a bare planning node (no LeafWork, so no active session to block it) is
+		// itself permitted; StartWorkAsync must still refuse to attach/start against it afterwards.
+		var (_, jobManagerId, workerId, bareLeafId) = await SeedBareLeafAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		_ = await jobNodePort.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = bareLeafId, Version = 1 });
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = bareLeafId, WorkedByUserId = workerId });
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-leaf-closed");
+	}
+
+	// ADR 0044 Stage 6 / plan §2.5: authorization matrix for starting work on behalf of another
+	// worker (the "Start for..." disclosure posts through this same StartWorkAsync path).
+
+	[Fact]
+	public async Task An_administrator_can_start_work_for_another_worker_regardless_of_ownership()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.admin", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		// jobManagerId is the bootstrap administrator (also separately granted JobManager) and owns
+		// neither this leaf nor its ancestors.
+		var result = await port.StartWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leafId, WorkedByUserId = otherWorkerId });
+
+		result.WorkedByUserId.Should().Be(otherWorkerId);
+	}
+
+	[Fact]
+	public async Task A_job_manager_who_is_not_administrator_can_start_work_for_another_worker()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var jobManagerOnlyId = await SeedEmployeeAsync("Plain Manager", "plain.manager.startfor", EmployeeRole.JobManager);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var result = await port.StartWorkAsync(new() { Context = ContextFor(jobManagerOnlyId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		result.WorkedByUserId.Should().Be(workerId);
+	}
+
+	[Fact]
+	public async Task A_direct_owner_can_start_work_for_another_worker_on_their_own_leaf()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.owner", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		// workerId owns leafId (SeedReadyLeafAsync), so they control it despite not being the target.
+		var result = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = otherWorkerId });
+
+		result.WorkedByUserId.Should().Be(otherWorkerId);
+	}
+
+	[Fact]
+	public async Task An_ancestor_owner_can_start_work_for_another_worker_on_a_descendant_leaf()
+	{
+		var (rootId, jobManagerId, branchOwnerId) = await SeedTreeAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var branch = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Branch",
+			OwnerUserId = branchOwnerId,
+			Priority = Priority.Medium,
+		});
+		var descendantLeaf = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = branch.Id,
+			Description = "Descendant leaf",
+			OwnerUserId = null,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = descendantLeaf.Id });
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.ancestor", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		// branchOwnerId owns the branch, not the leaf itself, so this exercises the ancestor-owner walk.
+		var result = await port.StartWorkAsync(
+			new() { Context = ContextFor(branchOwnerId), JobNodeId = descendantLeaf.Id, WorkedByUserId = otherWorkerId });
+
+		result.WorkedByUserId.Should().Be(otherWorkerId);
+	}
+
+	[Fact]
+	public async Task A_non_controlling_worker_cannot_start_work_for_another_worker()
+	{
+		var (_, _, _, leafId) = await SeedReadyLeafAsync();
+		var bystanderId = await SeedEmployeeAsync("Bystander", "bystander.startfor", EmployeeRole.Worker);
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.bystander", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartWorkAsync(new() { Context = ContextFor(bystanderId), JobNodeId = leafId, WorkedByUserId = otherWorkerId });
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task A_read_only_operational_role_cannot_start_work_for_another_worker()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var costViewerId = await SeedEmployeeAsync("Cost Viewer", "cost.viewer.startfor", EmployeeRole.CostViewer);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartWorkAsync(new() { Context = ContextFor(costViewerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task Starting_work_for_a_disabled_target_worker_throws_an_invariant_violation()
+	{
+		var (_, jobManagerId, _, leafId) = await SeedReadyLeafAsync();
+		var disabledWorkerId = await SeedEmployeeAsync("Disabled Worker", "disabled.worker.startfor", EmployeeRole.Worker);
+		await SetEnabledAsync(disabledWorkerId, false);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leafId, WorkedByUserId = disabledWorkerId });
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
+	}
+
+	[Fact]
+	public async Task Starting_work_for_a_target_with_no_eligible_workflow_role_throws_an_invariant_violation()
+	{
+		var (_, jobManagerId, _, leafId) = await SeedReadyLeafAsync();
+		var requesterId = await SeedEmployeeAsync("Requester Only", "requester.only.startfor", EmployeeRole.Requester);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leafId, WorkedByUserId = requesterId });
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
+	}
+
+	private async Task SetEnabledAsync(AppUserId appUserId, bool isEnabled)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
+		AddParameter(command, "@isEnabled", isEnabled);
+		AddParameter(command, "@appUserId", appUserId.Value);
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
 	protected abstract DbConnection CreateConnection(string connectionString);
 
 	protected abstract ISchemaVersionStore CreateStore();

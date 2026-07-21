@@ -141,6 +141,20 @@ This **replaces** the old `isOwnSession` rule. Consequences:
 `worked_by_user_id` remains a free choice of the authorized recorder; the per-`(worked_by_user_id,
 leaf_work_id)` overlap constraints (schema version 0007) are unchanged and orthogonal to this policy.
 
+This capability was always the domain's own rule, but the staff UI did not expose a way to invoke it
+until the browse-sessions plan added a "Start for…" worker picker (a batched, server-computed
+`CanManageSessions` rendering hint gates whether the picker is shown at all — never the authority
+itself, which the command re-evaluates from `canRecordWork` above at write time regardless of what
+the page rendered). Being able to *see* a leaf's recorded sessions is unrelated and unconditionally
+open to every employee role (ADR 0041) — a Worker who controls nothing on a leaf can still read its
+whole history, just not add to or correct it.
+
+A leaf being **closed** to new sessions — terminal achievement or archived (ADR 0044) — is an
+orthogonal condition to authorization: it is checked independently of, and in addition to,
+`canRecordWork` above. An owner who would otherwise be authorized to start or start-for a session is
+still refused if the leaf itself is closed; reopening/restoring the leaf and holding `canRecordWork`
+are both required, neither is a substitute for the other.
+
 ### 4.3 Pickup — claim an unassigned node
 
 ```

@@ -40,6 +40,10 @@ public interface IJobCommands
 	/// </exception>
 	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>
 	/// <exception cref="ConcurrencyConflictException">The supplied version is stale.</exception>
+	/// <exception cref="InvariantViolationException">
+	///     A session on this node's <c>LeafWork</c> is still active (<c>ConstraintId</c>
+	///     <c>"leaf-closure-active-sessions"</c>, ADR 0044).
+	/// </exception>
 	Task<JobNodeResult> ArchiveAsync(ArchiveJobNodeRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>Physically deletes a proven-unused planning node.</summary>

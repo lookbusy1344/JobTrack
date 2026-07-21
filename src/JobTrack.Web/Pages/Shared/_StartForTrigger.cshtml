@@ -1,0 +1,24 @@
+@model StartForDisclosureModel
+@* Native progressive disclosure for starting a session on behalf of another worker (plan §2.5).
+   The complete form is a child of details, so it remains operable without JavaScript. Only rendered
+   when the actor may manage sessions on the leaf; the command still revalidates authorization. *@
+<details class="jt-start-for-disclosure" id="@Model.RowId">
+	@if (Model.Labelled) {
+		<summary class="btn btn-secondary jt-start-for-summary">
+			<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-start"></use>
+			</svg>
+			Start for…
+		</summary>
+	} else {
+		<summary class="jt-icon-button jt-backdate-trigger" title="Start for…">
+			<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-start"></use>
+			</svg>
+			<span class="visually-hidden">Start for…</span>
+		</summary>
+	}
+	<div class="jt-backdate-panel">
+		<partial name="_StartForForm" model="Model"/>
+	</div>
+</details>

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using NodaTime;
 
 /// <summary>
 ///     Corrects a historical session's start and/or finish instants (plan §8.5 slice 4, spec §4.4):
@@ -53,7 +54,19 @@ public sealed class CorrectSessionModel(
 		return Page();
 	}
 
-	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+	public Task<IActionResult> OnPostAsync(CancellationToken cancellationToken) =>
+		SaveAsync(false, cancellationToken);
+
+	/// <summary>
+	///     Clears the finished time and saves in one step — reopening the session to active — still
+	///     requiring a reason like any other correction. The one-click affordance exists because
+	///     blanking a browser's <c>datetime-local</c> control by hand is fiddly and inconsistent
+	///     across browsers; this never bypasses the reason requirement (ModelState is still validated).
+	/// </summary>
+	public Task<IActionResult> OnPostClearFinishAsync(CancellationToken cancellationToken) =>
+		SaveAsync(true, cancellationToken);
+
+	private async Task<IActionResult> SaveAsync(bool clearFinish, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -71,7 +84,10 @@ public sealed class CorrectSessionModel(
 			return Page();
 		}
 
-		if (!BackdateInstant.TryParseOptional(Input.FinishedAt, zone, out var finishedAtInstant)) {
+		Instant? finishedAtInstant = null;
+		if (clearFinish) {
+			Input.FinishedAt = null;
+		} else if (!BackdateInstant.TryParseOptional(Input.FinishedAt, zone, out finishedAtInstant)) {
 			ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.FinishedAt)}", "Enter a valid date and time.");
 			return Page();
 		}
@@ -87,7 +103,9 @@ public sealed class CorrectSessionModel(
 
 		try {
 			_ = await jobTrackClient.Work.CorrectSessionAsync(request, cancellationToken);
-			return RedirectToPage("/Jobs/Work", new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			// No workedByUserId: returning to Work restores the viewer's remembered filter (or its
+			// permission-aware default), rather than snapping the Sessions view to the corrected worker.
+			return RedirectToPage("/Jobs/Work", new { leafNodeId = LeafNodeId });
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();

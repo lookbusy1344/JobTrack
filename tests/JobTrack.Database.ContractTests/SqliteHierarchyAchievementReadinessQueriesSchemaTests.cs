@@ -92,6 +92,28 @@ public sealed class SqliteHierarchyAchievementReadinessQueriesSchemaTests()
 		return await ReadLongColumnAsync(command);
 	}
 
+	protected override async Task<IReadOnlyList<long>> ControlledLeafIdsAsync(
+		DbConnection connection, long actorId, IReadOnlyList<long> leafIds)
+	{
+		await using var command = connection.CreateCommand();
+		var leafIdParameters = leafIds.Select((_, index) => $"@leafId{index}").ToArray();
+		command.CommandText = $"""
+							   WITH RECURSIVE ancestors(origin_leaf_id, id, owner_user_id, parent_id) AS (
+							       SELECT id, id, owner_user_id, parent_id FROM job_node WHERE id IN ({string.Join(',', leafIdParameters)})
+							       UNION ALL
+							       SELECT a.origin_leaf_id, jn.id, jn.owner_user_id, jn.parent_id
+							       FROM job_node jn JOIN ancestors a ON jn.id = a.parent_id
+							   )
+							   SELECT DISTINCT origin_leaf_id FROM ancestors WHERE owner_user_id = @actorId;
+							   """;
+		AddParameter(command, "@actorId", actorId);
+		for (var index = 0; index < leafIds.Count; index++) {
+			AddParameter(command, leafIdParameters[index], leafIds[index]);
+		}
+
+		return await ReadLongColumnAsync(command);
+	}
+
 	protected override async Task<bool> NodeReadyAsync(DbConnection connection, long nodeId) =>
 		(await UnsatisfiedPrerequisitesAsync(connection, nodeId)).Count == 0;
 

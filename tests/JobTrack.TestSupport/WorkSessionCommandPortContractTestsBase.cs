@@ -531,6 +531,68 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			.Which.ConstraintId.Should().Be("work-session-overlap");
 	}
 
+	[Fact]
+	public async Task Starting_a_session_for_a_leaf_with_terminal_achievement_throws_an_invariant_violation()
+	{
+		// ADR 0044: no achievement port is available in this shared base, so the terminal state is
+		// set directly against the schema -- exactly the "direct-write bypass" scenario the database
+		// trigger backstops, exercised here through the command's own application-side pre-check.
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		await SetAchievementIdAsync(leafId, (short)Achievement.Success);
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-leaf-closed");
+	}
+
+	[Fact]
+	public async Task Starting_a_session_for_an_archived_leaf_throws_an_invariant_violation()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		_ = await jobNodePort.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = leafId, Version = 1 });
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-leaf-closed");
+	}
+
+	[Fact]
+	public async Task Correcting_a_finished_session_back_to_active_on_a_terminal_leaf_throws_an_invariant_violation()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		session = await port.FinishSessionAsync(new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+		await SetAchievementIdAsync(leafId, (short)Achievement.Success);
+
+		var act = () => port.CorrectSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			StartedAt = session.StartedAt,
+			FinishedAt = null,
+			Reason = "Reopening by mistake",
+			Version = session.Version,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-leaf-closed");
+	}
+
+	private async Task SetAchievementIdAsync(JobNodeId leafId, short achievementId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "UPDATE leaf_work SET achievement_id = @achievementId WHERE job_node_id = @leafId;";
+		AddParameter(command, "@achievementId", achievementId);
+		AddParameter(command, "@leafId", leafId.Value);
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
 	protected abstract DbConnection CreateConnection(string connectionString);
 
 	protected abstract ISchemaVersionStore CreateStore();

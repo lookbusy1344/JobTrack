@@ -288,6 +288,40 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		return (leafId, finished.Id, finished.Version);
 	}
 
+	/// <summary>Seeds one worked leaf with the requested number of distinct active workers.</summary>
+	public async Task<(JobNodeId LeafId, IReadOnlyList<string> WorkerDisplayNames)> SeedActiveSessionsAsync(
+		string leafDescription, int workerCount)
+	{
+		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workerCount);
+
+		var leafId = await SeedLeafAsync(leafDescription);
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+		});
+		var workerDisplayNames = new List<string>(workerCount);
+		for (var index = 0; index < workerCount; index++) {
+			var displayName = $"Active Worker {index + 1}";
+			var employee = await seedClient.Employees.CreateEmployeeAsync(new() {
+				Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+				DisplayName = displayName,
+				IanaTimeZone = "Etc/UTC",
+				UserName = $"active.worker.{Guid.NewGuid():N}",
+				Password = AdministratorPassword,
+				Role = EmployeeRole.Worker,
+			});
+			_ = await seedClient.Work.StartSessionAsync(new() {
+				Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+				LeafWorkId = leafId,
+				WorkedByUserId = employee.Id,
+			});
+			workerDisplayNames.Add(displayName);
+		}
+
+		await ClearRequiresPasswordChangeAsync();
+		return (leafId, workerDisplayNames);
+	}
+
 	/// <summary>
 	///     Bootstrap already provisions the administrator with an open-ended default schedule version
 	///     starting <see cref="EmployeeProvisioningDefaults.ScheduleEffectiveStart" /> (2020-01-01,

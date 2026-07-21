@@ -447,6 +447,10 @@ public sealed class JobTrackClientUsageExampleTests
 			GetActiveSessionsRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult<EquatableArray<WorkSessionResult>>([]);
 
+		public Task<EquatableArray<LeafSessionManageCapabilityResult>> GetSessionManageCapabilitiesAsync(
+			GetSessionManageCapabilitiesRequest request, CancellationToken cancellationToken = default) =>
+			Task.FromResult<EquatableArray<LeafSessionManageCapabilityResult>>([]);
+
 		public Task<LeafWorkResult> GetLeafWorkAsync(GetLeafWorkRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult(new LeafWorkResult {
 				JobNodeId = request.JobNodeId,

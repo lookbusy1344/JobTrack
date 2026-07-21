@@ -1,4 +1,5 @@
 @page
+@using JobTrack.Abstractions
 @model AwaitingProgressModel
 @{
 	ViewData["Title"] = "Jobs awaiting progress";
@@ -45,25 +46,17 @@
 			<thead>
 			<tr>
 				<th>Description</th>
-				<th class="jt-col-secondary">Owner</th>
+				<th class="jt-col-secondary jt-col-owner">Owner</th>
 				<th class="jt-col-active">Active</th>
-				<th class="jt-col-cost">Cost</th>
+				<th class="jt-col-cost text-end">Cost</th>
 				<th class="jt-col-cost">Achievement</th>
 				<th class="jt-col-secondary">Deadline</th>
-				<th>Actions</th>
+				<th class="text-end">Actions</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var entry in Model.Entries) {
-				var entryActions = new WorkRowActionsModel {
-					LeafNodeId = entry.Id.Value,
-					ActiveSession = Model.ActiveSessionByLeaf.GetValueOrDefault(entry.Id),
-					ActiveSessionWorkedByOther = Model.ActiveSessionWorkedByOther(Model.ActiveSessionByLeaf.GetValueOrDefault(entry.Id)),
-					ViewerZone = Model.ViewerZone,
-					StartHandler = "StartWork",
-					StartNodeFieldName = "jobNodeId",
-					PageStateFields = Model.RowStateFields,
-				};
+				var entryActions = Model.WorkRowActionsFor(entry.Id, entry.Achievement);
 				<tr>
 					<td>
 						@if (!entry.IsReady) {
@@ -73,12 +66,19 @@
 						}
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse" asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry)</a>
 					</td>
-					<td class="jt-col-secondary">@Model.DescribeOwner(entry.OwnerUserId)</td>
+					<td class="jt-col-secondary jt-col-owner">@Model.DescribeOwner(entry.OwnerUserId)</td>
 					<td class="jt-col-active">
 						<partial name="_ActiveSincePill"
-						         model="@(new ActiveSincePillModel { ActiveSession = entryActions.ActiveSession, ActiveSessionWorkedByOther = entryActions.ActiveSessionWorkedByOther, ViewerZone = Model.ViewerZone, Now = Model.Now })"/>
+						         model="@(new ActiveSessionSummaryModel {
+							                ActiveSessions = entryActions.ActiveSessions,
+							                ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+							                DescribeWorker = id => Model.DescribeOwner(id),
+							                ViewerZone = Model.ViewerZone,
+							                Now = Model.Now,
+							                StartClosed = entryActions.IsStartClosed,
+						                })"/>
 					</td>
-					<td class="jt-col-cost">@(entry.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
+					<td class="jt-col-cost text-end">@(entry.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
 					<td class="jt-col-cost">
 						@if (entry.Achievement is { } achievement) {
 							<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = achievement })"/>
@@ -91,7 +91,8 @@
 						<partial name="_WorkRowActions" model="entryActions"/>
 					</td>
 				</tr>
-				<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = entryActions.Backdate, ColumnCount = 7 })"/>
+				<partial name="_BackdateRow"
+				         model="@(new BackdateRowModel { Disclosure = entryActions.ViewerSession is { } entryViewerSession ? entryActions.FinishBackdateFor(entryViewerSession) : entryActions.StartBackdate, ColumnCount = 7 })"/>
 			}
 			</tbody>
 		</table>

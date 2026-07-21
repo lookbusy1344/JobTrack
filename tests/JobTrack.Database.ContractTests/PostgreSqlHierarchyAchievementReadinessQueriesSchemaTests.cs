@@ -43,6 +43,16 @@ public sealed class PostgreSqlHierarchyAchievementReadinessQueriesSchemaTests()
 		return await ReadLongColumnAsync(command);
 	}
 
+	protected override async Task<IReadOnlyList<long>> ControlledLeafIdsAsync(
+		DbConnection connection, long actorId, IReadOnlyList<long> leafIds)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT controlled_leaf_id FROM job_node_controlled_leaf_ids(@actorId, @leafIds);";
+		AddParameter(command, "@actorId", actorId);
+		AddParameter(command, "@leafIds", leafIds.ToArray());
+		return await ReadLongColumnAsync(command);
+	}
+
 	protected override async Task<bool> NodeReadyAsync(DbConnection connection, long nodeId)
 	{
 		await using var command = connection.CreateCommand();

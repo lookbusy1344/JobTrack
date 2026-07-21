@@ -64,3 +64,79 @@ BEGIN
           AND (NEW.finished_at IS NULL OR ws.started_at < NEW.finished_at)
     );
 END;
+
+-- ADR 0044: a leaf is closed to new active sessions once its achievement is
+-- terminal (Success/Cancelled/Unsuccessful, ids 3/4/5 per schema version
+-- 0001) or its job_node.archived_at is set. SQLite has no advisory lock;
+-- the persistence layer's existing BEGIN IMMEDIATE/single-writer
+-- serialization (impl plan §7.4) is what makes this check race-free against
+-- a concurrent closure, matching the same-user/same-leaf overlap triggers
+-- above.
+--
+-- Rule 1: starting (any INSERT leaving finished_at NULL) or reactivating (an
+-- UPDATE leaving finished_at NULL) a session against a currently closed leaf
+-- is rejected. A correction that edits an already-finished session's fields
+-- without reactivating it is untouched (ADR 0044 rule 5) -- the UPDATE
+-- trigger below only fires when the resulting row is active.
+--
+-- An *archived* leaf additionally rejects a brand-new row even when it is
+-- already finished at insert (no operational backfill onto an archived
+-- leaf); a merely terminal-achievement leaf does not -- subtree import
+-- (Stage 3) legitimately inserts an already-finished historical session and
+-- sets the leaf's terminal achievement inside the same transaction.
+CREATE TRIGGER work_session_leaf_not_closed_on_insert
+    AFTER INSERT
+    ON work_session
+BEGIN
+    SELECT RAISE(ABORT, 'work-session-leaf-closed')
+    WHERE EXISTS (
+        SELECT 1
+        FROM leaf_work lw
+        JOIN job_node jn ON jn.id = lw.job_node_id
+        WHERE lw.job_node_id = NEW.leaf_work_id
+          AND (jn.archived_at IS NOT NULL OR (NEW.finished_at IS NULL AND lw.achievement_id IN (3, 4, 5)))
+    );
+END;
+
+CREATE TRIGGER work_session_leaf_not_closed_on_update
+    AFTER UPDATE OF started_at, finished_at, leaf_work_id
+    ON work_session
+    WHEN NEW.finished_at IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'work-session-leaf-closed')
+    WHERE EXISTS (
+        SELECT 1
+        FROM leaf_work lw
+        JOIN job_node jn ON jn.id = lw.job_node_id
+        WHERE lw.job_node_id = NEW.leaf_work_id
+          AND (lw.achievement_id IN (3, 4, 5) OR jn.archived_at IS NOT NULL)
+    );
+END;
+
+-- Rule 2: leaf_work cannot transition into a terminal achievement while any
+-- work_session on it is still active.
+CREATE TRIGGER leaf_work_no_active_sessions_on_terminal_achievement
+    AFTER UPDATE OF achievement_id
+    ON leaf_work
+    WHEN NEW.achievement_id IN (3, 4, 5)
+BEGIN
+    SELECT RAISE(ABORT, 'leaf-closure-active-sessions')
+    WHERE EXISTS (SELECT 1 FROM work_session WHERE leaf_work_id = NEW.job_node_id AND finished_at IS NULL);
+END;
+
+-- Rule 3: a leaf's own job_node cannot be archived while any work_session on
+-- it is still active. Archiving a branch (no leaf_work attached) is
+-- unaffected.
+CREATE TRIGGER job_node_no_active_sessions_on_archive
+    AFTER UPDATE OF archived_at
+    ON job_node
+    WHEN NEW.archived_at IS NOT NULL AND OLD.archived_at IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'leaf-closure-active-sessions')
+    WHERE EXISTS (
+        SELECT 1
+        FROM leaf_work lw
+        JOIN work_session ws ON ws.leaf_work_id = lw.job_node_id
+        WHERE lw.job_node_id = NEW.id AND ws.finished_at IS NULL
+    );
+END;

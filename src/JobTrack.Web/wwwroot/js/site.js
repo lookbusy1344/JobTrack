@@ -13,16 +13,18 @@ document.addEventListener('click', (event) => {
     event.preventDefault();
 });
 
-// Toggle a backdate row/panel (data-jt-backdate-toggle="<target id>") open/closed, in place of the
-// old <details> disclosure -- a <details> can't legally contain a <tr>, so the row/panel presentation
-// needs its own show/hide instead of relying on the element's native open state.
+// Toggle a disclosure row/panel (data-jt-disclosure-toggle="<target id>") open/closed, in place of
+// the old <details> disclosure -- a <details> can't legally contain a <tr>, so the row/panel
+// presentation needs its own show/hide instead of relying on the element's native open state. Shared
+// by the backdate disclosure (_BackdateTrigger/_BackdateRow/_BackdatePanel). Start-for uses native
+// details/summary instead so its complete form remains usable without JavaScript.
 document.addEventListener('click', (event) => {
-    const trigger = event.target.closest('[data-jt-backdate-toggle]');
+    const trigger = event.target.closest('[data-jt-disclosure-toggle]');
     if (!trigger) {
         return;
     }
 
-    const target = document.getElementById(trigger.getAttribute('data-jt-backdate-toggle'));
+    const target = document.getElementById(trigger.getAttribute('data-jt-disclosure-toggle'));
     if (!target) {
         return;
     }
@@ -32,7 +34,7 @@ document.addEventListener('click', (event) => {
     trigger.setAttribute('aria-expanded', String(wasHidden));
 
     if (wasHidden) {
-        target.querySelector('input[type="datetime-local"]')?.focus();
+        target.querySelector('input[type="datetime-local"], select, input[type="text"]')?.focus();
     }
 });
 

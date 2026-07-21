@@ -20,6 +20,10 @@ public static class WorkSessionFailureDisplay
 			"work-session-start-in-future" or "work-session-finish-in-future" => "That time is in the future — enter a past time.",
 			"work-session-overlap" => "That time overlaps another session for this leaf.",
 			"work-session-invalid-interval" => "The finish time must be after the start time.",
+			"work-session-leaf-closed" =>
+				"This leaf is closed to new sessions. Reopen it and/or restore it before starting another session.",
+			"leaf-closure-active-sessions" => "This leaf cannot be closed while a session is still active. Finish it first.",
+			"work-session-target-not-eligible" => "That worker is disabled or no longer eligible. Choose another worker.",
 			_ => exception.Message,
 		};
 	}
