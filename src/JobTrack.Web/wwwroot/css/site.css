@@ -356,20 +356,6 @@ p {
     max-width: 52rem;
 }
 
-/* The eyebrow: a small mono/uppercase kicker above a page title or on a card. */
-.jt-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--jt-space-2);
-    margin-bottom: var(--jt-space-2);
-    font-family: var(--bs-font-monospace);
-    font-size: var(--jt-font-size-xxs);
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--jt-orange-600);
-}
-
 /* Bootstrap 5.3 bakes the base `a` colour in as a literal hex at compile time rather than
    referencing --bs-link-color, so the :root override never reaches plain anchors. This explicit
    rule is what actually applies the token (originally caught by the axe-core colour-contrast
@@ -668,6 +654,14 @@ dl {
     border-left: 3px solid var(--jt-orange-600);
     border-radius: var(--jt-radius-lg);
     box-shadow: var(--jt-shadow-sm);
+}
+
+/* The <dl> carries Bootstrap's `.row` for its label/value grid, and `.row` sets a negative inline
+   margin that outranks the shorthand `margin: 0` above — pulling the card's spine half a gutter
+   left of every sibling block on the page. Restore the flush edge the base rule already intends so
+   the record card lines up with the toolbar, list cards, and table below it. */
+dl.row {
+    margin-inline: 0;
 }
 
 dt {
@@ -979,7 +973,7 @@ fieldset legend {
 /* Blocked is red, not the amber it used to be: the pill now carries a raised-palm stop sign, and a
    red hand on an amber ground reads as two states at once. Red is otherwise this palette's error
    colour, but a blocked job is the nearest thing to a stop the domain has, and `.jt-notice--error`
-   /`.jt-eyebrow--error` are separate components that never sit beside a status pill. */
+   is a separate component that never sits beside a status pill. */
 .status-pill-blocked {
     background-color: var(--jt-red-100);
     color: var(--jt-red-700);
@@ -1834,12 +1828,15 @@ nav[aria-label="breadcrumb"] li + li::before {
     font-weight: 600;
 }
 
-.jt-disclosure-body {
-    margin-top: var(--jt-space-3);
+/* A non-clickable list heading with no pointer affordance — labels the two always-shown lists
+   (Requires / Depends-on) that share one card on Browse. */
+.jt-list-heading {
+    margin: 0;
+    font-weight: 700;
 }
 
-.jt-eyebrow--error {
-    color: var(--jt-red-700);
+.jt-disclosure-body {
+    margin-top: var(--jt-space-3);
 }
 
 .jt-notice--error {

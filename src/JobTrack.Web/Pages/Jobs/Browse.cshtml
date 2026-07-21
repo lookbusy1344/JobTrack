@@ -25,7 +25,6 @@
 }
 
 <div class="jt-page-head">
-	<p class="jt-eyebrow">Job hierarchy</p>
 	<h1>Browse job</h1>
 </div>
 
@@ -258,68 +257,75 @@
 	}
 
 	@if (Model.CurrentNode.Node.Kind != NodeKind.Root) {
-		<div class="row row-cols-1 row-cols-md-2 g-3 mb-4">
-			<details class="jt-card col" open>
-				<summary class="jt-disclosure-summary">&larr; Requires (must finish first)</summary>
-				@if (Model.Requires.Count == 0) {
-					<p class="jt-empty">None.</p>
-				} else {
-					<ul class="jt-list">
-						@foreach (var node in Model.Requires) {
-							<li class="d-flex flex-wrap align-items-center gap-3">
-								@if (Model.BlockingRequiredIds.Contains(node.Id)) {
-									<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
-									                                                                                   viewBox="0 0 16 16"
-									                                                                                   aria-hidden="true"
-									                                                                                   focusable="false"><use
-												href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
-								} else {
-									<span class="status-pill status-pill--icon status-pill-ready" role="status"><svg class="status-pill-glyph"
-									                                                                                 viewBox="0 0 16 16"
-									                                                                                 aria-hidden="true"
-									                                                                                 focusable="false"><use
-												href="#jt-icon-go"></use></svg><span class="visually-hidden">Satisfied</span></span>
-								}
-								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-								   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
-								<span class="d-flex align-items-center gap-2 ms-auto">
-									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
-									@if (node.ArchivedAt is not null) {
-										<span class="jt-muted"> · archived</span>
+		@* Requires and Depends-on always appear together, so they share one card (ADR 0044 browse
+		   layout): a single full-width surface flush with the toolbar and subtree. The two lists sit
+		   side by side on wide screens and stack on narrow ones, each under its own directional
+		   heading. Always shown — not a disclosure. *@
+		<div class="jt-card mb-4">
+			<div class="d-flex flex-column flex-md-row gap-4">
+				<div class="flex-fill">
+					<p class="jt-list-heading">&larr; Requires (must finish first)</p>
+					@if (Model.Requires.Count == 0) {
+						<p class="jt-empty">None.</p>
+					} else {
+						<ul class="jt-list jt-list--wide mb-0">
+							@foreach (var node in Model.Requires) {
+								<li class="d-flex flex-wrap align-items-center gap-3">
+									@if (Model.BlockingRequiredIds.Contains(node.Id)) {
+										<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
+										                                                                                   viewBox="0 0 16 16"
+										                                                                                   aria-hidden="true"
+										                                                                                   focusable="false"><use
+													href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
+									} else {
+										<span class="status-pill status-pill--icon status-pill-ready" role="status"><svg class="status-pill-glyph"
+										                                                                                 viewBox="0 0 16 16"
+										                                                                                 aria-hidden="true"
+										                                                                                 focusable="false"><use
+													href="#jt-icon-go"></use></svg><span class="visually-hidden">Satisfied</span></span>
 									}
-								</span>
-							</li>
-						}
-					</ul>
-				}
-			</details>
-			<details class="jt-card col" open>
-				<summary class="jt-disclosure-summary">Depends on this job &rarr;</summary>
-				@if (Model.RequiredBy.Count == 0) {
-					<p class="jt-empty">None.</p>
-				} else {
-					<ul class="jt-list">
-						@foreach (var node in Model.RequiredBy) {
-							<li class="d-flex flex-wrap align-items-center gap-3">
-								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-								   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
-								<span class="d-flex align-items-center gap-2 ms-auto">
-									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
-									@if (node.ArchivedAt is not null) {
-										<span class="jt-muted"> · archived</span>
-									}
-								</span>
-							</li>
-						}
-					</ul>
-				}
-			</details>
+									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
+									<span class="d-flex align-items-center gap-2 ms-auto">
+										<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
+										@if (node.ArchivedAt is not null) {
+											<span class="jt-muted"> · archived</span>
+										}
+									</span>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+				<div class="flex-fill">
+					@* Nudged right to sit level with where "Requires" begins after its leading arrow. *@
+					<p class="jt-list-heading ps-3">Depends on this job &rarr;</p>
+					@if (Model.RequiredBy.Count == 0) {
+						<p class="jt-empty">None.</p>
+					} else {
+						<ul class="jt-list jt-list--wide mb-0">
+							@foreach (var node in Model.RequiredBy) {
+								<li class="d-flex flex-wrap align-items-center gap-3">
+									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
+									<span class="d-flex align-items-center gap-2 ms-auto">
+										<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
+										@if (node.ArchivedAt is not null) {
+											<span class="jt-muted"> · archived</span>
+										}
+									</span>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+			</div>
 		</div>
 
 		@if (Model.AncestorBlockers.Count > 0) {
 			<details class="jt-card">
 				<summary class="jt-disclosure-summary">Inherited blockers (from ancestor prerequisites)</summary>
-				<ul class="jt-list jt-list--wide">
+				<ul class="jt-list jt-list--wide mb-0">
 					@foreach (var blocker in Model.AncestorBlockers) {
 						<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
 							<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
