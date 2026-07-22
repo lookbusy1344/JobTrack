@@ -23,12 +23,23 @@ using Shared.Entities;
 ///     a lock. Closed-leaf session creation (ADR 0044) is the one exception: it does use ADR 0012's
 ///     "leaf session closure" advisory-lock domain, taken by schema version 0007's own deferred
 ///     constraint triggers (not by this port directly) to serialize against a concurrent terminal
-///     achievement transition or archive on the same leaf.
+///     achievement transition or archive on the same leaf. Prerequisite readiness checks reuse that
+///     same per-leaf lock for each required job, so reopening a formerly successful prerequisite cannot
+///     commit from the same readiness snapshot as a dependent session start.
 /// </summary>
 internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 {
 	/// <summary>ADR 0044: schema version 0007's leaf-closed deferred constraint triggers' distinct SQLSTATE.</summary>
 	private const string LeafClosedSqlState = "P0007";
+
+	/// <summary>ADR 0044: schema version 0007's leaf-closure deferred constraint triggers' distinct SQLSTATE.</summary>
+	private const string ActiveSessionsSqlState = "P0008";
+
+	/// <summary>ADR 0045 §4: the fixed structured reason recorded for every <see cref="CompleteLeafAsync" /> completion.</summary>
+	private const string CompletionReason = "Completed from the leaf work page";
+
+	/// <summary>ADR 0038's existing fixed auto-advance audit reason, reused verbatim by <see cref="ReopenAndStartWorkAsync" />.</summary>
+	private const string AutoAdvanceReason = "Advanced automatically on session start";
 
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
@@ -225,7 +236,8 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		var now = clock.GetCurrentInstant();
 		var session = await LoadTrackedSessionAsync(context, request.SessionId, cancellationToken).ConfigureAwait(false);
 		EnsureLeafMatchesOrThrow(session, request.LeafWorkId);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
+		await AuthorizeFinishOrThrowAsync(
+			context, request.Context.Actor, session.LeafWorkId, session.WorkedByUserId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(session.RowVersion, request.Version);
 
 		var finishedAt = request.FinishedAt ?? now;
@@ -321,6 +333,266 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		return ToResult(session);
 	}
 
+	/// <inheritdoc />
+	public async Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default)
+	{
+		await using var context = CreateContext();
+		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+		var leafWork = await context.Set<LeafWorkEntity>()
+						   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
+
+		var now = clock.GetCurrentInstant();
+		await AuthorizeCompleteOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
+		CheckVersionOrThrow(leafWork.RowVersion, request.Version);
+
+		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, Achievement.Success)) {
+			throw new InvariantViolationException(
+				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {Achievement.Success}.");
+		}
+
+		var activeSessions = await context.Set<WorkSessionEntity>()
+			.Where(s => s.LeafWorkId == request.JobNodeId && s.FinishedAt == null)
+			.OrderBy(s => s.Id)
+			.ToListAsync(cancellationToken).ConfigureAwait(false);
+		var expected = request.ExpectedActiveSessions.OrderBy(e => e.Id.Value).ToList();
+		var matchesExpected = activeSessions.Count == expected.Count
+							  && activeSessions.Zip(expected)
+								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.RowVersion == pair.Second.Version);
+		if (!matchesExpected) {
+			throw new ConcurrencyConflictException("The leaf's current active-session set no longer matches the confirmed set.");
+		}
+
+		var finishedAt = request.FinishedAt ?? now;
+		if (activeSessions.Any(s => finishedAt <= s.StartedAt)) {
+			throw new InvariantViolationException(
+				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+		}
+
+		if (finishedAt > now) {
+			throw new InvariantViolationException(
+				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+		}
+
+		if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
+		}
+
+		foreach (var session in activeSessions) {
+			session.FinishedAt = finishedAt;
+			session.ChangedAt = now;
+			session.RowVersion += 1;
+
+			AuditEventWriter.Add(
+				context, request.Context.Actor, now, "finish-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
+				null,
+				new Dictionary<string, string?> { ["finished_at"] = null },
+				new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
+		}
+
+		var previousAchievement = leafWork.Achievement;
+		leafWork.Achievement = Achievement.Success;
+		leafWork.ChangedAt = now;
+		leafWork.RowVersion += 1;
+
+		var completionReason = request.CompletionNote is { Length: > 0 } note
+			? $"{CompletionReason} ({note})"
+			: CompletionReason;
+		AuditEventWriter.Add(
+			context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value, request.Context.CorrelationId,
+			completionReason,
+			new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
+			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+		try {
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (DbUpdateConcurrencyException ex) {
+			throw new ConcurrencyConflictException(
+				$"Expected version for job node {request.JobNodeId} or one of its active sessions did not match its current version.", ex);
+		}
+		catch (Exception ex) when (FindActiveSessionsViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.", ex);
+		}
+
+		return new() {
+			JobNodeId = request.JobNodeId,
+			Achievement = leafWork.Achievement,
+			ChangedAt = leafWork.ChangedAt,
+			Version = leafWork.RowVersion,
+			FinishedSessions = [.. activeSessions.Select(ToResult)],
+		};
+	}
+
+	/// <inheritdoc />
+	public async Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(
+		ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(request.Reason, nameof(request.Reason));
+
+		await using var context = CreateContext();
+		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+		var leafWork = await context.Set<LeafWorkEntity>()
+						   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
+		var node = await context.Set<JobNodeEntity>().AsNoTracking()
+					   .FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
+
+		var now = clock.GetCurrentInstant();
+		CheckVersionOrThrow(leafWork.RowVersion, request.Version);
+
+		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, Achievement.Waiting)) {
+			throw new InvariantViolationException(
+				"achievement-transition-not-permitted", $"Cannot reopen from {leafWork.Achievement}.");
+		}
+
+		if (node.ArchivedAt is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "An archived node's leaf must be restored before it can be reopened.");
+		}
+
+		await AuthorizeReopenAndStartOrThrowAsync(
+			context, request.Context.Actor, request.JobNodeId, request.WorkedByUserId, now, cancellationToken).ConfigureAwait(false);
+		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
+
+		if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken, request.JobNodeId).ConfigureAwait(false)) {
+			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
+		}
+
+		if (leafWork.Achievement == Achievement.Success &&
+			await PrerequisiteReadinessSerialization.HasActiveDependentWorkAsync(context, request.JobNodeId, cancellationToken)
+				.ConfigureAwait(false)) {
+			throw new ConcurrencyConflictException(
+				$"Job node {request.JobNodeId} cannot be reopened because dependent work became active.");
+		}
+
+		var startedAt = request.StartedAt ?? now;
+		if (startedAt > now) {
+			throw new InvariantViolationException(
+				"work-session-start-in-future", "A session's start instant must not be in the future.");
+		}
+
+		if (await context.Set<WorkSessionEntity>().AsNoTracking().AnyAsync(
+				s => s.LeafWorkId == request.JobNodeId && s.WorkedByUserId == request.WorkedByUserId && s.FinishedAt == null,
+				cancellationToken).ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				"work-session-already-active", "This worker already has an active session for this leaf.");
+		}
+
+		var previousAchievement = leafWork.Achievement;
+		leafWork.Achievement = Achievement.Waiting;
+		leafWork.ChangedAt = now;
+		leafWork.RowVersion += 1;
+
+		AuditEventWriter.Add(
+			context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value, request.Context.CorrelationId,
+			request.Reason,
+			new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
+			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+		var reopenedAchievement = leafWork.Achievement;
+		leafWork.Achievement = Achievement.InProgress;
+		leafWork.RowVersion += 1;
+
+		AuditEventWriter.Add(
+			context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value, request.Context.CorrelationId,
+			AutoAdvanceReason,
+			new Dictionary<string, string?> { ["achievement"] = reopenedAchievement.ToString() },
+			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+		var session = new WorkSessionEntity {
+			Id = default,
+			LeafWorkId = request.JobNodeId,
+			WorkedByUserId = request.WorkedByUserId,
+			StartedAt = startedAt,
+			FinishedAt = null,
+			ChangedAt = now,
+			RowVersion = 1,
+		};
+		_ = context.Add(session);
+
+		try {
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+			AuditEventWriter.Add(
+				context, request.Context.Actor, now, "start-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
+				null, null,
+				new Dictionary<string, string?> {
+					["leaf_work_id"] = session.LeafWorkId.Value.ToString(CultureInfo.InvariantCulture),
+					["worked_by_user_id"] = session.WorkedByUserId.Value.ToString(CultureInfo.InvariantCulture),
+					["started_at"] = session.StartedAt.ToString(),
+				});
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (DbUpdateConcurrencyException ex) {
+			throw new ConcurrencyConflictException(
+				$"Expected version {request.Version} for job node {request.JobNodeId} did not match its current version.", ex);
+		}
+		catch (Exception ex) when (FindActiveSessionUniqueViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
+		}
+		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
+		}
+		catch (Exception ex) when (FindGeneralOverlapViolation(ex) is not null) {
+			throw new InvariantViolationException(
+				"work-session-overlap", "This session would overlap another session for the same worker and leaf.", ex);
+		}
+
+		return new() {
+			JobNodeId = request.JobNodeId,
+			Achievement = leafWork.Achievement,
+			ChangedAt = leafWork.ChangedAt,
+			Version = leafWork.RowVersion,
+			Session = ToResult(session),
+		};
+	}
+
+	/// <summary>
+	///     ADR 0045 §3.6: <see cref="CompleteLeafAsync" /> requires the same authority
+	///     <see cref="PostgreSqlAchievementCommandPort.SetAchievementAsync" /> already requires for the
+	///     terminal transition -- controlling owner, Job Manager, or Administrator, never the narrower
+	///     self-finish exception <see cref="WorkSessionAccessPolicy.CanFinishSession" /> adds for pausing.
+	/// </summary>
+	private static async Task AuthorizeCompleteOrThrowAsync(
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, JobNodeId leafId, Instant now, CancellationToken cancellationToken)
+	{
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
+			.ConfigureAwait(false);
+
+		if (!AchievementAccessPolicy.CanSetAchievement(actorRoles, ancestorOwnerIds.Contains(actorId.Value), false)) {
+			throw new AuthorizationDeniedException($"Actor {actorId} may not complete job node {leafId}.");
+		}
+	}
+
+	/// <summary>ADR 0045 §2: the atomic reopen-and-start composite's own, wider authority test.</summary>
+	private static async Task AuthorizeReopenAndStartOrThrowAsync(
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, JobNodeId leafId, AppUserId targetWorkedByUserId, Instant now,
+		CancellationToken cancellationToken)
+	{
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
+			.ConfigureAwait(false);
+		var actorParticipatedPreviously = await context.Set<WorkSessionEntity>().AsNoTracking()
+			.AnyAsync(s => s.LeafWorkId == leafId && s.WorkedByUserId == actorId, cancellationToken).ConfigureAwait(false);
+
+		if (!LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(
+				actorRoles, ancestorOwnerIds.Contains(actorId.Value), actorParticipatedPreviously, actorId, targetWorkedByUserId)) {
+			throw new AuthorizationDeniedException($"Actor {actorId} may not reopen and start job node {leafId} for {targetWorkedByUserId}.");
+		}
+	}
+
 	/// <summary>
 	///     The common "start/correct into a second active session" case is a plain unique-violation
 	///     against schema version 0007's partial index; the rarer general-overlap case is the GiST
@@ -349,6 +621,18 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 	///     "already active"; the GiST exclusion (23P01) or its belt-and-braces deadlock (40P01) path
 	///     means the backdated interval collides with a different, already-recorded session.
 	/// </summary>
+	/// <summary>
+	///     ADR 0044 Stage 6: schema version 0007's <c>leaf_work_no_active_sessions_on_terminal</c>
+	///     deferred constraint trigger, the same one <see cref="PostgreSqlAchievementCommandPort" />
+	///     backstops against for an ordinary <c>SetAchievementAsync</c> terminal transition.
+	/// </summary>
+	private static PostgresException? FindActiveSessionsViolation(Exception? ex) =>
+		ex switch {
+			null => null,
+			PostgresException pg when pg.SqlState == ActiveSessionsSqlState => pg,
+			_ => FindActiveSessionsViolation(ex.InnerException),
+		};
+
 	private static PostgresException? FindActiveSessionUniqueViolation(Exception? ex) =>
 		ex switch {
 			null => null,
@@ -419,6 +703,27 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 
 		if (!WorkSessionAccessPolicy.CanManage(actorRoles, ancestorOwnerIds.Contains(actorId.Value))) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage a session on job node {leafId}.");
+		}
+	}
+
+	/// <summary>
+	///     ADR 0045 §5: finishing a session admits one narrow exception beyond <see cref="AuthorizeOrThrowAsync" />'s
+	///     node-control rule -- the worker named on the session may always finish it themselves, even
+	///     after node ownership changed out from under them post-start. Governs <see cref="FinishSessionAsync" />
+	///     only; <see cref="StartSessionAsync" />/<see cref="StartWorkAsync" />/<see cref="CorrectSessionAsync" />
+	///     keep the unqualified node-control rule via <see cref="AuthorizeOrThrowAsync" />.
+	/// </summary>
+	private static async Task AuthorizeFinishOrThrowAsync(
+		PostgreSqlJobTrackDbContext context, AppUserId actorId, JobNodeId leafId, AppUserId sessionWorkedByUserId, Instant now,
+		CancellationToken cancellationToken)
+	{
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
+			.ConfigureAwait(false);
+
+		if (!WorkSessionAccessPolicy.CanFinishSession(
+				actorRoles, ancestorOwnerIds.Contains(actorId.Value), actorId == sessionWorkedByUserId)) {
+			throw new AuthorizationDeniedException($"Actor {actorId} may not finish this session on job node {leafId}.");
 		}
 	}
 

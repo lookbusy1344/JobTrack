@@ -17,8 +17,10 @@ using TestSupport;
 using Program = Program;
 
 /// <summary>
-///     Direct-HTTP tests for the inline Start/Finish controls on <c>/Jobs/Browse</c> (recording work is
-///     the app's most common action, so it does not require navigating to <c>/Jobs/Work</c> first).
+///     Direct-HTTP tests for <c>/Jobs/Browse</c>'s work controls: an inline one-click Start (recording
+///     work is the app's most common action, so it does not require navigating to <c>/Jobs/Work</c>
+///     first) alongside an "End session" link that hands the pause-vs-complete decision to
+///     <c>/Jobs/Work</c> (plan §5.3) -- Browse never finishes a session inline itself.
 /// </summary>
 public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 {
@@ -182,7 +184,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task A_worker_can_finish_their_active_session_inline_from_the_browse_row()
+	public async Task A_worker_can_end_their_active_session_from_the_browse_row_via_the_work_page()
 	{
 		var workerId = await SeedEmployeeAsync("browse.finisher", EmployeeRole.Worker);
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Lay bricks");
@@ -193,14 +195,21 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await startReloaded.Content.ReadAsStringAsync();
-		var (sessionId, version) = ExtractFirstSession(startBody);
 
-		var (finishCookie, finishToken) = await ExtractFormAsync(startReloaded, startCookie);
-		var finishResponse = await PostFinishAsync(authCookie, finishCookie, finishToken, sessionId, version, null);
+		// Plan §5.3: the Browse row never finishes inline -- it links to /Jobs/Work, which is where
+		// the finish handler actually lives.
+		startBody.Should().Contain($"/Jobs/Work?leafNodeId={leaf.Id.Value}");
+
+		var session = (await seedClient.Query.GetLeafSessionsAsync(
+				new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, LeafWorkId = leaf.Id }))
+			.Should().ContainSingle().Subject;
+
+		var (workCookie, workToken) = await GetFormAsync(authCookie, $"/Jobs/Work?leafNodeId={leaf.Id.Value}");
+		var finishResponse = await PostWorkFinishAsync(authCookie, workCookie, workToken, leaf.Id, session.Id.Value, session.Version, null);
 		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
 		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
-		finishBody.Should().Contain("Session finished");
+		finishBody.Should().Contain("Ends this session; the job stays In Progress.");
 	}
 
 	[Fact]
@@ -406,7 +415,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task A_lone_other_session_stays_finishable_inline_for_a_permitted_manager()
+	public async Task A_lone_other_session_stays_end_session_linked_for_a_permitted_manager()
 	{
 		var ownerId = await SeedEmployeeAsync("browse.lone.owner", EmployeeRole.Worker);
 		var aliceId = await SeedEmployeeAsync("browse.lone.alice", EmployeeRole.Worker);
@@ -422,8 +431,8 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		// Exactly one active session, owned by someone else: the leaf owner (a permitted manager) keeps
-		// an inline "Finish / pause" for it, because one session is unambiguous.
-		body.Should().Contain("title=\"Finish / pause\"");
+		// an "End session" link for it (plan §5.3), because one session is unambiguous.
+		body.Should().Contain("title=\"End session\"");
 	}
 
 	[Fact]
@@ -467,9 +476,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var response = await GetLeafDetailAsync(authCookie, rootId);
 		var body = await response.Content.ReadAsStringAsync();
 
-		// "Finish / pause" for me, "Sessions" for everyone else: the viewer's own finish stays inline;
-		// no other worker's finish appears.
-		body.Should().Contain("title=\"Finish / pause\"");
+		// "End session" for me, "Sessions" for everyone else: the viewer's own session stays a
+		// one-click End-session link (plan §5.3); no other worker's finish appears inline.
+		body.Should().Contain("title=\"End session\"");
 		body.Should().NotContain("'s session\"");
 		body.Should().Contain("title=\"Sessions\"");
 	}
@@ -554,7 +563,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task The_leaf_toolbar_keeps_a_labelled_finish_button_carrying_the_same_glyph()
+	public async Task The_leaf_toolbar_routes_session_work_to_the_unified_work_page_without_an_embedded_sessions_form()
 	{
 		var workerId = await SeedEmployeeAsync("browse.finish-label", EmployeeRole.Worker);
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Labelled finish leaf");
@@ -568,7 +577,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("#jt-icon-finish");
-		body.Should().Contain("Finish / pause");
+		body.Should().Contain("End session");
+		body.Should().NotContain("Finish / pause");
+		body.Should().NotContain("Filter by worker");
+		body.Should().Contain($"/Jobs/Work?leafNodeId={leaf.Id.Value}");
 	}
 
 	[Fact]
@@ -769,12 +781,17 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		return await client.SendAsync(request);
 	}
 
-	private async Task<HttpResponseMessage> PostFinishAsync(
-		string authCookie, string antiforgeryCookie, string token, long sessionId, long version, string? finishedAt)
+	/// <summary>
+	///     Ending a session from the Browse row is a two-step navigation (plan §5.3): the row's "End
+	///     session" link opens <c>/Jobs/Work</c>, whose own Finish handler actually posts the finish.
+	/// </summary>
+	private async Task<HttpResponseMessage> PostWorkFinishAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, long sessionId, long version, string? finishedAt)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=Finish");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Finish");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		var fields = new Dictionary<string, string> {
+			["leafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["sessionId"] = sessionId.ToString(CultureInfo.InvariantCulture),
 			["version"] = version.ToString(CultureInfo.InvariantCulture),
 			["__RequestVerificationToken"] = token,
@@ -786,6 +803,22 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		request.Content = new FormUrlEncodedContent(fields);
 
 		return await client.SendAsync(request);
+	}
+
+	private async Task<(string CookieHeader, string Token)> GetFormAsync(string authCookie, string path)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, path);
+		request.Headers.Add("Cookie", authCookie);
+
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+								throw new InvalidOperationException($"No antiforgery cookie in {path} response.");
+		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
+			? match.Groups["token"].Value
+			: throw new InvalidOperationException($"No antiforgery token in {path} body.");
+
+		return (ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private async Task<(string CookieHeader, string Token)> GetBrowseFormAsync(string authCookie)
@@ -814,18 +847,6 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 			: throw new InvalidOperationException("No antiforgery token in response body.");
 
 		return (cookie, token);
-	}
-
-	private static (long SessionId, long Version) ExtractFirstSession(string body)
-	{
-		var sessionIdMatch = SessionIdPattern().Match(body);
-		var versionMatch = VersionPattern().Match(body);
-		if (!sessionIdMatch.Success || !versionMatch.Success) {
-			throw new InvalidOperationException("No session row found in Browse page body.");
-		}
-
-		return (long.Parse(sessionIdMatch.Groups["id"].Value, CultureInfo.InvariantCulture),
-			long.Parse(versionMatch.Groups["version"].Value, CultureInfo.InvariantCulture));
 	}
 
 	private async Task<string> SignInAsync(string userName)
@@ -870,11 +891,6 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	[GeneratedRegex("name=\"sessionId\" value=\"(?<id>[0-9]+)\"")]
-	private static partial Regex SessionIdPattern();
-
-	[GeneratedRegex("name=\"version\" value=\"(?<version>[0-9]+)\"")]
-	private static partial Regex VersionPattern();
 
 	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
 	{

@@ -30,6 +30,32 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 	public Task DisposeAsync() => database.DisposeAsync();
 
 	[Fact]
+	public async Task CountDirectDependentsAsync_counts_only_edges_from_the_required_side()
+	{
+		var (requiredId, dependentId, unrelatedId) = await SeedEdgeAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var requiredCount = await port.CountDirectDependentsAsync(requiredId);
+		var dependentCount = await port.CountDirectDependentsAsync(dependentId);
+		var unrelatedCount = await port.CountDirectDependentsAsync(unrelatedId);
+
+		requiredCount.Should().Be(1);
+		dependentCount.Should().Be(0);
+		unrelatedCount.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task CountDirectDependentsAsync_throws_for_a_nonexistent_node()
+	{
+		var (requiredId, _, _) = await SeedEdgeAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var act = () => port.CountDirectDependentsAsync(new(requiredId.Value + 999));
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	[Fact]
 	public async Task GetPrerequisitesAsync_returns_the_edge_from_the_required_side()
 	{
 		var (requiredId, dependentId, _) = await SeedEdgeAsync();

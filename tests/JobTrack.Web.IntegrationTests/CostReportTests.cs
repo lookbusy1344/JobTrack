@@ -86,7 +86,7 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 		SterlingAmountPattern().Count(body).Should().Be(3);
 		body.Should().Contain(">&#xA3;120.00<");
 		body.Should().Contain(nameof(RateSource.UserCostRate));
-		body.Should().Contain("Ready");
+		body.Should().Contain("No blocks");
 	}
 
 	[Fact]

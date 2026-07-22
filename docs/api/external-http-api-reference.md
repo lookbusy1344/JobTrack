@@ -75,6 +75,8 @@ mutation is already retry-safe through one of the mechanisms below.
 | `POST /jobs/{nodeId}/prerequisites` | Add prerequisite | None (create) | `409 Conflict` | `job-prerequisite-already-exists`: the edge is a set member, not a counter: a retried add cannot double-apply. |
 | `DELETE /jobs/{nodeId}/prerequisites/{requiredJobId}` | Remove prerequisite | None | `404 Not Found` | The edge no longer exists after the first successful delete; a retry finds nothing to remove rather than erroring or re-deleting. |
 | `PUT /jobs/{nodeId}/achievement` | Set achievement | `version` (optimistic) | `409 Conflict` | Stale `version` on retry, same shape as session finish/correct. |
+| `POST /jobs/{nodeId}/complete` | Complete leaf (ADR 0045) | leaf `version` and every `expectedActiveSessions[].version` | `409 Conflict` | Stale leaf `version`, or the leaf's actual active-session set no longer exactly matches `expectedActiveSessions` (a concurrent session start/finish moved it) — never silently included or excluded. |
+| `POST /jobs/{nodeId}/reopen-and-start-session` | Reopen and start (ADR 0045) | `version` (optimistic) | `409 Conflict` | Stale `version` on retry, same shape as session finish/correct. |
 | `POST /employees/{userId}/rates/user-cost-rates` | Add user cost rate | None (create) | `409 Conflict` | Effective-dated ranges may not overlap; a retried identical insert collides with the one just created. |
 | `POST /employees/{userId}/rates/node-rate-overrides` | Add node rate override | None (create) | `409 Conflict` | Same overlap invariant as user cost rates. |
 | `POST /employees/{userId}/schedule/versions` | Add schedule version | None (create) | `409 Conflict` | Effective-dated schedule versions may not overlap. |
@@ -113,7 +115,9 @@ opaque `long` route identifiers.
 | POST | `/jobs/{nodeId}/prerequisites` | Add a prerequisite edge (body: `requiredJobId`). |
 | DELETE | `/jobs/{nodeId}/prerequisites/{requiredJobId}` | Remove a prerequisite edge. |
 | GET | `/jobs/{nodeId}/achievement` | A leaf's current achievement state. |
-| PUT | `/jobs/{nodeId}/achievement` | Transition achievement, with an audited reason. Reopening a terminal state (`Success`/`Cancelled`/`Unsuccessful`) back to `Waiting` requires Administrator/JobManager regardless of subtree ownership. |
+| PUT | `/jobs/{nodeId}/achievement` | Transition achievement, with an audited reason. This primitive endpoint always requires Administrator/JobManager to reopen a terminal state (`Success`/`Cancelled`/`Unsuccessful`) back to `Waiting`, regardless of subtree ownership — it never starts a session and grants no wider authority. |
+| POST | `/jobs/{nodeId}/complete` | Atomic composite (ADR 0045): finishes the exact caller-confirmed active-session set (`expectedActiveSessions`, possibly empty) at one instant and records `Success`, in one commit. Body: `version`, `expectedActiveSessions: [{ id, version }]`, optional `finishedAt`, optional `completionNote`. |
+| POST | `/jobs/{nodeId}/reopen-and-start-session` | Atomic composite (ADR 0045): reopens a terminal leaf to `Waiting` with an audited `reason`, auto-advances to `InProgress` (ADR 0038), and starts `workedByUserId`'s session, in one commit. Authorized more widely than the primitive `PUT .../achievement` above — a controlling owner, Job Manager, or Administrator may start for any eligible target; a prior session participant on this leaf who controls nothing may start for themselves only (ADR 0045 §2). Body: `version`, `reason`, `workedByUserId`, optional `startedAt`. |
 
 ### Cost reports (requires Administrator/CostViewer)
 

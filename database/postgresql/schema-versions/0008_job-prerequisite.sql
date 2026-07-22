@@ -30,6 +30,23 @@ CREATE TABLE job_prerequisite
 
 CREATE INDEX job_prerequisite_to_id_idx ON job_prerequisite (to_id);
 
+-- Reopening a successful prerequisite must not invalidate dependent work
+-- which became active after the caller reviewed the dependent impact.
+CREATE FUNCTION jobtrack_has_active_dependent_work(p_required_job_id bigint) RETURNS boolean AS
+$$
+    WITH RECURSIVE dependent_subtrees(id) AS (
+        SELECT to_id FROM job_prerequisite WHERE from_id = p_required_job_id
+        UNION
+        SELECT jn.id FROM job_node jn JOIN dependent_subtrees ds ON jn.parent_id = ds.id
+    )
+    SELECT EXISTS (
+        SELECT 1
+        FROM work_session ws
+        JOIN dependent_subtrees ds ON ds.id = ws.leaf_work_id
+        WHERE ws.finished_at IS NULL
+    );
+$$ LANGUAGE sql STABLE;
+
 -- Rule 4: acyclicity. Walks forward from the new edge's dependent node
 -- (to_id); if it can already reach the required node (from_id), the new
 -- edge would close a cycle.

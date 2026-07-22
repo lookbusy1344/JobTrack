@@ -287,6 +287,74 @@ public abstract class JobBrowseBrowserTestsBase
 		AssertNoCriticalOrSeriousViolations(results, "/Jobs/Browse");
 	}
 
+	/// <summary>
+	///     The Requires/Depends-on-this-job card's rows must line up regardless of content or which
+	///     side of the card they're on: an empty side ("None."), a satisfied prerequisite (go glyph),
+	///     a blocking one (stop glyph), and a plain dependent row (no glyph -- only Requires ever
+	///     carries a readiness marker) all render through the same <c>.jt-list &gt; li</c> box, so none
+	///     of them should stand taller than another (row-height regression guard for the icon-scale
+	///     fix below). Two page loads supply every state: an unrelated leaf gives the "None." row on
+	///     both sides, and a leaf with both prerequisite outcomes plus a dependent of its own gives
+	///     "Blocked", "Unblocked", and a plain Depends-on-this-job row.
+	/// </summary>
+	[Fact]
+	public async Task Requires_and_depends_on_rows_are_all_the_same_height_whether_empty_blocked_or_unblocked()
+	{
+		var unrelatedId = await fixture.SeedLeafAsync("No prerequisites or dependents");
+
+		var satisfiedRequiredId = await fixture.SeedSuccessLeafAsync("Foundation poured");
+		var blockingRequiredId = await fixture.SeedLeafAsync("Wiring not done");
+		var dependentId = await fixture.SeedLeafAsync("Fit cabinets");
+		var grandDependentId = await fixture.SeedLeafAsync("Hang cabinet doors");
+		await fixture.SeedPrerequisiteAsync(satisfiedRequiredId, dependentId);
+		await fixture.SeedPrerequisiteAsync(blockingRequiredId, dependentId);
+		await fixture.SeedPrerequisiteAsync(dependentId, grandDependentId);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+		await SignInAsync(page);
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={unrelatedId.Value}");
+		var unrelatedColumns = page.Locator(".jt-card .flex-fill");
+		var noneRequiresHeight = await RowHeightAsync(unrelatedColumns.Nth(0).Locator("li"));
+		var noneDependsOnHeight = await RowHeightAsync(unrelatedColumns.Nth(1).Locator("li"));
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={dependentId.Value}");
+		var columns = page.Locator(".jt-card .flex-fill");
+		var requiresRows = columns.Nth(0).Locator("li");
+		var dependsOnRows = columns.Nth(1).Locator("li");
+
+		(await requiresRows.CountAsync()).Should().Be(2, "one satisfied (unblocked) and one blocking prerequisite");
+		(await dependsOnRows.CountAsync()).Should().Be(1, "one job depends on this leaf");
+
+		(await requiresRows.Nth(0).InnerHTMLAsync()).Should().Contain("Satisfied", "the successful prerequisite was added first");
+		(await requiresRows.Nth(1).InnerHTMLAsync()).Should().Contain("Blocking", "the unfinished prerequisite was added second");
+		var unblockedHeight = await RowHeightAsync(requiresRows.Nth(0));
+		var blockedHeight = await RowHeightAsync(requiresRows.Nth(1));
+		var populatedDependsOnHeight = await RowHeightAsync(dependsOnRows.Nth(0));
+
+		var heights = new Dictionary<string, double> {
+			["None (Requires)"] = noneRequiresHeight,
+			["None (Depends-on)"] = noneDependsOnHeight,
+			["Unblocked (Requires)"] = unblockedHeight,
+			["Blocked (Requires)"] = blockedHeight,
+			["Populated (Depends-on)"] = populatedDependsOnHeight,
+		};
+
+		var max = heights.Values.Max();
+		var min = heights.Values.Min();
+		(max - min).Should().BeLessThanOrEqualTo(1.0,
+			"every row -- empty, blocked, unblocked, or a plain dependent -- should be the same height, but got: " +
+			string.Join(", ", heights.Select(kv => $"{kv.Key}={kv.Value}")));
+	}
+
+	private static async Task<double> RowHeightAsync(ILocator row)
+	{
+		var box = await row.BoundingBoxAsync();
+		box.Should().NotBeNull();
+		return box!.Height;
+	}
+
 	private static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)
 	{
 		var criticalOrSerious = results.Violations

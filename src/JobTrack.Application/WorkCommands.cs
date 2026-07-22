@@ -72,4 +72,26 @@ public sealed class WorkCommands : IWorkCommands
 			"work.set-achievement", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
 			() => _achievementPort.SetAchievementAsync(request, cancellationToken));
 	}
+
+	/// <inheritdoc />
+	public Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return JobTrackOperation.TraceAsync(
+			"work.complete-leaf", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
+			() => _sessionPort.CompleteLeafAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
+	public Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(
+		ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ArgumentException.ThrowIfNullOrWhiteSpace(request.Reason, nameof(request.Reason));
+
+		return JobTrackOperation.TraceAsync(
+			"work.reopen-and-start-work", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
+			() => _sessionPort.ReopenAndStartWorkAsync(request, cancellationToken));
+	}
 }

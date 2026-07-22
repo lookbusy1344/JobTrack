@@ -22,4 +22,10 @@ public interface IWorkSessionCommandPort
 
 	/// <inheritdoc cref="IWorkCommands.CorrectSessionAsync" />
 	Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default);
+
+	/// <inheritdoc cref="IWorkCommands.CompleteLeafAsync" />
+	Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default);
+
+	/// <inheritdoc cref="IWorkCommands.ReopenAndStartWorkAsync" />
+	Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default);
 }

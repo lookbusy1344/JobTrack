@@ -155,6 +155,17 @@ orthogonal condition to authorization: it is checked independently of, and in ad
 still refused if the leaf itself is closed; reopening/restoring the leaf and holding `canRecordWork`
 are both required, neither is a substitute for the other.
 
+**Finishing one's own already-active session is an exception to `canRecordWork`, not a use of it**
+(ADR 0045): the worker named on an active session may always finish (pause) that specific session,
+even after node ownership changed out from under them post-start. This exception covers finishing
+one's own session only — completing the leaf (`CompleteLeafAsync`) and finishing another worker's
+session both still require `canRecordWork` (controlling owner, Job Manager, or Administrator)
+unchanged. Reopening a terminal leaf and starting the next session in one atomic composite
+(`ReopenAndStartWorkAsync`) is available to a controlling owner (any eligible target worker) or to a
+prior participant on that leaf starting for themselves only — see ADR 0045 for the full authority
+test, which amends ADR 0001's original Job Manager/Administrator-only reopen restriction for this
+composite path.
+
 ### 4.3 Pickup — claim an unassigned node
 
 ```

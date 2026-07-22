@@ -306,6 +306,13 @@ public sealed class JobTrackClientUsageExampleTests
 
 		public Task<LeafWorkResult> SetAchievementAsync(SetAchievementRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(
+			ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
 	}
 
 	private sealed class FakeJobCommands : IJobCommands
@@ -468,6 +475,9 @@ public sealed class JobTrackClientUsageExampleTests
 
 		public Task<RateSnapshotResult> GetRatesAsync(GetRatesRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult(new RateSnapshotResult { UserCostRates = [], NodeRateOverrides = [] });
+
+		public Task<LeafWorkPageResult> GetLeafWorkPageAsync(GetLeafWorkPageRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
 	}
 
 	private sealed class FakeInstallationCommands(bool alreadyInitialised) : IInstallationCommands

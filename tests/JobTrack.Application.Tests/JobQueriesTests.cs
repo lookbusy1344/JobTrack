@@ -13,6 +13,10 @@ public sealed class JobQueriesTests
 	private static readonly AppUserId WorkerId = new(2);
 	private static readonly AppUserId OtherWorkerId = new(3);
 
+	// GetLeafWorkPageAsync (unified-leaf-workflow plan Stage 4): the composed single-call projection.
+	private static readonly JobNodeId RootIdForWorkPage = new(1);
+	private static readonly JobNodeId LeafIdForWorkPage = new(2);
+
 	private static FakeEmployeeQueryPort CreateSeededPort()
 	{
 		var port = new FakeEmployeeQueryPort();
@@ -1922,6 +1926,260 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(new FakeRateQueryPort());
 
 		var act = () => sut.GetRatesAsync(null!);
+
+		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
+
+	private static (FakeJobNodeCommandPort NodePort, FakeWorkSessionQueryPort SessionPort, FakeLeafWorkQueryPort LeafWorkPort,
+		FakePrerequisiteQueryPort PrerequisitePort) CreateLeafWorkPageFakes()
+	{
+		var nodePort = new FakeJobNodeCommandPort();
+		nodePort.SeedRoles(AdministratorId, EmployeeRole.Administrator);
+		nodePort.SeedRoles(WorkerId, EmployeeRole.Worker);
+		nodePort.SeedRoles(OtherWorkerId, EmployeeRole.Worker);
+		nodePort.SeedNode(new() {
+			Id = RootIdForWorkPage,
+			ParentId = null,
+			Kind = NodeKind.Root,
+			Description = "Root",
+			PostedByUserId = AdministratorId,
+			OwnerUserId = AdministratorId,
+			Priority = Priority.Medium,
+			PostedAt = nodePort.NowToReturn,
+			HasChildren = true,
+			HasLeafWork = false,
+			Version = 1,
+		});
+		nodePort.SeedNode(new() {
+			Id = LeafIdForWorkPage,
+			ParentId = RootIdForWorkPage,
+			Kind = NodeKind.Leaf,
+			Description = "Fit cabinets",
+			PostedByUserId = AdministratorId,
+			OwnerUserId = WorkerId,
+			Priority = Priority.Medium,
+			PostedAt = nodePort.NowToReturn,
+			HasChildren = false,
+			HasLeafWork = true,
+			Version = 1,
+		});
+		// FakeJobNodeCommandPort derives HasLeafWork from its own internal _leafWork set (mirroring
+		// AttachLeafWorkAsync's structural-fact tracking), not from the seeded JobNodeResult field
+		// above -- SetLeafWork keeps that internal fact in sync with the leaf being tested.
+		nodePort.SetLeafWork(
+			new() { JobNodeId = LeafIdForWorkPage, Achievement = Achievement.Waiting, ChangedAt = nodePort.NowToReturn, Version = 1 });
+
+		var sessionPort = new FakeWorkSessionQueryPort();
+		sessionPort.SeedRoles(AdministratorId, EmployeeRole.Administrator);
+		sessionPort.SeedRoles(WorkerId, EmployeeRole.Worker);
+		sessionPort.SeedRoles(OtherWorkerId, EmployeeRole.Worker);
+		sessionPort.SeedLeaf(LeafIdForWorkPage);
+		sessionPort.SeedControl(WorkerId, LeafIdForWorkPage);
+
+		var leafWorkPort = new FakeLeafWorkQueryPort();
+		var prerequisitePort = new FakePrerequisiteQueryPort();
+		prerequisitePort.SeedNode(LeafIdForWorkPage);
+
+		return (nodePort, sessionPort, leafWorkPort, prerequisitePort);
+	}
+
+	private static JobQueries CreateLeafWorkPageSut(
+		FakeJobNodeCommandPort nodePort, FakeWorkSessionQueryPort sessionPort, FakeLeafWorkQueryPort leafWorkPort,
+		FakePrerequisiteQueryPort prerequisitePort) =>
+		new(EmployeePortMirroring(nodePort), nodePort, nodePort, nodePort, sessionPort, leafWorkPort, prerequisitePort,
+			new FakeScheduleQueryPort(), new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
+
+	[Fact]
+	public async Task The_leaf_work_page_reports_two_concurrent_active_sessions_without_collapsing_them()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.InProgress,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		sessionPort.SeedSession(new() {
+			Id = new(1),
+			LeafWorkId = LeafIdForWorkPage,
+			WorkedByUserId = WorkerId,
+			StartedAt = nodePort.NowToReturn,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 1,
+		});
+		sessionPort.SeedSession(new() {
+			Id = new(2),
+			LeafWorkId = LeafIdForWorkPage,
+			WorkedByUserId = OtherWorkerId,
+			StartedAt = nodePort.NowToReturn,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 1,
+		});
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+
+		result.HasLeafWork.Should().BeTrue();
+		result.Achievement.Should().Be(Achievement.InProgress);
+		result.ActiveSessions.Should().HaveCount(2);
+		result.ActiveSessions.Select(s => s.WorkedByUserId).Should().BeEquivalentTo([WorkerId, OtherWorkerId]);
+	}
+
+	[Fact]
+	public async Task The_leaf_work_page_grants_complete_and_reopen_for_others_to_a_controlling_owner()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.Unsuccessful,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+
+		result.ActorControlsNode.Should().BeTrue();
+		result.CanComplete.Should().BeTrue();
+		result.CanReopenAndStartForSelf.Should().BeTrue();
+		result.CanReopenAndStartForOthers.Should().BeTrue();
+		result.CanReopenWithoutStarting.Should().BeFalse("node control alone does not grant elevated reopen-only correction authority");
+	}
+
+	[Fact]
+	public async Task The_leaf_work_page_grants_reopen_without_starting_only_to_an_elevated_actor()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.Unsuccessful,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(AdministratorId), JobNodeId = LeafIdForWorkPage });
+
+		result.CanReopenWithoutStarting.Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task The_leaf_work_page_grants_reopen_for_self_only_to_a_prior_participant_with_no_control()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.Unsuccessful,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		sessionPort.SeedSession(new() {
+			Id = new(1),
+			LeafWorkId = LeafIdForWorkPage,
+			WorkedByUserId = OtherWorkerId,
+			StartedAt = nodePort.NowToReturn,
+			FinishedAt = nodePort.NowToReturn,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(OtherWorkerId), JobNodeId = LeafIdForWorkPage });
+
+		result.ActorControlsNode.Should().BeFalse();
+		result.ActorParticipatedPreviously.Should().BeTrue();
+		result.CanComplete.Should().BeFalse();
+		result.CanReopenAndStartForSelf.Should().BeTrue();
+		result.CanReopenAndStartForOthers.Should().BeFalse();
+		result.CanReopenWithoutStarting.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task The_leaf_work_page_grants_no_reopen_authority_to_a_non_participant_non_controller()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.Unsuccessful,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(OtherWorkerId), JobNodeId = LeafIdForWorkPage });
+
+		result.CanReopenAndStartForSelf.Should().BeFalse();
+		result.CanReopenAndStartForOthers.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task The_leaf_work_page_counts_direct_dependents_of_a_successful_leaf()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.Success,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		var dependentId = new JobNodeId(3);
+		prerequisitePort.SeedNode(dependentId);
+		prerequisitePort.SeedEdge(new(LeafIdForWorkPage, dependentId));
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+
+		result.DirectDependentCount.Should().Be(1);
+		prerequisitePort.CountDirectDependentsCallCount.Should().Be(1);
+		prerequisitePort.GetPrerequisitesCallCount.Should().Be(0, "the bounded page projection must not materialize every touching edge");
+	}
+
+	[Fact]
+	public async Task The_leaf_work_page_reports_no_leaf_work_for_a_bare_leaf_without_throwing()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		var bareLeafId = new JobNodeId(4);
+		nodePort.SeedNode(new() {
+			Id = bareLeafId,
+			ParentId = RootIdForWorkPage,
+			Kind = NodeKind.Leaf,
+			Description = "Bare leaf",
+			PostedByUserId = AdministratorId,
+			OwnerUserId = WorkerId,
+			Priority = Priority.Medium,
+			PostedAt = nodePort.NowToReturn,
+			HasChildren = false,
+			HasLeafWork = false,
+			Version = 1,
+		});
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = bareLeafId });
+
+		result.HasLeafWork.Should().BeFalse();
+		result.Achievement.Should().BeNull();
+		result.ActiveSessions.Should().BeEmpty();
+		result.CanComplete.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task Querying_the_leaf_work_page_for_a_nonexistent_node_throws_not_found()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var act = () => sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = new(999) });
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	[Fact]
+	public async Task GetLeafWorkPageAsync_rejects_a_null_request()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var act = () => sut.GetLeafWorkPageAsync(null!);
 
 		await act.Should().ThrowAsync<ArgumentNullException>();
 	}

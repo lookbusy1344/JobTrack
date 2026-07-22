@@ -130,7 +130,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
 		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
-		finishBody.Should().Contain("Session finished");
+		finishBody.Should().Contain("Ends this session; the job stays In Progress.");
 	}
 
 	[Fact]
@@ -152,8 +152,9 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await startReloaded.Content.ReadAsStringAsync();
-		startBody.Should().Contain("Finish / pause");
-		// Plan §4.1: the viewer's own one-click Start is replaced by Finish/pause, but the
+		startBody.Should().Contain("Pause work");
+		startBody.Should().NotContain("Finish / pause");
+		// Plan §4.1: the viewer's own one-click Start is replaced by Pause work, but the
 		// authorized "Start for..." disclosure (also drawn with jt-icon-start) for another worker is
 		// never removed -- only the viewer's own primary action toggles.
 		startBody.Should().NotContain("title=\"Start session\"");
@@ -235,14 +236,14 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
 		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
-		finishBody.Should().Contain("Session finished");
+		finishBody.Should().Contain("Ends this session; the job stays In Progress.");
 
 		var sessions = await GetSessionsAsync(leaf.Id);
 		sessions.Should().ContainSingle().Which.FinishedAt.Should().Be(Instant.FromDateTimeOffset(finishedAt));
 	}
 
 	[Fact]
-	public async Task The_sessions_panel_offers_finish_as_an_icon_and_the_toolbar_keeps_its_label()
+	public async Task The_sessions_panel_offers_pause_as_an_icon_and_uses_the_explicit_outcome_label()
 	{
 		var workerId = await SeedEmployeeAsync("work.finish-icon", EmployeeRole.Worker);
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Finish icon session leaf");
@@ -255,9 +256,9 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("#jt-icon-finish");
-		// The panel's row action is icon-only; the page toolbar above it keeps its label.
-		body.Should().Contain("Finish / pause");
-		body.Should().NotContain("btn btn-secondary\">Finish / pause");
+		// Both the icon-only row action and the page toolbar name the outcome consistently.
+		body.Should().Contain("Pause work");
+		body.Should().NotContain("Finish / pause");
 	}
 
 	[Fact]
@@ -485,6 +486,301 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&workedByUserId={workerId.Value}", authCookie);
 
 		response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	public async Task A_controlling_worker_can_complete_a_job_with_one_active_session_from_the_work_page()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-one", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Fit cabinets");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.complete-one");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(authCookie, cookie, token, leaf.Id, 2, [(session.Id.Value, session.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Job completed and session finished.");
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id }, CancellationToken.None);
+		leafWork.Achievement.Should().Be(Achievement.Success);
+	}
+
+	[Fact]
+	public async Task Completion_options_backdate_the_active_set_and_persist_the_optional_note()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-options", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Complete with options");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+			StartedAt = Instant.FromDateTimeOffset(MinutesAgo(HoursBeforeFinish * MinutesPerHour)),
+		});
+		var finishedAt = MinutesAgo(HoursBeforeNowFinished * MinutesPerHour);
+		var authCookie = await SignInAsync("work.complete-options");
+
+		var page = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var pageBody = await page.Content.ReadAsStringAsync();
+		pageBody.Should().Contain("Completion options");
+		pageBody.Should().Contain("name=\"finishedAt\"");
+		pageBody.Should().Contain("name=\"completionNote\"");
+		var (cookie, token) = await ExtractFormAsync(page, FindSetCookie(page, "Antiforgery") is string setCookie
+			? ExtractCookiePair(setCookie)
+			: throw new InvalidOperationException("No antiforgery cookie in Work response."));
+		var response = await PostCompleteAsync(
+			authCookie, cookie, token, leaf.Id, 2, [(session.Id.Value, session.Version)],
+			FormatForDateTimeLocal(finishedAt), "Customer confirmed acceptance");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		(await GetSessionsAsync(leaf.Id)).Should().ContainSingle().Which.FinishedAt.Should().Be(Instant.FromDateTimeOffset(finishedAt));
+		var audit = await seedClient.Audit.SearchAuditEventsAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Filter = new() { EntityType = "leaf_work", EntityId = leaf.Id.Value },
+		});
+		audit.Events.Should().Contain(entry => entry.Reason == "Completed from the leaf work page (Customer confirmed acceptance)");
+	}
+
+	[Fact]
+	public async Task Completing_a_job_with_two_active_sessions_finishes_both_and_records_success()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-two", EmployeeRole.Worker);
+		var otherWorkerId = await SeedEmployeeAsync("work.complete-two-other", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Fit cabinets, two workers");
+		var first = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var second = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = otherWorkerId,
+		});
+		var authCookie = await SignInAsync("work.complete-two");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(
+			authCookie, cookie, token, leaf.Id, 2, [(first.Id.Value, first.Version), (second.Id.Value, second.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Job completed and 2 sessions finished.");
+		(await GetSessionsAsync(leaf.Id)).Should().OnlyContain(s => s.FinishedAt != null);
+	}
+
+	[Fact]
+	public async Task Several_active_sessions_show_an_always_expanded_completion_review_without_repeating_the_sessions_list()
+	{
+		var managerId = await SeedEmployeeAsync("work.review-manager", EmployeeRole.JobManager);
+		var firstWorkerId = await SeedEmployeeAsync("work.review-first", EmployeeRole.Worker);
+		var secondWorkerId = await SeedEmployeeAsync("work.review-second", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Review several sessions");
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = firstWorkerId,
+		});
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = secondWorkerId,
+		});
+		var authCookie = await SignInAsync("work.review-manager");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("<div class=\"jt-completion-review mt-3\"");
+		body.Should().Contain("Finish 2 sessions and complete job");
+		body.Should().NotContain("active since", "the per-session worker/start-time list duplicated the Sessions table below it");
+	}
+
+	[Theory]
+	[InlineData(Achievement.Cancelled, "Cancelled. To record more work")]
+	[InlineData(Achievement.Unsuccessful, "Unsuccessful. To record more work")]
+	public async Task A_terminal_leaf_names_its_actual_outcome(Achievement achievement, string expectedCopy)
+	{
+		var managerId = await SeedEmployeeAsync($"work.outcome-{achievement}", EmployeeRole.JobManager);
+		var leaf = await AddWorkedLeafAsync(rootId, managerId, $"{achievement} leaf");
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			NewAchievement = achievement,
+			Reason = "Closing for copy test",
+			Version = 1,
+		});
+		var authCookie = await SignInAsync($"work.outcome-{achievement}");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain(expectedCopy);
+		body.Should().NotContain("<p>Completed. To record more work");
+		body.Should().Contain($"selected=\"selected\" value=\"{managerId.Value}\"", "the reopen target must default to the viewer");
+	}
+
+	[Fact]
+	public async Task End_session_id_selects_the_exact_session_a_manager_may_pause_when_several_are_active()
+	{
+		var managerId = await SeedEmployeeAsync("work.select-session-manager", EmployeeRole.JobManager);
+		var firstWorkerId = await SeedEmployeeAsync("work.select-session-first", EmployeeRole.Worker);
+		var secondWorkerId = await SeedEmployeeAsync("work.select-session-second", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Select one active session");
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = firstWorkerId,
+		});
+		var selected = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = secondWorkerId,
+		});
+		var authCookie = await SignInAsync("work.select-session-manager");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&endSessionId={selected.Id.Value}#end-session", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var finishFormPattern = FormattableString.Invariant(
+			$"action=\"/Jobs/Work\\?handler=Finish\"[\\s\\S]*?name=\"sessionId\" value=\"{selected.Id.Value}\"");
+		Regex.IsMatch(body, finishFormPattern).Should().BeTrue("the selected interval must drive the Pause work form");
+	}
+
+	[Fact]
+	public async Task A_non_controlling_worker_cannot_complete_a_job_from_the_work_page()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-forbidden-owner", EmployeeRole.Worker);
+		var strangerId = await SeedEmployeeAsync("work.complete-forbidden-stranger", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Fit cabinets");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.complete-forbidden-stranger");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, strangerId);
+		var response = await PostCompleteAsync(authCookie, cookie, token, leaf.Id, 2, [(session.Id.Value, session.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Contain("/Account/AccessDenied");
+	}
+
+	[Fact]
+	public async Task A_non_controlling_worker_sees_no_doomed_start_or_outcome_controls()
+	{
+		var ownerId = await SeedEmployeeAsync("work.capabilities-owner", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("work.capabilities-bystander", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Capability-gated leaf");
+		var authCookie = await SignInAsync("work.capabilities-bystander");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().NotContain(">Start session</button>");
+		body.Should().NotContain(">Cancel job</button>");
+		body.Should().NotContain(">Mark unsuccessful</button>");
+		body.Should().Contain("A controlling owner, Job Manager, or Administrator can start work on this job.");
+	}
+
+	[Fact]
+	public async Task A_prior_participant_can_reopen_and_start_for_themselves_from_the_work_page()
+	{
+		var workerId = await SeedEmployeeAsync("work.reopen-participant", EmployeeRole.Worker);
+		var newOwnerId = await SeedEmployeeAsync("work.reopen-new-owner", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Terminal leaf");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			NewAchievement = Achievement.Unsuccessful,
+			Reason = "Did not work out",
+			Version = 2,
+		});
+		_ = await seedClient.Jobs.EditAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			NodeId = leaf.Id,
+			Description = leaf.Description,
+			OwnerUserId = newOwnerId,
+			Priority = Priority.Medium,
+			Version = leaf.Version,
+		});
+		var authCookie = await SignInAsync("work.reopen-participant");
+		var pageResponse = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var pageBody = await pageResponse.Content.ReadAsStringAsync();
+		pageBody.Should().Contain(">Reopen and start session</button>");
+		pageBody.Should().NotContain(">Reopen without starting</button>");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostReopenAndStartAsync(authCookie, cookie, token, leaf.Id, 3, "Work resumed", workerId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Job reopened. Session started.");
+	}
+
+	private async Task<HttpResponseMessage> PostCompleteAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, long leafWorkVersion,
+		IReadOnlyList<(long SessionId, long Version)> sessions, string? finishedAt = null, string? completionNote = null)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Complete");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		var pairs = new List<KeyValuePair<string, string>> {
+			new("LeafNodeId", leafNodeId.Value.ToString(CultureInfo.InvariantCulture)),
+			new("leafWorkVersion", leafWorkVersion.ToString(CultureInfo.InvariantCulture)),
+			new("__RequestVerificationToken", token),
+		};
+		foreach (var (sessionId, version) in sessions) {
+			pairs.Add(new("sessionId", sessionId.ToString(CultureInfo.InvariantCulture)));
+			pairs.Add(new("sessionVersion", version.ToString(CultureInfo.InvariantCulture)));
+		}
+
+		if (finishedAt is not null) {
+			pairs.Add(new("finishedAt", finishedAt));
+		}
+
+		if (completionNote is not null) {
+			pairs.Add(new("completionNote", completionNote));
+		}
+
+		request.Content = new FormUrlEncodedContent(pairs);
+
+		return await client.SendAsync(request);
+	}
+
+	private async Task<HttpResponseMessage> PostReopenAndStartAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, long leafWorkVersion, string reason,
+		AppUserId workedByUserId)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=ReopenAndStart");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["LeafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
+			["leafWorkVersion"] = leafWorkVersion.ToString(CultureInfo.InvariantCulture),
+			["reason"] = reason,
+			["workedByUserId"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
+			["__RequestVerificationToken"] = token,
+		});
+
+		return await client.SendAsync(request);
 	}
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>

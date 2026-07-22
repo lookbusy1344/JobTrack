@@ -27,7 +27,7 @@
 				<th>Worked by</th>
 				<th>Started</th>
 				<th>Finished</th>
-				<th>Actions</th>
+				<th class="text-end">Actions</th>
 			</tr>
 			</thead>
 			<tbody>
@@ -53,28 +53,33 @@
 							<span class="status-pill status-pill-ready">Active</span>
 						}
 					</td>
-					<td>
-						<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+					<td class="text-end text-nowrap">
+						<div class="jt-toolbar d-flex flex-nowrap gap-2 align-items-center justify-content-end">
 							@if (sessionBackdate is not null) {
 								<form method="post" asp-page-handler="Finish" class="inline-form">
 									@foreach (var field in sessionBackdate.HiddenFields) {
 										<input type="hidden" name="@field.Key" value="@field.Value"/>
 									}
-									<button type="submit" class="jt-icon-button" title="Finish / pause">
+									<button type="submit" class="jt-icon-button" title="Pause work">
 										<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 											<use href="#jt-icon-finish"></use>
 										</svg>
-										<span class="visually-hidden">Finish / pause</span>
+										<span class="visually-hidden">Pause work</span>
 									</button>
 								</form>
 								<partial name="_BackdateTrigger" model="sessionBackdate"/>
 							}
 							@* The list can span several workers, so each row corrects its own worker's
 							   session, not whoever the panel happens to be filtered to. *@
-							<a asp-page="/Jobs/CorrectSession"
+							<a class="jt-icon-button" asp-page="/Jobs/CorrectSession"
 							   asp-route-leafNodeId="@Model.LeafNodeId"
 							   asp-route-workedByUserId="@session.WorkedByUserId.Value"
-							   asp-route-sessionId="@session.Id.Value">Correct</a>
+							   asp-route-sessionId="@session.Id.Value" title="Correct">
+								<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<use href="#jt-icon-edit"></use>
+								</svg>
+								<span class="visually-hidden">Correct</span>
+							</a>
 						</div>
 					</td>
 				</tr>

@@ -1,126 +1,20 @@
 namespace JobTrack.Web.Pages.Jobs;
 
-using System.ComponentModel.DataAnnotations;
-using Abstractions;
-using Application;
-using Identity;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 /// <summary>
-///     Achievement updates (plan §8.5 slice 5, ADR 0001): transitions a leaf's <c>LeafWork</c>
-///     achievement state. Carries no page-level authorization policy —
-///     <see cref="Domain.Authorization.AchievementAccessPolicy" /> is re-evaluated by
-///     <see cref="IWorkCommands.SetAchievementAsync" /> itself, including the reopening-authority rule
-///     (Administrator/JobManager only, regardless of ownership), so an unauthorized attempt is denied
-///     by the command, not the page.
+///     Compatibility redirect (unified-leaf-workflow plan Stage 5, ADR 0045): this route used to host
+///     its own raw achievement-transition form. <c>/Jobs/Work</c> is now the single interactive
+///     status+Sessions page, so a GET here (bookmarked, linked from an old page) lands on that page's
+///     status section instead of rendering a competing form. The route itself is preserved for
+///     compatibility; nothing here mutates state.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
-public sealed class AchievementModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class AchievementModel : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long JobNodeId { get; init; }
 
-	[BindProperty] public long OriginalVersion { get; set; }
-
-	[BindProperty] public UpdateInput Input { get; set; } = new();
-
-	public LeafWorkResult? LeafWork { get; private set; }
-
-	/// <summary>The affected leaf, named and linked back to Browse by the page context.</summary>
-	public JobNodeDetailResult? CurrentNode { get; private set; }
-
-	public string? ErrorMessage { get; private set; }
-
-	public string? SuccessMessage { get; private set; }
-
-	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
-	{
-		var actor = await ResolveActorAsync();
-		if (actor is null) {
-			return Challenge();
-		}
-
-		await LoadAsync(actor.Value, cancellationToken);
-		var result = LeafWork;
-		if (result is not null) {
-			Input.NewAchievement = result.Achievement;
-			OriginalVersion = result.Version;
-		}
-
-		return Page();
-	}
-
-	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
-	{
-		var actor = await ResolveActorAsync();
-		if (actor is null) {
-			return Challenge();
-		}
-
-		if (!ModelState.IsValid) {
-			await LoadAsync(actor.Value, cancellationToken);
-			return Page();
-		}
-
-		try {
-			_ = await jobTrackClient.Work.SetAchievementAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
-				JobNodeId = new(JobNodeId),
-				NewAchievement = Input.NewAchievement,
-				Reason = Input.Reason,
-				Version = OriginalVersion,
-			}, cancellationToken);
-
-			return RedirectToPage("/Jobs/Browse", new { nodeId = JobNodeId });
-		}
-		catch (AuthorizationDeniedException) {
-			return Forbid();
-		}
-		catch (EntityNotFoundException) {
-			ErrorMessage = "This leaf has no work attached.";
-		}
-		catch (ConcurrencyConflictException) {
-			ErrorMessage =
-				"Someone else changed this leaf's achievement since the form was loaded. The latest state is shown below — review and try again.";
-		}
-		catch (InvariantViolationException ex) {
-			ErrorMessage = ex.Message;
-		}
-		catch (PrerequisiteBlockedException) {
-			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
-		}
-
-		await LoadAsync(actor.Value, cancellationToken);
-		return Page();
-	}
-
-	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
-	{
-		try {
-			var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
-			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = context, NodeId = new(JobNodeId) }, cancellationToken);
-			LeafWork = await jobTrackClient.Query.GetLeafWorkAsync(
-				new() { Context = context, JobNodeId = new(JobNodeId) }, cancellationToken);
-			OriginalVersion = LeafWork.Version;
-		}
-		catch (EntityNotFoundException) {
-			ErrorMessage = "This leaf has no work attached.";
-		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
-	}
-
-	public sealed class UpdateInput
-	{
-		[Required] public Achievement NewAchievement { get; set; }
-
-		[Required] public string Reason { get; set; } = string.Empty;
-	}
+	public IActionResult OnGet() => RedirectToPage("/Jobs/Work", null, new { leafNodeId = JobNodeId }, "status");
 }

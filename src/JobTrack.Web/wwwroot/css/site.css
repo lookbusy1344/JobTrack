@@ -932,17 +932,23 @@ fieldset legend {
 
 /* Icon-only: the sign alone, its name carried by a visually-hidden span. For a marker repeated
    once per row or list item, where a word of state per row would cost more width than the fact is
-   worth — the record card keeps the worded pill. */
+   worth — the record card keeps the worded pill. Padding is trimmed below `--jt-space-1` so the
+   pill's own box (glyph + padding + border) lands at the same 24px the body text's line-height
+   already resolves to at every breakpoint -- the exact height a marker-free `.jt-list > li` row
+   takes, so a row with this pill never grows taller than one without it. */
 .status-pill--icon {
-    padding: var(--jt-space-1);
+    padding: 0.1875rem;
     gap: 0;
 }
 
-/* Icon-only pills carry no text to size against, so the glyph matches the tree's kind-icon scale
-   (blocked and ready alike) instead of the smaller default tuned for sitting next to pill text. */
+/* Icon-only pills carry no text to size against, so the glyph is sized against the inline kind icon
+   (`--jt-icon-size-kind-inline`, `.jt-kind-icon-glyph`) that sits in the same row -- not the larger
+   `--jt-icon-size-kind` used by the Browse subtree's own tree row, which this class never appears
+   in. Matching that inline scale keeps every row of a jt-list (empty "None.", satisfied/blocking,
+   and plain rows with no marker at all) the same height instead of the marker rows growing taller. */
 .status-pill--icon .status-pill-glyph {
-    width: var(--jt-icon-size-kind);
-    height: var(--jt-icon-size-kind);
+    width: var(--jt-icon-size-kind-inline);
+    height: var(--jt-icon-size-kind-inline);
 }
 
 /* Icon-plus-value, no noun: the row-level "Active since" pill, reduced to its stopwatch and a

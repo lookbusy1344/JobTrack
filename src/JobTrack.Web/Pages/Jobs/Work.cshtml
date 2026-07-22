@@ -1,90 +1,291 @@
 @page
 @using JobTrack.Abstractions
+@using JobTrack.Application
 @model WorkModel
 @{
-	ViewData["Title"] = "Sessions";
+	ViewData["Title"] = Model.WorkPage?.Description ?? "Work";
+	var workPage = Model.WorkPage;
+	var isTerminal = workPage?.Achievement is { } a && a is Achievement.Success or Achievement.Cancelled or Achievement.Unsuccessful;
+	var isArchived = workPage?.ArchivedAt is not null;
 }
 
 <div class="jt-page-head">
-	<h1>Sessions</h1>
+	<h1 class="jt-preserve-whitespace">@(workPage?.Description ?? "Sessions")</h1>
 </div>
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
-@if (Model.CurrentNode is not null) {
-	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Leaf</span><a
-			class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-			asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
+@if (workPage is not null) {
+	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2">
+		<span>Leaf</span>
+		<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Back to Browse</a>
+	</p>
 
-	var toolbarActions = Model.ToolbarActions;
-	BackdateDisclosureModel? toolbarBackdate = null;
-	@if (toolbarActions.ActiveSessions.Count > 0 || toolbarActions.IsStartClosed) {
-		<div class="mb-3">
-			<partial name="_ActiveSincePill" model="@(new ActiveSessionSummaryModel {
-				                                        ActiveSessions = toolbarActions.ActiveSessions,
-				                                        ViewerId = Model.CurrentActorId ?? new AppUserId(0),
-				                                        DescribeWorker = Model.DescribeWorker,
-				                                        ViewerZone = Model.ViewerZone,
-				                                        Now = Model.Now,
-				                                        Compact = false,
-				                                        StartClosed = toolbarActions.IsStartClosed,
-			                                        })"/>
+	<div class="jt-card mb-4" id="status">
+		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+			<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = workPage.Achievement })"/>
+			@if (workPage.HasLeafWork && workPage.Achievement == Achievement.Waiting && workPage.ActiveSessions.Count == 0) {
+				@if (workPage.IsReady) {
+					<span class="status-pill status-pill-ready" role="status">
+						<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-go"></use></svg>
+						No blocks
+					</span>
+				} else {
+					<span class="status-pill status-pill-blocked" role="status">
+						<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg>
+						Blocked
+					</span>
+				}
+			}
+			@if (isTerminal && workPage.ActiveSessions.Count == 0) {
+				<span class="status-pill status-pill-closed">Closed</span>
+			}
+			@if (isArchived) {
+				<span class="status-pill status-pill-closed">Archived</span>
+			}
 		</div>
-	}
 
-	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
-		@if (toolbarActions.ViewerSession is { } viewerSession) {
-			<form method="post" asp-page-handler="Finish" class="inline-form">
-				@foreach (var field in toolbarActions.FinishFieldsFor(viewerSession)) {
-					<input type="hidden" name="@field.Key" value="@field.Value"/>
+		@if (isArchived) {
+			<div class="jt-notice">
+				<p>
+					This job is archived, so no new session can start here regardless of achievement.
+					An administrator must restore it first@(isTerminal ? ", then it can be reopened and a new session started." : ".")
+				</p>
+			</div>
+		} else if (isTerminal) {
+			@if (workPage.Achievement == Achievement.Success) {
+				<p>Completed. To record more work, reopen this job and start a new session.</p>
+			} else if (workPage.Achievement == Achievement.Cancelled) {
+				<p>Cancelled. To record more work, reopen this job and start a new session.</p>
+			} else if (workPage.Achievement == Achievement.Unsuccessful) {
+				<p>Unsuccessful. To record more work, reopen this job and start a new session.</p>
+			}
+
+			@if (workPage.DirectDependentCount > 0 && workPage.Achievement == Achievement.Success) {
+				<div class="jt-notice">
+					<p>
+						@workPage.DirectDependentCount job@(workPage.DirectDependentCount == 1 ? "" : "s") currently
+						depend@(workPage.DirectDependentCount == 1 ? "s" : "")
+						on this leaf's success. Reopening it will
+						make @(workPage.DirectDependentCount == 1 ? "that dependent" : "those dependents") blocked again.
+					</p>
+				</div>
+			}
+
+			@if (workPage.CanReopenAndStartForSelf || workPage.CanReopenAndStartForOthers) {
+				<form method="post" asp-page-handler="ReopenAndStart" class="jt-form-card" id="end-session">
+					<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+					<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+					<h2 class="h5">Reopen and start session</h2>
+					<div class="form-group">
+						<label for="reopenReason">Reason</label>
+						<input list="reopenReasonChoices" id="reopenReason" name="reason" class="form-control" required/>
+						<datalist id="reopenReasonChoices">
+							<option value="Closed by mistake"></option>
+							<option value="More work was found"></option>
+							<option value="Work resumed"></option>
+						</datalist>
+					</div>
+					@if (workPage.CanReopenAndStartForOthers) {
+						<div class="form-group">
+							<label for="reopenWorkedByUserId">Worker</label>
+							<select id="reopenWorkedByUserId" name="workedByUserId" class="form-control"
+							        asp-items="Model.ReopenWorkerOptions"></select>
+						</div>
+					} else {
+						<input type="hidden" name="workedByUserId" value="@Model.CurrentActorId?.Value"/>
+					}
+					<div class="form-group">
+						<label for="reopenStartedAt">Started at (optional backdate)</label>
+						<input type="datetime-local" id="reopenStartedAt" name="startedAt" class="form-control"/>
+					</div>
+					<button type="submit" class="btn btn-primary">Reopen and start session</button>
+				</form>
+			} else {
+				<p class="jt-muted">
+					A prior participant on this leaf, the controlling owner, a Job Manager, or an Administrator can reopen it.
+				</p>
+			}
+		} else if (workPage.ActiveSessions.Count > 0) {
+			<div class="mb-3">
+				<partial name="_ActiveSincePill" model="@(new ActiveSessionSummaryModel {
+					                                        ActiveSessions = workPage.ActiveSessions,
+					                                        ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+					                                        DescribeWorker = Model.DescribeWorker,
+					                                        ViewerZone = Model.ViewerZone,
+					                                        Now = Model.Now,
+					                                        Compact = false,
+				                                        })"/>
+			</div>
+
+			var presentation = ActiveSessionPresentation.Derive(workPage.ActiveSessions, Model.CurrentActorId ?? new AppUserId(0));
+			WorkSessionResult? selectedSession = null;
+			if (Model.EndSessionId is long requestedSessionId) {
+				selectedSession = workPage.ActiveSessions.FirstOrDefault(session => session.Id.Value == requestedSessionId);
+			}
+
+			WorkSessionResult? pausable;
+			if (selectedSession is not null
+			    && (selectedSession.WorkedByUserId == Model.CurrentActorId || workPage.CanManageSessions)) {
+				pausable = selectedSession;
+			} else if (presentation.ViewerSession is not null) {
+				pausable = presentation.ViewerSession;
+			} else {
+				pausable = workPage.CanManageSessions && presentation.Count == 1
+					? presentation.OtherSessions[0]
+					: null;
+			}
+
+			<div class="jt-form-card" id="end-session">
+				<h2 class="h5">How is this job ending?</h2>
+				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+					@if (pausable is not null) {
+						<form method="post" asp-page-handler="Finish" class="inline-form">
+							<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+							<input type="hidden" name="sessionId" value="@pausable.Id.Value"/>
+							<input type="hidden" name="version" value="@pausable.Version"/>
+							<button type="submit" class="btn btn-secondary" title="Ends this session; the job stays In Progress.">
+								<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<use href="#jt-icon-finish"></use>
+								</svg>
+								Pause work
+							</button>
+						</form>
+					}
+					@if (workPage.CanComplete && workPage.ActiveSessions.Count == 1) {
+						<form method="post" asp-page-handler="Complete" class="inline-form">
+							<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+							<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+							@foreach (var session in workPage.ActiveSessions) {
+								<input type="hidden" name="sessionId" value="@session.Id.Value"/>
+								<input type="hidden" name="sessionVersion" value="@session.Version"/>
+							}
+							<details class="mt-2">
+								<summary>Completion options</summary>
+								<div class="form-group mt-2">
+									<label for="completionFinishedAt">Finished at (optional backdate)</label>
+									<input type="datetime-local" id="completionFinishedAt" name="finishedAt" class="form-control"/>
+								</div>
+								<div class="form-group">
+									<label for="completionNote">Completion note (optional)</label>
+									<input id="completionNote" name="completionNote" class="form-control"/>
+								</div>
+							</details>
+							<button type="submit" class="btn btn-primary">
+								<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<use href="#jt-icon-go"></use>
+								</svg>
+								Complete job
+							</button>
+						</form>
+					} else if (workPage.CanComplete && workPage.ActiveSessions.Count > 1) {
+						<button type="submit" form="complete-multi-form" class="btn btn-primary">
+							<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+								<use href="#jt-icon-go"></use>
+							</svg>
+							Finish @workPage.ActiveSessions.Count sessions and complete job
+						</button>
+					} else if (!workPage.CanComplete && pausable is null) {
+						<p class="jt-muted">A controlling owner, Job Manager, or Administrator can end this job here.</p>
+					}
+				</div>
+				@if (workPage.CanComplete && workPage.ActiveSessions.Count > 1) {
+					<div class="jt-completion-review mt-3">
+						<form method="post" asp-page-handler="Complete" class="jt-form-card mt-2" id="complete-multi-form">
+							<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+							<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+							@foreach (var session in presentation.StableOrder) {
+								<input type="hidden" name="sessionId" value="@session.Id.Value"/>
+								<input type="hidden" name="sessionVersion" value="@session.Version"/>
+							}
+							<details>
+								<summary>Completion options</summary>
+								<div class="form-group mt-2">
+									<label for="multiCompletionFinishedAt">Finished at (optional backdate)</label>
+									<input type="datetime-local" id="multiCompletionFinishedAt" name="finishedAt" class="form-control"/>
+								</div>
+								<div class="form-group">
+									<label for="multiCompletionNote">Completion note (optional)</label>
+									<input id="multiCompletionNote" name="completionNote" class="form-control"/>
+								</div>
+							</details>
+						</form>
+					</div>
 				}
-				<button type="submit" class="btn btn-secondary">
-					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-						<use href="#jt-icon-finish"></use>
-					</svg>
-					Finish / pause
-				</button>
-			</form>
-			toolbarBackdate = toolbarActions.FinishBackdateFor(viewerSession);
-			<partial name="_BackdateTrigger" model="toolbarBackdate"/>
-		} else if (!toolbarActions.IsStartClosed) {
-			<form method="post" asp-page-handler="Start" class="inline-form">
-				@foreach (var field in Model.ToolbarStateFields) {
-					<input type="hidden" name="@field.Key" value="@field.Value"/>
-				}
-				<button type="submit" class="btn btn-primary">
-					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-						<use href="#jt-icon-start"></use>
-					</svg>
-					Start session
-				</button>
-			</form>
-			toolbarBackdate = toolbarActions.StartBackdate;
-			<partial name="_BackdateTrigger" model="toolbarBackdate"/>
+			</div>
+		} else {
+			var toolbarActions = Model.ToolbarActions;
+			@if (workPage.CanManageSessions) {
+				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+					<form method="post" asp-page-handler="Start" class="inline-form">
+						@foreach (var field in Model.ToolbarStateFields) {
+							<input type="hidden" name="@field.Key" value="@field.Value"/>
+						}
+						<button type="submit" class="btn btn-primary">
+							<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+								<use href="#jt-icon-start"></use>
+							</svg>
+							Start session
+						</button>
+					</form>
+					<partial name="_BackdateTrigger" model="toolbarActions.StartBackdate"/>
+					<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
+					@if (workPage.Achievement == Achievement.InProgress && workPage.CanComplete) {
+						<form method="post" asp-page-handler="Complete" class="inline-form">
+							<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+							<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+							<details class="mb-2">
+								<summary>Completion options</summary>
+								<div class="form-group mt-2">
+									<label for="pausedCompletionNote">Completion note (optional)</label>
+									<input id="pausedCompletionNote" name="completionNote" class="form-control"/>
+								</div>
+							</details>
+							<button type="submit" class="btn btn-secondary">Mark complete</button>
+						</form>
+					}
+				</div>
+				<partial name="_BackdatePanel" model="toolbarActions.StartBackdate"/>
+			} else {
+				<p class="jt-muted">A controlling owner, Job Manager, or Administrator can start work on this job.</p>
+			}
 		}
-		@{ var soloOther = toolbarActions.SoloOtherSession; }
-		@if (soloOther is not null) {
-			<form method="post" asp-page-handler="Finish" class="inline-form">
-				@foreach (var field in toolbarActions.FinishFieldsFor(soloOther)) {
-					<input type="hidden" name="@field.Key" value="@field.Value"/>
-				}
-				<button type="submit" class="btn btn-secondary">
-					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-						<use href="#jt-icon-finish"></use>
-					</svg>
-					Finish / pause
-				</button>
-			</form>
-		}
-		@if (toolbarActions.CanManage && !toolbarActions.IsStartClosed) {
-			<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
-		}
-		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Back to Browse</a>
 	</div>
-	@if (toolbarBackdate is not null) {
-		<partial name="_BackdatePanel" model="toolbarBackdate"/>
+
+	@if (workPage.HasLeafWork && !isArchived && ((!isTerminal && workPage.CanComplete) || (isTerminal && workPage.CanReopenWithoutStarting))) {
+		<details class="jt-card mb-4">
+			<summary>Change outcome</summary>
+			<div class="mt-3 d-flex flex-column gap-3">
+				@if (!isTerminal) {
+					<form method="post" asp-page-handler="SetAchievement" class="jt-form-card">
+						<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+						<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+						<div class="form-group">
+							<label for="changeOutcomeReason">Reason to change outcome</label>
+							<input id="changeOutcomeReason" name="reason" class="form-control" required/>
+						</div>
+						<div class="d-flex flex-wrap gap-2">
+							<button type="submit" name="newAchievement" value="@Achievement.Cancelled" class="btn btn-outline-danger">Cancel job</button>
+							<button type="submit" name="newAchievement" value="@Achievement.Unsuccessful" class="btn btn-outline-danger">Mark unsuccessful</button>
+						</div>
+					</form>
+				} else {
+					<form method="post" asp-page-handler="SetAchievement" class="jt-form-card">
+						<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+						<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+						<input type="hidden" name="newAchievement" value="@Achievement.Waiting"/>
+						<div class="form-group">
+							<label for="reopenOnlyReason">Reason to reopen without starting a session</label>
+							<input id="reopenOnlyReason" name="reason" class="form-control" required/>
+						</div>
+						<p class="jt-muted">Requires Job Manager or Administrator authority, regardless of subtree ownership.</p>
+						<button type="submit" class="btn btn-secondary">Reopen without starting</button>
+					</form>
+				}
+			</div>
+		</details>
 	}
 
 	@if (Model.Panel is { } panel) {

@@ -204,4 +204,16 @@ public interface IJobQueries
 	/// </exception>
 	/// <exception cref="EntityNotFoundException">The target employee does not exist.</exception>
 	Task<RateSnapshotResult> GetRatesAsync(GetRatesRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Retrieves the unified <c>/Jobs/Work</c> page's single bounded projection (unified-leaf-workflow
+	///     plan Stage 4): node context, leaf achievement/version, readiness, every active session (never
+	///     collapsed, ADR 0041), dependent-impact count, and actor-specific action capabilities for the
+	///     new atomic composites, in one call regardless of session or history growth. Carries no
+	///     ownership-based authorization gate of its own (see <see cref="GetReadinessRequest" />) --
+	///     viewing job data is an unqualified baseline capability for every role (spec §7.3); the
+	///     <c>Can*</c> members are rendering hints only, never authoritative.
+	/// </summary>
+	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>
+	Task<LeafWorkPageResult> GetLeafWorkPageAsync(GetLeafWorkPageRequest request, CancellationToken cancellationToken = default);
 }

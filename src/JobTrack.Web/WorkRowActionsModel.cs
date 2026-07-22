@@ -125,25 +125,4 @@ public sealed class WorkRowActionsModel
 		PageStateFields = PageStateFields,
 		Labelled = StartForLabelled,
 	};
-
-	/// <summary>
-	///     Hidden fields for a form finishing <paramref name="session" /> — the viewer's own or, when <see cref="CanManage" />, another worker's exact
-	///     session.
-	/// </summary>
-	public IReadOnlyDictionary<string, string?> FinishFieldsFor(WorkSessionResult session) =>
-		new Dictionary<string, string?>(PageStateFields) {
-			["sessionId"] = session.Id.Value.ToString(CultureInfo.InvariantCulture),
-			["version"] = session.Version.ToString(CultureInfo.InvariantCulture),
-		};
-
-	/// <summary>The backdate control for finishing <paramref name="session" />.</summary>
-	public BackdateDisclosureModel FinishBackdateFor(WorkSessionResult session) => new() {
-		Handler = "Finish",
-		FieldName = "finishedAt",
-		Label = "Finished at",
-		SubmitText = "Finish at this time",
-		AccessibleName = "Backdate finish",
-		HiddenFields = FinishFieldsFor(session),
-		RowId = $"backdate-finish-{session.Id.Value.ToString(CultureInfo.InvariantCulture)}",
-	};
 }

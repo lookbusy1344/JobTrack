@@ -26,7 +26,10 @@ internal static class LeafReadiness
 	///     transaction.
 	/// </summary>
 	public static async Task<bool> IsReadyAsync(
-		PostgreSqlJobTrackDbContext context, JobNodeId leafId, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context,
+		JobNodeId leafId,
+		CancellationToken cancellationToken,
+		JobNodeId? additionallyLockedRequiredJobId = null)
 	{
 		var ancestorChain = await JobNodeHierarchyQueries.GetAncestorChainAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);
@@ -36,6 +39,15 @@ internal static class LeafReadiness
 			.Where(jp => ancestorIds.Contains(jp.ToId))
 			.Select(jp => new PrerequisiteEdge(jp.FromId, jp.ToId))
 			.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+		var requiredJobIds = edges.Select(e => e.RequiredJobId);
+		if (additionallyLockedRequiredJobId.HasValue) {
+			requiredJobIds = requiredJobIds.Append(additionallyLockedRequiredJobId.Value);
+		}
+
+		foreach (var requiredJobId in requiredJobIds.Distinct().OrderBy(id => id.Value)) {
+			await PrerequisiteReadinessSerialization.AcquireAsync(context, requiredJobId, cancellationToken).ConfigureAwait(false);
+		}
 
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
 		foreach (var ancestor in ancestorChain) {

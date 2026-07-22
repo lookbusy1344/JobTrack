@@ -201,6 +201,14 @@ public sealed class JobQueries : IJobQueries
 	}
 
 	/// <inheritdoc />
+	public Task<LeafWorkPageResult> GetLeafWorkPageAsync(GetLeafWorkPageRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetLeafWorkPageCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
 	public Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesAsync(
 		GetPrerequisitesRequest request, CancellationToken cancellationToken = default)
 	{
@@ -610,6 +618,98 @@ public sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.get-prerequisites", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			() => _prerequisiteQueryPort.GetPrerequisitesAsync(request.NodeId, request.Offset, request.Limit, cancellationToken));
+
+	/// <summary>
+	///     Composes already-batched, already-fixed-cost port calls (unified-leaf-workflow plan Stage 4)
+	///     into the unified Work page's single call: <see cref="_browseQueryPort" /> for node context,
+	///     <see cref="_leafWorkQueryPort" /> for achievement/version, <see cref="_readinessQueryPort" />
+	///     for readiness, <see cref="_workSessionQueryPort" /> for active sessions/manage-capabilities
+	///     (both already batch-by-leaf, ADR 0044 Stage 4) and a limit-1 lookup for prior participation,
+	///     and <see cref="_prerequisiteQueryPort" /> for the dependent count. None of these scale with
+	///     session or history count, so neither does this composition.
+	/// </summary>
+	private Task<LeafWorkPageResult> GetLeafWorkPageCoreAsync(GetLeafWorkPageRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-leaf-work-page", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
+			async () => {
+				var node = await _browseQueryPort.GetNodeAsync(request.JobNodeId, cancellationToken).ConfigureAwait(false);
+				var leafId = request.JobNodeId;
+
+				// Node control (and therefore CanManageSessions/CanComplete's authority test) is a
+				// job_node-level fact, independent of whether LeafWork has been attached yet -- a
+				// controlling owner can see the "Start for..." disclosure on a brand-new leaf exactly
+				// as StartWorkAsync's own authorization already permits them to invoke it.
+				var manageCapabilities = await _workSessionQueryPort
+					.GetManageCapabilitiesAsync(request.Context.Actor, [leafId], cancellationToken).ConfigureAwait(false);
+				var actorControlsNode = manageCapabilities.ControlledLeafWorkIds.Contains(leafId);
+				var canManageSessions = WorkSessionAccessPolicy.CanManage(manageCapabilities.ActorRoles, actorControlsNode);
+				// ADR 0045 §3.6: the same "controlling owner, Job Manager, or Administrator" test
+				// AchievementAccessPolicy.CanSetAchievement already applies to a non-reopening
+				// transition governs both CompleteLeafAsync and starting the reopen-and-start
+				// composite for a target worker other than the actor.
+				var hasElevatedOrControlAuthority = AchievementAccessPolicy.CanSetAchievement(
+					manageCapabilities.ActorRoles, actorControlsNode, false);
+				var canComplete = hasElevatedOrControlAuthority;
+
+				Achievement? achievement = null;
+				long? leafWorkVersion = null;
+				EquatableArray<WorkSessionResult> activeSessions = [];
+				var actorParticipatedPreviously = false;
+				var canReopenAndStartForSelf = false;
+				var canReopenAndStartForOthers = false;
+				var canReopenWithoutStarting = false;
+				var isReady = false;
+				var directDependentCount = 0;
+
+				if (node.Node.HasLeafWork) {
+					var leafWork = await _leafWorkQueryPort.GetLeafWorkAsync(leafId, cancellationToken).ConfigureAwait(false);
+					achievement = leafWork.Achievement;
+					leafWorkVersion = leafWork.Version;
+
+					var readinessInputs = await _readinessQueryPort.GetReadinessInputsAsync(leafId, cancellationToken).ConfigureAwait(false);
+					isReady = ReadinessCalculator.IsReady(leafId, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady;
+
+					var activeSessionsResult = await _workSessionQueryPort
+						.GetActiveSessionsAsync(request.Context.Actor, [leafId], cancellationToken).ConfigureAwait(false);
+					activeSessions = activeSessionsResult.Sessions;
+
+					var priorParticipation = await _workSessionQueryPort.GetSessionsAsync(
+							request.Context.Actor, leafId, request.Context.Actor, 0, 1, cancellationToken)
+						.ConfigureAwait(false);
+					actorParticipatedPreviously = priorParticipation.Sessions.Count > 0;
+
+					var isTerminal = AchievementTransitions.IsCompletedState(achievement.Value);
+					canReopenAndStartForSelf = isTerminal && LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(
+						manageCapabilities.ActorRoles, actorControlsNode, actorParticipatedPreviously,
+						request.Context.Actor, request.Context.Actor);
+					canReopenAndStartForOthers = isTerminal && hasElevatedOrControlAuthority;
+					canReopenWithoutStarting = isTerminal && AchievementAccessPolicy.CanSetAchievement(
+						manageCapabilities.ActorRoles, actorControlsNode, true);
+
+					directDependentCount = await _prerequisiteQueryPort
+						.CountDirectDependentsAsync(leafId, cancellationToken).ConfigureAwait(false);
+				}
+
+				return new LeafWorkPageResult {
+					JobNodeId = request.JobNodeId,
+					Description = node.Node.Description,
+					OwnerUserId = node.Node.OwnerUserId,
+					ArchivedAt = node.Node.ArchivedAt,
+					HasLeafWork = node.Node.HasLeafWork,
+					Achievement = achievement,
+					LeafWorkVersion = leafWorkVersion,
+					IsReady = isReady,
+					ActiveSessions = activeSessions,
+					ActorControlsNode = actorControlsNode,
+					ActorParticipatedPreviously = actorParticipatedPreviously,
+					CanManageSessions = canManageSessions,
+					CanComplete = canComplete,
+					CanReopenAndStartForSelf = canReopenAndStartForSelf,
+					CanReopenAndStartForOthers = canReopenAndStartForOthers,
+					CanReopenWithoutStarting = canReopenWithoutStarting,
+					DirectDependentCount = directDependentCount,
+				};
+			});
 
 	private Task<ScheduleSnapshotResult> GetScheduleCoreAsync(GetScheduleRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(

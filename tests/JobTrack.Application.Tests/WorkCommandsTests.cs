@@ -718,4 +718,292 @@ public sealed class WorkCommandsTests
 
 		await act.Should().ThrowAsync<ArgumentNullException>();
 	}
+
+	[Fact]
+	public async Task Completing_a_leaf_with_one_active_session_finishes_it_and_records_success()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+
+		var result = await sut.CompleteLeafAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+		});
+
+		result.Achievement.Should().Be(Achievement.Success);
+		result.FinishedSessions.Should().HaveCount(1);
+		result.FinishedSessions[0].FinishedAt.Should().NotBeNull();
+	}
+
+	[Fact]
+	public async Task Completing_a_leaf_with_zero_active_sessions_is_permitted_from_in_progress()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var achievementPort = new FakeAchievementCommandPort(nodePort);
+		var sut = new WorkCommands(sessionPort, achievementPort);
+		await sut.SetAchievementAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Starting",
+			Version = 1,
+		});
+
+		var result = await sut.CompleteLeafAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [],
+		});
+
+		result.Achievement.Should().Be(Achievement.Success);
+		result.FinishedSessions.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task Completing_a_leaf_still_waiting_throws_an_invariant_violation()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+
+		var act = () => sut.CompleteLeafAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 1,
+			ExpectedActiveSessions = [],
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("achievement-transition-not-permitted");
+	}
+
+	[Fact]
+	public async Task A_worker_who_does_not_control_the_leaf_cannot_complete_it()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+
+		var act = () => sut.CompleteLeafAsync(new() {
+			Context = ContextFor(OtherWorkerId),
+			JobNodeId = leafId,
+			Version = 1,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task Completing_a_leaf_with_a_stale_expected_active_session_set_throws_a_concurrency_conflict()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+
+		var act = () => sut.CompleteLeafAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version + 1 }],
+		});
+
+		await act.Should().ThrowAsync<ConcurrencyConflictException>();
+	}
+
+	[Fact]
+	public async Task Completing_a_leaf_finishes_every_confirmed_active_session_for_several_workers_atomically()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var first = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		var second = await sut.StartWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leafId, WorkedByUserId = OtherWorkerId });
+
+		var result = await sut.CompleteLeafAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [
+				new() { Id = first.Id, Version = first.Version }, new() { Id = second.Id, Version = second.Version },
+			],
+		});
+
+		result.FinishedSessions.Should().HaveCount(2);
+		result.FinishedSessions.Should().OnlyContain(session => session.FinishedAt != null);
+	}
+
+	[Fact]
+	public async Task CompleteLeafAsync_rejects_a_null_request()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+
+		var act = () => sut.CompleteLeafAsync(null!);
+
+		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
+
+	private static async Task<JobNodeId> CreateTerminalLeafAsync(FakeJobNodeCommandPort nodePort, WorkCommands sut, AppUserId workedBy)
+	{
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var session = await sut.StartWorkAsync(new() { Context = ContextFor(workedBy), JobNodeId = leafId, WorkedByUserId = workedBy });
+		await sut.FinishSessionAsync(new() { Context = ContextFor(workedBy), SessionId = session.Id, Version = session.Version });
+		await sut.SetAchievementAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			NewAchievement = Achievement.Unsuccessful,
+			Reason = "Did not work out",
+			Version = 2,
+		});
+
+		return leafId;
+	}
+
+	[Fact]
+	public async Task A_job_manager_can_reopen_and_start_for_a_target_worker_who_neither_controls_nor_participated()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var leafId = await CreateTerminalLeafAsync(nodePort, sut, WorkerId);
+
+		var result = await sut.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 3,
+			Reason = "More work was found",
+			WorkedByUserId = OtherWorkerId,
+		});
+
+		result.Achievement.Should().Be(Achievement.InProgress);
+		result.Session.WorkedByUserId.Should().Be(OtherWorkerId);
+	}
+
+	[Fact]
+	public async Task A_prior_participant_who_no_longer_controls_the_leaf_can_reopen_and_start_for_themselves()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var leafId = await CreateTerminalLeafAsync(nodePort, sut, WorkerId);
+		var jobCommands = new JobCommands(nodePort);
+		await jobCommands.EditAsync(new() {
+			Context = ContextFor(JobManagerId),
+			NodeId = leafId,
+			Description = "Reassigned away from the original worker",
+			OwnerUserId = OtherWorkerId,
+			Priority = Priority.Medium,
+			Version = 1,
+		});
+
+		var result = await sut.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			Version = 3,
+			Reason = "Work resumed",
+			WorkedByUserId = WorkerId,
+		});
+
+		result.Achievement.Should().Be(Achievement.InProgress);
+		result.Session.WorkedByUserId.Should().Be(WorkerId);
+	}
+
+	[Fact]
+	public async Task A_prior_participant_who_no_longer_controls_the_leaf_cannot_start_for_a_different_worker()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var leafId = await CreateTerminalLeafAsync(nodePort, sut, WorkerId);
+		var jobCommands = new JobCommands(nodePort);
+		await jobCommands.EditAsync(new() {
+			Context = ContextFor(JobManagerId),
+			NodeId = leafId,
+			Description = "Reassigned away from the original worker",
+			OwnerUserId = OtherWorkerId,
+			Priority = Priority.Medium,
+			Version = 1,
+		});
+
+		var act = () => sut.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			Version = 3,
+			Reason = "Trying to hand it off",
+			WorkedByUserId = OtherWorkerId,
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task A_non_participant_non_controlling_worker_cannot_reopen_and_start_at_all()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var leafId = await CreateTerminalLeafAsync(nodePort, sut, WorkerId);
+
+		var act = () => sut.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(OtherWorkerId),
+			JobNodeId = leafId,
+			Version = 3,
+			Reason = "Trying anyway",
+			WorkedByUserId = OtherWorkerId,
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task Reopening_and_starting_with_a_stale_version_throws_a_concurrency_conflict()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var leafId = await CreateTerminalLeafAsync(nodePort, sut, WorkerId);
+
+		var act = () => sut.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 99,
+			Reason = "Trying again",
+			WorkedByUserId = WorkerId,
+		});
+
+		await act.Should().ThrowAsync<ConcurrencyConflictException>();
+	}
+
+	[Fact]
+	public void ReopenAndStartWorkAsync_rejects_a_blank_reason_synchronously()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var request = new ReopenAndStartWorkRequest {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = new(2),
+			Version = 1,
+			Reason = "\t",
+			WorkedByUserId = WorkerId,
+		};
+
+		Action act = () => _ = sut.ReopenAndStartWorkAsync(request);
+
+		act.Should().Throw<ArgumentException>().WithParameterName(nameof(request.Reason));
+	}
+
+	[Fact]
+	public async Task ReopenAndStartWorkAsync_rejects_a_null_request()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+
+		var act = () => sut.ReopenAndStartWorkAsync(null!);
+
+		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
 }

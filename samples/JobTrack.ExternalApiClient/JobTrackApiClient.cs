@@ -133,6 +133,45 @@ public sealed class JobTrackApiClient : IDisposable
 		return (await response.Content.ReadFromJsonAsync<Request>(SerializerOptions, cancellationToken).ConfigureAwait(false))!;
 	}
 
+	/// <summary>
+	///     Mutation workflow (ADR 0045): atomically finish the exact confirmed active-session set and
+	///     record achievement <c>Success</c>, in one commit -- the composite that replaces a two-call
+	///     "finish session, then set achievement" sequence a remote client would otherwise have to
+	///     orchestrate itself, unsafely, across two separate requests.
+	/// </summary>
+	public async Task<CompleteLeafResponse> CompleteLeafAsync(
+		long nodeId, long version, IReadOnlyCollection<ExpectedActiveSession> expectedActiveSessions,
+		CancellationToken cancellationToken = default)
+	{
+		using var response = await _httpClient.PostAsJsonAsync(
+			new Uri($"/api/jobs/{nodeId}/complete", UriKind.Relative),
+			new { version, expectedActiveSessions },
+			SerializerOptions,
+			cancellationToken).ConfigureAwait(false);
+		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
+
+		return (await response.Content.ReadFromJsonAsync<CompleteLeafResponse>(SerializerOptions, cancellationToken).ConfigureAwait(false))!;
+	}
+
+	/// <summary>
+	///     Mutation workflow (ADR 0045): atomically reopen a terminal leaf to <c>Waiting</c>, auto-advance
+	///     to <c>InProgress</c> (ADR 0038), and start <paramref name="workedByUserId" />'s session, in one
+	///     commit. Authorized more widely than the primitive <c>PUT /api/jobs/{nodeId}/achievement</c>
+	///     reopen path -- see the external API reference's ADR 0045 note.
+	/// </summary>
+	public async Task<ReopenAndStartWorkResponse> ReopenAndStartWorkAsync(
+		long nodeId, long version, string reason, long workedByUserId, CancellationToken cancellationToken = default)
+	{
+		using var response = await _httpClient.PostAsJsonAsync(
+			new Uri($"/api/jobs/{nodeId}/reopen-and-start-session", UriKind.Relative),
+			new { version, reason, workedByUserId },
+			SerializerOptions,
+			cancellationToken).ConfigureAwait(false);
+		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
+
+		return (await response.Content.ReadFromJsonAsync<ReopenAndStartWorkResponse>(SerializerOptions, cancellationToken).ConfigureAwait(false))!;
+	}
+
 	/// <summary>Read workflow: the token's owning requester's own submitted requests, most recent first (ADR 0033).</summary>
 	public async Task<Request[]> GetMyRequestsAsync(CancellationToken cancellationToken = default)
 	{
@@ -370,6 +409,42 @@ public sealed class WorkSession
 	public DateTimeOffset? FinishedAt { get; init; }
 
 	public required long Version { get; init; }
+}
+
+/// <summary>One session confirmed as part of the exact active set <c>POST .../complete</c> finishes (ADR 0045).</summary>
+public sealed class ExpectedActiveSession
+{
+	public required long Id { get; init; }
+
+	public required long Version { get; init; }
+}
+
+/// <summary>Result of <c>POST /api/jobs/{nodeId}/complete</c> (ADR 0045).</summary>
+public sealed class CompleteLeafResponse
+{
+	public required long JobNodeId { get; init; }
+
+	public required string Achievement { get; init; }
+
+	public required DateTimeOffset ChangedAt { get; init; }
+
+	public required long Version { get; init; }
+
+	public required WorkSession[] FinishedSessions { get; init; }
+}
+
+/// <summary>Result of <c>POST /api/jobs/{nodeId}/reopen-and-start-session</c> (ADR 0045).</summary>
+public sealed class ReopenAndStartWorkResponse
+{
+	public required long JobNodeId { get; init; }
+
+	public required string Achievement { get; init; }
+
+	public required DateTimeOffset ChangedAt { get; init; }
+
+	public required long Version { get; init; }
+
+	public required WorkSession Session { get; init; }
 }
 
 /// <summary>One active holding area, as returned by <c>GET /api/request-holding-areas</c> (ADR 0033).</summary>

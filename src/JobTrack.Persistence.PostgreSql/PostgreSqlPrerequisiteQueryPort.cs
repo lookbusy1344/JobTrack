@@ -19,6 +19,23 @@ internal sealed class PostgreSqlPrerequisiteQueryPort : IPrerequisiteQueryPort
 	public PostgreSqlPrerequisiteQueryPort(NpgsqlDataSource dataSource) => this.dataSource = dataSource;
 
 	/// <inheritdoc />
+	public async Task<int> CountDirectDependentsAsync(JobNodeId requiredJobId, CancellationToken cancellationToken = default)
+	{
+		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
+			.UseNpgsql(dataSource, o => o.UseNodaTime())
+			.Options;
+		await using var context = new PostgreSqlJobTrackDbContext(options);
+
+		if (!await context.Set<JobNodeEntity>().AsNoTracking()
+				.AnyAsync(n => n.Id == requiredJobId, cancellationToken).ConfigureAwait(false)) {
+			throw new EntityNotFoundException($"Job node {requiredJobId} does not exist.");
+		}
+
+		return await context.Set<JobPrerequisiteEntity>().AsNoTracking()
+			.CountAsync(edge => edge.FromId == requiredJobId, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <inheritdoc />
 	public async Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesAsync(
 		JobNodeId nodeId, int offset = 0, int? limit = null, CancellationToken cancellationToken = default)
 	{

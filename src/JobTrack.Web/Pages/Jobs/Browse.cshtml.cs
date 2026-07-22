@@ -152,14 +152,6 @@ public sealed class BrowseModel(
 	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 
 	/// <summary>
-	///     When <see cref="CurrentNode" /> is a leaf, its work-session panel: session history,
-	///     worked-by picker, and start/finish actions — the same content <c>Work</c> shows, folded in so
-	///     viewing a leaf's own detail never requires navigating to a second page for anything
-	///     time-tracking related (<c>Work</c> itself remains a stable deep link).
-	/// </summary>
-	public LeafWorkSessionsPanelModel? LeafWorkSessions { get; private set; }
-
-	/// <summary>
 	///     The current node's recorded achievement, when it is a leaf with work attached. Read through
 	///     the existing leaf-work query rather than threaded onto <see cref="JobNodeResult" />, which
 	///     every job-node command path also projects — one extra read on a leaf's own detail page is
@@ -287,45 +279,6 @@ public sealed class BrowseModel(
 		}
 		catch (PrerequisiteBlockedException) {
 			ErrorMessage = "This leaf's prerequisites are not satisfied.";
-		}
-
-		return RedirectToPage(CurrentRouteValues());
-	}
-
-	public async Task<IActionResult> OnPostFinishAsync(
-		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
-	{
-		var actor = await ResolveActorAsync();
-		if (actor is null) {
-			return Challenge();
-		}
-
-		try {
-			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
-			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
-				ErrorMessage = "Enter a valid date and time.";
-				return RedirectToPage(CurrentRouteValues());
-			}
-
-			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
-				SessionId = new(sessionId),
-				Version = version,
-				FinishedAt = finishedAtInstant,
-			}, cancellationToken);
-			SuccessMessage = "Session finished.";
-		}
-		catch (AuthorizationDeniedException) {
-			return Forbid();
-		}
-		catch (EntityNotFoundException) {
-			ErrorMessage = "That session does not exist.";
-		}
-		catch (ConcurrencyConflictException) {
-			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
-		}
-		catch (InvariantViolationException ex) {
-			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 
 		return RedirectToPage(CurrentRouteValues());
@@ -514,7 +467,6 @@ public sealed class BrowseModel(
 			await LoadRequestContextAsync(context, CurrentNode.Node.Id, cancellationToken);
 
 			if (CurrentNode.Node.Kind == NodeKind.Leaf) {
-				await LoadLeafWorkSessionsAsync(context, actor, CurrentNode.Node.Id, cancellationToken);
 				await LoadCurrentNodeAchievementAsync(context, CurrentNode.Node, cancellationToken);
 			}
 		}
@@ -587,57 +539,6 @@ public sealed class BrowseModel(
 		var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
 			new() { Context = context, JobNodeId = node.Id }, cancellationToken);
 		CurrentNodeAchievement = leafWork.Achievement;
-	}
-
-	private async Task LoadLeafWorkSessionsAsync(CommandContext context, AppUserId actor, JobNodeId leafNodeId, CancellationToken cancellationToken)
-	{
-		// Unset means every worker's sessions on this leaf, not the actor's own (ADR 0041): the whole
-		// record of work is what a reader wants first, and it is job data every employee may read.
-		var workedByUserId = WorkedByUserId.HasValue ? new AppUserId(WorkedByUserId.Value) : (AppUserId?)null;
-
-		try {
-			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
-				new() { Context = context, LeafWorkId = leafNodeId, WorkedByUserId = workedByUserId }, cancellationToken);
-
-			LeafWorkSessions = new() {
-				LeafNodeId = leafNodeId.Value,
-				ViewerZone = ViewerZone,
-				DisplayedWorkedByUserId = workedByUserId?.Value,
-				DisplayedWorkedByName = workedByUserId.HasValue
-					? EmployeeDirectoryDisplay.Describe(EmployeeDirectoryById, workedByUserId.Value.Value, "Unknown")
-					: null,
-				Sessions = sessions,
-				EmployeeDirectoryById = EmployeeDirectoryById,
-				WorkedByOptions = BuildWorkerFilterOptions(workedByUserId),
-				ExtraHiddenFields = new Dictionary<string, string?> {
-					["NodeId"] = NodeId?.ToString(CultureInfo.InvariantCulture),
-					["OwnerUserId"] = OwnerUserId?.ToString(CultureInfo.InvariantCulture),
-					["UnassignedOnly"] = UnassignedOnly.ToString(CultureInfo.InvariantCulture),
-					["ArchiveFilter"] = ArchiveFilter.ToString(),
-					["SearchText"] = SearchText,
-				},
-			};
-		}
-		catch (AuthorizationDeniedException) {
-			ErrorMessage = "You may not view that worker's sessions on this leaf.";
-		}
-	}
-
-	/// <summary>
-	///     Worker-filter options for the sessions panel: an "Everyone" default (empty value,
-	///     clearing the filter back to every worker's sessions) followed by each employee, with the
-	///     currently filtered worker preselected.
-	/// </summary>
-	private List<SelectListItem> BuildWorkerFilterOptions(AppUserId? selectedId)
-	{
-		var options = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory, new SelectListItem("Everyone", string.Empty));
-		if (selectedId is AppUserId id) {
-			foreach (var option in options) {
-				option.Selected = option.Value == id.Value.ToString(CultureInfo.InvariantCulture);
-			}
-		}
-
-		return options;
 	}
 
 	private async Task LoadHomeNodeAsync(CommandContext context, AppUserId actor, CancellationToken cancellationToken)

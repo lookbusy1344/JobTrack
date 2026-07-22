@@ -4,14 +4,14 @@
 		<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 			<use href="#jt-icon-go"></use>
 		</svg>
-		Ready — every prerequisite is satisfied.
+		No blocks — every prerequisite is satisfied.
 	</p>
 } else {
 	<p class="status-pill status-pill-blocked" role="alert">
 		<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 			<use href="#jt-icon-stop"></use>
 		</svg>
-		Not ready — unsatisfied prerequisites
+		Blocked — unsatisfied prerequisites
 	</p>
 	<ul class="jt-list">
 		@foreach (var blocker in Model.Blockers) {

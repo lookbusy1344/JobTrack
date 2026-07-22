@@ -113,4 +113,65 @@ public interface IWorkCommands
 	///     The transition enters a completed state while the leaf's prerequisites are unsatisfied (spec §6).
 	/// </exception>
 	Task<LeafWorkResult> SetAchievementAsync(SetAchievementRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Atomic composite (ADR 0045 §1/§3): finishes the exact, caller-confirmed active-session set
+	///     named by <see cref="CompleteLeafRequest.ExpectedActiveSessions" /> (zero, one, or many) at one
+	///     captured instant, and transitions the leaf <see cref="Achievement.InProgress" /> -&gt;
+	///     <see cref="Achievement.Success" /> with a fixed structured reason, in one commit. Records
+	///     <see cref="Achievement.Success" /> only -- <see cref="Achievement.Cancelled" /> and
+	///     <see cref="Achievement.Unsuccessful" /> have no atomic composite and remain manual
+	///     <see cref="SetAchievementAsync" /> calls. Ordinary <see cref="FinishSessionAsync" /> gains no
+	///     implicit meaning from this addition: finishing a session never implies success.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor may not complete this leaf (the same authority <see cref="SetAchievementAsync" />
+	///     already requires for the terminal transition -- controlling owner, Job Manager, or
+	///     Administrator; see <see cref="Domain.Authorization.AchievementAccessPolicy" />).
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The leaf has no <c>LeafWork</c> attached.</exception>
+	/// <exception cref="ConcurrencyConflictException">
+	///     The supplied leaf <see cref="CompleteLeafRequest.Version" /> is stale, or the leaf's current
+	///     active-session set no longer matches <see cref="CompleteLeafRequest.ExpectedActiveSessions" />
+	///     exactly, by id and version (ADR 0045 §3).
+	/// </exception>
+	/// <exception cref="InvariantViolationException">
+	///     The leaf's achievement is not <see cref="Achievement.InProgress" /> (<c>ConstraintId</c>
+	///     <c>"achievement-transition-not-permitted"</c>, ADR 0001 -- <c>Waiting -&gt; Success</c> remains
+	///     prohibited); a supplied <see cref="CompleteLeafRequest.FinishedAt" /> is not after every
+	///     affected session's start instant (<c>ConstraintId</c> <c>"work-session-invalid-interval"</c>)
+	///     or is in the future (<c>ConstraintId</c> <c>"work-session-finish-in-future"</c>, ADR 0028).
+	/// </exception>
+	/// <exception cref="PrerequisiteBlockedException">The leaf's prerequisites are not satisfied (spec §6).</exception>
+	Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Atomic composite (ADR 0045 §1/§2): transitions a terminal leaf back to
+	///     <see cref="Achievement.Waiting" /> with <see cref="ReopenAndStartWorkRequest.Reason" />,
+	///     applies ADR 0038's existing <see cref="Achievement.Waiting" /> -&gt;
+	///     <see cref="Achievement.InProgress" /> auto-advance, and starts
+	///     <see cref="ReopenAndStartWorkRequest.WorkedByUserId" />'s session, in one commit. Authorized
+	///     more widely than <see cref="SetAchievementAsync" />'s reopening path: a controlling owner, Job
+	///     Manager, or Administrator may start for any eligible target worker, and a prior session
+	///     participant on this leaf who controls nothing may start for themselves only (ADR 0045 §2).
+	///     <c>ReopenWithoutStartingAsync</c>-shaped elevated correction (no session following) is
+	///     unaffected and remains Job Manager/Administrator-only via <see cref="SetAchievementAsync" />.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor holds none of ADR 0045 §2's three reopen-and-start authority sources for this leaf
+	///     and target worker (see <see cref="Domain.Authorization.LeafReopenAndStartAccessPolicy" />).
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The leaf has no <c>LeafWork</c> attached.</exception>
+	/// <exception cref="ConcurrencyConflictException">The supplied <see cref="ReopenAndStartWorkRequest.Version" /> is stale.</exception>
+	/// <exception cref="InvariantViolationException">
+	///     The leaf's achievement is not currently terminal (<c>ConstraintId</c>
+	///     <c>"achievement-transition-not-permitted"</c>, ADR 0001); the leaf's node is archived
+	///     (<c>ConstraintId</c> <c>"work-session-leaf-closed"</c>, ADR 0044 -- restore the node first); a
+	///     supplied <see cref="ReopenAndStartWorkRequest.StartedAt" /> is in the future (<c>ConstraintId</c>
+	///     <c>"work-session-start-in-future"</c>) or would overlap another session for the same worker
+	///     and leaf (<c>ConstraintId</c> <c>"work-session-overlap"</c>); or
+	///     <see cref="ReopenAndStartWorkRequest.WorkedByUserId" /> names a worker who is disabled, locked,
+	///     or holds no eligible workflow role (<c>ConstraintId</c> <c>"work-session-target-not-eligible"</c>).
+	/// </exception>
+	Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default);
 }

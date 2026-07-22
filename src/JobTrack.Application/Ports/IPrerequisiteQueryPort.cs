@@ -11,6 +11,14 @@ using Domain.Hierarchy;
 public interface IPrerequisiteQueryPort
 {
 	/// <summary>
+	///     Counts edges for which <paramref name="requiredJobId" /> is the required side, without
+	///     materializing the touching edge collection. Used by bounded page projections that need only
+	///     dependent impact, not the edge details.
+	/// </summary>
+	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>
+	Task<int> CountDirectDependentsAsync(JobNodeId requiredJobId, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	///     Loads every prerequisite edge touching the node, as either <see cref="PrerequisiteEdge.RequiredJobId" />
 	///     or <see cref="PrerequisiteEdge.DependentJobId" />, ordered by <c>RequiredJobId</c> then
 	///     <c>DependentJobId</c>, bounded by <paramref name="offset" />/<paramref name="limit" />

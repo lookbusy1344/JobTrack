@@ -259,7 +259,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task A_leaf_with_an_active_session_shows_a_finish_button_instead_of_start()
+	public async Task A_leaf_with_an_active_session_shows_an_end_session_link_instead_of_start()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.toggle");
 		var rootId = bootstrappedRootId!.Value;
@@ -272,10 +272,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await reloaded.Content.ReadAsStringAsync();
-		startBody.Should().Contain("Finish / pause");
-		// Plan §4.1: the viewer's own one-click Start is replaced by Finish/pause, but the
-		// authorized "Start for..." disclosure for another worker is never removed -- only the
-		// viewer's own primary action toggles.
+		// Plan §5.3: the dashboard row never finishes inline -- the viewer's own one-click Start
+		// is replaced by an "End session" link into /Jobs/Work, not an inline finish form.
+		startBody.Should().Contain($"/Jobs/Work?leafNodeId={leafId.Value}");
+		startBody.Should().Contain("End session");
 		startBody.Should().NotContain("title=\"Start session\"");
 	}
 
@@ -313,19 +313,23 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (startFormCookie, startToken) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var startResponse = await PostStartWorkAsync(authCookie, startFormCookie, startToken, leafId);
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
-		var startBody = await startReloaded.Content.ReadAsStringAsync();
-		var (sessionId, version) = ExtractFirstSession(startBody);
+		await FollowRedirectAsync(startResponse, authCookie);
+		var session = (await GetSessionsAsync(leafId, adminId)).Should().ContainSingle().Subject;
 
-		var (finishCookie, finishToken) = await ExtractFormAsync(startReloaded, startFormCookie);
-		var finishResponse = await PostFinishWorkAsync(authCookie, finishCookie, finishToken, sessionId, version);
+		var (workFormCookie, workToken) = await GetFormAsync(authCookie, $"/Jobs/Work?leafNodeId={leafId.Value}");
+		var finishResponse = await PostFinishWorkAsync(authCookie, workFormCookie, workToken, leafId, session.Id.Value, session.Version);
 		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
 		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
 
-		finishBody.Should().Contain("Session finished");
+		finishBody.Should().Contain("Ends this session; the job stays In Progress.");
 		finishBody.Should().Contain("#jt-icon-start");
-		finishBody.Should().NotContain("Finish / pause");
+
+		using var dashboardRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/AwaitingProgress");
+		dashboardRequest.Headers.Add("Cookie", authCookie);
+		var dashboardResponse = await client.SendAsync(dashboardRequest);
+		var dashboardBody = await dashboardResponse.Content.ReadAsStringAsync();
+		dashboardBody.Should().Contain("title=\"Start session\"");
 	}
 
 	[Fact]
@@ -344,7 +348,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Session started");
-		body.Should().Contain("Finish / pause");
+		body.Should().Contain("End session");
 
 		var sessions = await GetSessionsAsync(leafId, adminId);
 		sessions.Should().ContainSingle().Which.StartedAt.Should().Be(Instant.FromDateTimeOffset(backdatedAt));
@@ -387,7 +391,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task A_worker_can_finish_a_session_with_a_backdated_time_from_the_dashboard_row()
+	public async Task A_worker_can_finish_a_session_with_a_backdated_time_reached_from_the_dashboard_row()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.backdate-finish");
 		var rootId = bootstrappedRootId!.Value;
@@ -399,16 +403,17 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (startFormCookie, startToken) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var startResponse = await PostStartWorkAsync(authCookie, startFormCookie, startToken, leafId, FormatForDateTimeLocal(startedAt));
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
-		var startBody = await startReloaded.Content.ReadAsStringAsync();
-		var (sessionId, version) = ExtractFirstSession(startBody);
+		await FollowRedirectAsync(startResponse, authCookie);
+		var session = (await GetSessionsAsync(leafId, adminId)).Should().ContainSingle().Subject;
 
-		var (finishCookie, finishToken) = await ExtractFormAsync(startReloaded, startFormCookie);
-		var finishResponse = await PostFinishWorkAsync(authCookie, finishCookie, finishToken, sessionId, version, FormatForDateTimeLocal(finishedAt));
+		var (workFormCookie, workToken) = await GetFormAsync(authCookie, $"/Jobs/Work?leafNodeId={leafId.Value}");
+		var finishResponse =
+			await PostFinishWorkAsync(authCookie, workFormCookie, workToken, leafId, session.Id.Value, session.Version,
+				FormatForDateTimeLocal(finishedAt));
 		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
 		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
-		finishBody.Should().Contain("Session finished");
+		finishBody.Should().Contain("Ends this session; the job stays In Progress.");
 
 		var sessions = await GetSessionsAsync(leafId, adminId);
 		sessions.Should().ContainSingle().Which.FinishedAt.Should().Be(Instant.FromDateTimeOffset(finishedAt));
@@ -718,12 +723,19 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		return await client.SendAsync(request);
 	}
 
-	private async Task<HttpResponseMessage> PostFinishWorkAsync(string authCookie, string antiforgeryCookie, string token, long sessionId,
-		long version, string? finishedAt = null)
+	/// <summary>
+	///     Ending a session from the dashboard is a two-step navigation (plan §5.3): the row's "End
+	///     session" link opens <c>/Jobs/Work</c>, whose own Finish handler actually posts the finish.
+	///     This mirrors that by posting directly to <c>/Jobs/Work?handler=Finish</c>, the same handler
+	///     the dashboard's End-session link ultimately drives.
+	/// </summary>
+	private async Task<HttpResponseMessage> PostFinishWorkAsync(string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId,
+		long sessionId, long version, string? finishedAt = null)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/AwaitingProgress?handler=Finish");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Finish");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		var fields = new Dictionary<string, string> {
+			["leafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["sessionId"] = sessionId.ToString(CultureInfo.InvariantCulture),
 			["version"] = version.ToString(CultureInfo.InvariantCulture),
 			["__RequestVerificationToken"] = token,
@@ -735,30 +747,6 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		request.Content = new FormUrlEncodedContent(fields);
 
 		return await client.SendAsync(request);
-	}
-
-	private static async Task<(string CookieHeader, string Token)> ExtractFormAsync(HttpResponseMessage response, string previousAntiforgeryCookie)
-	{
-		var body = await response.Content.ReadAsStringAsync();
-		var newCookie = FindSetCookie(response, "Antiforgery");
-		var cookie = newCookie is not null ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in response body.");
-
-		return (cookie, token);
-	}
-
-	private static (long SessionId, long Version) ExtractFirstSession(string body)
-	{
-		var sessionIdMatch = SessionIdPattern().Match(body);
-		var versionMatch = VersionPattern().Match(body);
-		if (!sessionIdMatch.Success || !versionMatch.Success) {
-			throw new InvalidOperationException("No session row found in AwaitingProgress page body.");
-		}
-
-		return (long.Parse(sessionIdMatch.Groups["id"].Value, CultureInfo.InvariantCulture),
-			long.Parse(versionMatch.Groups["version"].Value, CultureInfo.InvariantCulture));
 	}
 
 	private async Task<(string CookieHeader, string Token)> GetFormAsync(string authCookie, string path)
@@ -821,12 +809,6 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-	[GeneratedRegex("name=\"sessionId\" value=\"(?<id>[0-9]+)\"")]
-	private static partial Regex SessionIdPattern();
-
-	[GeneratedRegex("name=\"version\" value=\"(?<version>[0-9]+)\"")]
-	private static partial Regex VersionPattern();
 
 	private async Task<AppUserId> SeedWorkerEmployeeAsync(string userName, EmployeeRole role = EmployeeRole.Worker, string ianaTimeZone = "UTC")
 	{

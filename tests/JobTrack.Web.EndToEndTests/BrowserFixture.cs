@@ -288,6 +288,65 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		return (leafId, finished.Id, finished.Version);
 	}
 
+	/// <summary>Seeds a leaf that has reached the terminal <see cref="Achievement.Success" /> state.</summary>
+	public async Task<JobNodeId> SeedSuccessLeafAsync(string description) => await SeedTerminalLeafAsync(description, Achievement.Success);
+
+	/// <summary>Seeds a leaf that reached a terminal achievement and was then archived.</summary>
+	public async Task<JobNodeId> SeedArchivedTerminalLeafAsync(string description)
+	{
+		var leafId = await SeedTerminalLeafAsync(description, Achievement.Success);
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() }, NodeId = leafId });
+		_ = await seedClient.Jobs.ArchiveAsync(new() {
+			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			NodeId = leafId,
+			Version = current.Node.Version,
+		});
+		return leafId;
+	}
+
+	private async Task<JobNodeId> SeedTerminalLeafAsync(string description, Achievement achievement)
+	{
+		var leafId = await SeedLeafAsync(description);
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+		});
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(
+			new() { Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leafId });
+		var inProgress = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Browser fixture setup",
+			Version = leafWork.Version,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leafId,
+			NewAchievement = achievement,
+			Reason = "Browser fixture setup",
+			Version = inProgress.Version,
+		});
+		return leafId;
+	}
+
+	/// <summary>Seeds a worker with no ownership or management capability over any leaf, for unauthorized-action browser tests.</summary>
+	public async Task<(AppUserId Id, string UserName)> SeedBystanderWorkerAsync()
+	{
+		var userName = $"bystander.worker.{Guid.NewGuid():N}";
+		var employee = await seedClient.Employees.CreateEmployeeAsync(new() {
+			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			DisplayName = "Bystander Worker",
+			IanaTimeZone = "Etc/UTC",
+			UserName = userName,
+			Password = AdministratorPassword,
+			Role = EmployeeRole.Worker,
+		});
+		await ClearRequiresPasswordChangeAsync();
+		return (employee.Id, userName);
+	}
+
 	/// <summary>Seeds one worked leaf with the requested number of distinct active workers.</summary>
 	public async Task<(JobNodeId LeafId, IReadOnlyList<string> WorkerDisplayNames)> SeedActiveSessionsAsync(
 		string leafDescription, int workerCount)
@@ -310,11 +369,20 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 				Password = AdministratorPassword,
 				Role = EmployeeRole.Worker,
 			});
-			_ = await seedClient.Work.StartSessionAsync(new() {
-				Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
-				LeafWorkId = leafId,
-				WorkedByUserId = employee.Id,
-			});
+			if (index == 0) {
+				_ = await seedClient.Work.StartWorkAsync(new() {
+					Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+					JobNodeId = leafId,
+					WorkedByUserId = employee.Id,
+				});
+			} else {
+				_ = await seedClient.Work.StartSessionAsync(new() {
+					Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+					LeafWorkId = leafId,
+					WorkedByUserId = employee.Id,
+				});
+			}
+
 			workerDisplayNames.Add(displayName);
 		}
 

@@ -75,8 +75,14 @@ schema-level guarantee, not an application check):
 
 - **A leaf's achievement is stored and manually set** — `Waiting → InProgress → {Success, Cancelled,
   Unsuccessful}`, or `Waiting → {Cancelled, Unsuccessful}` directly. Any terminal state can be
-  reopened back to `Waiting`, but only by a Job manager or Administrator, with a mandatory audited
-  reason (ADR 0001). Only `Success` satisfies a prerequisite.
+  reopened back to `Waiting` with a mandatory audited reason (ADR 0001). Reopening in isolation
+  (`ReopenWithoutStartingAsync`, no session follows) stays Job manager/Administrator-only. Reopening
+  *and starting a session in the same atomic composite* (`ReopenAndStartWorkAsync`) is additionally
+  available to a prior session participant (starting for themselves only) or a controlling owner
+  (who may start for any eligible worker), per ADR 0045. Only `Success` satisfies a prerequisite.
+  `CompleteLeafAsync` (ADR 0045) atomically finishes a confirmed active-session set and records
+  `Success` in one commit; `Cancelled`/`Unsuccessful` have no equivalent atomic composite and remain
+  manual `SetAchievementAsync` calls gated by ADR 0044's no-active-session rule.
 - **A branch's (and the root's) achievement is never stored** — it's always derived: a branch
   succeeds if and only if every direct child succeeds, recursively, all the way down to leaves. A
   cached value for query performance is disposable and must be rebuildable, never authoritative.

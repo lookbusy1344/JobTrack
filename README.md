@@ -229,6 +229,36 @@ may create or finish a session for someone other than themselves, which remains 
 controls the leaf) and is re-checked by the command at write time regardless of what the page
 rendered a moment earlier.
 
+## The unified leaf work page
+
+`/Jobs/Work?leafNodeId={id}` is the single interactive surface for a leaf's current status and its
+Sessions (ADR 0045). It shows one obvious primary action for the current state:
+
+- **Waiting or nothing recorded yet, no active session** — Start session (the same one-click
+  `StartWorkAsync` composite described above).
+- **In progress, at least one active session** — an explicit **Pause work** / **Complete job**
+  decision. Pause finishes only the selected session and leaves achievement unchanged; Complete job
+  atomically finishes the exact confirmed active-session set (one worker or several, all at the same
+  instant) and records `Success` in one commit (`CompleteLeafAsync`). Neither is ever implicit —
+  finishing a session never silently means "done."
+- **A terminal leaf** (`Success`/`Cancelled`/`Unsuccessful`) — **Reopen and start session**, when the
+  actor qualifies: a controlling owner, Job Manager, or Administrator may reopen and start for any
+  eligible worker; a worker who recorded any previous session on that leaf may reopen and start for
+  themselves only. This is `ReopenAndStartWorkAsync`, one atomic commit of the audited
+  `terminal -> Waiting` transition, ADR 0038's existing `Waiting -> InProgress` auto-advance, and the
+  new session — amending ADR 0001's original Administrator/JobManager-only reopen rule for this
+  composite path specifically (an isolated reopen with no session following it stays
+  Administrator/JobManager-only, in "Change outcome" below).
+- **Archived** — no active-session action at all; the page names the restore requirement instead of
+  silently reactivating a closed node.
+
+A "Change outcome" disclosure covers the remaining, exceptional transitions — Cancel job, Mark
+unsuccessful, and reopening without starting a session — through the original `SetAchievementAsync`
+primitive, unchanged.
+
+`/Jobs/Achievement`, the page's now-retired predecessor, is a compatibility redirect to
+`/Jobs/Work#status`; nothing links to it directly any more.
+
 ## External HTTP API
 
 Beyond the server-rendered Razor Pages, `JobTrack.Web` exposes a resource-oriented JSON API under

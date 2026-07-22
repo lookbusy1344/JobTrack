@@ -431,3 +431,6 @@ JobTrack.Domain.Hierarchy.JobSubtreeLimits
 const JobTrack.Domain.Hierarchy.JobSubtreeLimits.DefaultMaxDepth = 3 -> int
 const JobTrack.Domain.Hierarchy.JobSubtreeLimits.HardMaxDepth = 5 -> int
 const JobTrack.Domain.Hierarchy.JobSubtreeLimits.BreadthCap = 25 -> int
+JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy
+static JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool actorParticipatedPreviously, JobTrack.Abstractions.AppUserId actorUserId, JobTrack.Abstractions.AppUserId targetWorkedByUserId) -> bool
+static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanFinishSession(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool isOwnSession) -> bool

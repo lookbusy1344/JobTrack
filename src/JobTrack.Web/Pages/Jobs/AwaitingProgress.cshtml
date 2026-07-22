@@ -90,8 +90,10 @@
 						<partial name="_WorkRowActions" model="entryActions"/>
 					</td>
 				</tr>
-				<partial name="_BackdateRow"
-				         model="@(new BackdateRowModel { Disclosure = entryActions.ViewerSession is { } entryViewerSession ? entryActions.FinishBackdateFor(entryViewerSession) : entryActions.StartBackdate, ColumnCount = 7 })"/>
+				@if (entryActions.ViewerSession is null && !entryActions.IsStartClosed) {
+					<partial name="_BackdateRow"
+					         model="@(new BackdateRowModel { Disclosure = entryActions.StartBackdate, ColumnCount = 7 })"/>
+				}
 			}
 			</tbody>
 		</table>

@@ -70,4 +70,39 @@ public sealed class WorkSessionAccessPolicyTests
 
 		act.Should().Throw<ArgumentNullException>();
 	}
+
+	// CanFinishSession (ADR 0045 §5): CanManage's node-control rule still governs finishing another
+	// worker's session or finishing without controlling the node, but the worker named on the session
+	// may always finish it themselves regardless of control -- the one narrow exception.
+	[Fact]
+	public void A_worker_who_controls_the_node_may_finish_any_session_on_it() =>
+		WorkSessionAccessPolicy.CanFinishSession([EmployeeRole.Worker], true, false).Should().BeTrue();
+
+	[Fact]
+	public void A_worker_who_no_longer_controls_the_node_may_still_finish_their_own_session() =>
+		WorkSessionAccessPolicy.CanFinishSession([EmployeeRole.Worker], false, true).Should().BeTrue();
+
+	[Fact]
+	public void A_worker_who_does_not_control_the_node_may_not_finish_another_workers_session() =>
+		WorkSessionAccessPolicy.CanFinishSession([EmployeeRole.Worker], false, false).Should().BeFalse();
+
+	[Fact]
+	public void An_actor_with_no_roles_may_not_finish_even_their_own_session() =>
+		WorkSessionAccessPolicy.CanFinishSession([], false, true).Should().BeFalse();
+
+	[Fact]
+	public void A_requester_may_never_finish_even_their_own_session() =>
+		WorkSessionAccessPolicy.CanFinishSession([EmployeeRole.Requester], false, true).Should().BeFalse();
+
+	[Fact]
+	public void An_administrator_may_finish_any_session_without_controlling_the_node() =>
+		WorkSessionAccessPolicy.CanFinishSession([EmployeeRole.Administrator], false, false).Should().BeTrue();
+
+	[Fact]
+	public void A_null_role_collection_is_rejected_by_CanFinishSession()
+	{
+		var act = () => WorkSessionAccessPolicy.CanFinishSession(null!, false, true);
+
+		act.Should().Throw<ArgumentNullException>();
+	}
 }

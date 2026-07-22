@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
@@ -173,7 +174,6 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		body.Should().NotContain(">Dependencies<");
 		body.Should().NotContain(">Decompose<");
 		body.Should().NotContain(">Work<");
-		body.Should().NotContain(">Achievement<");
 	}
 
 	[Fact]
@@ -190,7 +190,6 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		body.Should().Contain(">Dependencies<");
 		body.Should().Contain(">Decompose<");
 		body.Should().Contain("#jt-icon-start");
-		body.Should().Contain(">Achievement<");
 	}
 
 	[Fact]
@@ -284,7 +283,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
-	public async Task Work_page_links_the_leafs_own_name_to_browse_and_titles_the_page_sessions()
+	public async Task Work_page_links_the_leafs_own_name_to_browse_and_titles_the_page_with_the_leafs_description()
 	{
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
@@ -293,7 +292,8 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
-		body.Should().Contain("<h1>Sessions</h1>");
+		body.Should().Contain("Pour foundation</h1>");
+		body.Should().NotContain("jt-eyebrow", "the eyebrow kicker was removed project-wide -- a page shows one title, not two");
 		body.Should().NotContain("Leaf work");
 	}
 
@@ -322,7 +322,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
-	public async Task Achievement_page_names_the_target_leaf_and_links_it_to_browse()
+	public async Task Achievement_page_redirects_to_the_unified_work_page_for_the_same_leaf()
 	{
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		_ = await seedClient.Work.StartWorkAsync(new() {
@@ -333,9 +333,9 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var authCookie = await SignInAsync("browse-nav.worker");
 
 		var response = await GetAsync($"/Jobs/Achievement?jobNodeId={leafId.Value}", authCookie);
-		var body = await ReadNormalizedBodyAsync(response);
 
-		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Pour foundation (ID {leafId.Value})</a>");
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Be($"/Jobs/Work?leafNodeId={leafId.Value}#status");
 	}
 
 	[Fact]

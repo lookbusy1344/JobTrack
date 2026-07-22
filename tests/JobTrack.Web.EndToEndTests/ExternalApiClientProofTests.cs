@@ -104,6 +104,24 @@ public sealed class ExternalApiClientProofTests
 		var conflict = await Record.ExceptionAsync(() => apiClient.StartSessionAsync(leaf.Id.Value, workerId.Value));
 		conflict.Should().BeOfType<JobTrackApiConflictException>();
 
+		// Composite mutation workflow (ADR 0045): atomically finish the confirmed active session and
+		// record Success, over the plain-JSON external client -- no JobTrack.* library reference. The
+		// achievement advance to InProgress uses the library-side seed client purely as test setup
+		// (StartSessionAsync, unlike StartWorkAsync, does not itself auto-advance achievement).
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(
+			new() { Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id });
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Prepare client-proof completion fixture",
+			Version = leafWork.Version,
+		});
+		var completed = await apiClient.CompleteLeafAsync(
+			leaf.Id.Value, leafWork.Version + 1, [new() { Id = session.Id, Version = session.Version }]);
+		completed.Achievement.Should().Be("Success");
+		completed.FinishedSessions.Should().ContainSingle(finished => finished.Id == session.Id);
+
 		// Revocation handling: once the token is revoked, the next call fails cleanly, not a crash.
 		await seedClient.Tokens.RevokeAsync(new() {
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },

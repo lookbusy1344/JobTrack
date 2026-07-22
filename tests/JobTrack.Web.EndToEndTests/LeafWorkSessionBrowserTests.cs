@@ -76,6 +76,27 @@ public abstract class LeafWorkSessionBrowserTestsBase
 	}
 
 	[Fact]
+	public async Task The_work_page_honours_reduced_motion_preferences()
+	{
+		var leafId = await fixture.SeedLeafAsync("Reduced motion work leaf");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+		await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		var mainAnimationName = await page.Locator("main[role=\"main\"]").EvaluateAsync<string>(
+			"element => window.getComputedStyle(element).animationName");
+		var buttonTransitionDuration = await page.GetByRole(AriaRole.Button, new() { Name = "Start session" }).EvaluateAsync<string>(
+			"element => window.getComputedStyle(element).transitionDuration");
+
+		mainAnimationName.Should().Be("none");
+		buttonTransitionDuration.Split(',').Should().OnlyContain(duration => duration.Trim() == "0s");
+	}
+
+	[Fact]
 	public async Task Starting_work_on_a_fresh_leaf_is_operable_by_keyboard_with_visible_focus()
 	{
 		var leafId = await fixture.SeedLeafAsync("Keyboard work session leaf");
@@ -152,6 +173,118 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work");
+	}
+
+	[Fact]
+	public async Task The_work_page_for_a_successful_leaf_has_no_critical_or_serious_accessibility_violations()
+	{
+		var leafId = await fixture.SeedSuccessLeafAsync("Accessibility success leaf");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		(await page.Locator(".status-pill-closed").IsVisibleAsync()).Should().BeTrue();
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for a successful leaf");
+	}
+
+	[Fact]
+	public async Task The_work_page_for_an_archived_terminal_leaf_has_no_critical_or_serious_accessibility_violations()
+	{
+		var leafId = await fixture.SeedArchivedTerminalLeafAsync("Accessibility archived leaf");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		(await page.GetByText("Archived", new() { Exact = false }).First.IsVisibleAsync()).Should().BeTrue();
+		(await page.Locator("form[action*='handler=ReopenAndStart']").CountAsync()).Should()
+			.Be(0, "an archived leaf cannot start a new session regardless of achievement");
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for an archived terminal leaf");
+	}
+
+	[Fact]
+	public async Task A_bystander_sees_no_reopen_form_on_a_terminal_leaf_they_do_not_control()
+	{
+		var leafId = await fixture.SeedSuccessLeafAsync("Bystander reopen leaf");
+		var (_, bystanderUserName) = await fixture.SeedBystanderWorkerAsync();
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
+		await page.Locator("#Input_UserName").FillAsync(bystanderUserName);
+		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
+		await page.Locator("button[type=submit]").ClickAsync();
+		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		(await page.GetByText("Completed.", new() { Exact = false }).IsVisibleAsync()).Should().BeTrue();
+		(await page.Locator("form[action*='handler=ReopenAndStart']").CountAsync()).Should()
+			.Be(0, "a worker with no ownership or management capability must not see a reopen form (rendering hint follows server authorization)");
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for a bystander viewing a terminal leaf");
+	}
+
+	[Fact]
+	public async Task The_full_leaf_workflow_is_repeatable_by_keyboard_and_remains_accessible()
+	{
+		var leafId = await fixture.SeedLeafAsync("Golden leaf workflow");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		await page.GetByRole(AriaRole.Button, new() { Name = "Start session", Exact = true }).PressAsync("Enter");
+		await page.GetByText("Session started.", new() { Exact = true }).WaitForAsync();
+
+		await page.Locator("#end-session")
+			.GetByRole(AriaRole.Button, new() { Name = "Pause work", Exact = true }).PressAsync("Enter");
+		await page.GetByText("Ends this session; the job stays In Progress.", new() { Exact = true }).WaitForAsync();
+
+		await page.GetByRole(AriaRole.Button, new() { Name = "Mark complete", Exact = true }).PressAsync("Enter");
+		await page.GetByText("Job completed.", new() { Exact = true }).WaitForAsync();
+
+		var reason = page.Locator("#reopenReason");
+		await reason.FocusAsync();
+		(await page.EvaluateAsync<string>("document.activeElement.id")).Should().Be("reopenReason");
+		await reason.FillAsync("More work was found");
+		await reason.PressAsync("Enter");
+
+		await page.GetByText("Job reopened. Session started.", new() { Exact = true }).WaitForAsync();
+		(await page.GetByText("In Progress", new() { Exact = true }).First.IsVisibleAsync()).Should().BeTrue();
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after the complete reopen workflow");
+	}
+
+	[Fact]
+	public async Task Multi_worker_completion_finishes_every_worker_then_completes_the_job()
+	{
+		var (leafId, _) = await fixture.SeedActiveSessionsAsync(
+			"Golden multi-worker completion", RequiredSimultaneousWorkerCount);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		(await page.Locator("div.jt-completion-review").IsVisibleAsync()).Should().BeTrue();
+
+		await page.GetByRole(
+			AriaRole.Button,
+			new() { Name = $"Finish {RequiredSimultaneousWorkerCount} sessions and complete job", Exact = true }).PressAsync("Enter");
+
+		await page.GetByText(
+			$"Job completed and {RequiredSimultaneousWorkerCount} sessions finished.",
+			new() { Exact = true }).WaitForAsync();
+		(await page.GetByText("Closed", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker completion");
 	}
 
 	[Fact]

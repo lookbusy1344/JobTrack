@@ -547,6 +547,8 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 
 	public LeafWorkResult? FindLeafWork(JobNodeId id) => _leafWork.TryGetValue(id, out var leafWork) ? leafWork : null;
 
+	public JobNodeResult? FindNode(JobNodeId id) => _nodes.TryGetValue(id, out var node) ? node : null;
+
 	public void SetLeafWork(LeafWorkResult leafWork) => _leafWork[leafWork.JobNodeId] = leafWork;
 
 	/// <summary>

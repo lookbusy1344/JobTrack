@@ -51,6 +51,8 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 		new("DELETE", "/api/jobs/{nodeId}/prerequisites/{requiredJobId}", ["401", "403", "404", "429"]),
 		new("GET", "/api/jobs/{nodeId}/achievement", ["401", "403", "404", "429"]),
 		new("PUT", "/api/jobs/{nodeId}/achievement", ["400", "401", "403", "404", "409", "413", "429"]),
+		new("POST", "/api/jobs/{nodeId}/complete", ["400", "401", "403", "404", "409", "413", "429"]),
+		new("POST", "/api/jobs/{nodeId}/reopen-and-start-session", ["400", "401", "403", "404", "409", "413", "429"]),
 		new("GET", "/api/jobs/{nodeId}/cost", ["400", "401", "403", "404", "429"]),
 		new("GET", "/api/jobs/{nodeId}/cost/hierarchy", ["400", "401", "403", "404", "429"]),
 		new("GET", "/api/jobs/{nodeId}/subtree", ["400", "401", "403", "404", "429"]),

@@ -238,45 +238,6 @@ public sealed class AwaitingProgressModel(
 		return RedirectToPage(CurrentRouteValues());
 	}
 
-	public async Task<IActionResult> OnPostFinishAsync(
-		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
-	{
-		var actor = await ResolveActorAsync();
-		if (actor is null) {
-			return Challenge();
-		}
-
-		try {
-			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
-			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
-				ErrorMessage = "Enter a valid date and time.";
-				return RedirectToPage(CurrentRouteValues());
-			}
-
-			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
-				SessionId = new(sessionId),
-				Version = version,
-				FinishedAt = finishedAtInstant,
-			}, cancellationToken);
-			SuccessMessage = "Session finished.";
-		}
-		catch (AuthorizationDeniedException) {
-			return Forbid();
-		}
-		catch (EntityNotFoundException) {
-			ErrorMessage = "That session does not exist.";
-		}
-		catch (ConcurrencyConflictException) {
-			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
-		}
-		catch (InvariantViolationException ex) {
-			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
-		}
-
-		return RedirectToPage(CurrentRouteValues());
-	}
-
 	/// <summary>
 	///     The page's own browsing context (mirrors <see cref="RowStateFields" />, minus the string
 	///     conversion), replayed on the redirect every mutating handler ends with so the reloaded GET

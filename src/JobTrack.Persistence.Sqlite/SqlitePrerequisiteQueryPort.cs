@@ -18,6 +18,20 @@ internal sealed class SqlitePrerequisiteQueryPort : IPrerequisiteQueryPort
 	public SqlitePrerequisiteQueryPort(string connectionString) => this.connectionString = connectionString;
 
 	/// <inheritdoc />
+	public async Task<int> CountDirectDependentsAsync(JobNodeId requiredJobId, CancellationToken cancellationToken = default)
+	{
+		await using var context = SqliteDbContextFactory.CreateContext(connectionString);
+
+		if (!await context.Set<JobNodeEntity>().AsNoTracking()
+				.AnyAsync(n => n.Id == requiredJobId, cancellationToken).ConfigureAwait(false)) {
+			throw new EntityNotFoundException($"Job node {requiredJobId} does not exist.");
+		}
+
+		return await context.Set<JobPrerequisiteEntity>().AsNoTracking()
+			.CountAsync(edge => edge.FromId == requiredJobId, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <inheritdoc />
 	public async Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesAsync(
 		JobNodeId nodeId, int offset = 0, int? limit = null, CancellationToken cancellationToken = default)
 	{

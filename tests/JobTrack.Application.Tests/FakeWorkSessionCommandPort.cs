@@ -119,7 +119,7 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 	public Task<WorkSessionResult> FinishSessionAsync(FinishSessionRequest request, CancellationToken cancellationToken = default)
 	{
 		var existing = GetExisting(request.SessionId);
-		AuthorizeOrThrow(request.Context.Actor, existing.LeafWorkId);
+		AuthorizeFinishOrThrow(request.Context.Actor, existing.LeafWorkId, existing.WorkedByUserId);
 		CheckVersionOrThrow(existing.Version, request.Version);
 
 		// Unlike a real clock, NowToReturn is a single frozen instant shared by every operation in a
@@ -174,6 +174,147 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		return Task.FromResult(updated);
 	}
 
+	public async Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default)
+	{
+		var leafWork = nodePort.FindLeafWork(request.JobNodeId)
+					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
+
+		var ownsNodeOrAncestor = nodePort.OwnsNodeOrAncestor(request.Context.Actor, request.JobNodeId);
+		if (!AchievementAccessPolicy.CanSetAchievement(nodePort.RolesOf(request.Context.Actor), ownsNodeOrAncestor, false)) {
+			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not complete job node {request.JobNodeId}.");
+		}
+
+		if (leafWork.Version != request.Version) {
+			throw new ConcurrencyConflictException(
+				$"Expected version {request.Version} but the current version is {leafWork.Version}.");
+		}
+
+		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, Achievement.Success)) {
+			throw new InvariantViolationException(
+				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {Achievement.Success}.");
+		}
+
+		var actualActive = _sessions.Values
+			.Where(session => session.LeafWorkId == request.JobNodeId && session.FinishedAt is null)
+			.OrderBy(session => session.Id.Value)
+			.ToList();
+		var expected = request.ExpectedActiveSessions
+			.OrderBy(expectedSession => expectedSession.Id.Value)
+			.ToList();
+		var matchesExpected = actualActive.Count == expected.Count
+							  && actualActive.Zip(expected)
+								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.Version == pair.Second.Version);
+		if (!matchesExpected) {
+			throw new ConcurrencyConflictException(
+				"The leaf's current active-session set no longer matches the confirmed set.");
+		}
+
+		var finishedAt = request.FinishedAt ?? NowToReturn;
+		if (request.FinishedAt is not null) {
+			if (actualActive.Any(session => finishedAt <= session.StartedAt)) {
+				throw new InvariantViolationException(
+					"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+			}
+
+			if (finishedAt > NowToReturn) {
+				throw new InvariantViolationException(
+					"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+			}
+		}
+
+		var readinessInputs = await nodePort.GetReadinessInputsAsync(request.JobNodeId, cancellationToken).ConfigureAwait(false);
+		var readiness = ReadinessCalculator.IsReady(request.JobNodeId, readinessInputs.NodesById, readinessInputs.Prerequisites);
+		if (!readiness.IsReady) {
+			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
+		}
+
+		var finished = new List<WorkSessionResult>();
+		foreach (var session in actualActive) {
+			var updated = session with { FinishedAt = finishedAt, ChangedAt = NowToReturn, Version = session.Version + 1 };
+			_sessions[updated.Id] = updated;
+			finished.Add(updated);
+		}
+
+		var updatedLeafWork = leafWork with { Achievement = Achievement.Success, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
+		nodePort.SetLeafWork(updatedLeafWork);
+
+		return new() {
+			JobNodeId = request.JobNodeId,
+			Achievement = Achievement.Success,
+			ChangedAt = updatedLeafWork.ChangedAt,
+			Version = updatedLeafWork.Version,
+			FinishedSessions = [.. finished],
+		};
+	}
+
+	public async Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(
+		ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default)
+	{
+		var leafWork = nodePort.FindLeafWork(request.JobNodeId)
+					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
+
+		if (leafWork.Version != request.Version) {
+			throw new ConcurrencyConflictException(
+				$"Expected version {request.Version} but the current version is {leafWork.Version}.");
+		}
+
+		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, Achievement.Waiting)) {
+			throw new InvariantViolationException(
+				"achievement-transition-not-permitted", $"Cannot reopen from {leafWork.Achievement}.");
+		}
+
+		var node = nodePort.FindNode(request.JobNodeId);
+		if (node?.ArchivedAt is not null) {
+			throw new InvariantViolationException(
+				"work-session-leaf-closed", "An archived node's leaf must be restored before it can be reopened.");
+		}
+
+		var actorControlsNode = nodePort.OwnsNodeOrAncestor(request.Context.Actor, request.JobNodeId);
+		var actorParticipatedPreviously = _sessions.Values.Any(session =>
+			session.LeafWorkId == request.JobNodeId && session.WorkedByUserId == request.Context.Actor);
+		if (!LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(
+				nodePort.RolesOf(request.Context.Actor), actorControlsNode, actorParticipatedPreviously,
+				request.Context.Actor, request.WorkedByUserId)) {
+			throw new AuthorizationDeniedException(
+				$"Actor {request.Context.Actor} may not reopen and start job node {request.JobNodeId} for {request.WorkedByUserId}.");
+		}
+
+		var startedAt = request.StartedAt ?? NowToReturn;
+		if (startedAt > NowToReturn) {
+			throw new InvariantViolationException(
+				"work-session-start-in-future", "A session's start instant must not be in the future.");
+		}
+
+		if (_sessions.Values.Any(session =>
+				session.LeafWorkId == request.JobNodeId
+				&& session.WorkedByUserId == request.WorkedByUserId
+				&& RangesOverlap(startedAt, null, session.StartedAt, session.FinishedAt))) {
+			throw new InvariantViolationException(
+				"work-session-overlap", "This session would overlap another session for the same worker and leaf.");
+		}
+
+		var updatedLeafWork = leafWork with { Achievement = Achievement.InProgress, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
+		nodePort.SetLeafWork(updatedLeafWork);
+
+		var session = new WorkSessionResult {
+			Id = new(_nextId++),
+			LeafWorkId = request.JobNodeId,
+			WorkedByUserId = request.WorkedByUserId,
+			StartedAt = startedAt,
+			ChangedAt = NowToReturn,
+			Version = 1,
+		};
+		_sessions[session.Id] = session;
+
+		return new() {
+			JobNodeId = request.JobNodeId,
+			Achievement = Achievement.InProgress,
+			ChangedAt = updatedLeafWork.ChangedAt,
+			Version = updatedLeafWork.Version,
+			Session = session,
+		};
+	}
+
 	private static bool RangesOverlap(Instant aStart, Instant? aFinish, Instant bStart, Instant? bFinish)
 	{
 		var aEnd = aFinish ?? Instant.MaxValue;
@@ -186,6 +327,15 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 	{
 		if (!WorkSessionAccessPolicy.CanManage(nodePort.RolesOf(actorId), nodePort.OwnsNodeOrAncestor(actorId, leafId))) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage a session on job node {leafId}.");
+		}
+	}
+
+	/// <summary>ADR 0045 §5: the narrow self-finish exception <see cref="WorkSessionAccessPolicy.CanFinishSession" /> adds.</summary>
+	private void AuthorizeFinishOrThrow(AppUserId actorId, JobNodeId leafId, AppUserId sessionWorkedByUserId)
+	{
+		if (!WorkSessionAccessPolicy.CanFinishSession(
+				nodePort.RolesOf(actorId), nodePort.OwnsNodeOrAncestor(actorId, leafId), actorId == sessionWorkedByUserId)) {
+			throw new AuthorizationDeniedException($"Actor {actorId} may not finish this session on job node {leafId}.");
 		}
 	}
 

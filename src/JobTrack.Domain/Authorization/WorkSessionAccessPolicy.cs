@@ -56,4 +56,21 @@ public static class WorkSessionAccessPolicy
 			or EmployeeRole.CostViewer
 			or EmployeeRole.Auditor);
 	}
+
+	/// <summary>
+	///     Whether the actor may finish (pause) this specific active session -- <see cref="CanManage" />
+	///     plus one narrow exception (ADR 0045 §5): the worker named on the session may always finish it
+	///     themselves, even if node ownership changed after the session started. This exception governs
+	///     finishing one's own session only; it grants no authority to finish another worker's session,
+	///     to start or correct a session, or to complete the leaf (<c>CompleteLeafAsync</c> keeps
+	///     requiring <see cref="CanManage" /> unchanged). Without it, a worker who started a session
+	///     while controlling the node could be left unable to stop their own clock purely because control
+	///     moved elsewhere in the meantime.
+	/// </summary>
+	public static bool CanFinishSession(IReadOnlyCollection<EmployeeRole> actorRoles, bool actorControlsNode, bool isOwnSession)
+	{
+		ArgumentNullException.ThrowIfNull(actorRoles);
+
+		return CanManage(actorRoles, actorControlsNode) || (actorRoles.Contains(EmployeeRole.Worker) && isOwnSession);
+	}
 }

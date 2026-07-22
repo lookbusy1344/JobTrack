@@ -12,14 +12,13 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using NodaTime;
 
 /// <summary>
-///     A leaf's own work-session detail (plan §8.5 slice 4): a deep-linkable page showing the same
-///     <c>_LeafWorkSessions</c> panel <c>Browse</c> shows inline for a leaf, plus <c>CorrectSession</c>'s
-///     post-redirect target. "Pause" and "resume" are UI terms only — pause posts to the same handler as
-///     finish, and resume posts to the same handler as start (spec §4.4); there is no separate
-///     resume/pause command. Historical correction lives on the separate <see cref="CorrectSessionModel" />
-///     page. Carries no page-level authorization policy — the commands themselves re-evaluate
-///     <see cref="Domain.Authorization.WorkSessionAccessPolicy" /> per call, so an unauthorized attempt is
-///     denied by the command, not the page.
+///     The unified leaf-work page (unified-leaf-workflow plan, ADR 0045): the single interactive
+///     surface for a leaf's current status and its Sessions. Shows one obvious primary action for the
+///     current state -- Start, the Pause/Complete decision, or Reopen and start -- and pushes
+///     historical correction and exceptional outcomes into progressive disclosure. Carries no
+///     page-level authorization policy beyond <see cref="JobTrackPolicyNames.JobWorkflow" /> -- every
+///     command re-evaluates its own authorization at write time, so <see cref="LeafWorkPageResult" />'s
+///     <c>Can*</c> members are rendering hints only.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
 public sealed class WorkModel(
@@ -40,39 +39,36 @@ public sealed class WorkModel(
 
 	[BindProperty(SupportsGet = true)] public long? WorkedByUserId { get; init; }
 
-	public JobNodeDetailResult? CurrentNode { get; private set; }
+	/// <summary>
+	///     Set by an End-session link from Browse/Awaiting Progress (<c>?endSessionId=</c>) so the page
+	///     can focus the end-session decision panel on load; the command itself never trusts this value
+	///     -- it always reloads and reauthorizes the exact confirmed session set.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public long? EndSessionId { get; init; }
+
+	/// <summary>The unified bounded projection this page renders (<see cref="IJobQueries.GetLeafWorkPageAsync" />).</summary>
+	public LeafWorkPageResult? WorkPage { get; private set; }
 
 	public LeafWorkSessionsPanelModel? Panel { get; private set; }
 
-	/// <summary>The signed-in actor, so the toolbar can tell their own active session apart from another worker's.</summary>
+	/// <summary>The signed-in actor, so the page can tell their own active session apart from another worker's.</summary>
 	public AppUserId? CurrentActorId { get; private set; }
 
-	/// <summary>
-	///     Every active session on this leaf, never collapsed to one representative (plan §2.4) -- unlike <see cref="Panel" />'s history, which the
-	///     worker filter narrows.
-	/// </summary>
-	public EquatableArray<WorkSessionResult> ActiveSessions { get; private set; } = [];
-
-	/// <summary>
-	///     Whether the actor may manage sessions on this leaf (<see cref="IJobQueries.GetSessionManageCapabilitiesAsync" />) -- a rendering hint for
-	///     the "Start for…" disclosure and another worker's exact finish.
-	/// </summary>
-	public bool CanManage { get; private set; }
-
-	/// <summary>The leaf's current achievement, when work is attached.</summary>
-	public Achievement? CurrentAchievement { get; private set; }
-
-	/// <summary>Every enabled workflow employee, for the "Start for…" worker picker.</summary>
+	/// <summary>Every enabled workflow employee, for the "Start for…" and reopen-target worker pickers.</summary>
 	public IReadOnlyList<SelectListItem> StartForWorkerOptions { get; private set; } = [];
+
+	/// <summary>Every enabled workflow employee, with the viewer selected by default for reopen-and-start.</summary>
+	public IReadOnlyList<SelectListItem> ReopenWorkerOptions { get; private set; } = [];
 
 	/// <summary>The one leaf this page is for, as a <see cref="WorkRowActionsModel" /> so the toolbar shares Browse's exact start/finish/start-for logic.</summary>
 	public WorkRowActionsModel ToolbarActions => new() {
 		LeafNodeId = LeafNodeId,
 		ViewerId = CurrentActorId ?? new AppUserId(0),
-		ActiveSessions = ActiveSessions,
-		CanManage = CanManage,
-		Achievement = CurrentAchievement,
-		IsArchived = CurrentNode?.Node.ArchivedAt is not null,
+		ActiveSessions = WorkPage?.ActiveSessions ?? [],
+		CanManage = WorkPage?.CanManageSessions ?? false,
+		Achievement = WorkPage?.Achievement,
+		IsArchived = WorkPage?.ArchivedAt is not null,
 		ViewerZone = ViewerZone,
 		StartHandler = "Start",
 		StartNodeFieldName = "leafNodeId",
@@ -132,9 +128,6 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
-		// Always the viewer's own one-click start -- WorkedByUserId is the Sessions history filter
-		// only and must never double as a mutation target (plan §2.5 rule 4). Starting for another
-		// worker goes through OnPostStartForAsync's distinct StartForUserId field.
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
@@ -212,6 +205,7 @@ public sealed class WorkModel(
 		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 	}
 
+	/// <summary>"Pause work": finishes exactly one session and leaves achievement unchanged (ADR 0045 §3.3).</summary>
 	public async Task<IActionResult> OnPostFinishAsync(
 		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
 	{
@@ -233,7 +227,7 @@ public sealed class WorkModel(
 				Version = version,
 				FinishedAt = finishedAtInstant,
 			}, cancellationToken);
-			SuccessMessage = "Session finished.";
+			SuccessMessage = "Ends this session; the job stays In Progress.";
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -251,6 +245,176 @@ public sealed class WorkModel(
 		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 	}
 
+	/// <summary>
+	///     "Complete job": atomically finishes the exact confirmed active-session set shown on the page
+	///     and records <see cref="Achievement.Success" /> (ADR 0045 §1/§3). <paramref name="sessionId" />/
+	///     <paramref name="sessionVersion" /> are parallel arrays, one hidden pair per session the page
+	///     rendered in its review -- the command re-verifies this is exactly the leaf's current active
+	///     set before finishing any of them.
+	/// </summary>
+	public async Task<IActionResult> OnPostCompleteAsync(
+		long leafWorkVersion, long[]? sessionId, long[]? sessionVersion, string? finishedAt, string? completionNote,
+		CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		sessionId ??= [];
+		sessionVersion ??= [];
+		if (sessionId.Length != sessionVersion.Length) {
+			ErrorMessage = "The active-session list on this page is out of date. Reloading.";
+			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		}
+
+		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
+				ErrorMessage = "Enter a valid completion date and time.";
+				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			}
+
+			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				JobNodeId = new(LeafNodeId),
+				Version = leafWorkVersion,
+				ExpectedActiveSessions = [
+					.. sessionId.Zip(sessionVersion, (id, ver) => new ExpectedActiveSession { Id = new(id), Version = ver }),
+				],
+				FinishedAt = finishedAtInstant,
+				CompletionNote = string.IsNullOrWhiteSpace(completionNote) ? null : completionNote,
+			}, cancellationToken);
+			SuccessMessage = result.FinishedSessions.Count switch {
+				0 => "Job completed.",
+				1 => "Job completed and session finished.",
+				var n => $"Job completed and {n} sessions finished.",
+			};
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "This leaf has no work attached.";
+		}
+		catch (ConcurrencyConflictException) {
+			ErrorMessage =
+				"Someone else changed this leaf or one of its active sessions since the page was loaded. The latest state is shown below.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
+		}
+
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+	}
+
+	/// <summary>
+	///     "Reopen and start session": atomically reopens a terminal leaf and starts
+	///     <paramref name="workedByUserId" />'s session (ADR 0045 §1/§2). Authorized more widely than
+	///     the advanced "Reopen without starting" action below -- see <see cref="LeafWorkPageResult.CanReopenAndStartForSelf" />/
+	///     <see cref="LeafWorkPageResult.CanReopenAndStartForOthers" />, both rendering hints only.
+	/// </summary>
+	public async Task<IActionResult> OnPostReopenAndStartAsync(
+		long leafWorkVersion, string? reason, long workedByUserId, string? startedAt, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		if (string.IsNullOrWhiteSpace(reason)) {
+			ErrorMessage = "Enter a reason for reopening this job.";
+			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		}
+
+		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			}
+
+			_ = await jobTrackClient.Work.ReopenAndStartWorkAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				JobNodeId = new(LeafNodeId),
+				Version = leafWorkVersion,
+				Reason = reason,
+				WorkedByUserId = new(workedByUserId),
+				StartedAt = startedAtInstant,
+			}, cancellationToken);
+			SuccessMessage = "Job reopened. Session started.";
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "This leaf or worker does not exist.";
+		}
+		catch (ConcurrencyConflictException) {
+			ErrorMessage = "Someone else changed this leaf since the page was loaded. The latest state is shown below.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+	}
+
+	/// <summary>
+	///     Every advanced achievement action that is not one of the two atomic composites above --
+	///     Cancel job, Mark unsuccessful, and Reopen without starting (ADR 0045 §2/§5.5) -- all reuse the
+	///     one primitive <see cref="IWorkCommands.SetAchievementAsync" />, which re-evaluates
+	///     <see cref="Domain.Authorization.AchievementAccessPolicy" /> itself, including reopening's own
+	///     Administrator/JobManager-only rule.
+	/// </summary>
+	public async Task<IActionResult> OnPostSetAchievementAsync(
+		long leafWorkVersion, Achievement newAchievement, string? reason, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		if (string.IsNullOrWhiteSpace(reason)) {
+			ErrorMessage = "Enter a reason for this change.";
+			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		}
+
+		try {
+			_ = await jobTrackClient.Work.SetAchievementAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				JobNodeId = new(LeafNodeId),
+				NewAchievement = newAchievement,
+				Reason = reason,
+				Version = leafWorkVersion,
+			}, cancellationToken);
+			SuccessMessage = newAchievement == Achievement.Waiting
+				? "Job reopened."
+				: $"Achievement changed to {EnumDisplay.Label(newAchievement)}.";
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "This leaf has no work attached.";
+		}
+		catch (ConcurrencyConflictException) {
+			ErrorMessage =
+				"Someone else changed this leaf's achievement since the page was loaded. The latest state is shown below.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
+		}
+
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+	}
+
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		CurrentActorId = actor;
@@ -261,25 +425,18 @@ public sealed class WorkModel(
 			new() { Context = context }, cancellationToken);
 		_employeeDirectoryById = _employeeDirectory.ToDictionary(entry => entry.Id);
 		StartForWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory);
+		ReopenWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory);
+		foreach (var option in ReopenWorkerOptions) {
+			option.Selected = option.Value == actor.Value.ToString(CultureInfo.InvariantCulture);
+		}
 
+		var leafId = new JobNodeId(LeafNodeId);
 		try {
-			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = new JobNodeId(LeafNodeId) },
-				cancellationToken);
+			WorkPage = await jobTrackClient.Query.GetLeafWorkPageAsync(new() { Context = context, JobNodeId = leafId }, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
 			return;
-		}
-
-		var leafId = new JobNodeId(LeafNodeId);
-		ActiveSessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [leafId] }, cancellationToken);
-		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
-			new() { Context = context, LeafWorkIds = [leafId] }, cancellationToken);
-		CanManage = capabilities.FirstOrDefault(c => c.LeafWorkId == leafId)?.CanManage ?? false;
-		if (CurrentNode.Node.HasLeafWork) {
-			var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
-				new() { Context = context, JobNodeId = leafId }, cancellationToken);
-			CurrentAchievement = leafWork.Achievement;
 		}
 
 		var workedByUserId = ResolveWorkerFilter(leafId, actor);
@@ -320,7 +477,7 @@ public sealed class WorkModel(
 		var key = FormattableString.Invariant($"Jobs.Work.WorkedBy.{leafId.Value}");
 		// Default when nothing is remembered: Everyone (null) when the viewer may manage this leaf's
 		// sessions, else their own (a plain worker may not read everyone's).
-		var fallback = CanManage ? (long?)null : actor.Value;
+		var fallback = WorkPage?.CanManageSessions ?? false ? (long?)null : actor.Value;
 		var resolved = FilterMemory.Resolve(
 			HttpContext.Session, key, Request.Query.ContainsKey(nameof(WorkedByUserId)), WorkedByUserId, fallback);
 		return resolved.HasValue ? new AppUserId(resolved.Value) : null;

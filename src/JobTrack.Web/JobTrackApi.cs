@@ -320,6 +320,34 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status409Conflict)
 			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
+		_ = api.MapPost("/jobs/{nodeId:long}/complete", CompleteLeafAsync)
+			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			.AddEndpointFilter<AntiforgeryValidationFilter>()
+			.WithName("CompleteLeaf")
+			.WithSummary(
+				"Atomically finish the exact confirmed active-session set and record Success (ADR 0045). Composite of finish-session(s) and set-achievement.")
+			.Produces<CompleteLeafResponse>()
+			.ProducesProblem(StatusCodes.Status400BadRequest)
+			.ProducesProblem(StatusCodes.Status401Unauthorized)
+			.ProducesProblem(StatusCodes.Status403Forbidden)
+			.ProducesProblem(StatusCodes.Status404NotFound)
+			.ProducesProblem(StatusCodes.Status409Conflict)
+			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+
+		_ = api.MapPost("/jobs/{nodeId:long}/reopen-and-start-session", ReopenAndStartWorkAsync)
+			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			.AddEndpointFilter<AntiforgeryValidationFilter>()
+			.WithName("ReopenAndStartWork")
+			.WithSummary(
+				"Atomically reopen a terminal leaf to Waiting, auto-advance to InProgress (ADR 0038), and start the target worker's session (ADR 0045).")
+			.Produces<ReopenAndStartWorkResponse>(StatusCodes.Status201Created)
+			.ProducesProblem(StatusCodes.Status400BadRequest)
+			.ProducesProblem(StatusCodes.Status401Unauthorized)
+			.ProducesProblem(StatusCodes.Status403Forbidden)
+			.ProducesProblem(StatusCodes.Status404NotFound)
+			.ProducesProblem(StatusCodes.Status409Conflict)
+			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+
 		_ = api.MapGet("/jobs/{nodeId:long}/cost", GetCostDetailsAsync)
 			.RequireAuthorization(JobTrackPolicyNames.RateRead)
 			.WithName("GetCostDetails")
@@ -971,6 +999,52 @@ internal static partial class JobTrackApi
 		});
 	}
 
+	private static async Task<IResult> CompleteLeafAsync(
+		long nodeId,
+		[FromBody] CompleteLeafBody request,
+		HttpContext httpContext,
+		UserManager<JobTrackIdentityUser> userManager,
+		IJobTrackClient jobTrackClient,
+		CancellationToken cancellationToken)
+	{
+		return await ExecuteAsync(httpContext, userManager, async context => {
+			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
+				Context = context,
+				JobNodeId = new(nodeId),
+				Version = request.Version,
+				ExpectedActiveSessions = [
+					.. request.ExpectedActiveSessions.Select(s => new ExpectedActiveSession { Id = new(s.Id), Version = s.Version }),
+				],
+				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
+				CompletionNote = request.CompletionNote,
+			}, cancellationToken);
+
+			return TypedResults.Ok(Map(result));
+		});
+	}
+
+	private static async Task<IResult> ReopenAndStartWorkAsync(
+		long nodeId,
+		[FromBody] ReopenAndStartWorkBody request,
+		HttpContext httpContext,
+		UserManager<JobTrackIdentityUser> userManager,
+		IJobTrackClient jobTrackClient,
+		CancellationToken cancellationToken)
+	{
+		return await ExecuteAsync(httpContext, userManager, async context => {
+			var result = await jobTrackClient.Work.ReopenAndStartWorkAsync(new() {
+				Context = context,
+				JobNodeId = new(nodeId),
+				Version = request.Version,
+				Reason = request.Reason,
+				WorkedByUserId = new(request.WorkedByUserId),
+				StartedAt = request.StartedAt.HasValue ? Instant.FromDateTimeOffset(request.StartedAt.Value) : null,
+			}, cancellationToken);
+
+			return TypedResults.Created($"/api/jobs/{nodeId}/sessions/{result.Session.Id.Value}", Map(result));
+		});
+	}
+
 	private static async Task<IResult> GetCostDetailsAsync(
 		long nodeId,
 		DateTimeOffset? asOf,
@@ -1544,6 +1618,24 @@ internal static partial class JobTrackApi
 			Version = result.Version,
 		};
 
+	private static CompleteLeafResponse Map(CompleteLeafResult result) =>
+		new() {
+			JobNodeId = result.JobNodeId.Value,
+			Achievement = result.Achievement,
+			ChangedAt = result.ChangedAt.ToDateTimeOffset(),
+			Version = result.Version,
+			FinishedSessions = [.. result.FinishedSessions.Select(Map)],
+		};
+
+	private static ReopenAndStartWorkResponse Map(ReopenAndStartWorkResult result) =>
+		new() {
+			JobNodeId = result.JobNodeId.Value,
+			Achievement = result.Achievement,
+			ChangedAt = result.ChangedAt.ToDateTimeOffset(),
+			Version = result.Version,
+			Session = Map(result.Session),
+		};
+
 	private static RatesResponse Map(RateSnapshotResult result) =>
 		new() { UserCostRates = [.. result.UserCostRates.Select(Map)], NodeRateOverrides = [.. result.NodeRateOverrides.Select(Map)] };
 
@@ -2067,6 +2159,61 @@ internal static partial class JobTrackApi
 		[Required] public required string Reason { get; init; }
 
 		public required long Version { get; init; }
+	}
+
+	internal sealed class ExpectedActiveSessionBody
+	{
+		public required long Id { get; init; }
+
+		public required long Version { get; init; }
+	}
+
+	internal sealed class CompleteLeafBody
+	{
+		public required long Version { get; init; }
+
+		public required ExpectedActiveSessionBody[] ExpectedActiveSessions { get; init; }
+
+		public DateTimeOffset? FinishedAt { get; init; }
+
+		public string? CompletionNote { get; init; }
+	}
+
+	internal sealed class CompleteLeafResponse
+	{
+		public required long JobNodeId { get; init; }
+
+		public required Achievement Achievement { get; init; }
+
+		public required DateTimeOffset ChangedAt { get; init; }
+
+		public required long Version { get; init; }
+
+		public required WorkSessionResponse[] FinishedSessions { get; init; }
+	}
+
+	internal sealed class ReopenAndStartWorkBody
+	{
+		public required long Version { get; init; }
+
+		[Required] public required string Reason { get; init; }
+
+		public required long WorkedByUserId { get; init; }
+
+		public DateTimeOffset? StartedAt { get; init; }
+	}
+
+	internal sealed class ReopenAndStartWorkResponse
+	{
+		public required long JobNodeId { get; init; }
+
+		public required Achievement Achievement { get; init; }
+
+		public required DateTimeOffset ChangedAt { get; init; }
+
+		public required long Version { get; init; }
+
+		public required WorkSessionResponse Session { get; init; }
 	}
 
 	internal sealed class RatesResponse
