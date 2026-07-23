@@ -1,24 +1,28 @@
 @page "/Requests/{id:long}"
+@using NodaTime
 @model DetailsModel
 @{
 	ViewData["Title"] = "Request detail";
 }
 
 <div class="jt-page-head">
-	<h1 class="jt-preserve-whitespace">@(Model.Detail is { } headingDetail ? JobNodeDisplay.Title(headingDetail.Description, headingDetail.JobNodeId.Value) : null)</h1>
+	<h1 class="jt-preserve-whitespace">@(Model.Detail is not null ? JobNodeDisplay.Title(Model.Detail.Description, Model.Detail.JobNodeId.Value) : null)</h1>
 </div>
 
 <p><a asp-page="Index">&larr; Back to your requests</a></p>
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
-@if (Model.Detail is { } detail) {
+@{
+	var detail = Model.Detail;
+}
+@if (detail is not null) {
 	<dl class="row">
 		<dt class="col-sm-3">Status</dt>
 		<dd class="col-sm-9">@EnumDisplay.Label(detail.Status)</dd>
 		<dt class="col-sm-3">Submitted</dt>
 		<dd class="col-sm-9">@InstantDisplay.Format(detail.SubmittedAt, Model.ViewerZone)</dd>
-		@if (detail.AcknowledgedAt is { } acknowledgedAt) {
+		@if (detail.AcknowledgedAt is Instant acknowledgedAt) {
 			<dt class="col-sm-3">Acknowledged</dt>
 			<dd class="col-sm-9">@InstantDisplay.Format(acknowledgedAt, Model.ViewerZone)</dd>
 		}

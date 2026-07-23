@@ -36,6 +36,14 @@ public sealed class LeafWorkSessionsPanelModel
 	/// </summary>
 	public required string? DisplayedWorkedByName { get; init; }
 
+	/// <summary>
+	///     Whether the worker-filter form renders at all. Browse's leaf detail view always shows every
+	///     worker's sessions (recorded work is job data every employee may read, ADR 0041) and has no
+	///     use for narrowing it there; <see cref="WorkModel" /> keeps the filter as a follow-up narrowing
+	///     tool on its own dedicated page.
+	/// </summary>
+	public required bool ShowWorkerFilter { get; init; }
+
 	public required EquatableArray<WorkSessionResult> Sessions { get; init; }
 
 	public required List<SelectListItem> WorkedByOptions { get; init; }

@@ -3,6 +3,7 @@ namespace JobTrack.Web.Pages.Jobs;
 using System.Globalization;
 using Abstractions;
 using Application;
+using Domain.Hierarchy;
 using Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -39,18 +40,65 @@ public sealed class WorkModel(
 
 	[BindProperty(SupportsGet = true)] public long? WorkedByUserId { get; init; }
 
-	/// <summary>
-	///     Set by an End-session link from Browse/Awaiting Progress (<c>?endSessionId=</c>) so the page
-	///     can focus the end-session decision panel on load; the command itself never trusts this value
-	///     -- it always reloads and reauthorizes the exact confirmed session set.
-	/// </summary>
-	[BindProperty(SupportsGet = true)]
-	public long? EndSessionId { get; init; }
-
 	/// <summary>The unified bounded projection this page renders (<see cref="IJobQueries.GetLeafWorkPageAsync" />).</summary>
 	public LeafWorkPageResult? WorkPage { get; private set; }
 
 	public LeafWorkSessionsPanelModel? Panel { get; private set; }
+
+	/// <summary>
+	///     The leaf's full node record — carries <c>WriteUp</c> and the node's own optimistic-concurrency
+	///     <c>Version</c> (distinct from <see cref="LeafWorkPageResult.LeafWorkVersion" />), neither of
+	///     which the bounded <see cref="WorkPage" /> projection needs for its own purpose.
+	/// </summary>
+	public JobNodeDetailResult? CurrentNode { get; private set; }
+
+	/// <summary>
+	///     The achievements <see cref="IWorkCommands.CompleteLeafAsync" /> can record from
+	///     <see cref="Achievement.InProgress" /> (ADR 0047), for the "Completion options" dropdown —
+	///     <see cref="Achievement.Success" /> first and selected by default, as the common case.
+	/// </summary>
+	public IReadOnlyList<SelectListItem> CompletionAchievementOptions { get; } = [
+		new(EnumDisplay.Label(Achievement.Success), nameof(Achievement.Success), true),
+		new(EnumDisplay.Label(Achievement.Cancelled), nameof(Achievement.Cancelled)),
+		new(EnumDisplay.Label(Achievement.Unsuccessful), nameof(Achievement.Unsuccessful)),
+	];
+
+	/// <summary>
+	///     Every achievement the single "Change outcome" dropdown may target from the leaf's current
+	///     achievement: every value <see cref="AchievementTransitions.IsPermitted" /> allows, filtered to
+	///     what the actor is authorized for — <see cref="LeafWorkPageResult.CanReopenWithoutStarting" />
+	///     for the elevated terminal-to-<see cref="Achievement.Waiting" /> case
+	///     (<see cref="AchievementTransitions.IsReopening" />), <see cref="LeafWorkPageResult.CanComplete" />
+	///     (the same authority <see cref="IWorkCommands.SetAchievementAsync" /> already requires for every
+	///     other transition) otherwise. A rendering hint only — <see cref="OnPostSetAchievementAsync" />
+	///     re-authorizes itself regardless of what this list showed.
+	/// </summary>
+	public IReadOnlyList<SelectListItem> ChangeOutcomeOptions
+	{
+		get
+		{
+			if (WorkPage is not { HasLeafWork: true, Achievement: Achievement achievement } workPage) {
+				return [];
+			}
+
+			List<SelectListItem> options = [];
+			foreach (var candidate in Enum.GetValues<Achievement>()) {
+				if (candidate == Achievement.None || candidate == achievement
+												  || !AchievementTransitions.IsPermitted(achievement, candidate)) {
+					continue;
+				}
+
+				var authorized = AchievementTransitions.IsReopening(achievement, candidate)
+					? workPage.CanReopenWithoutStarting
+					: workPage.CanComplete;
+				if (authorized) {
+					options.Add(new(EnumDisplay.Label(candidate), candidate.ToString()));
+				}
+			}
+
+			return options;
+		}
+	}
 
 	/// <summary>The signed-in actor, so the page can tell their own active session apart from another worker's.</summary>
 	public AppUserId? CurrentActorId { get; private set; }
@@ -205,13 +253,25 @@ public sealed class WorkModel(
 		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 	}
 
-	/// <summary>"Pause work": finishes exactly one session and leaves achievement unchanged (ADR 0045 §3.3).</summary>
+	/// <summary>
+	///     "Pause job": finishes exactly one session and leaves achievement unchanged (ADR 0045 §3.3).
+	///     <paramref name="nodeVersion" />/<paramref name="writeUp" /> are present only when the post came
+	///     from this page's unified ending form, where the write-up shares one form with Pause/Complete/Save
+	///     — the icon-only row action in <c>_LeafWorkSessions</c> (also used from <c>/Jobs/Browse</c>) posts
+	///     neither and pauses without touching the write-up.
+	/// </summary>
 	public async Task<IActionResult> OnPostFinishAsync(
-		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
+		long sessionId, long version, string? finishedAt, long? nodeVersion = null, string? writeUp = null,
+		CancellationToken cancellationToken = default)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
 			return Challenge();
+		}
+
+		var (writeUpSaved, writeUpFailure) = await SaveWriteUpFirstAsync(actor.Value, nodeVersion, writeUp, cancellationToken);
+		if (writeUpFailure is not null) {
+			return writeUpFailure;
 		}
 
 		try {
@@ -227,7 +287,7 @@ public sealed class WorkModel(
 				Version = version,
 				FinishedAt = finishedAtInstant,
 			}, cancellationToken);
-			SuccessMessage = "Ends this session; the job stays In Progress.";
+			SuccessMessage = WithWriteUpNote("Ends this session; the job stays In Progress.", writeUpSaved);
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -247,30 +307,40 @@ public sealed class WorkModel(
 
 	/// <summary>
 	///     "Complete job": atomically finishes the exact confirmed active-session set shown on the page
-	///     and records <see cref="Achievement.Success" /> (ADR 0045 §1/§3). <paramref name="sessionId" />/
-	///     <paramref name="sessionVersion" /> are parallel arrays, one hidden pair per session the page
-	///     rendered in its review -- the command re-verifies this is exactly the leaf's current active
-	///     set before finishing any of them.
+	///     and records <paramref name="finalAchievement" /> (<see cref="Achievement.Success" /> by
+	///     default, or <see cref="Achievement.Cancelled" />/<see cref="Achievement.Unsuccessful" /> from
+	///     the "Completion options" dropdown, ADR 0047). <paramref name="completeSessionId" />/
+	///     <paramref name="completeSessionVersion" /> are parallel arrays, one hidden pair per session the
+	///     page rendered in its review -- the command re-verifies this is exactly the leaf's current active
+	///     set before finishing any of them. They carry a <c>complete</c> prefix (and the backdate is
+	///     <paramref name="completionFinishedAt" />) because the unified ending form also carries the
+	///     Pause button's single <c>sessionId</c>/<c>version</c> pair, which must stay distinct.
 	/// </summary>
 	public async Task<IActionResult> OnPostCompleteAsync(
-		long leafWorkVersion, long[]? sessionId, long[]? sessionVersion, string? finishedAt, string? completionNote,
-		CancellationToken cancellationToken)
+		long leafWorkVersion, long[]? completeSessionId, long[]? completeSessionVersion, string? completionFinishedAt,
+		string? completionNote, Achievement finalAchievement = Achievement.Success, long? nodeVersion = null,
+		string? writeUp = null, CancellationToken cancellationToken = default)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
 			return Challenge();
 		}
 
-		sessionId ??= [];
-		sessionVersion ??= [];
-		if (sessionId.Length != sessionVersion.Length) {
+		completeSessionId ??= [];
+		completeSessionVersion ??= [];
+		if (completeSessionId.Length != completeSessionVersion.Length) {
 			ErrorMessage = "The active-session list on this page is out of date. Reloading.";
 			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 		}
 
+		var (writeUpSaved, writeUpFailure) = await SaveWriteUpFirstAsync(actor.Value, nodeVersion, writeUp, cancellationToken);
+		if (writeUpFailure is not null) {
+			return writeUpFailure;
+		}
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
-			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
+			if (!BackdateInstant.TryParseOptional(completionFinishedAt, zone, out var finishedAtInstant)) {
 				ErrorMessage = "Enter a valid completion date and time.";
 				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 			}
@@ -280,16 +350,15 @@ public sealed class WorkModel(
 				JobNodeId = new(LeafNodeId),
 				Version = leafWorkVersion,
 				ExpectedActiveSessions = [
-					.. sessionId.Zip(sessionVersion, (id, ver) => new ExpectedActiveSession { Id = new(id), Version = ver }),
+					.. completeSessionId.Zip(
+						completeSessionVersion, (id, ver) => new ExpectedActiveSession { Id = new(id), Version = ver }),
 				],
 				FinishedAt = finishedAtInstant,
 				CompletionNote = string.IsNullOrWhiteSpace(completionNote) ? null : completionNote,
+				FinalAchievement = finalAchievement,
 			}, cancellationToken);
-			SuccessMessage = result.FinishedSessions.Count switch {
-				0 => "Job completed.",
-				1 => "Job completed and session finished.",
-				var n => $"Job completed and {n} sessions finished.",
-			};
+			SuccessMessage = WithWriteUpNote(
+				DescribeCompletionOutcome(result.Achievement, result.FinishedSessions.Count), writeUpSaved);
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -364,11 +433,12 @@ public sealed class WorkModel(
 	}
 
 	/// <summary>
-	///     Every advanced achievement action that is not one of the two atomic composites above --
-	///     Cancel job, Mark unsuccessful, and Reopen without starting (ADR 0045 §2/§5.5) -- all reuse the
-	///     one primitive <see cref="IWorkCommands.SetAchievementAsync" />, which re-evaluates
-	///     <see cref="Domain.Authorization.AchievementAccessPolicy" /> itself, including reopening's own
-	///     Administrator/JobManager-only rule.
+	///     The single "Change outcome" dropdown's Save action: every achievement transition that is not
+	///     one of the two atomic composites above (Start-adjacent Complete, Reopen-and-start) reuses this
+	///     one primitive, including reopening a terminal leaf back to <see cref="Achievement.Waiting" />
+	///     without starting a session. <see cref="Domain.Authorization.AchievementAccessPolicy" />
+	///     re-evaluates itself here regardless of what <see cref="ChangeOutcomeOptions" /> rendered,
+	///     including reopening's own Administrator/JobManager-only rule.
 	/// </summary>
 	public async Task<IActionResult> OnPostSetAchievementAsync(
 		long leafWorkVersion, Achievement newAchievement, string? reason, CancellationToken cancellationToken)
@@ -415,6 +485,118 @@ public sealed class WorkModel(
 		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 	}
 
+	/// <summary>
+	///     Saves the node's <c>WriteUp</c> -- the main way a worker documents how a leaf's (or a
+	///     branch's, on <c>/Jobs/Edit</c>) work went, whether it succeeded or failed. <see cref="IJobCommands.EditAsync" />
+	///     is full-replace, so this re-fetches the node's other current field values immediately before
+	///     saving rather than round-tripping every one of them as a hidden field on this page;
+	///     <paramref name="nodeVersion" /> is the node's own optimistic-concurrency version captured when
+	///     the page was rendered (<see cref="CurrentNode" />), so a concurrent structural edit (e.g. via
+	///     <c>/Jobs/Edit</c>) is still detected as a conflict even though this handler's own fetch is fresh.
+	///     This is the write-up's own button; the same field also rides along with Pause and Complete,
+	///     which share its one form.
+	/// </summary>
+	public async Task<IActionResult> OnPostSaveWriteUpAsync(long nodeVersion, string? writeUp, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		var (_, failure) = await SaveWriteUpFirstAsync(actor.Value, nodeVersion, writeUp, cancellationToken);
+		if (failure is not null) {
+			return failure;
+		}
+
+		SuccessMessage = "Write-up saved.";
+
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+	}
+
+	/// <summary>
+	///     Persists the write-up submitted alongside a Pause or Complete before that command runs, so a
+	///     rejected command never silently discards what the worker typed. A no-op when
+	///     <paramref name="nodeVersion" /> is absent (the post came from a form without the field) or when
+	///     the submitted text already matches what is stored — an unchanged write-up must not burn a node
+	///     version or write an audit entry on every pause. Deliberately two calls rather than one
+	///     transaction: the node's write-up and the leaf's work state are separate aggregates with separate
+	///     concurrency tokens, and doing the write-up first means the worst case is a saved write-up on a
+	///     job whose Complete was then rejected — not a completed job with the text thrown away.
+	/// </summary>
+	/// <returns>
+	///     Whether the write-up was actually changed, and the result to return instead of continuing when
+	///     the save itself failed (<see langword="null" /> when the caller should carry on).
+	/// </returns>
+	private async Task<(bool Saved, IActionResult? Failure)> SaveWriteUpFirstAsync(
+		AppUserId actor, long? nodeVersion, string? writeUp, CancellationToken cancellationToken)
+	{
+		if (nodeVersion is not long version) {
+			return (false, null);
+		}
+
+		var leafId = new JobNodeId(LeafNodeId);
+		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+		var text = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp;
+
+		try {
+			var current = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = leafId }, cancellationToken);
+			if (text == current.Node.WriteUp) {
+				return (false, null);
+			}
+
+			_ = await jobTrackClient.Jobs.EditAsync(new() {
+				Context = context,
+				NodeId = leafId,
+				Description = current.Node.Description,
+				WriteUp = text,
+				OwnerUserId = current.Node.OwnerUserId,
+				ExpectedDurationHours = current.Node.ExpectedDurationHours,
+				ExpectedCost = current.Node.ExpectedCost,
+				NeededStart = current.Node.NeededStart,
+				NeededFinish = current.Node.NeededFinish,
+				Priority = current.Node.Priority,
+				Version = version,
+			}, cancellationToken);
+
+			return (true, null);
+		}
+		catch (AuthorizationDeniedException) {
+			return (false, Forbid());
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "That job node does not exist.";
+		}
+		catch (ConcurrencyConflictException) {
+			ErrorMessage = "Someone else changed this job's details since you loaded this page. Reload and try again.";
+		}
+
+		return (false, RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId }));
+	}
+
+	/// <summary>Appends the write-up's own confirmation to a command's success message, but only when it actually changed.</summary>
+	private static string WithWriteUpNote(string message, bool writeUpSaved) => writeUpSaved ? $"{message} Write-up saved." : message;
+
+	/// <summary>
+	///     Describes a <see cref="IWorkCommands.CompleteLeafAsync" /> outcome for <see cref="SuccessMessage" />
+	///     (ADR 0047) -- the phrasing for <see cref="Achievement.Success" /> is unchanged from before the
+	///     dropdown existed.
+	/// </summary>
+	private static string DescribeCompletionOutcome(Achievement achievement, int finishedSessionCount)
+	{
+		var verb = achievement switch {
+			Achievement.Success => "completed",
+			Achievement.Cancelled => "cancelled",
+			Achievement.Unsuccessful => "marked unsuccessful",
+			_ => throw new ArgumentOutOfRangeException(nameof(achievement), achievement, "Not a valid completion outcome."),
+		};
+
+		return finishedSessionCount switch {
+			0 => $"Job {verb}.",
+			1 => $"Job {verb} and session finished.",
+			var n => $"Job {verb} and {n} sessions finished.",
+		};
+	}
+
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		CurrentActorId = actor;
@@ -433,6 +615,7 @@ public sealed class WorkModel(
 		var leafId = new JobNodeId(LeafNodeId);
 		try {
 			WorkPage = await jobTrackClient.Query.GetLeafWorkPageAsync(new() { Context = context, JobNodeId = leafId }, cancellationToken);
+			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = leafId }, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
@@ -455,6 +638,7 @@ public sealed class WorkModel(
 				Sessions = sessions,
 				EmployeeDirectoryById = _employeeDirectoryById,
 				WorkedByOptions = BuildWorkerFilterOptions(workedByUserId),
+				ShowWorkerFilter = true,
 				ExtraHiddenFields = new Dictionary<string, string?> { ["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture) },
 			};
 		}

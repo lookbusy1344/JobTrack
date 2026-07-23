@@ -122,8 +122,9 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
 
+	/// <summary>ADR 0048: starting one's own session on an unassigned leaf claims it, rather than being denied.</summary>
 	[Fact]
-	public async Task A_worker_cannot_start_a_session_on_an_unassigned_leaf()
+	public async Task A_worker_starting_a_session_on_an_unassigned_leaf_claims_it_for_the_worked_by_user()
 	{
 		var (rootId, jobManagerId, workerId, _) = await SeedReadyLeafAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
@@ -137,13 +138,46 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = unassignedLeaf.Id, WorkedByUserId = workerId });
+		var result = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = unassignedLeaf.Id,
+			WorkedByUserId = workerId,
+		});
+
+		result.WorkedByUserId.Should().Be(workerId);
+		var reclaim = () => jobNodePort.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassignedLeaf.Id });
+		(await reclaim.Should().ThrowAsync<InvariantViolationException>()).Which.ConstraintId.Should().Be("job-node-already-claimed");
+	}
+
+	/// <summary>
+	///     ADR 0048: a plain Worker starting a session for someone else is unaffected by auto-claim -- the
+	///     leaf claims for the target worker, not the actor, so the actor still doesn't control it.
+	/// </summary>
+	[Fact]
+	public async Task A_worker_starting_a_session_for_another_worker_on_an_unassigned_leaf_is_still_denied()
+	{
+		var (rootId, jobManagerId, workerId, _) = await SeedReadyLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.unassigned", EmployeeRole.Worker);
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var unassignedLeaf = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Unassigned pool leaf",
+			OwnerUserId = null,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () =>
+			port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = unassignedLeaf.Id, WorkedByUserId = otherWorkerId });
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
 
+	/// <summary>ADR 0048: an administrator's unconditional authority no longer leaves the node unassigned afterward.</summary>
 	[Fact]
-	public async Task An_administrator_can_start_a_session_on_an_unassigned_leaf()
+	public async Task An_administrator_starting_a_session_on_an_unassigned_leaf_also_claims_it_for_the_worked_by_user()
 	{
 		var (rootId, jobManagerId, workerId, _) = await SeedReadyLeafAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
@@ -164,6 +198,35 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		});
 
 		result.WorkedByUserId.Should().Be(workerId);
+		var reclaim = () => jobNodePort.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassignedLeaf.Id });
+		(await reclaim.Should().ThrowAsync<InvariantViolationException>()).Which.ConstraintId.Should().Be("job-node-already-claimed");
+	}
+
+	/// <summary>ADR 0048: the auto-claim writes the same audit action as an explicit pickup, distinguished by its reason.</summary>
+	[Fact]
+	public async Task Starting_a_session_on_an_unassigned_leaf_writes_an_auto_claim_pickup_audit_event()
+	{
+		var (rootId, jobManagerId, workerId, _) = await SeedReadyLeafAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var unassignedLeaf = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Unassigned pool leaf",
+			OwnerUserId = null,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
+		var port = CreateSessionPort(database.ConnectionString);
+
+		_ = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = unassignedLeaf.Id, WorkedByUserId = workerId });
+
+		var auditPort = CreateAuditQueryPort(database.ConnectionString);
+		var audit = await auditPort.SearchAuditEventsAsync(
+			new() { EntityType = "job_node", EntityId = unassignedLeaf.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+
+		var pickup = audit.Events.Should().ContainSingle(e => e.Operation == "pick-up-job-node").Which;
+		pickup.ActorId.Should().Be(workerId);
+		pickup.Reason.Should().Be("Automatically claimed on session start");
 	}
 
 	[Fact]
@@ -645,6 +708,46 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 
 		result.Achievement.Should().Be(Achievement.Success);
 		result.FinishedSessions.Should().ContainSingle().Which.FinishedAt.Should().NotBeNull();
+	}
+
+	[Theory]
+	[InlineData(Achievement.Cancelled)]
+	[InlineData(Achievement.Unsuccessful)]
+	public async Task Completing_a_leaf_with_a_non_success_final_achievement_records_it(Achievement finalAchievement)
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var result = await port.CompleteLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			FinalAchievement = finalAchievement,
+		});
+
+		result.Achievement.Should().Be(finalAchievement);
+		result.FinishedSessions.Should().ContainSingle().Which.FinishedAt.Should().NotBeNull();
+	}
+
+	[Fact]
+	public async Task Completing_a_leaf_with_a_final_achievement_in_progress_cannot_reach_throws_an_invariant_violation()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		_ = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var act = () => port.CompleteLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [],
+			FinalAchievement = Achievement.Waiting,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("achievement-transition-not-permitted");
 	}
 
 	[Fact]

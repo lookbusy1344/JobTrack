@@ -22,9 +22,9 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
+	private readonly IDataProtectionProvider dataProtectionProvider = new EphemeralDataProtectionProvider();
 
 	private readonly SqliteDatabaseFixture database = new();
-	private readonly IDataProtectionProvider dataProtectionProvider = new EphemeralDataProtectionProvider();
 
 	public async Task InitializeAsync()
 	{

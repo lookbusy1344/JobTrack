@@ -2646,6 +2646,8 @@ JobTrack.Application.CompleteLeafRequest.Context.init -> void
 JobTrack.Application.CompleteLeafRequest.Equals(JobTrack.Application.CompleteLeafRequest? other) -> bool
 JobTrack.Application.CompleteLeafRequest.ExpectedActiveSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ExpectedActiveSession!>
 JobTrack.Application.CompleteLeafRequest.ExpectedActiveSessions.init -> void
+JobTrack.Application.CompleteLeafRequest.FinalAchievement.get -> JobTrack.Abstractions.Achievement
+JobTrack.Application.CompleteLeafRequest.FinalAchievement.init -> void
 JobTrack.Application.CompleteLeafRequest.FinishedAt.get -> NodaTime.Instant?
 JobTrack.Application.CompleteLeafRequest.FinishedAt.init -> void
 JobTrack.Application.CompleteLeafRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId

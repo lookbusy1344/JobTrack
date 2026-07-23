@@ -1,0 +1,10 @@
+@model WriteUpFieldModel
+@* Prominent and multi-line, never tucked inside a disclosure -- the writeup is the main way a worker
+   documents how a leaf's work went, whether it succeeded or failed (spec). Always optional: no
+   required attribute, no validation. *@
+<input type="hidden" name="nodeVersion" value="@Model.NodeVersion"/>
+<div class="form-group">
+	<label for="writeUp">Write-up</label>
+	<textarea id="writeUp" name="writeUp" class="form-control" rows="6"
+	          placeholder="What happened -- how the work went, why it succeeded or failed, anything the next person needs to know.">@Model.WriteUp</textarea>
+</div>

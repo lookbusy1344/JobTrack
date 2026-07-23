@@ -22,6 +22,8 @@ public sealed class ChangePasswordModel(
 {
 	[BindProperty] public ChangePasswordInput Input { get; set; } = new();
 
+	public string? ErrorMessage { get; private set; }
+
 	public void OnGet()
 	{
 	}
@@ -39,10 +41,7 @@ public sealed class ChangePasswordModel(
 
 		var changeResult = await userManager.ChangePasswordAsync(user, Input.CurrentPassword, Input.NewPassword);
 		if (!changeResult.Succeeded) {
-			foreach (var error in changeResult.Errors) {
-				ModelState.AddModelError(string.Empty, error.Description);
-			}
-
+			ErrorMessage = string.Join(" ", changeResult.Errors.Select(error => error.Description));
 			return Page();
 		}
 

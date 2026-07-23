@@ -1,6 +1,7 @@
 @page
 @using System.Globalization
 @using JobTrack.Abstractions
+@using NodaTime
 @model BrowseModel
 @{
 	ViewData["Title"] = "Browse job";
@@ -30,7 +31,7 @@
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
-@if (Model.ErrorMessage is not null && Model.NodeId is { } missingNodeId) {
+@if (Model.ErrorMessage is not null && Model.NodeId is long missingNodeId) {
 	<div hidden data-jt-missing-node-id="@missingNodeId"></div>
 }
 
@@ -67,7 +68,9 @@
 		toolbarActions = Model.WorkRowActionsFor(
 			Model.CurrentNode.Node.Id, "Start", "leafNodeId", Model.CurrentNodeAchievement, Model.CurrentNode.Node.ArchivedAt is not null, true);
 	}
-	var showActive = toolbarActions is not null && (toolbarActions.ActiveSessions.Count > 0 || toolbarActions.IsStartClosed);
+
+	var showActive = toolbarActions is not null
+	                 && (toolbarActions.ActiveSessions.Count > 0 || toolbarActions.IsStartClosed || toolbarActions.IsPaused);
 
 	<div class="row g-3 mb-4 align-items-start">
 		<div class="col-md-8">
@@ -77,7 +80,15 @@
 					<partial name="_KindIcon" model="@(new KindIconModel { Kind = Model.CurrentNode.Node.Kind })"/>
 				</dd>
 				<dt class="col-sm-3">Owner</dt>
-				<dd class="col-sm-9"><span class="jt-tag">@Model.DescribeOwner(Model.CurrentNode.Node.OwnerUserId)</span></dd>
+				<dd class="col-sm-9 d-flex flex-wrap align-items-center gap-2">
+					<span class="jt-tag">@Model.DescribeOwner(Model.CurrentNode.Node.OwnerUserId)</span>
+					@* The claim control sits on the field it changes, not only in the toolbar — an
+					   unassigned owner and the one action that resolves it read as a single fact. *@
+					@if (Model.CurrentNode.Node.OwnerUserId is null) {
+						<partial name="_PickUpButton"
+						         model="@(new PickUpButtonModel { NodeId = Model.CurrentNode.Node.Id.Value, PageStateFields = Model.RowStateFields })"/>
+					}
+				</dd>
 				<dt class="col-sm-3">Priority</dt>
 				<dd class="col-sm-9">@EnumDisplay.Label(Model.CurrentNode.Node.Priority)</dd>
 				@if (showActive) {
@@ -91,23 +102,24 @@
 							                                        Now = Model.Now,
 							                                        Compact = false,
 							                                        StartClosed = toolbarActions.IsStartClosed,
+							                                        Paused = toolbarActions.IsPaused,
 						                                        })"/>
 					</dd>
 				}
-				@if (Model.Subtree?.RootTotal is { } rootTotal) {
+				@if (Model.Subtree?.RootTotal.HasValue == true) {
 					<dt class="col-sm-3">Cost</dt>
-					<dd class="col-sm-9"><span class="jt-amount">@MoneyDisplay.Format(rootTotal)</span></dd>
+					<dd class="col-sm-9"><span class="jt-amount">@MoneyDisplay.Format(Model.Subtree.RootTotal.Value)</span></dd>
 				}
-				@if (Model.CurrentNodeAchievement is { } currentAchievement) {
+				@if (Model.CurrentNodeAchievement is Achievement currentAchievement) {
 					<dt class="col-sm-3">Achievement</dt>
 					<dd class="col-sm-9">
 						<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = currentAchievement })"/>
 					</dd>
 				}
-				@if (Model.Readiness is { } readiness) {
+				@if (Model.Readiness is not null) {
 					<dt class="col-sm-3">Readiness</dt>
 					<dd class="col-sm-9">
-						@if (readiness.IsReady) {
+						@if (Model.Readiness.IsReady) {
 							<span class="status-pill status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
 							                                                               aria-hidden="true" focusable="false"><use
 										href="#jt-icon-go"></use></svg>No blocks</span>
@@ -122,15 +134,15 @@
 					<dt class="col-sm-3">Writeup</dt>
 					<dd class="col-sm-9 jt-preserve-whitespace">@Model.CurrentNode.Node.WriteUp</dd>
 				}
-				@if (Model.CurrentNode.Node.ArchivedAt is { } archivedAt) {
+				@if (Model.CurrentNode.Node.ArchivedAt is Instant archivedAt) {
 					<dt class="col-sm-3">Archived</dt>
 					<dd class="col-sm-9">@InstantDisplay.Format(archivedAt, Model.ViewerZone)</dd>
 				}
-				@if (Model.RequestContext is { } requestContext) {
+				@if (Model.RequestContext is not null) {
 					<dt class="col-sm-3">Requester request</dt>
 					<dd class="col-sm-9">
-						<span class="jt-tag">@EnumDisplay.Label(requestContext.Status)</span>
-						<a asp-page="/Requests/Details" asp-route-id="@requestContext.JobNodeId.Value">View request detail</a>
+						<span class="jt-tag">@EnumDisplay.Label(Model.RequestContext.Status)</span>
+						<a asp-page="/Requests/Details" asp-route-id="@Model.RequestContext.JobNodeId.Value">View request detail</a>
 					</dd>
 				}
 			</dl>
@@ -144,15 +156,7 @@
 	BackdateDisclosureModel? toolbarBackdate = null;
 	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
 		@if (toolbarActions is not null) {
-			@if (toolbarActions.ViewerSession is { } viewerSession) {
-				<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.CurrentNode.Node.Id.Value"
-				   asp-route-endSessionId="@viewerSession.Id.Value" asp-fragment="end-session">
-					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-						<use href="#jt-icon-finish"></use>
-					</svg>
-					End session
-				</a>
-			} else if (!toolbarActions.IsStartClosed) {
+			@if (toolbarActions.ViewerSession is null && !toolbarActions.IsStartClosed) {
 				<form method="post" asp-page-handler="Start" class="inline-form">
 					@foreach (var field in toolbarActions.StartFields) {
 						<input type="hidden" name="@field.Key" value="@field.Value"/>
@@ -166,17 +170,6 @@
 				</form>
 				toolbarBackdate = toolbarActions.StartBackdate;
 				<partial name="_BackdateTrigger" model="toolbarBackdate"/>
-			}
-
-			var soloOther = toolbarActions.SoloOtherSession;
-			@if (soloOther is not null) {
-				<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.CurrentNode.Node.Id.Value"
-				   asp-route-endSessionId="@soloOther.Id.Value" asp-fragment="end-session">
-					<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-						<use href="#jt-icon-finish"></use>
-					</svg>
-					End session
-				</a>
 			}
 
 			@if (toolbarActions.CanManage && !toolbarActions.IsStartClosed) {
@@ -195,19 +188,9 @@
 			   data-jt-confirm="Delete this job node permanently? You will review the details on the next page.">Delete</a>
 			<span class="jt-toolbar-divider" aria-hidden="true"></span>
 		}
-		@if (Model.CurrentNode.Node.OwnerUserId is null) {
-			<form method="post" asp-page-handler="PickUp" class="inline-form">
-				<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-				<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-				<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-				<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-				<input type="hidden" name="nodeId" value="@Model.CurrentNode.Node.Id.Value"/>
-				<button type="submit"
-				        class='btn @(!Model.CurrentNode.Node.HasChildren && Model.CurrentNode.Node.Kind != NodeKind.Root ? "btn-secondary" : "btn-primary")'>
-					Pick up
-				</button>
-			</form>
-		}
+		@* No Pick up here: the claim control lives on the Owner field above, beside the value it
+		   changes. Two controls for one action on one node is a choice the reader has to resolve
+		   before acting, and the record card is where the ownership fact already reads. *@
 		<a class="btn btn-secondary" asp-page="/Jobs/Edit" asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Edit</a>
 		@if (Model.CurrentNode.Node.ParentId is not null) {
 			<a class="btn btn-secondary" asp-page="/Jobs/Move" asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Move</a>
@@ -241,7 +224,7 @@
 					<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
 					<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
 					<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-					<input type="hidden" name="nodeId" value="@Model.CurrentNode.Node.Id.Value"/>
+					<input type="hidden" name="homeNodeId" value="@Model.CurrentNode.Node.Id.Value"/>
 					<button type="submit" class="btn btn-secondary">Set as home node</button>
 				</form>
 			}
@@ -257,10 +240,12 @@
 		@* Requires and Depends-on always appear together, so they share one card (ADR 0044 browse
 		   layout): a single full-width surface flush with the toolbar and subtree. The two lists sit
 		   side by side on wide screens and stack on narrow ones, each under its own directional
-		   heading. Always shown — not a disclosure. *@
+		   heading. Always shown — not a disclosure. Bootstrap grid columns (not flex-fill), so both
+		   sides split exactly 50/50 regardless of how long either side's node titles run --
+		   flex-fill's content-based flex-basis let a long title on one side outweigh the other. *@
 		<div class="jt-card mb-4">
-			<div class="d-flex flex-column flex-md-row gap-4">
-				<div class="flex-fill">
+			<div class="row g-4">
+				<div class="col-md-6 jt-prereq-col">
 					<p class="jt-list-heading">&larr; Requires (must finish first)</p>
 					@if (Model.Requires.Count == 0) {
 						@* Same .jt-list > li box as a populated row, not the taller .jt-empty panel, so an
@@ -299,7 +284,7 @@
 						</ul>
 					}
 				</div>
-				<div class="flex-fill">
+				<div class="col-md-6 jt-prereq-col">
 					@* Nudged right to sit level with where "Requires" begins after its leading arrow. *@
 					<p class="jt-list-heading ps-3">Depends on this job &rarr;</p>
 					@if (Model.RequiredBy.Count == 0) {
@@ -386,18 +371,14 @@
 							<partial name="_KindIcon" model="@(new KindIconModel { Kind = child.Kind, ShowLabel = false })"/>
 						</td>
 						<td class="jt-col-secondary jt-col-owner">
-							@if (child.OwnerUserId is { } childOwnerUserId) {
+							@if (child.OwnerUserId is AppUserId childOwnerUserId) {
 								@Model.DescribeOwner(childOwnerUserId)
 							} else {
-								<span>Unassigned</span>
-								<form method="post" asp-page-handler="PickUp" class="inline-form">
-									<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-									<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-									<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-									<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-									<input type="hidden" name="nodeId" value="@child.Id.Value"/>
-									<button type="submit" class="btn btn-secondary">Pick up</button>
-								</form>
+								<span class="d-inline-flex align-items-center gap-2">
+									<span>Unassigned</span>
+									<partial name="_PickUpButton"
+									         model="@(new PickUpButtonModel { NodeId = child.Id.Value, PageStateFields = Model.RowStateFields })"/>
+								</span>
 							}
 						</td>
 						<td class="jt-col-active">
@@ -409,10 +390,11 @@
 								                ViewerZone = Model.ViewerZone,
 								                Now = Model.Now,
 								                StartClosed = childActions?.IsStartClosed ?? false,
+								                Paused = childActions?.IsPaused ?? false,
 							                })"/>
 						</td>
 						<td class="jt-col-cost text-end">
-							@if (child.Cost is { } cost) {
+							@if (child.Cost is Money cost) {
 								@MoneyDisplay.Format(cost)
 							}
 						</td>
@@ -512,18 +494,14 @@
 							</span>
 						</td>
 						<td class="jt-col-secondary jt-col-owner">
-							@if (node.OwnerUserId is { } nodeOwnerUserId) {
+							@if (node.OwnerUserId is AppUserId nodeOwnerUserId) {
 								@Model.DescribeOwner(nodeOwnerUserId)
 							} else {
-								<span>Unassigned</span>
-								<form method="post" asp-page-handler="PickUp" class="inline-form">
-									<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-									<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-									<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-									<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-									<input type="hidden" name="nodeId" value="@node.Id.Value"/>
-									<button type="submit" class="btn btn-secondary">Pick up</button>
-								</form>
+								<span class="d-inline-flex align-items-center gap-2">
+									<span>Unassigned</span>
+									<partial name="_PickUpButton"
+									         model="@(new PickUpButtonModel { NodeId = node.Id.Value, PageStateFields = Model.RowStateFields })"/>
+								</span>
 							}
 						</td>
 						<td class="jt-col-active">
@@ -535,10 +513,11 @@
 								                ViewerZone = Model.ViewerZone,
 								                Now = Model.Now,
 								                StartClosed = nodeActions?.IsStartClosed ?? false,
+								                Paused = nodeActions?.IsPaused ?? false,
 							                })"/>
 						</td>
 						<td class="jt-col-cost text-end">
-							@if (node.Cost is { } cost) {
+							@if (node.Cost is Money cost) {
 								@MoneyDisplay.Format(cost)
 							}
 						</td>
@@ -570,6 +549,8 @@
 			</table>
 		</div>
 	}
+} else if (Model.Panel is not null) {
+	<partial name="_LeafWorkSessions" model="Model.Panel"/>
 }
 
 @if (Model.CurrentNode is not null && !Model.IsSearch) {

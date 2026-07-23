@@ -162,6 +162,57 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 		_ = adminUserId;
 	}
 
+	[Fact]
+	public async Task The_change_outcome_dropdown_offers_success_for_an_in_progress_leaf_not_only_cancel_or_unsuccessful()
+	{
+		var workerId = await SeedEmployeeAsync("achievement.dropdown-success", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Dropdown offers success");
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("achievement.dropdown-success");
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Work?leafNodeId={leaf.Id.Value}");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("id=\"changeOutcomeAchievement\"");
+		body.Should().Contain("value=\"Success\"");
+		body.Should().Contain("value=\"Cancelled\"");
+		body.Should().Contain("value=\"Unsuccessful\"");
+	}
+
+	[Fact]
+	public async Task A_controlling_worker_can_change_an_in_progress_leafs_outcome_to_success_via_the_change_outcome_dropdown()
+	{
+		var workerId = await SeedEmployeeAsync("achievement.dropdown-set-success", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Change outcome to success");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		var authCookie = await SignInAsync("achievement.dropdown-set-success");
+
+		var (cookie, token) = await GetAntiforgeryAsync(authCookie, leaf.Id);
+		var response = await PostSetAchievementAsync(
+			authCookie, cookie, token, leaf.Id, nameof(Achievement.Success), "Finished ahead of schedule.", 2);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id });
+		leafWork.Achievement.Should().Be(Achievement.Success);
+	}
+
 	private async Task<JobNodeResult> AddWorkedLeafAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {

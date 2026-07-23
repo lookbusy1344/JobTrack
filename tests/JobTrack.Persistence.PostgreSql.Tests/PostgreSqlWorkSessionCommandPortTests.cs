@@ -60,6 +60,44 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 		(await ReadLeafStateAsync(leafId)).ActiveSessionCount.Should().Be(1);
 	}
 
+	/// <summary>
+	///     ADR 0048: starting a session on an unassigned node claims it via the same conditional
+	///     <c>WHERE owner_user_id IS NULL</c> write <c>PickUpAsync</c> uses -- two different workers
+	///     racing to start their own first session on the same unassigned leaf must have exactly one
+	///     win the claim, the other seeing zero rows affected (<c>job-node-already-claimed</c>) rather
+	///     than silently overwriting the winner's claim.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_session_starts_by_different_workers_on_the_same_unassigned_leaf_allow_exactly_one_to_succeed()
+	{
+		var (rootId, jobManagerId, workerA, _) = await SeedReadyLeafAsync();
+		var workerB = await SeedEmployeeAsync("Other Worker", "pg.unassigned-start-race.other", EmployeeRole.Worker);
+		var jobNodePort = CreateJobNodePort(ConnectionString);
+		var unassigned = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Unassigned pool leaf",
+			OwnerUserId = null,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassigned.Id });
+
+		var results = await Task.WhenAll(
+			TryStartSessionAsync(CreateSessionPort(ConnectionString), workerA, unassigned.Id),
+			TryStartSessionAsync(CreateSessionPort(ConnectionString), workerB, unassigned.Id));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+		(await ReadLeafStateAsync(unassigned.Id)).ActiveSessionCount.Should().Be(1);
+	}
+
+	/// <summary>
+	///     ADR 0048: on an unassigned leaf, the loser of the race can surface either exception depending
+	///     on interleaving -- the conditional claim losing after passing a stale "unassigned" read
+	///     (<see cref="InvariantViolationException" />, "job-node-already-claimed"), or a fresh read
+	///     already seeing the winner's committed claim, leaving <c>canRecordWork</c> to deny a
+	///     non-controlling actor (<see cref="AuthorizationDeniedException" />) -- mirroring
+	///     <c>PostgreSqlJobNodeCommandPortTests.TryPickUpAsync</c>'s identical dual-exception race.
+	/// </summary>
 	private static async Task<bool> TryStartSessionAsync(IWorkSessionCommandPort port, AppUserId workerId, JobNodeId leafId)
 	{
 		try {
@@ -67,6 +105,9 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 			return true;
 		}
 		catch (InvariantViolationException) {
+			return false;
+		}
+		catch (AuthorizationDeniedException) {
 			return false;
 		}
 	}

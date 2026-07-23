@@ -3,7 +3,10 @@
 **Date:** 2026-07-21
 **Status:** Implemented and verified. Stages 1-8 and the post-implementation review fixes are
 complete; the final `dotnet test JobTrack.slnx --no-build` run passed all 2,634 tests across 13 test
-projects on 2026-07-21.
+projects on 2026-07-21. §4.1/§4.3's "Sessions eye opens `/Jobs/Work`" as the *only* place a leaf's
+history/Finish action appears is superseded by ADR 0046 (2026-07-23): a leaf's own Browse detail
+view now embeds that same panel directly; the link to `/Jobs/Work` remains for the
+achievement-changing actions the panel doesn't cover.
 **Depends on:** ADR 0001 (achievement states and reopening), ADR 0031/0032 (node ownership and
 work-session authority), ADR 0038 (start-work auto-advance), ADR 0039/0043 (Browse subtree and
 readiness), ADR 0041 (all-employee session visibility), the mandatory implementation order in
@@ -204,6 +207,12 @@ Order common actions by task frequency:
 When the viewer is active, replace their Start action with Finish / pause mine; do not remove the
 Start-for disclosure for other workers. When closed, remove start affordances and show a concise
 reason with the route to Achievement or Edit/restore as appropriate. Sessions remains available.
+
+**Superseded by ADR 0046:** a leaf's Browse detail view also embeds the full Sessions
+history/worker-filter/Finish/Correct panel in place of the (necessarily empty, for a leaf) Subtree
+table below the toolbar — not only the eye link to `/Jobs/Work` described here and in §4.3. The link
+to `/Jobs/Work` remains, for the achievement-changing actions (Complete, Reopen, Cancel, Mark
+unsuccessful) the panel does not expose.
 
 ### 4.2 Browse and Awaiting Progress leaf rows
 

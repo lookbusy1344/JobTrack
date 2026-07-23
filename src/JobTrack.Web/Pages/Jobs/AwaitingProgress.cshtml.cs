@@ -55,7 +55,19 @@ public sealed class AwaitingProgressModel(
 	[BindProperty(SupportsGet = true)]
 	public bool UnassignedOnly { get; init; }
 
-	[BindProperty(SupportsGet = true)] public long? SubtreeRootId { get; init; }
+	// Settable so LoadAsync can replace an omitted value with the actor's home node (see LoadAsync),
+	// which every replayed filter/route value then reflects.
+	[BindProperty(SupportsGet = true)] public long? SubtreeRootId { get; set; }
+
+	/// <summary>
+	///     When set, keeps the dashboard unscoped even though <see cref="SubtreeRootId" /> is absent —
+	///     distinguishes "no scope specified yet" (defaults to the actor's home node, if any) from "the
+	///     whole tree was explicitly chosen" (the "Show the whole tree" link below). Without this flag,
+	///     re-submitting the filter form after choosing the whole tree would re-default straight back to
+	///     the home node, since <see cref="SubtreeRootId" /> is null either way.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public bool ShowWholeTree { get; init; }
 
 	[TempData] public string? ErrorMessage { get; set; }
 
@@ -107,6 +119,7 @@ public sealed class AwaitingProgressModel(
 		["OwnerUserId"] = OwnerUserId?.ToString(CultureInfo.InvariantCulture),
 		["UnassignedOnly"] = UnassignedOnly.ToString(),
 		["SubtreeRootId"] = SubtreeRootId?.ToString(CultureInfo.InvariantCulture),
+		["ShowWholeTree"] = ShowWholeTree.ToString(),
 		["Offset"] = Offset.ToString(CultureInfo.InvariantCulture),
 	};
 
@@ -247,6 +260,7 @@ public sealed class AwaitingProgressModel(
 		["ownerUserId"] = OwnerUserId,
 		["unassignedOnly"] = UnassignedOnly,
 		["subtreeRootId"] = SubtreeRootId,
+		["showWholeTree"] = ShowWholeTree,
 		["offset"] = Offset,
 	};
 
@@ -266,6 +280,16 @@ public sealed class AwaitingProgressModel(
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Everyone", string.Empty));
 		StartForWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(directory);
+
+		// A bare visit (no subtree specified, whole tree not explicitly chosen -- e.g. the header nav
+		// link) defaults to the actor's own home node rather than the entire tree; ShowWholeTree is the
+		// escape hatch that survives round-trips through the filter form and PRG redirects, since
+		// SubtreeRootId is null either way once that link is followed.
+		if (!SubtreeRootId.HasValue && !ShowWholeTree) {
+			var profile = await jobTrackClient.Query.GetEmployeeProfileAsync(
+				new() { Context = context, TargetUserId = actor }, cancellationToken);
+			SubtreeRootId = profile.HomeNodeId?.Value;
+		}
 
 		try {
 			if (SubtreeRootId.HasValue) {

@@ -740,6 +740,26 @@ public sealed class WorkCommandsTests
 	}
 
 	[Fact]
+	public async Task Completing_a_leaf_with_a_non_success_final_achievement_records_it()
+	{
+		var (nodePort, sessionPort) = CreateSeededPorts();
+		var leafId = await CreateReadyLeafAsync(nodePort);
+		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
+		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+
+		var result = await sut.CompleteLeafAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			FinalAchievement = Achievement.Unsuccessful,
+		});
+
+		result.Achievement.Should().Be(Achievement.Unsuccessful);
+		result.FinishedSessions.Should().HaveCount(1);
+	}
+
+	[Fact]
 	public async Task Completing_a_leaf_with_zero_active_sessions_is_permitted_from_in_progress()
 	{
 		var (nodePort, sessionPort) = CreateSeededPorts();

@@ -995,6 +995,17 @@ fieldset legend {
     border-color: rgb(71 88 106 / 25%);
 }
 
+/* Paused is In Progress with nobody clocked on — open work at rest. It borrows the amber ink of
+   .status-pill-active (this is the same "someone is working this job" thread of state) but sits on
+   the neutral ground rather than the amber one, so "started, nobody on it" never reads as "running
+   right now" at a glance, nor as the settled slate-on-slate "Closed". Not red or otherwise alarming:
+   ADR 0045 makes zero active sessions a valid state from InProgress, and Pause job produces it. */
+.status-pill-paused {
+    background-color: var(--jt-slate-50);
+    color: var(--jt-amber-700);
+    border-color: rgb(138 86 6 / 35%);
+}
+
 /* ---- Node-kind icon (Root / Branch / Leaf) -------------------------------------------------- */
 
 /* The structural counterpart to .status-pill: names a node's derived hierarchy classification
@@ -1304,6 +1315,18 @@ fieldset legend {
 .jt-icon-button--primary {
     color: var(--jt-orange-600);
     border-color: var(--jt-orange-600);
+}
+
+/* An icon action whose consequence is destructive and not undoable in the UI (revoking a token).
+   The glyph itself is the shared `jt-icon-remove` cross: the difference from an ordinary remove is
+   consequence, not kind, so it is carried by colour rather than by a second glyph. */
+.jt-icon-button--danger {
+    color: var(--jt-red-700);
+}
+
+.jt-icon-button--danger:hover {
+    color: var(--jt-red-700);
+    border-color: var(--jt-red-700);
 }
 
 .jt-icon-summary-glyph {

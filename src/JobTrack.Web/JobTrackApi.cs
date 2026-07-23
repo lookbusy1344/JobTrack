@@ -325,7 +325,7 @@ internal static partial class JobTrackApi
 			.AddEndpointFilter<AntiforgeryValidationFilter>()
 			.WithName("CompleteLeaf")
 			.WithSummary(
-				"Atomically finish the exact confirmed active-session set and record Success (ADR 0045). Composite of finish-session(s) and set-achievement.")
+				"Atomically finish the exact confirmed active-session set and record an achievement -- Success by default, or Cancelled/Unsuccessful (ADR 0045/0047). Composite of finish-session(s) and set-achievement.")
 			.Produces<CompleteLeafResponse>()
 			.ProducesProblem(StatusCodes.Status400BadRequest)
 			.ProducesProblem(StatusCodes.Status401Unauthorized)
@@ -1017,6 +1017,7 @@ internal static partial class JobTrackApi
 				],
 				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
 				CompletionNote = request.CompletionNote,
+				FinalAchievement = request.FinalAchievement ?? Achievement.Success,
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -2177,6 +2178,12 @@ internal static partial class JobTrackApi
 		public DateTimeOffset? FinishedAt { get; init; }
 
 		public string? CompletionNote { get; init; }
+
+		/// <summary>
+		///     The achievement to record (ADR 0047) -- <see langword="null" /> (the wire default) means
+		///     <see cref="Achievement.Success" />, preserving every existing client's behavior.
+		/// </summary>
+		public Achievement? FinalAchievement { get; init; }
 	}
 
 	internal sealed class CompleteLeafResponse

@@ -245,10 +245,10 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await page.GetByText("Session started.", new() { Exact = true }).WaitForAsync();
 
 		await page.Locator("#end-session")
-			.GetByRole(AriaRole.Button, new() { Name = "Pause work", Exact = true }).PressAsync("Enter");
+			.GetByRole(AriaRole.Button, new() { Name = "Pause job", Exact = true }).PressAsync("Enter");
 		await page.GetByText("Ends this session; the job stays In Progress.", new() { Exact = true }).WaitForAsync();
 
-		await page.GetByRole(AriaRole.Button, new() { Name = "Mark complete", Exact = true }).PressAsync("Enter");
+		await page.GetByRole(AriaRole.Button, new() { Name = "Complete job", Exact = true }).PressAsync("Enter");
 		await page.GetByText("Job completed.", new() { Exact = true }).WaitForAsync();
 
 		var reason = page.Locator("#reopenReason");

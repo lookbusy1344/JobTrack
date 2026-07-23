@@ -1,0 +1,17 @@
+@model PickUpButtonModel
+@* The one "claim this node" control, wherever an unassigned node is shown — once per unassigned row,
+   and once on the Owner field of Browse's record card. Always icon-only: it repeats down a column,
+   so a labelled button would out-shout each row's own name (the same rule _WorkRowActions follows),
+   and on the record card it reads as part of the owner value rather than as a competing toolbar
+   action. The accessible name rides in a visually-hidden span plus a title, never on the glyph. *@
+<form method="post" asp-page-handler="PickUp" class="inline-form">
+	@foreach (var field in Model.Fields) {
+		<input type="hidden" name="@field.Key" value="@field.Value"/>
+	}
+	<button type="submit" class="jt-icon-button" title="Pick up">
+		<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+			<use href="#jt-icon-pick-up"></use>
+		</svg>
+		<span class="visually-hidden">Pick up</span>
+	</button>
+</form>

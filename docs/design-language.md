@@ -120,7 +120,8 @@ The markup composes these classes; styling lives entirely in `site.css`.
 | `<dl>` | Record card — a label/value grid with a burnt-orange spine, collapsing to one column below 30em. |
 | `.jt-tree-cell` (+ `.jt-tree-guide`, `.jt-tree-label`, `.jt-tree-icon`) | The Browse subtree's description cell, styled as a file-manager listing — see below. |
 | `.jt-col-secondary` | A table column that is dropped below 768px. See "The tree row" for what qualifies. |
-| `.jt-icon-button` (+ `.jt-backdate-trigger`) | A small square glyph button, for a rare action sitting beside a common one (Backdate, next to Start/Finish). Always carries a visually-hidden name. A `.jt-backdate-trigger` toggles the matching `.jt-backdate-row`/`.jt-backdate-panel` open via `aria-expanded`/`aria-controls` (site.js), rather than opening a floating popup. |
+| `.jt-icon-button` (+ `.jt-backdate-trigger`) | A small square glyph button, for an action repeated once per row or list item, or a rare action sitting beside a common one (Backdate, next to Start/Finish). Always carries a visually-hidden name. Add `.jt-icon-button--primary` for the action a row exists for, `.jt-icon-button--danger` for one whose consequence is not undoable in the UI. A `.jt-backdate-trigger` toggles the matching `.jt-backdate-row`/`.jt-backdate-panel` open via `aria-expanded`/`aria-controls` (site.js), rather than opening a floating popup. |
+| `_PickUpButton.cshtml` | The one claim-this-node control (Browse's record card, search rows, subtree rows), always icon-only. Posts `PickUpButtonModel.NodeFieldName`, never `nodeId` — see below. |
 | `.jt-backdate-row` / `.jt-backdate-panel` | The tinted, hidden-by-default expansion a backdate trigger reveals: a full-width table row (`.jt-backdate-row`, one cell spanning the table via `colspan`) or a block under a toolbar (`.jt-backdate-panel`), each wrapping the shared `.jt-backdate-form` (label + `datetime-local` input + submit). |
 
 ### Stop and go
@@ -175,6 +176,61 @@ pill followed by a stable, wrapping (`d-inline-flex flex-wrap`) name list — th
 labelled "You" first, then every other worker in start order, capped at
 `ActiveSessionSummaryModel.PreviewLimit` in the dense per-row form only (the toolbar/Sessions-page
 summary always names everyone, since it has the width).
+
+Zero active workers is two different facts, and the column distinguishes them. A leaf nobody has
+started renders nothing. A leaf that is `InProgress` with nobody clocked on is **paused** —
+`LeafActivity.IsPaused`, the one place that predicate lives — and gets `.status-pill-paused` via the
+`_PausedPill` partial, carrying the same pause sign as the Pause job button. It is amber ink
+(`--jt-amber-700`, the same "someone is working this job" thread as `.status-pill-active`) on the
+neutral `--jt-slate-50` ground, so "started, nobody on it" reads as neither "running right now" nor
+the settled slate-on-slate "Closed". It is deliberately not a warning colour: ADR 0045 makes zero
+active sessions a valid state from `InProgress`, and Pause job produces it every time. `Closed` wins
+over `Paused` when both apply (an archived leaf can be `InProgress`, and "you cannot start here" is
+the more consequential fact).
+
+### Row actions are glyphs, never words
+
+**Any action repeated once per row or list item is an icon button, never a labelled `.btn`.** A word
+in every row out-shouts the row's own name and pushes the control people are aiming for off a
+stable column. The glyph comes from `_IconSprite.cshtml`, the accessible name from a
+visually-hidden span plus a `title` — never from the glyph alone, and never a bare verb repeated
+identically down the column when the row can name its own target ("Remove dependency on Pour
+foundation (ID 12)", "Revoke token workshop-laptop"). A page's *single* primary action has no
+repetition to earn an icon alone, so a standalone toolbar keeps the glyph **and** the word.
+
+The affordance glyphs are one family — outlined strokes at 1.5–1.6, taking the button's own colour
+— deliberately unlike the filled discs and signs, which report a state rather than offering an
+action:
+
+| Glyph | Means | Where |
+| --- | --- | --- |
+| `jt-icon-start` / `jt-icon-finish` | Start a session / pause-or-finish one | `_WorkRowActions`, Browse toolbar |
+| `jt-icon-backdate` | Reveal the backdate pane | beside Start/Finish |
+| `jt-icon-sessions` | View this leaf's sessions | `_WorkRowActions`, Browse toolbar |
+| `jt-icon-edit` | Correct a recorded session | `_LeafWorkSessions` |
+| `jt-icon-pick-up` | Claim an unassigned node for yourself | `_PickUpButton` |
+| `jt-icon-remove` | Detach a thing from a list (a prerequisite edge, a live token) | Prerequisites, Personal access tokens |
+
+`jt-icon-pick-up` is a **person with a plus** ("assign this to me"), not a hand: `jt-icon-stop`
+already owns the hand silhouette, and a second hand glyph would read as a readiness sign at the
+~14px both actually render at. It sits on each unassigned row, and on the Owner field of Browse's
+record card — the field the action changes — never additionally in the page toolbar: one node's
+claim action appears exactly once, or the reader has to resolve a choice between two identical
+controls before acting.
+
+`jt-icon-remove` is a plain cross, and one glyph covers both "remove" and "revoke": the difference
+is consequence, not kind, so revoke is the same cross tinted with `.jt-icon-button--danger` rather
+than a glyph of its own. It is never a diagonal slash through a disc — that shape belongs to
+`jt-icon-achievement-closed`, which reports a state.
+
+### The claim control's field name
+
+`_PickUpButton` posts its target as `pickUpNodeId` (`PickUpButtonModel.NodeFieldName`), not
+`nodeId`. Model binding is case-insensitive and every form on Browse replays the page's own `NodeId`
+browsing state as a hidden field, so a handler parameter named `nodeId` binds the *first* posted
+value — the node being browsed — and claims that instead of the row that was clicked. Any new
+row-scoped handler on a page with bound route state needs a parameter name that cannot collide the
+same way (`OnPostSetHomeNodeAsync`'s `homeNodeId` is the other instance).
 
 ### The tree row
 

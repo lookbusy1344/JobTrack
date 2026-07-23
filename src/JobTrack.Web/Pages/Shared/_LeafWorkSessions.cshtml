@@ -1,19 +1,22 @@
 @using System.Globalization
+@using NodaTime
 @model LeafWorkSessionsPanelModel
 
-<form method="get" class="jt-form-card">
-	@foreach (var field in Model.ExtraHiddenFields) {
-		<input type="hidden" name="@field.Key" value="@field.Value"/>
-	}
-	<div class="form-group">
-		<label for="WorkedByUserId">Filter by worker</label>
-		<select id="WorkedByUserId" name="WorkedByUserId" class="form-control" asp-items="Model.WorkedByOptions"></select>
-	</div>
-	<button type="submit" class="btn btn-secondary">Apply filter</button>
-</form>
+@if (Model.ShowWorkerFilter) {
+	<form method="get" class="jt-form-card">
+		@foreach (var field in Model.ExtraHiddenFields) {
+			<input type="hidden" name="@field.Key" value="@field.Value"/>
+		}
+		<div class="form-group">
+			<label for="WorkedByUserId">Filter by worker</label>
+			<select id="WorkedByUserId" name="WorkedByUserId" class="form-control" asp-items="Model.WorkedByOptions"></select>
+		</div>
+		<button type="submit" class="btn btn-secondary">Apply filter</button>
+	</form>
+}
 
-@if (Model.DisplayedWorkedByName is { } displayedWorkedByName) {
-	<h2>Sessions worked by @displayedWorkedByName</h2>
+@if (Model.DisplayedWorkedByName is not null) {
+	<h2>Sessions worked by @Model.DisplayedWorkedByName</h2>
 } else {
 	<h2>Sessions</h2>
 }
@@ -47,7 +50,7 @@
 					<td>@Model.DescribeWorker(session.WorkedByUserId)</td>
 					<td>@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
 					<td>
-						@if (session.FinishedAt is { } finishedAt) {
+						@if (session.FinishedAt is Instant finishedAt) {
 							@InstantDisplay.Format(finishedAt, Model.ViewerZone)
 						} else {
 							<span class="status-pill status-pill-ready">Active</span>
@@ -60,11 +63,11 @@
 									@foreach (var field in sessionBackdate.HiddenFields) {
 										<input type="hidden" name="@field.Key" value="@field.Value"/>
 									}
-									<button type="submit" class="jt-icon-button" title="Pause work">
+									<button type="submit" class="jt-icon-button" title="Pause job">
 										<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 											<use href="#jt-icon-finish"></use>
 										</svg>
-										<span class="visually-hidden">Pause work</span>
+										<span class="visually-hidden">Pause job</span>
 									</button>
 								</form>
 								<partial name="_BackdateTrigger" model="sessionBackdate"/>

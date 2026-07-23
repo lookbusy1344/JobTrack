@@ -24,6 +24,7 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 	{
 		_ = nodePort.FindLeafWork(request.LeafWorkId)
 			?? throw new EntityNotFoundException($"Job node {request.LeafWorkId} has no LeafWork attached.");
+		nodePort.AutoClaimUnassignedNode(request.Context.Actor, request.LeafWorkId, request.WorkedByUserId);
 		AuthorizeOrThrow(request.Context.Actor, request.LeafWorkId);
 
 		if (_sessions.Values.Any(session =>
@@ -69,6 +70,7 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 
 	public async Task<WorkSessionResult> StartWorkAsync(StartWorkRequest request, CancellationToken cancellationToken = default)
 	{
+		nodePort.AutoClaimUnassignedNode(request.Context.Actor, request.JobNodeId, request.WorkedByUserId);
 		var leafWork = nodePort.EnsureLeafWorkAttached(request.JobNodeId, request.Context.Actor);
 
 		if (_sessions.Values.Any(session =>
@@ -189,9 +191,9 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 				$"Expected version {request.Version} but the current version is {leafWork.Version}.");
 		}
 
-		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, Achievement.Success)) {
+		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, request.FinalAchievement)) {
 			throw new InvariantViolationException(
-				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {Achievement.Success}.");
+				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {request.FinalAchievement}.");
 		}
 
 		var actualActive = _sessions.Values
@@ -235,12 +237,12 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 			finished.Add(updated);
 		}
 
-		var updatedLeafWork = leafWork with { Achievement = Achievement.Success, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
+		var updatedLeafWork = leafWork with { Achievement = request.FinalAchievement, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
 		nodePort.SetLeafWork(updatedLeafWork);
 
 		return new() {
 			JobNodeId = request.JobNodeId,
-			Achievement = Achievement.Success,
+			Achievement = request.FinalAchievement,
 			ChangedAt = updatedLeafWork.ChangedAt,
 			Version = updatedLeafWork.Version,
 			FinishedSessions = [.. finished],
@@ -269,6 +271,7 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 				"work-session-leaf-closed", "An archived node's leaf must be restored before it can be reopened.");
 		}
 
+		nodePort.AutoClaimUnassignedNode(request.Context.Actor, request.JobNodeId, request.WorkedByUserId);
 		var actorControlsNode = nodePort.OwnsNodeOrAncestor(request.Context.Actor, request.JobNodeId);
 		var actorParticipatedPreviously = _sessions.Values.Any(session =>
 			session.LeafWorkId == request.JobNodeId && session.WorkedByUserId == request.Context.Actor);

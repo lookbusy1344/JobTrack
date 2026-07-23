@@ -115,14 +115,15 @@ public interface IWorkCommands
 	Task<LeafWorkResult> SetAchievementAsync(SetAchievementRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	///     Atomic composite (ADR 0045 §1/§3): finishes the exact, caller-confirmed active-session set
-	///     named by <see cref="CompleteLeafRequest.ExpectedActiveSessions" /> (zero, one, or many) at one
-	///     captured instant, and transitions the leaf <see cref="Achievement.InProgress" /> -&gt;
-	///     <see cref="Achievement.Success" /> with a fixed structured reason, in one commit. Records
-	///     <see cref="Achievement.Success" /> only -- <see cref="Achievement.Cancelled" /> and
-	///     <see cref="Achievement.Unsuccessful" /> have no atomic composite and remain manual
-	///     <see cref="SetAchievementAsync" /> calls. Ordinary <see cref="FinishSessionAsync" /> gains no
-	///     implicit meaning from this addition: finishing a session never implies success.
+	///     Atomic composite (ADR 0045 §1/§3, ADR 0047): finishes the exact, caller-confirmed
+	///     active-session set named by <see cref="CompleteLeafRequest.ExpectedActiveSessions" /> (zero,
+	///     one, or many) at one captured instant, and transitions the leaf
+	///     <see cref="Achievement.InProgress" /> -&gt; <see cref="CompleteLeafRequest.FinalAchievement" />
+	///     (<see cref="Achievement.Success" /> by default, or <see cref="Achievement.Cancelled" />/
+	///     <see cref="Achievement.Unsuccessful" />) with a fixed structured reason, in one commit. Ordinary
+	///     <see cref="FinishSessionAsync" /> gains no implicit meaning from this addition: finishing a
+	///     session never implies any particular outcome. A caller not choosing to end active sessions and
+	///     an achievement together still uses <see cref="SetAchievementAsync" /> directly.
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor may not complete this leaf (the same authority <see cref="SetAchievementAsync" />
@@ -136,7 +137,9 @@ public interface IWorkCommands
 	///     exactly, by id and version (ADR 0045 §3).
 	/// </exception>
 	/// <exception cref="InvariantViolationException">
-	///     The leaf's achievement is not <see cref="Achievement.InProgress" /> (<c>ConstraintId</c>
+	///     The leaf's achievement is not <see cref="Achievement.InProgress" />, or
+	///     <see cref="CompleteLeafRequest.FinalAchievement" /> is not one of <see cref="Achievement.Success" />/
+	///     <see cref="Achievement.Cancelled" />/<see cref="Achievement.Unsuccessful" /> (<c>ConstraintId</c>
 	///     <c>"achievement-transition-not-permitted"</c>, ADR 0001 -- <c>Waiting -&gt; Success</c> remains
 	///     prohibited); a supplied <see cref="CompleteLeafRequest.FinishedAt" /> is not after every
 	///     affected session's start instant (<c>ConstraintId</c> <c>"work-session-invalid-interval"</c>)

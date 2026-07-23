@@ -58,13 +58,6 @@ public sealed class BrowseModel(
 
 	[BindProperty(SupportsGet = true)] public string? SearchText { get; init; }
 
-	/// <summary>
-	///     When viewing a leaf, whose sessions to show — defaults to the actor. Distinct from
-	///     <see cref="OwnerUserId" /> (a children-list ownership filter).
-	/// </summary>
-	[BindProperty(SupportsGet = true)]
-	public long? WorkedByUserId { get; init; }
-
 	[TempData] public string? ErrorMessage { get; set; }
 
 	[TempData] public string? SuccessMessage { get; set; }
@@ -160,6 +153,14 @@ public sealed class BrowseModel(
 	public Achievement? CurrentNodeAchievement { get; private set; }
 
 	/// <summary>
+	///     The current leaf's Sessions panel (shared with <see cref="WorkModel" /> via
+	///     <c>_LeafWorkSessions</c>) — <see langword="null" /> for a branch/root, where the subtree table
+	///     renders instead (a node never has both children and leaf work, so the two are mutually
+	///     exclusive), or when the leaf has no work attached yet.
+	/// </summary>
+	public LeafWorkSessionsPanelModel? Panel { get; private set; }
+
+	/// <summary>
 	///     Every enabled workflow employee's directory entry, keyed by id, for resolving an
 	///     owner's display name/username instead of showing a bare <see cref="AppUserId" /> (see
 	///     <see cref="IJobQueries.GetEmployeeDirectoryAsync" />). An owner id absent from this
@@ -197,7 +198,6 @@ public sealed class BrowseModel(
 		["UnassignedOnly"] = UnassignedOnly.ToString(CultureInfo.InvariantCulture),
 		["ArchiveFilter"] = ArchiveFilter.ToString(),
 		["SearchText"] = SearchText,
-		["WorkedByUserId"] = WorkedByUserId?.ToString(CultureInfo.InvariantCulture),
 	};
 
 	/// <summary>
@@ -289,7 +289,7 @@ public sealed class BrowseModel(
 	///     (plan §2.5 "Starting for another worker") — a distinct handler/field from
 	///     <see cref="OnPostStartAsync" /> so the "Start for…" disclosure can never be confused with the
 	///     one-click Start. <see cref="StartForDisclosureModel.StartForFieldName" /> is a mutation
-	///     target, never the <see cref="WorkedByUserId" /> history filter. Authorization is not
+	///     target, distinct from any session-history filter. Authorization is not
 	///     rechecked here beyond signing in — <c>StartWorkAsync</c> itself re-evaluates
 	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanManage" /> for the acting user
 	///     against this leaf and rejects an unauthorized actor with <see cref="AuthorizationDeniedException" />.
@@ -338,7 +338,54 @@ public sealed class BrowseModel(
 		return RedirectToPage(CurrentRouteValues());
 	}
 
-	public async Task<IActionResult> OnPostPickUpAsync(long nodeId, CancellationToken cancellationToken)
+	/// <summary>"Pause work" from the leaf detail view — mirrors <see cref="WorkModel.OnPostFinishAsync" />.</summary>
+	public async Task<IActionResult> OnPostFinishAsync(
+		long sessionId, long version, string? finishedAt, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(CurrentRouteValues());
+			}
+
+			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				SessionId = new(sessionId),
+				Version = version,
+				FinishedAt = finishedAtInstant,
+			}, cancellationToken);
+			SuccessMessage = "Ends this session; the job stays In Progress.";
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "That session does not exist.";
+		}
+		catch (ConcurrencyConflictException) {
+			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+
+		return RedirectToPage(CurrentRouteValues());
+	}
+
+	/// <summary>
+	///     Claims <paramref name="pickUpNodeId" /> — the node whose row was clicked, which is not
+	///     generally the node being browsed. The parameter is deliberately not named <c>nodeId</c>:
+	///     model binding is case-insensitive, so it would bind from the same posted value as this
+	///     page's own <see cref="NodeId" /> browsing state (which every form replays as a hidden
+	///     field) and claim whatever node the viewer happened to be looking at instead.
+	/// </summary>
+	public async Task<IActionResult> OnPostPickUpAsync(long pickUpNodeId, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -347,7 +394,8 @@ public sealed class BrowseModel(
 
 		try {
 			_ = await jobTrackClient.Jobs.PickUpAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, NodeId = new(nodeId) }, cancellationToken);
+				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, NodeId = new(pickUpNodeId) },
+				cancellationToken);
 			SuccessMessage = "Job node claimed.";
 		}
 		catch (AuthorizationDeniedException) {
@@ -363,14 +411,18 @@ public sealed class BrowseModel(
 		return RedirectToPage(CurrentRouteValues());
 	}
 
-	public async Task<IActionResult> OnPostSetHomeNodeAsync(long nodeId, CancellationToken cancellationToken)
+	/// <summary>
+	///     Pins <paramref name="homeNodeId" /> as the actor's home node. Named apart from
+	///     <see cref="NodeId" /> for the same binding reason as <see cref="OnPostPickUpAsync" />.
+	/// </summary>
+	public async Task<IActionResult> OnPostSetHomeNodeAsync(long homeNodeId, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
 			return Challenge();
 		}
 
-		await SetHomeNodeAsync(actor.Value, new JobNodeId(nodeId), cancellationToken);
+		await SetHomeNodeAsync(actor.Value, new JobNodeId(homeNodeId), cancellationToken);
 		return RedirectToPage(CurrentRouteValues());
 	}
 
@@ -412,7 +464,6 @@ public sealed class BrowseModel(
 		["unassignedOnly"] = UnassignedOnly,
 		["archiveFilter"] = ArchiveFilter,
 		["searchText"] = SearchText,
-		["workedByUserId"] = WorkedByUserId,
 	};
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
@@ -468,6 +519,7 @@ public sealed class BrowseModel(
 
 			if (CurrentNode.Node.Kind == NodeKind.Leaf) {
 				await LoadCurrentNodeAchievementAsync(context, CurrentNode.Node, cancellationToken);
+				await LoadLeafSessionsPanelAsync(context, CurrentNode.Node.Id, cancellationToken);
 			}
 		}
 		catch (EntityNotFoundException) {
@@ -539,6 +591,41 @@ public sealed class BrowseModel(
 		var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
 			new() { Context = context, JobNodeId = node.Id }, cancellationToken);
 		CurrentNodeAchievement = leafWork.Achievement;
+	}
+
+	/// <summary>
+	///     Builds <see cref="Panel" /> for the current leaf, if it has work attached — mirrors
+	///     <see cref="WorkModel.LoadAsync" />'s own panel construction, with <see cref="RowStateFields" />
+	///     standing in for <see cref="WorkModel.ToolbarStateFields" /> as the redisplay/redirect state
+	///     each row's forms replay. Unlike <see cref="WorkModel" />, Browse's leaf detail view always
+	///     shows every worker's sessions — recorded work is job data every employee may read (ADR 0041),
+	///     and a follow-up narrowing filter belongs on the dedicated Sessions page, not repeated here.
+	/// </summary>
+	private async Task LoadLeafSessionsPanelAsync(CommandContext context, JobNodeId leafId, CancellationToken cancellationToken)
+	{
+		if (!CurrentNode!.Node.HasLeafWork) {
+			return;
+		}
+
+		try {
+			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
+				new() { Context = context, LeafWorkId = leafId, WorkedByUserId = null }, cancellationToken);
+
+			Panel = new() {
+				LeafNodeId = leafId.Value,
+				ViewerZone = ViewerZone,
+				DisplayedWorkedByUserId = null,
+				DisplayedWorkedByName = null,
+				Sessions = sessions,
+				EmployeeDirectoryById = EmployeeDirectoryById,
+				WorkedByOptions = [],
+				ShowWorkerFilter = false,
+				ExtraHiddenFields = RowStateFields,
+			};
+		}
+		catch (AuthorizationDeniedException) {
+			ErrorMessage = "You may not view that worker's sessions on this leaf.";
+		}
 	}
 
 	private async Task LoadHomeNodeAsync(CommandContext context, AppUserId actor, CancellationToken cancellationToken)

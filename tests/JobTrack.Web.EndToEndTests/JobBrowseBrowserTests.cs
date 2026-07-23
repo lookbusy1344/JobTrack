@@ -315,12 +315,12 @@ public abstract class JobBrowseBrowserTestsBase
 		await SignInAsync(page);
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={unrelatedId.Value}");
-		var unrelatedColumns = page.Locator(".jt-card .flex-fill");
+		var unrelatedColumns = page.Locator(".jt-card .jt-prereq-col");
 		var noneRequiresHeight = await RowHeightAsync(unrelatedColumns.Nth(0).Locator("li"));
 		var noneDependsOnHeight = await RowHeightAsync(unrelatedColumns.Nth(1).Locator("li"));
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={dependentId.Value}");
-		var columns = page.Locator(".jt-card .flex-fill");
+		var columns = page.Locator(".jt-card .jt-prereq-col");
 		var requiresRows = columns.Nth(0).Locator("li");
 		var dependsOnRows = columns.Nth(1).Locator("li");
 
@@ -353,6 +353,61 @@ public abstract class JobBrowseBrowserTestsBase
 		var box = await row.BoundingBoxAsync();
 		box.Should().NotBeNull();
 		return box!.Height;
+	}
+
+	/// <summary>
+	///     Requires and Depends-on-this-job are Bootstrap grid columns (<c>col-md-6</c>), a fixed
+	///     50/50 split of the card -- not a flex-basis derived from each side's content, which let a
+	///     long node title on one side outweigh a short one on the other. Checked both ways round (the
+	///     long title on Requires, then on Depends-on) so the assertion cannot pass by coincidence of
+	///     which side happens to be first in DOM order.
+	/// </summary>
+	[Fact]
+	public async Task Requires_and_depends_on_columns_stay_equal_width_regardless_of_which_side_has_the_longer_title()
+	{
+		const string LongTitle =
+			"A very long prerequisite job title that would visually widen its column if the layout were content-driven instead of a fixed 50/50 split";
+
+		var longRequiredId = await fixture.SeedLeafAsync(LongTitle);
+		var shortDependentId = await fixture.SeedLeafAsync("Y");
+		var currentId = await fixture.SeedLeafAsync("Current node under test");
+		await fixture.SeedPrerequisiteAsync(longRequiredId, currentId);
+		await fixture.SeedPrerequisiteAsync(currentId, shortDependentId);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+		await SignInAsync(page);
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={currentId.Value}");
+		var columns = page.Locator(".jt-card .jt-prereq-col");
+		var requiresWidth = await ColumnWidthAsync(columns.Nth(0));
+		var dependsOnWidth = await ColumnWidthAsync(columns.Nth(1));
+
+		Math.Abs(requiresWidth - dependsOnWidth).Should().BeLessThanOrEqualTo(1.0,
+			"the long-titled prerequisite is on the Requires side, but both columns should still split the card " +
+			$"50/50, got Requires={requiresWidth}, Depends-on={dependsOnWidth}");
+
+		var swappedCurrentId = await fixture.SeedLeafAsync("Second current node under test");
+		var shortRequiredId = await fixture.SeedLeafAsync("Z");
+		var longDependentId = await fixture.SeedLeafAsync(LongTitle);
+		await fixture.SeedPrerequisiteAsync(shortRequiredId, swappedCurrentId);
+		await fixture.SeedPrerequisiteAsync(swappedCurrentId, longDependentId);
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={swappedCurrentId.Value}");
+		var swappedColumns = page.Locator(".jt-card .jt-prereq-col");
+		var swappedRequiresWidth = await ColumnWidthAsync(swappedColumns.Nth(0));
+		var swappedDependsOnWidth = await ColumnWidthAsync(swappedColumns.Nth(1));
+
+		Math.Abs(swappedRequiresWidth - swappedDependsOnWidth).Should().BeLessThanOrEqualTo(1.0,
+			"the long-titled dependent is on the Depends-on side this time, but both columns should still split the " +
+			$"card 50/50, got Requires={swappedRequiresWidth}, Depends-on={swappedDependsOnWidth}");
+	}
+
+	private static async Task<double> ColumnWidthAsync(ILocator column)
+	{
+		var box = await column.BoundingBoxAsync();
+		box.Should().NotBeNull();
+		return box!.Width;
 	}
 
 	private static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)

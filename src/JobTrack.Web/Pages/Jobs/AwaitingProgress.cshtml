@@ -13,16 +13,17 @@
 
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
-@if (Model.SubtreeRoot is { } subtreeRoot) {
+@if (Model.SubtreeRoot is not null) {
 	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2">
 		<span>Scoped to <strong><a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-		                           asp-route-nodeId="@subtreeRoot.Node.Id.Value">@JobNodeDisplay.Title(subtreeRoot.Node)</a></strong></span>
-		<a asp-page="/Jobs/AwaitingProgress" asp-route-ownerUserId="@Model.OwnerUserId">Show the whole tree</a>
+		                           asp-route-nodeId="@Model.SubtreeRoot.Node.Id.Value">@JobNodeDisplay.Title(Model.SubtreeRoot.Node)</a></strong></span>
+		<a asp-page="/Jobs/AwaitingProgress" asp-route-ownerUserId="@Model.OwnerUserId" asp-route-showWholeTree="true">Show the whole tree</a>
 	</p>
 }
 
 <form method="get" asp-page="/Jobs/AwaitingProgress" class="jt-form-card">
 	<input type="hidden" asp-for="SubtreeRootId"/>
+	<input type="hidden" asp-for="ShowWholeTree"/>
 	<div class="form-group">
 		<label asp-for="OwnerUserId">Owner</label>
 		<select asp-for="OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
@@ -75,17 +76,19 @@
 							                ViewerZone = Model.ViewerZone,
 							                Now = Model.Now,
 							                StartClosed = entryActions.IsStartClosed,
+							                Paused = entryActions.IsPaused,
 						                })"/>
 					</td>
-					<td class="jt-col-cost text-end">@(entry.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
+					<td class="jt-col-cost text-end">@(entry.Cost.HasValue ? MoneyDisplay.Format(entry.Cost.Value) : null)</td>
 					<td class="jt-col-cost">
-						@if (entry.Achievement is { } achievement) {
+						@if (entry.Achievement is Achievement achievement) {
 							<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = achievement })"/>
 						} else {
 							<span class="jt-muted">None</span>
 						}
 					</td>
-					<td class="jt-col-secondary">@((entry.NeededFinish ?? entry.NeededStart) is { } needed ? InstantDisplay.Format(needed, Model.ViewerZone) : null)</td>
+					<td class="jt-col-secondary">@{ var needed = entry.NeededFinish ?? entry.NeededStart; }
+						@(needed.HasValue ? InstantDisplay.Format(needed.Value, Model.ViewerZone) : null)</td>
 					<td>
 						<partial name="_WorkRowActions" model="entryActions"/>
 					</td>
@@ -105,6 +108,7 @@
 		   asp-route-OwnerUserId="@Model.OwnerUserId"
 		   asp-route-UnassignedOnly="@Model.UnassignedOnly"
 		   asp-route-SubtreeRootId="@Model.SubtreeRootId"
+		   asp-route-ShowWholeTree="@Model.ShowWholeTree"
 		   asp-route-Offset="@(Model.Offset + AwaitingProgressModel.PageSize)">
 			Next page
 		</a>

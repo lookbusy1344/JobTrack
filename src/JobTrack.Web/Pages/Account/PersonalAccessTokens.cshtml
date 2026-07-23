@@ -68,13 +68,18 @@
 					<td>@token.Label</td>
 					<td>@InstantDisplay.Format(token.CreatedAt, Model.ViewerZone)</td>
 					<td>@InstantDisplay.Format(token.ExpiresAt, Model.ViewerZone)</td>
-					<td>@(token.LastUsedAt is { } lastUsedAt ? InstantDisplay.Format(lastUsedAt, Model.ViewerZone) : "Never")</td>
+					<td>@(token.LastUsedAt.HasValue ? InstantDisplay.Format(token.LastUsedAt.Value, Model.ViewerZone) : "Never")</td>
 					<td>@(token.RevokedAt is not null ? "Revoked" : "Active")</td>
 					<td>
 						@if (token.RevokedAt is null) {
 							<form method="post" asp-page-handler="Revoke" class="inline-form">
 								<input type="hidden" name="tokenId" value="@token.Id.Value"/>
-								<button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+								<button type="submit" class="jt-icon-button jt-icon-button--danger" title="Revoke token">
+									<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+										<use href="#jt-icon-remove"></use>
+									</svg>
+									<span class="visually-hidden">Revoke token @token.Label</span>
+								</button>
 							</form>
 						}
 					</td>

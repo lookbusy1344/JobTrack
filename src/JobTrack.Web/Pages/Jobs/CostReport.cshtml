@@ -28,11 +28,12 @@
 
 	<p><a asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">&larr; Back to Browse</a></p>
 
-	@if (Model.Readiness is { } readiness) {
-		<partial name="_Readiness" model="readiness"/>
+	@if (Model.Readiness is not null) {
+		<partial name="_Readiness" model="Model.Readiness"/>
 	}
 
-	@if (Model.CostDetails is { } costDetails) {
+	var costDetails = Model.CostDetails;
+	@if (costDetails is not null) {
 		<div class="row row-cols-1 row-cols-sm-2 g-3 mb-4">
 			<div class="col jt-metric">
 				<span class="jt-metric-label">Exact cost</span>

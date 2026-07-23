@@ -134,9 +134,19 @@ This **replaces** the old `isOwnSession` rule. Consequences:
   entering time on behalf of other people is a first-class owner capability.
 - A Worker who controls nothing on the tree may record **no** work there — not even their own. To
   work a node they don't control, they must first **pick it up** (§4.3) or be given a node they own.
-- An **unassigned** (`NULL`) node is not directly workable by a plain Worker: `controls` is false for
-  everyone, so recording is denied until someone claims it. Admin/JobManager may still record on it
-  directly (their bypass does not depend on `controls`).
+- **An unassigned (`NULL`) node is claimed as part of starting a session on it** (ADR 0048): starting
+  a session (`StartSessionAsync`, `StartWorkAsync`, `ReopenAndStartWorkAsync`) on an unassigned node
+  performs the pickup itself, atomically, claiming the node for `worked_by_user_id` — the worker the
+  session is actually for, not necessarily the acting caller — immediately before `canRecordWork` is
+  evaluated. This is the same claim §4.3 describes, entered from a second call site: a work session
+  naming a specific worker and an unassigned node are mutually contradictory states, so the obvious
+  next action (claim it) is taken rather than requiring a separate round trip first. Practically: a
+  plain Worker starting their own first session on a pool node now succeeds directly; starting a
+  session **for** someone else still claims it for that someone, so a non-controlling Worker starting
+  it on another worker's behalf is still denied exactly as before. Administrator/JobManager, who could
+  already start on an unassigned node without controlling it, no longer leave it unassigned
+  afterward. Explicit pickup (§4.3) remains available and unchanged for claiming without starting
+  work immediately.
 
 `worked_by_user_id` remains a free choice of the authorized recorder; the per-`(worked_by_user_id,
 leaf_work_id)` overlap constraints (schema version 0007) are unchanged and orthogonal to this policy.
@@ -187,6 +197,11 @@ directly owned by someone else. That follows the same ancestor rule as any other
 Pickup is a conditional, concurrency-safe write: `SET owner = @actor WHERE id = @id AND owner IS
 NULL`. If the row was claimed by someone else first, the update affects zero rows and the command
 throws `already-claimed` rather than silently overwriting.
+
+Starting a session on an unassigned node (§4.2) is a second entry point into this same mechanism —
+the identical conditional write, run for `worked_by_user_id` rather than the caller, inside the
+session-start call's own transaction (ADR 0048). Explicit `PickUpAsync` above remains the only way to
+claim a node without also starting a session on it in the same call.
 
 ### 4.4 Reassignment and release to the pool
 

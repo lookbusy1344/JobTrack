@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages.Jobs;
 
+using System.Globalization;
 using Abstractions;
 using Application;
 using Domain.Hierarchy;
@@ -78,6 +79,16 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 	[TempData] public string? ErrorMessage { get; set; }
 
 	[TempData] public string? SuccessMessage { get; set; }
+
+	/// <summary>
+	///     <paramref name="nodeId" />'s display title, or the bare id when no summary was resolved —
+	///     the accessible name each row's icon-only Remove button carries, so the control names the
+	///     edge it removes rather than repeating "Remove" once per row.
+	/// </summary>
+	public string DescribeNode(JobNodeId nodeId) =>
+		NodeSummariesById.TryGetValue(nodeId, out var summary)
+			? JobNodeDisplay.Title(summary)
+			: $"job {nodeId.Value.ToString(CultureInfo.InvariantCulture)}";
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{

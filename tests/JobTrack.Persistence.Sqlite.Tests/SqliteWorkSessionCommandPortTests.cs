@@ -66,6 +66,39 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		(await ReadLeafStateAsync(leafId)).Should().Be(new LeafState(Achievement.InProgress, false, 1));
 	}
 
+	/// <summary>
+	///     ADR 0048: starting a session on an unassigned node claims it via the same conditional
+	///     <c>WHERE owner_user_id IS NULL</c> write <c>PickUpAsync</c> uses. SQLite's
+	///     <c>
+	///         BEGIN
+	///         IMMEDIATE
+	///     </c>
+	///     serializes the two attempts through its single-writer model, so exactly one
+	///     worker must win the claim and the other must see <c>job-node-already-claimed</c>, never both.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_session_starts_by_different_workers_on_the_same_unassigned_leaf_allow_exactly_one_to_succeed()
+	{
+		var (rootId, jobManagerId, workerA, _) = await SeedReadyLeafAsync();
+		var workerB = await SeedEmployeeAsync("Other Worker", "sqlite.unassigned-start-race.other", EmployeeRole.Worker);
+		var jobNodePort = CreateJobNodePort(ConnectionString);
+		var unassigned = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Unassigned pool leaf",
+			OwnerUserId = null,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassigned.Id });
+
+		var results = await Task.WhenAll(
+			TryStartSessionForAsync(CreateSessionPort(ConnectionString), workerA, workerA, unassigned.Id),
+			TryStartSessionForAsync(CreateSessionPort(ConnectionString), workerB, workerB, unassigned.Id));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+		(await ReadLeafStateAsync(unassigned.Id)).ActiveSessionCount.Should().Be(1);
+	}
+
 	/// <summary>ADR 0045 plan §6 race matrix: "reopen-and-start vs archive" -- the two are mutually exclusive outcomes.</summary>
 	[Fact]
 	public async Task Concurrent_reopen_and_start_vs_archive_leaves_a_consistent_final_state()
@@ -222,6 +255,17 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		}
 	}
 
+	/// <summary>
+	///     ADR 0048: on an unassigned leaf raced by a non-controlling actor, SQLite's
+	///     <c>
+	///         BEGIN
+	///         IMMEDIATE
+	///     </c>
+	///     serialization means the loser's own auto-claim read can already see the
+	///     winner's committed ownership, leaving <c>canRecordWork</c> to deny it
+	///     (<see cref="AuthorizationDeniedException" />) rather than the claim's own conditional write
+	///     losing (<see cref="InvariantViolationException" />) -- both mean "did not win the race."
+	/// </summary>
 	private static async Task<bool> TryStartSessionForAsync(
 		IWorkSessionCommandPort port, AppUserId actorId, AppUserId targetWorkerId, JobNodeId leafId)
 	{
@@ -229,7 +273,8 @@ public sealed class SqliteWorkSessionCommandPortTests()
 			_ = await port.StartSessionAsync(new() { Context = ContextFor(actorId), LeafWorkId = leafId, WorkedByUserId = targetWorkerId });
 			return true;
 		}
-		catch (Exception ex) when (ex is InvariantViolationException or ConcurrencyConflictException or PrerequisiteBlockedException) {
+		catch (Exception ex) when (ex is InvariantViolationException or ConcurrencyConflictException
+									   or PrerequisiteBlockedException or AuthorizationDeniedException) {
 			return false;
 		}
 	}

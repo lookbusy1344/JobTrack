@@ -94,6 +94,30 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	/// <summary>
+	/// The per-edge Remove control is an icon button from the shared sprite, like every other action
+	/// repeated once per row or list item. Its accessible name states which edge it removes rather
+	/// than repeating a bare "Remove" once per entry, so the names stay distinguishable out of context.
+	/// </summary>
+	public async Task Each_listed_dependency_offers_an_icon_remove_naming_the_edge_it_removes()
+	{
+		var managerId = await SeedEmployeeAsync("prereq.icon-manager", EmployeeRole.JobManager);
+		var required = await AddChildAsync(rootId, managerId, "Pour foundation");
+		var dependent = await AddChildAsync(rootId, managerId, "Frame walls");
+		var authCookie = await SignInAsync("prereq.icon-manager");
+
+		var (searchCookie, searchToken) = await GetFormAsync(authCookie, dependent.Id, "Pour");
+		var addResponse = await PostAddSelectedAsync(
+			authCookie, searchCookie, searchToken, dependent.Id, "Pour", [required.Id], []);
+		var body = await (await FollowRedirectAsync(addResponse, authCookie)).Content.ReadAsStringAsync();
+
+		body.Should().Contain("#jt-icon-remove");
+		body.Should().Contain("class=\"jt-icon-button\" title=\"Remove dependency\"");
+		body.Should().Contain($"Remove dependency on Pour foundation (ID {required.Id.Value})");
+		body.Should().NotContain(">Remove</button>");
+	}
+
+	[Fact]
 	public async Task Readiness_pill_on_browse_reflects_an_added_dependency()
 	{
 		var managerId = await SeedEmployeeAsync("prereq.readiness-manager", EmployeeRole.JobManager);

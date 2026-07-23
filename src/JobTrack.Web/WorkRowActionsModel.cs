@@ -86,18 +86,11 @@ public sealed class WorkRowActionsModel
 	/// </summary>
 	public WorkSessionResult? ViewerSession => Presentation.ViewerSession;
 
-	/// <summary>
-	///     The one other worker's session that is still finishable inline: present only when the viewer
-	///     can manage sessions, is not themselves working, and exactly one session is active on the leaf.
-	///     A single session is unambiguous, so it keeps a plain "Finish / pause"; with two or more, every
-	///     other worker's session is delegated to the leaf's Sessions page instead (a finish button per
-	///     worker does not scale). The viewer's own session is always finished via <see cref="ViewerSession" />.
-	/// </summary>
-	public WorkSessionResult? SoloOtherSession =>
-		CanManage && ViewerSession is null && Presentation.Count == 1 ? Presentation.OtherSessions[0] : null;
-
 	/// <summary>Whether current leaf state prohibits creating or reopening an active session (ADR 0044).</summary>
 	public bool IsStartClosed => IsArchived || (Achievement.HasValue && AchievementTransitions.IsCompletedState(Achievement.Value));
+
+	/// <summary>Whether the leaf is paused — started, but nobody clocked on right now (<see cref="LeafActivity.IsPaused" />).</summary>
+	public bool IsPaused => LeafActivity.IsPaused(Achievement, ActiveSessions.Count);
 
 	/// <summary>Hidden fields for the viewer's own one-click start.</summary>
 	public IReadOnlyDictionary<string, string?> StartFields =>

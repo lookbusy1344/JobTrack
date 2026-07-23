@@ -7,6 +7,8 @@
    - zero: nothing here (the outer @if below), unless the leaf is closed -- then a neutral "Closed"
      pill, so a done/archived leaf reads as settled rather than merely idle. The verbose "reopen it
      before starting another session" sentence this replaces never belonged in the Actions cell.
+     Zero sessions on an *In Progress* leaf is the third case: paused, someone stopped part-way, and
+     it gets its own pill rather than reading identically to a leaf nobody has ever started.
    - one: the familiar compact stopwatch pill, worker named only when it is not the viewer.
    - two or more: a prominent "N active" pill, followed by the stable preview (You first, then every
      other worker by start order), capped at ActiveSessionSummaryModel.PreviewLimit only in the dense
@@ -49,4 +51,8 @@
 	</span>
 } else if (Model.StartClosed) {
 	<span class="status-pill status-pill-closed@(Model.Compact ? " status-pill--compact" : string.Empty)">Closed</span>
+} else if (Model.Paused) {
+	@* Closed wins over Paused: an archived leaf can be InProgress, and "you cannot start here" is the
+	   more consequential fact of the two. *@
+	<partial name="_PausedPill"/>
 }

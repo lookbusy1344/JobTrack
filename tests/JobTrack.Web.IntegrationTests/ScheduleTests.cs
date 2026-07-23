@@ -94,6 +94,27 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task An_unparsable_exception_start_or_end_shows_an_error_bubble_instead_of_being_silently_swallowed()
+	{
+		var workerId = await SeedEmployeeAsync("schedule.bad-datetime", EmployeeRole.Worker);
+		var authCookie = await SignInAsync("schedule.bad-datetime");
+
+		var (versionCookie, versionToken) = await GetFormAsync(authCookie, workerId);
+		var versionResponse = await PostAddVersionAsync(authCookie, versionCookie, versionToken, workerId, "2026-01-01", "Europe/London");
+		var versionReloaded = await FollowRedirectAsync(versionResponse, authCookie);
+
+		var (exceptionCookie, exceptionToken) = await ExtractFormAsync(versionReloaded, versionCookie);
+		var response = await PostAddExceptionAsync(
+			authCookie, exceptionCookie, exceptionToken, workerId, "RemoveWorkingTime",
+			"not-a-date", "2026-01-06T00:00", "Public holiday");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK, "an invalid date/time re-renders the page inline rather than redirecting");
+		body.Should().Contain("alert-danger", "the error must render through the same bubble every other page uses, not be silently dropped");
+		body.Should().Contain("Start and end must each be a valid date and time.");
+	}
+
+	[Fact]
 	public async Task The_schedule_page_defaults_the_effective_start_to_today_and_uses_human_friendly_field_labels()
 	{
 		var workerId = await SeedEmployeeAsync("schedule.labels", EmployeeRole.Worker);

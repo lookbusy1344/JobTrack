@@ -259,7 +259,55 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task A_leaf_with_an_active_session_shows_an_end_session_link_instead_of_start()
+	public async Task AwaitingProgress_defaults_to_the_actors_home_node_when_no_subtree_is_specified()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.homedefault");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
+		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
+		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			NodeId = branchId,
+		});
+		var authCookie = await SignInAsync("awaiting.homedefault");
+
+		// A bare visit -- e.g. following the header's "Awaiting progress" link -- scopes to the actor's
+		// own home node rather than the entire tree, but still offers a way back to everything.
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Install cabinets");
+		body.Should().NotContain("Outside the branch");
+		body.Should().Contain("Show the whole tree");
+	}
+
+	[Fact]
+	public async Task Show_the_whole_tree_overrides_the_home_node_default()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.homeoverride");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
+		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
+		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			NodeId = branchId,
+		});
+		var authCookie = await SignInAsync("awaiting.homeoverride");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress?showWholeTree=true", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Install cabinets");
+		body.Should().Contain("Outside the branch");
+		body.Should().NotContain("Show the whole tree", "the whole tree is already showing, so the escape hatch back to it has nothing to offer");
+	}
+
+	[Fact]
+	public async Task A_leaf_with_an_active_session_shows_no_start_button_only_a_sessions_link()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.toggle");
 		var rootId = bootstrappedRootId!.Value;
@@ -273,9 +321,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await reloaded.Content.ReadAsStringAsync();
 		// Plan §5.3: the dashboard row never finishes inline -- the viewer's own one-click Start
-		// is replaced by an "End session" link into /Jobs/Work, not an inline finish form.
+		// is replaced by the always-present "Sessions" link into /Jobs/Work, not an inline finish form.
 		startBody.Should().Contain($"/Jobs/Work?leafNodeId={leafId.Value}");
-		startBody.Should().Contain("End session");
+		startBody.Should().Contain("title=\"Sessions\"");
 		startBody.Should().NotContain("title=\"Start session\"");
 	}
 
@@ -348,7 +396,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Session started");
-		body.Should().Contain("End session");
+		body.Should().Contain("title=\"Sessions\"");
 
 		var sessions = await GetSessionsAsync(leafId, adminId);
 		sessions.Should().ContainSingle().Which.StartedAt.Should().Be(Instant.FromDateTimeOffset(backdatedAt));
@@ -492,7 +540,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task The_dashboard_row_offers_finish_as_an_icon_once_a_session_is_active()
+	public async Task The_dashboard_row_shows_only_the_sessions_icon_once_a_session_is_active()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.finish-icon");
 		var rootId = bootstrappedRootId!.Value;
@@ -505,7 +553,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
-		body.Should().Contain("#jt-icon-finish");
+		body.Should().Contain("#jt-icon-sessions");
 		body.Should().NotContain("btn btn-secondary\">Finish / pause");
 	}
 

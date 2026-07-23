@@ -236,11 +236,18 @@ Sessions (ADR 0045). It shows one obvious primary action for the current state:
 
 - **Waiting or nothing recorded yet, no active session** — Start session (the same one-click
   `StartWorkAsync` composite described above).
-- **In progress, at least one active session** — an explicit **Pause work** / **Complete job**
+- **In progress, no active session** — *paused*: work started and nobody is clocked on. A valid,
+  ordinary state (ADR 0045 allows zero active sessions from `InProgress`) and exactly what Pause job
+  produces, so it is named with a **Paused** pill wherever a leaf appears — `/Jobs/Work`, Browse's
+  detail view and subtree rows, Awaiting Progress — from the single `LeafActivity.IsPaused`
+  predicate. Start session resumes it; the ending decision is still offered, since completing from
+  zero remaining sessions is the supported path.
+- **In progress, at least one active session** — an explicit **Pause job** / **Complete job**
   decision. Pause finishes only the selected session and leaves achievement unchanged; Complete job
   atomically finishes the exact confirmed active-session set (one worker or several, all at the same
   instant) and records `Success` in one commit (`CompleteLeafAsync`). Neither is ever implicit —
-  finishing a session never silently means "done."
+  finishing a session never silently means "done." Both share one form with the leaf's write-up and
+  its own **Save write-up** button, so whichever button is pressed persists the text typed beside it.
 - **A terminal leaf** (`Success`/`Cancelled`/`Unsuccessful`) — **Reopen and start session**, when the
   actor qualifies: a controlling owner, Job Manager, or Administrator may reopen and start for any
   eligible worker; a worker who recorded any previous session on that leaf may reopen and start for

@@ -11,21 +11,10 @@
    Never infers a target worker from collection order (plan §2.4): the viewer's own action always
    comes from Model.ViewerSession, and "Start for…" is a distinct disclosure from the viewer's own
    one-click Start. Ending a session never finishes inline here (unified-leaf-workflow plan §5.3) —
-   an "End session" link always opens /Jobs/Work at the merged status/decision page, which is where
-   pause-vs-complete is actually decided; a permitted manager's "solo other worker" case
-   (Model.SoloOtherSession) gets the same link, one session being unambiguous about which to end.
-   With two or more workers, every other worker's session is delegated to the leaf's own Sessions
-   page (the always-present link below), where each session has its own control. *@
+   it is always decided on the leaf's own Sessions page (/Jobs/Work, the always-present link below),
+   where pause-vs-complete is actually decided and every session has its own control. *@
 <div class="jt-toolbar d-flex flex-nowrap justify-content-end gap-2 align-items-center">
-	@if (Model.ViewerSession is { } viewerSession) {
-		<a class="jt-icon-button" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId"
-		   asp-route-endSessionId="@viewerSession.Id.Value" asp-fragment="end-session" title="End session">
-			<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-				<use href="#jt-icon-finish"></use>
-			</svg>
-			<span class="visually-hidden">End session</span>
-		</a>
-	} else if (!Model.IsStartClosed) {
+	@if (Model.ViewerSession is null && !Model.IsStartClosed) {
 		<form method="post" asp-page-handler="@Model.StartHandler" class="inline-form">
 			@foreach (var field in Model.StartFields) {
 				<input type="hidden" name="@field.Key" value="@field.Value"/>
@@ -38,16 +27,6 @@
 			</button>
 		</form>
 		<partial name="_BackdateTrigger" model="Model.StartBackdate"/>
-	}
-	@{ var soloOther = Model.SoloOtherSession; }
-	@if (soloOther is not null) {
-		<a class="jt-icon-button" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId"
-		   asp-route-endSessionId="@soloOther.Id.Value" asp-fragment="end-session" title="End session">
-			<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-				<use href="#jt-icon-finish"></use>
-			</svg>
-			<span class="visually-hidden">End session</span>
-		</a>
 	}
 	@if (Model.CanManage && !Model.IsStartClosed) {
 		<partial name="_StartForTrigger" model="Model.StartFor"/>

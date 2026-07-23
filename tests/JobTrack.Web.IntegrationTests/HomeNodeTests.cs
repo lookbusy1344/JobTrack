@@ -164,7 +164,7 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=SetHomeNode");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["nodeId"] = nodeId.Value.ToString(CultureInfo.InvariantCulture),
+			["homeNodeId"] = nodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["__RequestVerificationToken"] = token,
 		});
 

@@ -128,6 +128,29 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 		revokeBody.Should().Contain("revoked");
 	}
 
+	[Fact]
+	/// <summary>
+	/// Revoke is a per-row action, so it is the same icon button every other table row uses -- the
+	/// shared remove cross, tinted by `jt-icon-button--danger` rather than given a glyph of its own,
+	/// since what separates it from an ordinary remove is consequence, not kind. Each button names
+	/// the token it revokes so the accessible names stay distinguishable between rows.
+	/// </summary>
+	public async Task A_live_token_row_offers_an_icon_revoke_naming_the_token()
+	{
+		_ = await SeedEmployeeAsync("pat.revoke-icon", EmployeeRole.Worker);
+		var authCookie = await SignInAsync("pat.revoke-icon");
+		_ = await PostIssueAsync(authCookie, "workshop-laptop", 30);
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
+		request.Headers.Add("Cookie", authCookie);
+		var body = await (await client.SendAsync(request)).Content.ReadAsStringAsync();
+
+		body.Should().Contain("#jt-icon-remove");
+		body.Should().Contain("class=\"jt-icon-button jt-icon-button--danger\" title=\"Revoke token\"");
+		body.Should().Contain("Revoke token workshop-laptop");
+		body.Should().NotContain(">Revoke</button>");
+	}
+
 	/// <summary>
 	///     The handler always scopes <c>TargetUserId</c> to the signed-in actor (never a caller-supplied
 	///     value), so another user's <c>tokenId</c> simply matches no row for the attacker's own scope --

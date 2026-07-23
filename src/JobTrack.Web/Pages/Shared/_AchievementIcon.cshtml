@@ -18,7 +18,7 @@
 	};
 }
 @* Both tests hold or neither does; the second binds the value the label needs. *@
-@if (glyph is var (iconId, modifier) && Model.Achievement is { } achievement) {
+@if (glyph is var (iconId, modifier) && Model.Achievement is Achievement achievement) {
 	var label = EnumDisplay.Label(achievement);
 	<span class="jt-achievement-icon jt-achievement-icon--@modifier">
 		<svg class="jt-achievement-icon-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">

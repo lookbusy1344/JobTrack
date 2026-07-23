@@ -139,6 +139,27 @@
 		      fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
 		<path d="M9.3 3.5 12.5 6.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 	</symbol>
+	@* Pick up: a person with a plus, i.e. "assign this to me" — the one action the unassigned pool
+	   offers. Outlined at the same 1.5 stroke as Start/Backdate/Sessions/Correct because it is an
+	   affordance the viewer takes, never a state being reported, and deliberately a *person* rather
+	   than a hand: `jt-icon-stop` already owns the hand silhouette, and a second hand glyph would read
+	   as a readiness sign at the ~14px both actually render at. The figure sits left of centre so the
+	   plus has clear air to its right instead of overlapping the shoulders. *@
+	<symbol id="jt-icon-pick-up" viewBox="0 0 16 16">
+		<circle cx="6" cy="4.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+		<path d="M1.4 13.5a4.6 4.6 0 0 1 9.2 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+		<path d="M11.3 11.9h3.8M13.2 10v3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+	</symbol>
+	@* Remove: a plain cross, for detaching a thing from a list (a prerequisite edge, a live token).
+	   Outlined like the rest of the affordance family. The one glyph covers both because both mean
+	   "take this away"; the token's is tinted with `.jt-icon-button--danger` rather than given a
+	   glyph of its own, since the difference is consequence, not kind. Deliberately not a diagonal
+	   slash through a disc — that shape belongs to `jt-icon-achievement-closed`, which reports a
+	   state. *@
+	<symbol id="jt-icon-remove" viewBox="0 0 16 16">
+		<path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" fill="none" stroke="currentColor" stroke-width="1.6"
+		      stroke-linecap="round"/>
+	</symbol>
 	<symbol id="jt-icon-archived" viewBox="0 0 16 16">
 		<path d="M2 3.25c0-.41.34-.75.75-.75h10.5c.41 0 .75.34.75.75v1.5c0 .41-.34.75-.75.75H2.75A.75.75 0 0 1 2 4.75z"/>
 		<path opacity="0.7" d="M3 7h10v5.25c0 .69-.56 1.25-1.25 1.25h-7.5C3.56 13.5 3 12.94 3 12.25z"/>

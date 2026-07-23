@@ -152,9 +152,9 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var startReloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await startReloaded.Content.ReadAsStringAsync();
-		startBody.Should().Contain("Pause work");
+		startBody.Should().Contain("Pause job");
 		startBody.Should().NotContain("Finish / pause");
-		// Plan §4.1: the viewer's own one-click Start is replaced by Pause work, but the
+		// Plan §4.1: the viewer's own one-click Start is replaced by Pause job, but the
 		// authorized "Start for..." disclosure (also drawn with jt-icon-start) for another worker is
 		// never removed -- only the viewer's own primary action toggles.
 		startBody.Should().NotContain("title=\"Start session\"");
@@ -257,7 +257,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("#jt-icon-finish");
 		// Both the icon-only row action and the page toolbar name the outcome consistently.
-		body.Should().Contain("Pause work");
+		body.Should().Contain("Pause job");
 		body.Should().NotContain("Finish / pause");
 	}
 
@@ -489,6 +489,32 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task A_controlling_worker_can_finish_sessions_and_record_a_non_success_outcome_via_the_completion_dropdown()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-cancelled", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Site access withdrawn");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.complete-cancelled");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(
+			authCookie, cookie, token, leaf.Id, 2, [(session.Id.Value, session.Version)], finalAchievement: Achievement.Cancelled);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Job cancelled and session finished.");
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id }, CancellationToken.None);
+		leafWork.Achievement.Should().Be(Achievement.Cancelled);
+		(await GetSessionsAsync(leaf.Id)).Should().ContainSingle().Which.FinishedAt.Should().NotBeNull();
+	}
+
+	[Fact]
 	public async Task A_controlling_worker_can_complete_a_job_with_one_active_session_from_the_work_page()
 	{
 		var workerId = await SeedEmployeeAsync("work.complete-one", EmployeeRole.Worker);
@@ -529,7 +555,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var page = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
 		var pageBody = await page.Content.ReadAsStringAsync();
 		pageBody.Should().Contain("Completion options");
-		pageBody.Should().Contain("name=\"finishedAt\"");
+		pageBody.Should().Contain("name=\"completionFinishedAt\"");
 		pageBody.Should().Contain("name=\"completionNote\"");
 		var (cookie, token) = await ExtractFormAsync(page, FindSetCookie(page, "Antiforgery") is string setCookie
 			? ExtractCookiePair(setCookie)
@@ -628,33 +654,6 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task End_session_id_selects_the_exact_session_a_manager_may_pause_when_several_are_active()
-	{
-		var managerId = await SeedEmployeeAsync("work.select-session-manager", EmployeeRole.JobManager);
-		var firstWorkerId = await SeedEmployeeAsync("work.select-session-first", EmployeeRole.Worker);
-		var secondWorkerId = await SeedEmployeeAsync("work.select-session-second", EmployeeRole.Worker);
-		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Select one active session");
-		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
-			JobNodeId = leaf.Id,
-			WorkedByUserId = firstWorkerId,
-		});
-		var selected = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
-			LeafWorkId = leaf.Id,
-			WorkedByUserId = secondWorkerId,
-		});
-		var authCookie = await SignInAsync("work.select-session-manager");
-
-		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&endSessionId={selected.Id.Value}#end-session", authCookie);
-		var body = await response.Content.ReadAsStringAsync();
-
-		var finishFormPattern = FormattableString.Invariant(
-			$"action=\"/Jobs/Work\\?handler=Finish\"[\\s\\S]*?name=\"sessionId\" value=\"{selected.Id.Value}\"");
-		Regex.IsMatch(body, finishFormPattern).Should().BeTrue("the selected interval must drive the Pause work form");
-	}
-
-	[Fact]
 	public async Task A_non_controlling_worker_cannot_complete_a_job_from_the_work_page()
 	{
 		var workerId = await SeedEmployeeAsync("work.complete-forbidden-owner", EmployeeRole.Worker);
@@ -737,9 +736,204 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("Job reopened. Session started.");
 	}
 
+	[Fact]
+	public async Task The_work_page_shows_the_leafs_current_write_up_in_a_prominent_multi_line_field()
+	{
+		var workerId = await SeedEmployeeAsync("work.writeup-shown", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Write-up leaf");
+		_ = await seedClient.Jobs.EditAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			NodeId = leaf.Id,
+			Description = leaf.Description,
+			WriteUp = "Existing notes from a prior worker.",
+			OwnerUserId = workerId,
+			Priority = Priority.Medium,
+			Version = leaf.Version,
+		});
+		var authCookie = await SignInAsync("work.writeup-shown");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("id=\"writeup\"");
+		body.Should().Contain("<textarea id=\"writeUp\"");
+		body.Should().Contain("rows=\"6\"", "the write-up field is multi-line, not a single-line input");
+		body.Should().Contain("Existing notes from a prior worker.");
+	}
+
+	[Fact]
+	public async Task The_ending_section_carries_pause_complete_and_save_write_up_in_one_form()
+	{
+		var workerId = await SeedEmployeeAsync("work.ending-one-form", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "One ending form");
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.ending-one-form");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var section = body[body.IndexOf("id=\"end-session\"", StringComparison.Ordinal)..];
+		section = section[..section.IndexOf("</form>", StringComparison.Ordinal)];
+		section.Should().Contain("<textarea id=\"writeUp\"", "the write-up posts with whichever ending button is pressed");
+		section.Should().Contain("Pause job");
+		section.Should().Contain("Complete job");
+		section.Should().Contain("Save write-up");
+	}
+
+	/// <summary>
+	///     A paused leaf (<c>InProgress</c>, nobody clocked on) is a valid, expected state — ADR 0045
+	///     allows zero active sessions from <c>InProgress</c>, and Pause job produces exactly this. The
+	///     page names it rather than looking identical to a leaf nobody has started, and still offers
+	///     the ending decision, since completing from zero sessions is the supported path.
+	/// </summary>
+	[Fact]
+	public async Task A_paused_leaf_reads_as_paused_and_can_still_be_completed_with_its_write_up()
+	{
+		var workerId = await SeedEmployeeAsync("work.paused", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Paused leaf");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		var authCookie = await SignInAsync("work.paused");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("status-pill-paused", "the paused state is named, not left to look like a leaf nobody started");
+		body.Should().NotContain("Finish 0 sessions and complete job", "a paused leaf has no sessions left to finish");
+		var section = body[body.IndexOf("id=\"end-session\"", StringComparison.Ordinal)..];
+		section = section[..section.IndexOf("</form>", StringComparison.Ordinal)];
+		section.Should().Contain("<textarea id=\"writeUp\"", "the paused leaf's completion carries its write-up too");
+		section.Should().Contain("Complete job");
+		section.Should().Contain("Save write-up");
+		section.Should().NotContain("Pause job", "there is no session left to pause");
+	}
+
+	[Fact]
+	public async Task A_paused_leaf_can_be_completed_with_no_remaining_sessions()
+	{
+		var workerId = await SeedEmployeeAsync("work.paused-complete", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Paused then completed");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		var authCookie = await SignInAsync("work.paused-complete");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(
+			authCookie, cookie, token, leaf.Id, 2, [], nodeVersion: leaf.Version, writeUp: "Wrapped up after the pause.");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Job completed.");
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id });
+		current.Node.WriteUp.Should().Be("Wrapped up after the pause.");
+	}
+
+	[Fact]
+	public async Task Completing_a_job_saves_the_write_up_typed_beside_it()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-writeup", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Complete with write-up");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.complete-writeup");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(
+			authCookie, cookie, token, leaf.Id, 2, [(session.Id.Value, session.Version)],
+			nodeVersion: leaf.Version, writeUp: "Ran long, but the fit is sound.");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id });
+		current.Node.WriteUp.Should().Be("Ran long, but the fit is sound.");
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id }, CancellationToken.None);
+		leafWork.Achievement.Should().Be(Achievement.Success);
+	}
+
+	[Fact]
+	public async Task Pausing_a_session_saves_the_write_up_typed_beside_it()
+	{
+		var workerId = await SeedEmployeeAsync("work.pause-writeup", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Pause with write-up");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.pause-writeup");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostFinishAsync(
+			authCookie, cookie, token, leaf.Id, workerId, session.Id.Value, session.Version,
+			nodeVersion: leaf.Version, writeUp: "Stopping here; awaiting the replacement part.");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id });
+		current.Node.WriteUp.Should().Be("Stopping here; awaiting the replacement part.");
+		(await GetSessionsAsync(leaf.Id)).Should().ContainSingle().Which.FinishedAt.Should().NotBeNull();
+	}
+
+	[Fact]
+	public async Task A_controlling_worker_can_save_the_leafs_write_up_without_affecting_other_fields()
+	{
+		var workerId = await SeedEmployeeAsync("work.writeup-save", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Write-up save leaf");
+		var authCookie = await SignInAsync("work.writeup-save");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=SaveWriteUp");
+		request.Headers.Add("Cookie", $"{authCookie}; {cookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["LeafNodeId"] = leaf.Id.Value.ToString(CultureInfo.InvariantCulture),
+			["nodeVersion"] = leaf.Version.ToString(CultureInfo.InvariantCulture),
+			["writeUp"] = "Finished the trim work; used oak instead of pine per client request.",
+			["__RequestVerificationToken"] = token,
+		});
+
+		var response = await client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Write-up saved.");
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id });
+		current.Node.WriteUp.Should().Be("Finished the trim work; used oak instead of pine per client request.");
+		current.Node.Description.Should().Be(leaf.Description);
+		current.Node.OwnerUserId.Should().Be(workerId);
+	}
+
 	private async Task<HttpResponseMessage> PostCompleteAsync(
 		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, long leafWorkVersion,
-		IReadOnlyList<(long SessionId, long Version)> sessions, string? finishedAt = null, string? completionNote = null)
+		IReadOnlyList<(long SessionId, long Version)> sessions, string? finishedAt = null, string? completionNote = null,
+		Achievement? finalAchievement = null, long? nodeVersion = null, string? writeUp = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Complete");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -749,16 +943,28 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 			new("__RequestVerificationToken", token),
 		};
 		foreach (var (sessionId, version) in sessions) {
-			pairs.Add(new("sessionId", sessionId.ToString(CultureInfo.InvariantCulture)));
-			pairs.Add(new("sessionVersion", version.ToString(CultureInfo.InvariantCulture)));
+			pairs.Add(new("completeSessionId", sessionId.ToString(CultureInfo.InvariantCulture)));
+			pairs.Add(new("completeSessionVersion", version.ToString(CultureInfo.InvariantCulture)));
 		}
 
 		if (finishedAt is not null) {
-			pairs.Add(new("finishedAt", finishedAt));
+			pairs.Add(new("completionFinishedAt", finishedAt));
 		}
 
 		if (completionNote is not null) {
 			pairs.Add(new("completionNote", completionNote));
+		}
+
+		if (finalAchievement is Achievement achievement) {
+			pairs.Add(new("finalAchievement", achievement.ToString()));
+		}
+
+		if (nodeVersion is long nodeVersionValue) {
+			pairs.Add(new("nodeVersion", nodeVersionValue.ToString(CultureInfo.InvariantCulture)));
+		}
+
+		if (writeUp is not null) {
+			pairs.Add(new("writeUp", writeUp));
 		}
 
 		request.Content = new FormUrlEncodedContent(pairs);
@@ -851,7 +1057,8 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 	private async Task<HttpResponseMessage> PostFinishAsync(
 		string authCookie, string antiforgeryCookie, string token,
-		JobNodeId leafNodeId, AppUserId workedByUserId, long sessionId, long version, string? finishedAt = null)
+		JobNodeId leafNodeId, AppUserId workedByUserId, long sessionId, long version, string? finishedAt = null,
+		long? nodeVersion = null, string? writeUp = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Finish");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -864,6 +1071,14 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		};
 		if (finishedAt is not null) {
 			fields["finishedAt"] = finishedAt;
+		}
+
+		if (nodeVersion is long nodeVersionValue) {
+			fields["nodeVersion"] = nodeVersionValue.ToString(CultureInfo.InvariantCulture);
+		}
+
+		if (writeUp is not null) {
+			fields["writeUp"] = writeUp;
 		}
 
 		request.Content = new FormUrlEncodedContent(fields);

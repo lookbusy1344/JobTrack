@@ -127,8 +127,35 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 			["__RequestVerificationToken"] = token,
 		});
 		var changeResponse = await client.SendAsync(changeRequest);
+		var body = await changeResponse.Content.ReadAsStringAsync();
 
 		changeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("alert-danger", "an Identity rejection (not tied to one field) renders through the same bubble every other page uses");
+	}
+
+	[Fact]
+	public async Task A_missing_current_password_shows_an_inline_field_error_not_a_bubble()
+	{
+		await SeedUserAsync("jocasta", KnownPassword);
+		var authCookie = await SignInAsync("jocasta", KnownPassword);
+		var (antiforgeryCookie, token) = await GetChangePasswordFormAsync(authCookie);
+
+		using var changeRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
+		changeRequest.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		changeRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.CurrentPassword"] = string.Empty,
+			["Input.NewPassword"] = "Some-New-Horse-1!",
+			["Input.ConfirmNewPassword"] = "Some-New-Horse-1!",
+			["__RequestVerificationToken"] = token,
+		});
+		var changeResponse = await client.SendAsync(changeRequest);
+		var body = await changeResponse.Content.ReadAsStringAsync();
+
+		changeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain(
+			"span class=\"text-danger field-validation-error\" data-valmsg-for=\"Input.CurrentPassword\"",
+			"a field-level error stays next to its own field, not folded into the page-level bubble");
+		body.Should().NotContain("alert-danger", "a plain missing-field error never reached the OnPostAsync handler, so no bubble should render");
 	}
 
 	[Fact]

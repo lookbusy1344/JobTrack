@@ -31,12 +31,13 @@
 	} else {
 		<ul class="jt-list">
 			@foreach (var edge in Model.Requires) {
+				var requiredTitle = Model.DescribeNode(edge.RequiredJobId);
 				<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
 					@if (Model.NodeSummariesById.TryGetValue(edge.RequiredJobId, out var requiredNode)) {
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 						   asp-route-nodeId="@edge.RequiredJobId.Value">@JobNodeDisplay.Title(requiredNode)</a>
 						<partial name="_KindIcon" model="@(new KindIconModel { Kind = requiredNode.Kind })"/>
-						@if (requiredNode.Cost is { } cost) {
+						@if (requiredNode.Cost is Money cost) {
 							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
 						}
 					} else {
@@ -46,7 +47,12 @@
 						<input type="hidden" asp-for="NodeId"/>
 						<input type="hidden" name="requiredJobId" value="@edge.RequiredJobId.Value"/>
 						<input type="hidden" name="dependentJobId" value="@edge.DependentJobId.Value"/>
-						<button type="submit" class="btn btn-secondary">Remove</button>
+						<button type="submit" class="jt-icon-button" title="Remove dependency">
+							<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+								<use href="#jt-icon-remove"></use>
+							</svg>
+							<span class="visually-hidden">Remove dependency on @requiredTitle</span>
+						</button>
 					</form>
 				</li>
 			}
@@ -59,12 +65,13 @@
 	} else {
 		<ul class="jt-list">
 			@foreach (var edge in Model.RequiredBy) {
+				var dependentTitle = Model.DescribeNode(edge.DependentJobId);
 				<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
 					@if (Model.NodeSummariesById.TryGetValue(edge.DependentJobId, out var dependentNode)) {
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 						   asp-route-nodeId="@edge.DependentJobId.Value">@JobNodeDisplay.Title(dependentNode)</a>
 						<partial name="_KindIcon" model="@(new KindIconModel { Kind = dependentNode.Kind })"/>
-						@if (dependentNode.Cost is { } cost) {
+						@if (dependentNode.Cost is Money cost) {
 							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
 						}
 					} else {
@@ -74,7 +81,12 @@
 						<input type="hidden" asp-for="NodeId"/>
 						<input type="hidden" name="requiredJobId" value="@edge.RequiredJobId.Value"/>
 						<input type="hidden" name="dependentJobId" value="@edge.DependentJobId.Value"/>
-						<button type="submit" class="btn btn-secondary">Remove</button>
+						<button type="submit" class="jt-icon-button" title="Remove dependency">
+							<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+								<use href="#jt-icon-remove"></use>
+							</svg>
+							<span class="visually-hidden">Remove dependency from @dependentTitle</span>
+						</button>
 					</form>
 				</li>
 			}
@@ -120,7 +132,7 @@
 								<td>
 									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, ShowLabel = false })"/>
 								</td>
-								<td>@(node.Cost is { } cost ? MoneyDisplay.Format(cost) : null)</td>
+								<td>@(node.Cost is Money cost ? MoneyDisplay.Format(cost) : null)</td>
 								<td>@(node.ArchivedAt is not null ? "yes" : "no")</td>
 								<td>
 									@if (Model.ExistingRequiresIds.Contains(node.Id) || Model.ExistingRequiredByIds.Contains(node.Id)) {

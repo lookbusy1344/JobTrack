@@ -41,6 +41,9 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 	/// <summary>ADR 0038's existing fixed auto-advance audit reason, reused verbatim by <see cref="ReopenAndStartWorkAsync" />.</summary>
 	private const string AutoAdvanceReason = "Advanced automatically on session start";
 
+	/// <summary>ADR 0048's fixed audit reason for a session-start-triggered pickup, distinguishing it from an explicit one.</summary>
+	private const string AutoClaimReason = "Automatically claimed on session start";
+
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
@@ -63,6 +66,8 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		}
 
 		var now = clock.GetCurrentInstant();
+		await AutoClaimUnassignedNodeAsync(context, request.Context, request.LeafWorkId, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
 		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
@@ -141,6 +146,8 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 					   .FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
 		var now = clock.GetCurrentInstant();
+		await AutoClaimUnassignedNodeAsync(context, request.Context, request.JobNodeId, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
 		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
@@ -294,7 +301,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			&& await LeafSessionClosure.IsClosedAsync(context, session.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"work-session-leaf-closed",
-				"This correction would leave the session active on a leaf that is closed (terminal achievement or archived).");
+				"This correction would leave the session active on a closed leaf. Use \"Reopen and start session\" on the leaf's Work page instead.");
 		}
 
 		var before = new Dictionary<string, string?> {
@@ -323,7 +330,8 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		catch (Exception ex) when (FindLeafClosedViolation(ex) is not null) {
 			throw new InvariantViolationException(
 				"work-session-leaf-closed",
-				"This correction would leave the session active on a leaf that is closed (terminal achievement or archived).", ex);
+				"This correction would leave the session active on a closed leaf. Use \"Reopen and start session\" on the leaf's Work page instead.",
+				ex);
 		}
 		catch (Exception ex) when (FindOverlapException(ex) is not null) {
 			throw new InvariantViolationException(
@@ -347,9 +355,9 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		await AuthorizeCompleteOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(leafWork.RowVersion, request.Version);
 
-		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, Achievement.Success)) {
+		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, request.FinalAchievement)) {
 			throw new InvariantViolationException(
-				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {Achievement.Success}.");
+				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {request.FinalAchievement}.");
 		}
 
 		var activeSessions = await context.Set<WorkSessionEntity>()
@@ -392,7 +400,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		}
 
 		var previousAchievement = leafWork.Achievement;
-		leafWork.Achievement = Achievement.Success;
+		leafWork.Achievement = request.FinalAchievement;
 		leafWork.ChangedAt = now;
 		leafWork.RowVersion += 1;
 
@@ -456,6 +464,8 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 				"work-session-leaf-closed", "An archived node's leaf must be restored before it can be reopened.");
 		}
 
+		await AutoClaimUnassignedNodeAsync(context, request.Context, request.JobNodeId, request.WorkedByUserId, now, cancellationToken)
+			.ConfigureAwait(false);
 		await AuthorizeReopenAndStartOrThrowAsync(
 			context, request.Context.Actor, request.JobNodeId, request.WorkedByUserId, now, cancellationToken).ConfigureAwait(false);
 		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
@@ -685,6 +695,48 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		if (expectedLeafWorkId is JobNodeId leafWorkId && session.LeafWorkId != leafWorkId) {
 			throw new EntityNotFoundException($"Work session {session.Id} does not exist under job node {leafWorkId}.");
 		}
+	}
+
+	/// <summary>
+	///     ADR 0048: starting a session on an unassigned node claims it for
+	///     <paramref name="workedByUserId" /> -- the same conditional, race-safe write
+	///     <see cref="PostgreSqlJobNodeCommandPort.PickUpAsync" /> uses, gated by the identical
+	///     <see cref="JobPickupPolicy.CanPickUp" /> eligibility test -- immediately before the caller
+	///     runs its own <see cref="AuthorizeOrThrowAsync" />/<see cref="AuthorizeReopenAndStartOrThrowAsync" />
+	///     check against the node's now-current ownership. A no-op for an already-owned node or an
+	///     actor ineligible even to pick up, leaving the existing <c>canRecordWork</c> denial to fire.
+	/// </summary>
+	private static async Task AutoClaimUnassignedNodeAsync(
+		PostgreSqlJobTrackDbContext context, CommandContext ctx, JobNodeId nodeId, AppUserId workedByUserId, Instant now,
+		CancellationToken cancellationToken)
+	{
+		var isUnassigned = await context.Set<JobNodeEntity>().AsNoTracking()
+			.Where(n => n.Id == nodeId).Select(n => n.OwnerUserId == null).SingleAsync(cancellationToken).ConfigureAwait(false);
+		if (!isUnassigned) {
+			return;
+		}
+
+		var actorRoles = await GetActorRolesAsync(context, ctx.Actor, now, cancellationToken).ConfigureAwait(false);
+		if (!JobPickupPolicy.CanPickUp(actorRoles, true)) {
+			return;
+		}
+
+		// The conditional WHERE owner_user_id IS NULL is the concurrency mechanism itself, identical
+		// to PickUpAsync's own race-safety guarantee (plan §6 risk note).
+		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
+			$"""
+			 UPDATE job_node SET owner_user_id = {workedByUserId.Value}, row_version = row_version + 1
+			 WHERE id = {nodeId.Value} AND owner_user_id IS NULL;
+			 """, cancellationToken).ConfigureAwait(false);
+
+		if (affected == 0) {
+			throw new InvariantViolationException("job-node-already-claimed", $"Job node {nodeId} has already been claimed.");
+		}
+
+		AuditEventWriter.Add(
+			context, ctx.Actor, now, "pick-up-job-node", "job_node", nodeId.Value, ctx.CorrelationId, AutoClaimReason,
+			new Dictionary<string, string?> { ["owner_user_id"] = null },
+			new Dictionary<string, string?> { ["owner_user_id"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture) });
 	}
 
 	/// <summary>

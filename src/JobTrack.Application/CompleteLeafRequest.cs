@@ -6,8 +6,8 @@ using NodaTime;
 /// <summary>
 ///     Input to <see cref="IWorkCommands.CompleteLeafAsync" />: the atomic composite that finishes an
 ///     exact, caller-confirmed active-session set and transitions the leaf
-///     <see cref="Achievement.InProgress" /> -&gt; <see cref="Achievement.Success" />, in one commit
-///     (ADR 0045 §1/§3). <see cref="ExpectedActiveSessions" /> may be empty -- a previously paused
+///     <see cref="Achievement.InProgress" /> -&gt; <see cref="FinalAchievement" />, in one commit (ADR
+///     0045 §1/§3, ADR 0047). <see cref="ExpectedActiveSessions" /> may be empty -- a previously paused
 ///     <see cref="Achievement.InProgress" /> leaf with no active session can be completed without
 ///     fabricating one.
 /// </summary>
@@ -29,6 +29,17 @@ public sealed record CompleteLeafRequest
 	///     a conflict rather than being silently included or excluded.
 	/// </summary>
 	public required EquatableArray<ExpectedActiveSession> ExpectedActiveSessions { get; init; }
+
+	/// <summary>
+	///     The achievement recorded once every session in <see cref="ExpectedActiveSessions" /> has
+	///     finished (ADR 0047) -- <see cref="Achievement.Success" /> by default, or
+	///     <see cref="Achievement.Cancelled" />/<see cref="Achievement.Unsuccessful" />, the only other
+	///     values <see cref="Domain.Hierarchy.AchievementTransitions.IsPermitted" /> allows from
+	///     <see cref="Achievement.InProgress" />. Any other value throws <see cref="InvariantViolationException" />
+	///     with <c>ConstraintId</c> <c>"achievement-transition-not-permitted"</c>, the same as
+	///     <see cref="IWorkCommands.SetAchievementAsync" />.
+	/// </summary>
+	public Achievement FinalAchievement { get; init; } = Achievement.Success;
 
 	/// <summary>
 	///     The one finish instant applied to every session in <see cref="ExpectedActiveSessions" />, or

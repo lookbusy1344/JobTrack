@@ -522,6 +522,22 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		});
 	}
 
+	/// <summary>
+	///     ADR 0048: mirrors <see cref="PickUpAsync" />'s claim, but for <paramref name="workedByUserId" />
+	///     rather than the acting caller, and silently no-ops (rather than throwing) when the node is
+	///     already owned or the actor isn't eligible to pick up -- <see cref="FakeWorkSessionCommandPort" />
+	///     calls this before its own authorization check runs.
+	/// </summary>
+	internal void AutoClaimUnassignedNode(AppUserId actorId, JobNodeId nodeId, AppUserId workedByUserId)
+	{
+		var existing = GetExisting(nodeId);
+		if (existing.OwnerUserId is not null || !JobPickupPolicy.CanPickUp(RolesOf(actorId), true)) {
+			return;
+		}
+
+		_nodes[nodeId] = existing with { OwnerUserId = workedByUserId, Version = existing.Version + 1 };
+	}
+
 	private static Instant EarliestImportedSessionStart(ImportSubtreeLeafWorkSpec work) =>
 		work.AdditionalSessions.Select(session => session.StartedAt).Prepend(work.StartedAt).Min();
 

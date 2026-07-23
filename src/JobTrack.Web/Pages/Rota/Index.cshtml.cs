@@ -145,7 +145,7 @@ public sealed class IndexModel(
 		if (TryValidateModel(ExceptionInput, nameof(ExceptionInput))) {
 			if (!BackdateInstant.TryParse(ExceptionInput.Start, zone, out var start)
 				|| !BackdateInstant.TryParse(ExceptionInput.End, zone, out var end)) {
-				ModelState.AddModelError(string.Empty, "Start and end must each be a valid date and time.");
+				ErrorMessage = "Start and end must each be a valid date and time.";
 				for (var i = VersionInput.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; i++) {
 					VersionInput.WeeklyIntervals.Add(new());
 				}

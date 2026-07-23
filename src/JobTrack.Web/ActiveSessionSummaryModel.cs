@@ -50,6 +50,14 @@ public sealed class ActiveSessionSummaryModel
 	/// </summary>
 	public bool StartClosed { get; init; }
 
+	/// <summary>
+	///     Whether the leaf is paused — <see cref="Abstractions.Achievement.InProgress" /> with nobody
+	///     clocked on (<see cref="WorkRowActionsModel.IsPaused" />). Surfaced in the Active column as a
+	///     plain "Paused" pill when no session is active and the leaf is not closed, so a leaf someone
+	///     stopped part-way stops reading identically to one nobody has ever started.
+	/// </summary>
+	public bool Paused { get; init; }
+
 	/// <summary>The total number of active sessions on this leaf.</summary>
 	public int Count => ActiveSessions.Count;
 
@@ -65,8 +73,8 @@ public sealed class ActiveSessionSummaryModel
 		{
 			var presentation = ActiveSessionPresentation.Derive(ActiveSessions, ViewerId);
 			var ordered = new List<ActiveWorkerEntry>(presentation.Count);
-			if (presentation.ViewerSession is { } viewerSession) {
-				ordered.Add(new(viewerSession, "You", true));
+			if (presentation.ViewerSession is not null) {
+				ordered.Add(new(presentation.ViewerSession, "You", true));
 			}
 
 			ordered.AddRange(presentation.OtherSessions.Select(session =>
