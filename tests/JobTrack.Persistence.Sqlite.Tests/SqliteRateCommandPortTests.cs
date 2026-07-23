@@ -25,12 +25,12 @@ public sealed class SqliteRateCommandPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IRateCommandPort CreateRatePort(string connectionString) =>
+	internal override IRateCommandPort CreateRatePort(string connectionString) =>
 		new SqliteRateCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
 		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
 }

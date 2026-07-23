@@ -4,7 +4,7 @@ using Abstractions;
 using NodaTime;
 
 /// <summary>Result of <see cref="IInstallationBootstrapPort.BootstrapAsync" />.</summary>
-public sealed record BootstrapPersistenceResult
+internal sealed record BootstrapPersistenceResult
 {
 	/// <summary>The new administrator's <c>app_user</c> identifier.</summary>
 	public required AppUserId AdministratorId { get; init; }

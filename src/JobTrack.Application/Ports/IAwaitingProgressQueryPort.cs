@@ -10,7 +10,7 @@ using Domain.Hierarchy;
 ///     performs no graph traversal of its own. Carries no actor — the query itself has no
 ///     authorization gate (see <see cref="GetAwaitingProgressRequest" />).
 /// </summary>
-public interface IAwaitingProgressQueryPort
+internal interface IAwaitingProgressQueryPort
 {
 	/// <inheritdoc cref="IJobQueries.GetAwaitingProgressAsync" />
 	Task<AwaitingProgressQueryResult> GetAwaitingProgressInputsAsync(CancellationToken cancellationToken = default);

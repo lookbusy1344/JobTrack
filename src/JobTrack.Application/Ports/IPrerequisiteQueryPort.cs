@@ -8,7 +8,7 @@ using Domain.Hierarchy;
 ///     slice 5). Carries no actor — the query itself has no authorization gate (see
 ///     <see cref="GetPrerequisitesRequest" />).
 /// </summary>
-public interface IPrerequisiteQueryPort
+internal interface IPrerequisiteQueryPort
 {
 	/// <summary>
 	///     Counts edges for which <paramref name="requiredJobId" /> is the required side, without

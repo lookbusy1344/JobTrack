@@ -20,6 +20,6 @@ public sealed class PostgreSqlAuthenticationAuditPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IAuthenticationAuditPort CreatePort(string connectionString) =>
+	internal override IAuthenticationAuditPort CreatePort(string connectionString) =>
 		new PostgreSqlAuthenticationAuditPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 }

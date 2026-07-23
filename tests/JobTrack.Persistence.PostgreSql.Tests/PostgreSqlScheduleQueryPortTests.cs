@@ -20,12 +20,12 @@ public sealed class PostgreSqlScheduleQueryPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IScheduleCommandPort CreateCommandPort(string connectionString) =>
+	internal override IScheduleCommandPort CreateCommandPort(string connectionString) =>
 		new PostgreSqlScheduleCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IScheduleQueryPort CreateQueryPort(string connectionString) =>
+	internal override IScheduleQueryPort CreateQueryPort(string connectionString) =>
 		new PostgreSqlScheduleQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 }

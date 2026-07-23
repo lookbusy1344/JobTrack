@@ -137,7 +137,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreatePort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreatePort(string connectionString);
 
 	private static BootstrapPersistenceRequest CreateRequest(string userNameSuffix, string ianaTimeZone = "Europe/London") => new() {
 		DisplayName = "Ada Lovelace",

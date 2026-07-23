@@ -7,7 +7,7 @@ using Ports;
 ///     Implements employee account-management commands (plan §8.3) by delegating each atomic operation
 ///     to <see cref="IEmployeeCommandPort" />, which owns authorization and the transaction.
 /// </summary>
-public sealed class EmployeeCommands : IEmployeeCommands
+internal sealed class EmployeeCommands : IEmployeeCommands
 {
 	private static readonly EmployeeCredentialSubject CredentialSubject = new();
 	private readonly IPasswordHasher<EmployeeCredentialSubject> _passwordHasher;

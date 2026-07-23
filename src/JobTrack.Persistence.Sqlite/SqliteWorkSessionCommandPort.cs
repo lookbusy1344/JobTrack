@@ -304,6 +304,71 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 	}
 
 	/// <inheritdoc />
+	public async Task<FinishSessionAndUpdateWriteUpResult> FinishSessionAndUpdateWriteUpAsync(
+		FinishSessionAndUpdateWriteUpRequest request, CancellationToken cancellationToken = default)
+	{
+		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await context.Database
+			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+
+		var now = clock.GetCurrentInstant();
+		var session = await LoadTrackedSessionAsync(context, request.SessionId, cancellationToken).ConfigureAwait(false);
+		EnsureLeafMatchesOrThrow(session, request.LeafWorkId);
+		await AuthorizeFinishOrThrowAsync(
+			context, request.Context.Actor, session.LeafWorkId, session.WorkedByUserId, now, cancellationToken).ConfigureAwait(false);
+		CheckVersionOrThrow(session.RowVersion, request.Version);
+
+		var finishedAt = request.FinishedAt ?? now;
+		if (finishedAt <= session.StartedAt) {
+			throw new InvariantViolationException(
+				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+		}
+
+		if (finishedAt > now) {
+			throw new InvariantViolationException(
+				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+		}
+
+		session.FinishedAt = finishedAt;
+		session.ChangedAt = now;
+		session.RowVersion += 1;
+
+		AuditEventWriter.Add(
+			context, request.Context.Actor, now, "finish-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
+			null,
+			new Dictionary<string, string?> { ["finished_at"] = null },
+			new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
+
+		var writeUpChanged = false;
+		JobNodeEntity? writtenUpNode = null;
+		if (request.WriteUpChange is WriteUpChange writeUpChange) {
+			// Same node-control authority EditAsync's own JobNodeAccessPolicy.CanManage would require --
+			// distinct from AuthorizeFinishOrThrowAsync's session-owner exception above, which governs
+			// finishing the session itself, not editing the node's write-up.
+			await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
+			(writeUpChanged, writtenUpNode) = await WriteUpChangeApplier.ApplyAsync(
+				context, session.LeafWorkId, writeUpChange.NodeVersion, writeUpChange.WriteUp, request.Context.Actor,
+				request.Context.CorrelationId, now, cancellationToken).ConfigureAwait(false);
+		}
+
+		try {
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (DbUpdateConcurrencyException ex) {
+			throw new ConcurrencyConflictException(
+				$"Expected version {request.Version} for work session {request.SessionId} did not match its current version.", ex);
+		}
+
+		return new() {
+			Session = ToResult(session),
+			WriteUpChanged = writeUpChanged,
+			Node = writtenUpNode is null ? null : await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
+				.ConfigureAwait(false),
+		};
+	}
+
+	/// <inheritdoc />
 	public async Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default)
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
@@ -424,6 +489,9 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 				new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
 		}
 
+		var writeUpChanged = false;
+		JobNodeEntity? writtenUpNode = null;
+
 		try {
 			// SQLite's leaf-closure immediate trigger (unlike PostgreSQL's deferred one) evaluates the
 			// moment each statement runs, not at commit -- the session finish rows must actually commit
@@ -447,6 +515,12 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 				new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
 				new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
 
+			if (request.WriteUpChange is WriteUpChange writeUpChange) {
+				(writeUpChanged, writtenUpNode) = await WriteUpChangeApplier.ApplyAsync(
+					context, request.JobNodeId, writeUpChange.NodeVersion, writeUpChange.WriteUp, request.Context.Actor,
+					request.Context.CorrelationId, now, cancellationToken).ConfigureAwait(false);
+			}
+
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
@@ -465,6 +539,9 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			ChangedAt = leafWork.ChangedAt,
 			Version = leafWork.RowVersion,
 			FinishedSessions = [.. activeSessions.Select(ToResult)],
+			WriteUpChanged = writeUpChanged,
+			Node = writtenUpNode is null ? null : await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
+				.ConfigureAwait(false),
 		};
 	}
 
@@ -734,17 +811,10 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			return;
 		}
 
-		// The conditional WHERE owner_user_id IS NULL is the concurrency mechanism itself; SQLite's
-		// BEGIN IMMEDIATE (started by each caller's own transaction) serializes concurrent writes, so
-		// a concurrent claimant that commits first leaves zero rows affected here, identical to
-		// PickUpAsync's own race-safety guarantee.
-		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
-			$"""
-			 UPDATE job_node SET owner_user_id = {workedByUserId.Value}, row_version = row_version + 1
-			 WHERE id = {nodeId.Value} AND owner_user_id IS NULL;
-			 """, cancellationToken).ConfigureAwait(false);
-
-		if (affected == 0) {
+		// SQLite's BEGIN IMMEDIATE (started by each caller's own transaction) serializes concurrent
+		// writes, so a concurrent claimant that commits first leaves zero rows affected inside
+		// UnassignedNodeClaim, identical to PickUpAsync's own race-safety guarantee.
+		if (!await UnassignedNodeClaim.TryClaimAsync(context, nodeId, workedByUserId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException("job-node-already-claimed", $"Job node {nodeId} has already been claimed.");
 		}
 

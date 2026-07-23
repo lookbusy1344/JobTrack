@@ -20,12 +20,12 @@ public sealed class PostgreSqlLeafWorkQueryPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override ILeafWorkQueryPort CreateQueryPort(string connectionString) =>
+	internal override ILeafWorkQueryPort CreateQueryPort(string connectionString) =>
 		new PostgreSqlLeafWorkQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
 }

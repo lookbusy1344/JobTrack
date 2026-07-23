@@ -7,7 +7,7 @@ using Ports;
 ///     operation to <see cref="IJobNodeCommandPort" />, which owns authorization and the transaction
 ///     (see the port's own documentation for why that check cannot safely live here for mutations).
 /// </summary>
-public sealed class JobCommands : IJobCommands
+internal sealed class JobCommands : IJobCommands
 {
 	private readonly IJobNodeCommandPort _port;
 
@@ -103,6 +103,19 @@ public sealed class JobCommands : IJobCommands
 		return JobTrackOperation.TraceAsync(
 			"jobs.add-prerequisite", request.Context, JobTrackOperation.WithNodeId(request.DependentJobId),
 			() => _port.AddPrerequisiteAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
+	public Task AddPrerequisitesAsync(AddPrerequisitesRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		if (request.Edges.Count == 0) {
+			throw new ArgumentException("At least one prerequisite edge is required.", nameof(request));
+		}
+
+		return JobTrackOperation.TraceAsync(
+			"jobs.add-prerequisites", request.Context, null,
+			() => _port.AddPrerequisitesAsync(request, cancellationToken));
 	}
 
 	/// <inheritdoc />

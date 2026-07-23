@@ -12,7 +12,7 @@ using Abstractions;
 ///     never sees a transaction boundary (plan §7.4: "one logical
 ///     mutation uses one context/connection and one transaction; the unit of work is internal").
 /// </summary>
-public interface IInstallationBootstrapPort
+internal interface IInstallationBootstrapPort
 {
 	/// <summary>
 	///     Atomically creates the first administrator, the permanent root job node, and the

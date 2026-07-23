@@ -59,6 +59,7 @@ internal static partial class JobTrackApi
 	private const string ConcurrencyProblemType = "/problems/concurrency-conflict";
 	private const string ValidationProblemType = "/problems/validation";
 	private const string BlockedProblemType = "/problems/prerequisite-blocked";
+	private const string MissingRateProblemType = "/problems/missing-rate";
 	private const string StoredTimeZoneRotProblemType = "/problems/stored-time-zone-not-recognized";
 
 	/// <summary>
@@ -254,6 +255,20 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status409Conflict)
 			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
+		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/finish-and-update-write-up", FinishSessionAndUpdateWriteUpAsync)
+			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			.AddEndpointFilter<AntiforgeryValidationFilter>()
+			.WithName("FinishSessionAndUpdateWriteUp")
+			.WithSummary(
+				"Atomic composite (remediation plan §2.1): finish the active session and, optionally, apply a write-up change to its leaf's node, in one commit. The plain finish endpoint above remains for a caller with no write-up to change.")
+			.Produces<FinishSessionAndUpdateWriteUpResponse>()
+			.ProducesProblem(StatusCodes.Status400BadRequest)
+			.ProducesProblem(StatusCodes.Status401Unauthorized)
+			.ProducesProblem(StatusCodes.Status403Forbidden)
+			.ProducesProblem(StatusCodes.Status404NotFound)
+			.ProducesProblem(StatusCodes.Status409Conflict)
+			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/correct", CorrectSessionAsync)
 			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
 			.AddEndpointFilter<AntiforgeryValidationFilter>()
@@ -356,7 +371,8 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status400BadRequest)
 			.ProducesProblem(StatusCodes.Status401Unauthorized)
 			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			.ProducesProblem(StatusCodes.Status404NotFound)
+			.ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/cost/hierarchy", GetHierarchyTotalsAsync)
 			.RequireAuthorization(JobTrackPolicyNames.RateRead)
@@ -366,7 +382,8 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status400BadRequest)
 			.ProducesProblem(StatusCodes.Status401Unauthorized)
 			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			.ProducesProblem(StatusCodes.Status404NotFound)
+			.ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/subtree", GetJobSubtreeAsync)
 			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
@@ -788,7 +805,7 @@ internal static partial class JobTrackApi
 	private static OwnershipFilter ResolveOwnership(long? ownerUserId, bool unassignedOnly) =>
 		(unassignedOnly, ownerUserId) switch {
 			(true, _) => OwnershipFilter.Unassigned,
-			(false, { } id) => OwnershipFilter.OwnedBy(new(id)),
+			(false, long id) => OwnershipFilter.OwnedBy(new(id)),
 			(false, null) => OwnershipFilter.All,
 		};
 
@@ -880,6 +897,32 @@ internal static partial class JobTrackApi
 				Version = request.Version,
 				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
 				LeafWorkId = new JobNodeId(nodeId),
+			}, cancellationToken);
+
+			return TypedResults.Ok(Map(result));
+		});
+	}
+
+	private static async Task<IResult> FinishSessionAndUpdateWriteUpAsync(
+		long nodeId,
+		long sessionId,
+		[FromBody] FinishSessionAndUpdateWriteUpBody request,
+		HttpContext httpContext,
+		UserManager<JobTrackIdentityUser> userManager,
+		IJobTrackClient jobTrackClient,
+		CancellationToken cancellationToken)
+	{
+		return await ExecuteAsync(httpContext, userManager, async context => {
+			var writeUpChange = request.WriteUpChange;
+			var result = await jobTrackClient.Work.FinishSessionAndUpdateWriteUpAsync(new() {
+				Context = context,
+				SessionId = new(sessionId),
+				Version = request.Version,
+				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
+				LeafWorkId = new JobNodeId(nodeId),
+				WriteUpChange = writeUpChange is not null
+					? new() { NodeVersion = writeUpChange.NodeVersion, WriteUp = writeUpChange.WriteUp }
+					: null,
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -1008,6 +1051,7 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
+			var writeUpChange = request.WriteUpChange;
 			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
 				Context = context,
 				JobNodeId = new(nodeId),
@@ -1018,6 +1062,9 @@ internal static partial class JobTrackApi
 				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
 				CompletionNote = request.CompletionNote,
 				FinalAchievement = request.FinalAchievement ?? Achievement.Success,
+				WriteUpChange = writeUpChange is not null
+					? new() { NodeVersion = writeUpChange.NodeVersion, WriteUp = writeUpChange.WriteUp }
+					: null,
 			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
@@ -1430,6 +1477,13 @@ internal static partial class JobTrackApi
 				"This action is blocked until its prerequisites are satisfied.",
 				BlockedProblemType);
 		}
+		catch (MissingRateException) {
+			return Problem(
+				StatusCodes.Status422UnprocessableEntity,
+				"No rate resolves",
+				"No rate resolves for one or more contributing sessions, so cost cannot be calculated.",
+				MissingRateProblemType);
+		}
 		catch (ArgumentOutOfRangeException) {
 			return Problem(
 				StatusCodes.Status400BadRequest, "Invalid request", "The request contains an invalid value.", ValidationProblemType);
@@ -1448,6 +1502,17 @@ internal static partial class JobTrackApi
 				StatusCodes.Status400BadRequest, "Invalid request", "The specified time zone is not recognized.", ValidationProblemType);
 		}
 		catch (ArgumentException) {
+			// This maps every ArgumentException the library raises to a client 400 -- a deliberate,
+			// conscious trade-off. The library uses ArgumentException/ArgumentOutOfRangeException as its
+			// documented channel for client-input contract violations that survive model binding: a blank
+			// WorkSession Reason, an empty prerequisite edge set, a missing token lifetime, an out-of-range
+			// trace/node cap. All of those are genuinely the caller's bad value, so 400 is correct. The
+			// residual risk -- a server-side mapping bug that constructs an internally-invalid library
+			// request -- would also surface here as a 400 rather than a 500 we'd alert on. That path is
+			// narrow: endpoints always pass a non-null library request (so ArgumentNullException from the
+			// request guard never originates server-side), and malformed/absent bodies are already rejected
+			// by System.Text.Json binding before the handler runs. Kept as 400 rather than split by subtype,
+			// because no argument exception reaching this point is known to be server-originated.
 			return Problem(StatusCodes.Status400BadRequest, "Invalid request", "The request is invalid.", ValidationProblemType);
 		}
 	}
@@ -1626,6 +1691,15 @@ internal static partial class JobTrackApi
 			ChangedAt = result.ChangedAt.ToDateTimeOffset(),
 			Version = result.Version,
 			FinishedSessions = [.. result.FinishedSessions.Select(Map)],
+			WriteUpChanged = result.WriteUpChanged,
+			Node = result.Node is not null ? Map(result.Node) : null,
+		};
+
+	private static FinishSessionAndUpdateWriteUpResponse Map(FinishSessionAndUpdateWriteUpResult result) =>
+		new() {
+			Session = Map(result.Session),
+			WriteUpChanged = result.WriteUpChanged,
+			Node = result.Node is not null ? Map(result.Node) : null,
 		};
 
 	private static ReopenAndStartWorkResponse Map(ReopenAndStartWorkResult result) =>
@@ -2151,6 +2225,36 @@ internal static partial class JobTrackApi
 		public DateTimeOffset? FinishedAt { get; init; }
 	}
 
+	/// <summary>
+	///     Nested write-up change (remediation plan §2.1) -- omitted entirely on the containing body
+	///     means "no write-up change"; present with <see cref="WriteUp" /> itself <see langword="null" />
+	///     means "clear the write-up".
+	/// </summary>
+	internal sealed class WriteUpChangeBody
+	{
+		public required long NodeVersion { get; init; }
+
+		public string? WriteUp { get; init; }
+	}
+
+	internal sealed class FinishSessionAndUpdateWriteUpBody
+	{
+		public required long Version { get; init; }
+
+		public DateTimeOffset? FinishedAt { get; init; }
+
+		public WriteUpChangeBody? WriteUpChange { get; init; }
+	}
+
+	internal sealed class FinishSessionAndUpdateWriteUpResponse
+	{
+		public required WorkSessionResponse Session { get; init; }
+
+		public required bool WriteUpChanged { get; init; }
+
+		public JobNodeResponse? Node { get; init; }
+	}
+
 	internal sealed class CorrectSessionBody
 	{
 		public required DateTimeOffset StartedAt { get; init; }
@@ -2184,6 +2288,9 @@ internal static partial class JobTrackApi
 		///     <see cref="Achievement.Success" />, preserving every existing client's behavior.
 		/// </summary>
 		public Achievement? FinalAchievement { get; init; }
+
+		/// <summary>An optional write-up change applied in the same commit as this completion (remediation plan §2.1).</summary>
+		public WriteUpChangeBody? WriteUpChange { get; init; }
 	}
 
 	internal sealed class CompleteLeafResponse
@@ -2197,6 +2304,10 @@ internal static partial class JobTrackApi
 		public required long Version { get; init; }
 
 		public required WorkSessionResponse[] FinishedSessions { get; init; }
+
+		public required bool WriteUpChanged { get; init; }
+
+		public JobNodeResponse? Node { get; init; }
 	}
 
 	internal sealed class ReopenAndStartWorkBody

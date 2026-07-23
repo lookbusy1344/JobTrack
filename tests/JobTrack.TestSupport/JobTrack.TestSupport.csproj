@@ -39,4 +39,12 @@
         <ProjectReference Include="..\..\src\JobTrack.Database\JobTrack.Database.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- Fresh-eyes remediation §2.3/ADR 0049: the contract-test-base classes are internal (their
+             abstract Create*Port members return JobTrack.Application's now-internal port interfaces),
+             so only the two provider test projects that subclass them need to see them. -->
+        <InternalsVisibleTo Include="JobTrack.Persistence.PostgreSql.Tests"/>
+        <InternalsVisibleTo Include="JobTrack.Persistence.Sqlite.Tests"/>
+    </ItemGroup>
+
 </Project>

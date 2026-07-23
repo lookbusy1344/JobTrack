@@ -9,7 +9,7 @@ using Abstractions;
 ///     <see cref="JobQueries" /> can apply <see cref="Domain.Authorization.WorkSessionAccessPolicy" />
 ///     without a second round-trip.
 /// </summary>
-public interface IWorkSessionQueryPort
+internal interface IWorkSessionQueryPort
 {
 	/// <summary>
 	///     Loads sessions on the leaf and the actor's current roles, sessions ordered

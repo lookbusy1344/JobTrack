@@ -25,6 +25,6 @@ public sealed class SqliteInstallationBootstrapPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreatePort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreatePort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 }

@@ -8,7 +8,7 @@ using Abstractions;
 ///     eligibility and applies <see cref="Domain.Authorization.RequesterAccessPolicy" /> itself before
 ///     writing, the same shape as <see cref="IJobNodeCommandPort" />.
 /// </summary>
-public interface IJobRequestCommandPort
+internal interface IJobRequestCommandPort
 {
 	/// <inheritdoc cref="IRequestCommands.SubmitAsync" />
 	Task<JobRequestResult> SubmitAsync(SubmitJobRequestRequest request, CancellationToken cancellationToken = default);

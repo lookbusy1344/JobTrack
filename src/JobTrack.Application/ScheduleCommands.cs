@@ -6,7 +6,7 @@ using Ports;
 ///     Implements schedule commands (plan §7.3 step 8) by delegating each atomic operation to
 ///     <see cref="IScheduleCommandPort" />, which owns authorization and the transaction.
 /// </summary>
-public sealed class ScheduleCommands : IScheduleCommands
+internal sealed class ScheduleCommands : IScheduleCommands
 {
 	private readonly IScheduleCommandPort _port;
 

@@ -20,6 +20,11 @@ internal sealed class FakeCostQueries : ICostQueries
 	/// <summary>Fresh-eyes review §2.8 efficiency guard: proves listing enrichment is one batched call, never per row.</summary>
 	public int GetBulkNodeCostsCallCount { get; private set; }
 
+	private readonly List<int> _bulkBatchSizes = [];
+
+	/// <summary>The candidate count of each bulk call in order -- lets a caller prove enrichment respects the port's cap.</summary>
+	public IReadOnlyList<int> BulkBatchSizes => _bulkBatchSizes;
+
 	public GetBulkNodeCostsRequest? LastBulkRequest { get; private set; }
 
 	public Task<CostDetailsResult> GetCostDetailsAsync(
@@ -49,6 +54,14 @@ internal sealed class FakeCostQueries : ICostQueries
 	{
 		GetBulkNodeCostsCallCount++;
 		LastBulkRequest = request;
+		_bulkBatchSizes.Add(request.NodeIds.Count);
+		// Mirror the real CostQueries backstop: a batch wider than the cap is a caller contract
+		// violation, not something the fake silently absorbs -- so enrichment must chunk to the cap.
+		if (request.NodeIds.Count > CostQueries.MaxBulkNodeIdCount) {
+			throw new ArgumentOutOfRangeException(
+				nameof(request), request.NodeIds.Count, $"A bulk cost request cannot price more than {CostQueries.MaxBulkNodeIdCount} node ids at once.");
+		}
+
 		var displayed = request.NodeIds
 			.Where(_bulkCosts.ContainsKey)
 			.ToDictionary(nodeId => nodeId, nodeId => _bulkCosts[nodeId]);

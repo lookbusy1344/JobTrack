@@ -6,7 +6,7 @@ namespace JobTrack.Application.Ports;
 ///     whether the schedule is their own, and applies <see cref="Domain.Authorization.ScheduleAccessPolicy" />
 ///     itself before writing — the same mutation-safety shape as the other command ports.
 /// </summary>
-public interface IScheduleCommandPort
+internal interface IScheduleCommandPort
 {
 	/// <inheritdoc cref="IScheduleCommands.AddScheduleVersionAsync" />
 	Task<ScheduleVersionResult> AddScheduleVersionAsync(

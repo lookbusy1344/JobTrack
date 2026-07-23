@@ -9,7 +9,7 @@ using NodaTime;
 ///     bound for the next page's keyset predicate and as the decoded form of an
 ///     <see cref="AuditEventSearchResult.ContinuationCursor" /> opaque token.
 /// </summary>
-public sealed record AuditEventSearchCursor
+internal sealed record AuditEventSearchCursor
 {
 	/// <summary>The boundary row's <see cref="AuditEventResult.OccurredAt" />.</summary>
 	public required Instant OccurredAt { get; init; }

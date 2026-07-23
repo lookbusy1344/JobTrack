@@ -302,16 +302,16 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IJobNodeCommandPort CreateJobCommandPort(string connectionString);
+	internal abstract IJobNodeCommandPort CreateJobCommandPort(string connectionString);
 
-	protected abstract IWorkSessionCommandPort CreateSessionCommandPort(string connectionString);
+	internal abstract IWorkSessionCommandPort CreateSessionCommandPort(string connectionString);
 
-	protected abstract IWorkSessionQueryPort CreateQueryPort(string connectionString);
+	internal abstract IWorkSessionQueryPort CreateQueryPort(string connectionString);
 
 	/// <summary>Stage 4 efficiency-guard seam: a query port wired with <paramref name="interceptor" /> attached to its <c>DbContext</c>.</summary>
-	protected abstract IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor);
+	internal abstract IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor);
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 

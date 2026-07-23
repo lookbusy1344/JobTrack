@@ -8,7 +8,7 @@ using Ports;
 ///     <see cref="IJobRequestCommandPort" />, which owns authorization and the transaction — the same
 ///     shape as <see cref="JobCommands" />.
 /// </summary>
-public sealed class RequestCommands : IRequestCommands
+internal sealed class RequestCommands : IRequestCommands
 {
 	private readonly IJobRequestCommandPort _port;
 

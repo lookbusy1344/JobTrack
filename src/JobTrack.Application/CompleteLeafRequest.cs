@@ -54,4 +54,10 @@ public sealed record CompleteLeafRequest
 	///     never required.
 	/// </summary>
 	public string? CompletionNote { get; init; }
+
+	/// <summary>
+	///     An optional write-up change applied to the leaf's node in the same transaction and commit as
+	///     this completion (remediation plan §2.1) -- <see langword="null" /> means no write-up change.
+	/// </summary>
+	public WriteUpChange? WriteUpChange { get; init; }
 }

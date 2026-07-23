@@ -122,11 +122,14 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 			// (schema version 0004) fire immediately from this UPDATE -- SQLite has no deferred
 			// constraint triggers (impl plan §7.4). Only the authorization predicate differs from
 			// the ordinary structural move (ADR 0033, plan §5).
-			affected = await context.Database.ExecuteSqlInterpolatedAsync(
-				$"""
-				 UPDATE job_node SET parent_id = {request.NewParentId.Value}, row_version = row_version + 1
-				 WHERE id = {request.NodeId.Value} AND row_version = {request.Version};
-				 """, cancellationToken).ConfigureAwait(false);
+			affected = await context.Set<JobNodeEntity>()
+				.Where(n => n.Id == request.NodeId && n.RowVersion == request.Version)
+				.ExecuteUpdateAsync(
+					setters => setters
+						.SetProperty(n => n.ParentId, request.NewParentId)
+						.SetProperty(n => n.RowVersion, n => n.RowVersion + 1),
+					cancellationToken)
+				.ConfigureAwait(false);
 		}
 		catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintErrorCode) {
 			throw new InvariantViolationException(

@@ -4,7 +4,7 @@ using Abstractions;
 using Ports;
 
 /// <summary>Application command surface for authentication audit events.</summary>
-public sealed class AuthenticationAuditCommands : IAuthenticationAuditCommands
+internal sealed class AuthenticationAuditCommands : IAuthenticationAuditCommands
 {
 	private readonly IAuthenticationAuditPort port;
 

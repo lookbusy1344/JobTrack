@@ -7,7 +7,7 @@ namespace JobTrack.Application.Ports;
 ///     <see cref="Domain.Authorization.EmployeeAccessPolicy.CanManageAccounts" /> itself before writing —
 ///     the same mutation-safety shape as the other command ports.
 /// </summary>
-public interface IEmployeeCommandPort
+internal interface IEmployeeCommandPort
 {
 	/// <summary>Persists a new employee account with an already-hashed credential — see <see cref="IEmployeeCommands.CreateEmployeeAsync" />.</summary>
 	Task<AccountStateResult> CreateEmployeeAsync(

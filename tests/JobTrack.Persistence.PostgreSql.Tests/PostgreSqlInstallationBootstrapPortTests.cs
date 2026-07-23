@@ -20,7 +20,7 @@ public sealed class PostgreSqlInstallationBootstrapPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreatePort(string connectionString)
+	internal override IInstallationBootstrapPort CreatePort(string connectionString)
 	{
 		var dataSource = new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build();
 		return new PostgreSqlInstallationBootstrapPort(dataSource, SystemClock.Instance);

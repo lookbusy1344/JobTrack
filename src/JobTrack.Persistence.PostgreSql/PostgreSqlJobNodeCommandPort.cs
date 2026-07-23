@@ -142,16 +142,8 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not pick up job node {request.NodeId}.");
 		}
 
-		// The conditional WHERE owner_user_id IS NULL is the concurrency mechanism itself (plan §6
-		// risk note): a concurrent claimant that commits first leaves zero rows affected here rather
-		// than silently overwriting their claim.
-		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
-			$"""
-			 UPDATE job_node SET owner_user_id = {request.Context.Actor.Value}, row_version = row_version + 1
-			 WHERE id = {request.NodeId.Value} AND owner_user_id IS NULL;
-			 """, cancellationToken).ConfigureAwait(false);
-
-		if (affected == 0) {
+		if (!await UnassignedNodeClaim.TryClaimAsync(context, request.NodeId, request.Context.Actor, cancellationToken)
+				.ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"job-node-already-claimed", $"Job node {request.NodeId} has already been claimed.");
 		}
@@ -396,6 +388,56 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	}
 
 	/// <inheritdoc />
+	public async Task AddPrerequisitesAsync(AddPrerequisitesRequest request, CancellationToken cancellationToken = default)
+	{
+		await using var context = CreateContext();
+		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+
+		try {
+			foreach (var edge in request.Edges) {
+				await ValidatePrerequisiteEdgeAsync(
+						context, request.Context.Actor, edge.RequiredJobId, edge.DependentJobId, now, cancellationToken)
+					.ConfigureAwait(false);
+				_ = await context.Database.ExecuteSqlInterpolatedAsync(
+					$"SELECT add_job_prerequisite({edge.RequiredJobId.Value}, {edge.DependentJobId.Value});",
+					cancellationToken).ConfigureAwait(false);
+
+				AuditEventWriter.Add(
+					context, request.Context.Actor, now, "add-job-prerequisite", "job_prerequisite",
+					edge.DependentJobId.Value, request.Context.CorrelationId, null, null,
+					new Dictionary<string, string?> {
+						["required_job_id"] = edge.RequiredJobId.Value.ToString(CultureInfo.InvariantCulture),
+						["dependent_job_id"] = edge.DependentJobId.Value.ToString(CultureInfo.InvariantCulture),
+					});
+			}
+
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (PostgresException ex) when (ex.SqlState == PrerequisiteCycleSqlState) {
+			throw new InvariantViolationException(
+				"job-prerequisite-would-cycle", "This prerequisite edge would create a cycle.", ex);
+		}
+		catch (PostgresException ex) when (ex.SqlState == PrerequisiteHierarchyEdgeSqlState) {
+			throw new InvariantViolationException(
+				"job-prerequisite-is-hierarchy-edge",
+				"A prerequisite edge cannot connect nodes that are ancestor/descendant of each other.", ex);
+		}
+		catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation) {
+			throw new InvariantViolationException(
+				"job-prerequisite-already-exists", "This prerequisite edge already exists.", ex);
+		}
+		catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.CheckViolation) {
+			throw new InvariantViolationException("job-prerequisite-not-self", "A job cannot require itself.", ex);
+		}
+		catch (PostgresException ex) {
+			throw new InvariantViolationException(
+				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", ex);
+		}
+	}
+
+	/// <inheritdoc />
 	public async Task RemovePrerequisiteAsync(RemovePrerequisiteRequest request, CancellationToken cancellationToken = default)
 	{
 		await using var context = CreateContext();
@@ -408,9 +450,9 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, actorRoles, request.Context.Actor, request.DependentJobId, cancellationToken)
 			.ConfigureAwait(false);
 
-		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
-			$"DELETE FROM job_prerequisite WHERE from_id = {request.RequiredJobId.Value} AND to_id = {request.DependentJobId.Value};",
-			cancellationToken).ConfigureAwait(false);
+		var affected = await context.Set<JobPrerequisiteEntity>()
+			.Where(p => p.FromId == request.RequiredJobId && p.ToId == request.DependentJobId)
+			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		if (affected == 0) {
 			throw new EntityNotFoundException(

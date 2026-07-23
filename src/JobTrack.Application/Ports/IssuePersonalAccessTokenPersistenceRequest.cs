@@ -4,7 +4,7 @@ using Abstractions;
 using NodaTime;
 
 /// <summary>Input to <see cref="IPersonalAccessTokenPort.IssueAsync" /> — carries an already-computed hash, never the plaintext.</summary>
-public sealed record IssuePersonalAccessTokenPersistenceRequest
+internal sealed record IssuePersonalAccessTokenPersistenceRequest
 {
 	/// <summary>The acting user and correlation identifier.</summary>
 	public required CommandContext Context { get; init; }

@@ -13,7 +13,7 @@ using Domain.Intervals;
 ///     overrides up to the root, the query's costing bounds, and one <see cref="WorkerCostInputs" /> per
 ///     worker who has any costable session in scope.
 /// </summary>
-public sealed record CostQueryResult
+internal sealed record CostQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }

@@ -610,23 +610,23 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IJobRequestCommandPort CreateCommandPort(string connectionString);
+	internal abstract IJobRequestCommandPort CreateCommandPort(string connectionString);
 
-	protected abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
+	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
 	/// <summary>
 	///     The existing staff browse query — proves the holding-area queue view (plan §5, §9
 	///     Stage 5) needs no new query, only calling it on the holding area's own <c>job_node_id</c>.
 	/// </summary>
-	protected abstract IJobBrowseQueryPort CreateBrowsePort(string connectionString);
+	internal abstract IJobBrowseQueryPort CreateBrowsePort(string connectionString);
 
 	/// <summary>
 	///     The existing job-node command port — used to prove decomposition preserves the
 	///     <c>job_request</c> anchor (plan §5, §9 Stage 5), reusing the ordinary decompose command.
 	/// </summary>
-	protected abstract IJobNodeCommandPort CreateJobNodeCommandPort(string connectionString);
+	internal abstract IJobNodeCommandPort CreateJobNodeCommandPort(string connectionString);
 
 	/// <summary>PostgreSQL binds <see cref="DateTimeOffset" /> directly; SQLite needs ADR 0007's unix-epoch-ticks encoding.</summary>
 	protected abstract object EncodeInstant(DateTimeOffset value);

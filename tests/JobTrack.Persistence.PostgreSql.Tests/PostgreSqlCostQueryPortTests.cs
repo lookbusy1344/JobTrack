@@ -21,25 +21,25 @@ public sealed class PostgreSqlCostQueryPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IScheduleCommandPort CreateSchedulePort(string connectionString) =>
+	internal override IScheduleCommandPort CreateSchedulePort(string connectionString) =>
 		new PostgreSqlScheduleCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IRateCommandPort CreateRatePort(string connectionString) =>
+	internal override IRateCommandPort CreateRatePort(string connectionString) =>
 		new PostgreSqlRateCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
+	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
 		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override ICostQueryPort CreateCostQueryPort(string connectionString) =>
+	internal override ICostQueryPort CreateCostQueryPort(string connectionString) =>
 		new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override ICostQueryPort CreateCostQueryPortWithInterceptors(
+	internal override ICostQueryPort CreateCostQueryPortWithInterceptors(
 		string connectionString, IReadOnlyList<IInterceptor> interceptors) =>
 		new PostgreSqlCostQueryPort(
 			new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance, interceptors);

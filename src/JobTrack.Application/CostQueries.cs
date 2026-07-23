@@ -16,7 +16,7 @@ using Ports;
 ///     independently because rates, overrides, and concurrency are always resolved per worker (see
 ///     <see cref="Domain.Rates.RateResolver" />).
 /// </summary>
-public sealed class CostQueries : ICostQueries
+internal sealed class CostQueries : ICostQueries
 {
 	// Bounded ranges for cost responses (remediation plan §3.1): a cost trace/hierarchy is not
 	// offset/limit-paginated like a flat collection -- reconciliation needs the whole subtree or
@@ -31,8 +31,10 @@ public sealed class CostQueries : ICostQueries
 
 	// A bulk request's candidate count is caller-controlled (one listing page's rows), so this is a
 	// defensive backstop against a misbehaving caller, not a realistic page width -- the largest
-	// paginated listing page this library serves is far smaller (fresh-eyes review §2.8).
-	private const int MaxBulkNodeIdCount = 500;
+	// paginated listing page this library serves is far smaller (fresh-eyes review §2.8). Exposed to
+	// the assembly so JobQueries' listing enrichment can chunk a wider candidate set to this exact
+	// bound rather than over-flow the port in a single call.
+	internal const int MaxBulkNodeIdCount = 500;
 
 	private readonly ICostQueryPort _port;
 

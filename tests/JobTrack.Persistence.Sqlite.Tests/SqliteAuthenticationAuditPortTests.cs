@@ -25,6 +25,6 @@ public sealed class SqliteAuthenticationAuditPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IAuthenticationAuditPort CreatePort(string connectionString) =>
+	internal override IAuthenticationAuditPort CreatePort(string connectionString) =>
 		new SqliteAuthenticationAuditPort(connectionString, SystemClock.Instance);
 }

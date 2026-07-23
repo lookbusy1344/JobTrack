@@ -277,6 +277,9 @@ JobTrack.Abstractions.RequesterStatus.Completed = 5 -> JobTrack.Abstractions.Req
 JobTrack.Abstractions.RequesterStatus.InProgress = 3 -> JobTrack.Abstractions.RequesterStatus
 JobTrack.Abstractions.RequesterStatus.Submitted = 1 -> JobTrack.Abstractions.RequesterStatus
 JobTrack.Abstractions.RequesterStatus.Waiting = 4 -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.PasswordPolicy
+const JobTrack.Abstractions.PasswordPolicy.MinimumLength = 6 -> int
+static JobTrack.Abstractions.PasswordPolicy.IsSatisfiedBy(string? password) -> bool
 override JobTrack.Abstractions.JobRequestNoteId.GetHashCode() -> int
 static JobTrack.Abstractions.JobRequestNoteId.operator !=(JobTrack.Abstractions.JobRequestNoteId left, JobTrack.Abstractions.JobRequestNoteId right) -> bool
 static JobTrack.Abstractions.JobRequestNoteId.operator ==(JobTrack.Abstractions.JobRequestNoteId left, JobTrack.Abstractions.JobRequestNoteId right) -> bool

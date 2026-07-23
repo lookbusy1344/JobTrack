@@ -8,7 +8,7 @@ using Abstractions;
 ///     <see cref="Domain.Authorization.PersonalAccessTokenAccessPolicy" /> itself before writing — the
 ///     same mutation-safety shape as <see cref="IEmployeeCommandPort" />.
 /// </summary>
-public interface IPersonalAccessTokenPort
+internal interface IPersonalAccessTokenPort
 {
 	/// <inheritdoc cref="ITokenCommands.IssueAsync" />
 	Task<IssuePersonalAccessTokenPersistenceResult> IssueAsync(

@@ -25,19 +25,19 @@ public sealed class SqliteJobRequestCommandPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IJobRequestCommandPort CreateCommandPort(string connectionString) =>
+	internal override IJobRequestCommandPort CreateCommandPort(string connectionString) =>
 		new SqliteJobRequestCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
 		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
 
-	protected override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
+	internal override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
 		new SqliteJobBrowseQueryPort(connectionString);
 
-	protected override IJobNodeCommandPort CreateJobNodeCommandPort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobNodeCommandPort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;

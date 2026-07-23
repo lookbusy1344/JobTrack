@@ -20,19 +20,19 @@ public sealed class PostgreSqlJobRequestCommandPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IJobRequestCommandPort CreateCommandPort(string connectionString) =>
+	internal override IJobRequestCommandPort CreateCommandPort(string connectionString) =>
 		new PostgreSqlJobRequestCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
 		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
+	internal override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
 		new PostgreSqlJobBrowseQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
 
-	protected override IJobNodeCommandPort CreateJobNodeCommandPort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobNodeCommandPort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value;

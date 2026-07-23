@@ -8,7 +8,7 @@ using Domain.Hierarchy;
 ///     ownership, and archive-filter queries (plan §8.5 slice 2). Carries no actor-role bundling, since
 ///     these queries carry no authorization gate (see <see cref="GetJobNodeRequest" />).
 /// </summary>
-public interface IJobBrowseQueryPort
+internal interface IJobBrowseQueryPort
 {
 	/// <summary>Loads a node's full detail and root-first ancestor breadcrumb.</summary>
 	/// <param name="nodeId">The node to retrieve, or <see langword="null" /> for the permanent root.</param>

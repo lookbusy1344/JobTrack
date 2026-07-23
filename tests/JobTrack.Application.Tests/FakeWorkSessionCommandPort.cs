@@ -144,6 +144,43 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		return Task.FromResult(updated);
 	}
 
+	public Task<FinishSessionAndUpdateWriteUpResult> FinishSessionAndUpdateWriteUpAsync(
+		FinishSessionAndUpdateWriteUpRequest request, CancellationToken cancellationToken = default)
+	{
+		var existing = GetExisting(request.SessionId);
+		AuthorizeFinishOrThrow(request.Context.Actor, existing.LeafWorkId, existing.WorkedByUserId);
+		CheckVersionOrThrow(existing.Version, request.Version);
+
+		var finishedAt = request.FinishedAt ?? NowToReturn;
+		if (request.FinishedAt is not null && finishedAt <= existing.StartedAt) {
+			throw new InvariantViolationException(
+				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+		}
+
+		if (request.FinishedAt is not null && finishedAt > NowToReturn) {
+			throw new InvariantViolationException(
+				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+		}
+
+		var updated = existing with { FinishedAt = finishedAt, ChangedAt = NowToReturn, Version = existing.Version + 1 };
+		_sessions[updated.Id] = updated;
+
+		var writeUpChanged = false;
+		JobNodeResult? writtenUpNode = null;
+		if (request.WriteUpChange is WriteUpChange change) {
+			// Same node-control authority EditAsync's own JobNodeAccessPolicy.CanManage would require --
+			// distinct from AuthorizeFinishOrThrow's session-owner exception above.
+			AuthorizeOrThrow(request.Context.Actor, existing.LeafWorkId);
+			(writeUpChanged, writtenUpNode) = ApplyWriteUpChange(existing.LeafWorkId, change);
+		}
+
+		return Task.FromResult(new FinishSessionAndUpdateWriteUpResult {
+			Session = updated,
+			WriteUpChanged = writeUpChanged,
+			Node = writtenUpNode,
+		});
+	}
+
 	public Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default)
 	{
 		var existing = GetExisting(request.SessionId);
@@ -240,12 +277,20 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		var updatedLeafWork = leafWork with { Achievement = request.FinalAchievement, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
 		nodePort.SetLeafWork(updatedLeafWork);
 
+		var writeUpChanged = false;
+		JobNodeResult? writtenUpNode = null;
+		if (request.WriteUpChange is WriteUpChange change) {
+			(writeUpChanged, writtenUpNode) = ApplyWriteUpChange(request.JobNodeId, change);
+		}
+
 		return new() {
 			JobNodeId = request.JobNodeId,
 			Achievement = request.FinalAchievement,
 			ChangedAt = updatedLeafWork.ChangedAt,
 			Version = updatedLeafWork.Version,
 			FinishedSessions = [.. finished],
+			WriteUpChanged = writeUpChanged,
+			Node = writtenUpNode,
 		};
 	}
 
@@ -340,6 +385,25 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 				nodePort.RolesOf(actorId), nodePort.OwnsNodeOrAncestor(actorId, leafId), actorId == sessionWorkedByUserId)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not finish this session on job node {leafId}.");
 		}
+	}
+
+	/// <summary>Mirrors the real providers' shared <c>WriteUpChangeApplier</c>: a no-op when the text is unchanged.</summary>
+	private (bool Changed, JobNodeResult? Node) ApplyWriteUpChange(JobNodeId leafId, WriteUpChange change)
+	{
+		var node = nodePort.FindNode(leafId) ?? throw new EntityNotFoundException($"Job node {leafId} does not exist.");
+		if (node.Version != change.NodeVersion) {
+			throw new ConcurrencyConflictException(
+				$"Expected version {change.NodeVersion} for job node {leafId} did not match its current version.");
+		}
+
+		if (node.WriteUp == change.WriteUp) {
+			return (false, node);
+		}
+
+		var updated = node with { WriteUp = change.WriteUp, Version = node.Version + 1 };
+		nodePort.SeedNode(updated);
+
+		return (true, updated);
 	}
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)

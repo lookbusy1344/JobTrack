@@ -446,16 +446,16 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IJobNodeCommandPort CreateCommandPort(string connectionString);
+	internal abstract IJobNodeCommandPort CreateCommandPort(string connectionString);
 
-	protected abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
+	internal abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
 
-	protected abstract IJobBrowseQueryPort CreateBrowsePort(string connectionString);
+	internal abstract IJobBrowseQueryPort CreateBrowsePort(string connectionString);
 
 	/// <summary>Stage 6 efficiency-guard seam: a browse port wired with <paramref name="interceptor" /> attached to its <c>DbContext</c>.</summary>
-	protected abstract IJobBrowseQueryPort CreateBrowsePortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor);
+	internal abstract IJobBrowseQueryPort CreateBrowsePortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor);
 
 	/// <summary>
 	///     Stage 6 (2026-07-15 plan §5): a subtree fetch is two SQL round trips -- the bounded recursive

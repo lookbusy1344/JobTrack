@@ -316,13 +316,13 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IJobNodeCommandPort CreateJobNodePort(string connectionString);
+	internal abstract IJobNodeCommandPort CreateJobNodePort(string connectionString);
 
-	protected abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
+	internal abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
 
-	protected abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
+	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
 	protected static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 

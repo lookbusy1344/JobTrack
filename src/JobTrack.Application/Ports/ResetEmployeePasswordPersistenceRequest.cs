@@ -8,7 +8,7 @@ using Abstractions;
 ///     <c>IPasswordHasher&lt;EmployeeCredentialSubject&gt;</c> — the persistence implementation never
 ///     sees plaintext (mirrors <see cref="BootstrapPersistenceRequest" />'s exact shape).
 /// </summary>
-public sealed record ResetEmployeePasswordPersistenceRequest
+internal sealed record ResetEmployeePasswordPersistenceRequest
 {
 	/// <summary>The acting user and correlation identifier.</summary>
 	public required CommandContext Context { get; init; }

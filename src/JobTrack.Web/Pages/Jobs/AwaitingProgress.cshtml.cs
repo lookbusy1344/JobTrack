@@ -299,7 +299,7 @@ public sealed class AwaitingProgressModel(
 
 			var ownership = (UnassignedOnly, OwnerUserId) switch {
 				(true, _) => OwnershipFilter.Unassigned,
-				(false, { } ownerUserId) => OwnershipFilter.OwnedBy(new(ownerUserId)),
+				(false, long ownerUserId) => OwnershipFilter.OwnedBy(new(ownerUserId)),
 				(false, null) => OwnershipFilter.All,
 			};
 

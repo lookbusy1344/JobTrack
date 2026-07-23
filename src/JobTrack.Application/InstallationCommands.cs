@@ -8,7 +8,7 @@ using Ports;
 ///     hashing the supplied credential and delegating the atomic write to the persistence-owned
 ///     <see cref="IInstallationBootstrapPort" />.
 /// </summary>
-public sealed class InstallationCommands : IInstallationCommands
+internal sealed class InstallationCommands : IInstallationCommands
 {
 	private static readonly BootstrapCredentialSubject CredentialSubject = new();
 	private readonly IPasswordHasher<BootstrapCredentialSubject> _passwordHasher;

@@ -114,7 +114,7 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IAuthenticationAuditPort CreatePort(string connectionString);
+	internal abstract IAuthenticationAuditPort CreatePort(string connectionString);
 
 	private async Task DeploySchemaAsync()
 	{

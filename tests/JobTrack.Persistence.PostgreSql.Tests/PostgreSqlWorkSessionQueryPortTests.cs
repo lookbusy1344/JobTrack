@@ -20,19 +20,19 @@ public sealed class PostgreSqlWorkSessionQueryPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IWorkSessionCommandPort CreateSessionCommandPort(string connectionString) =>
+	internal override IWorkSessionCommandPort CreateSessionCommandPort(string connectionString) =>
 		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IWorkSessionQueryPort CreateQueryPort(string connectionString) =>
+	internal override IWorkSessionQueryPort CreateQueryPort(string connectionString) =>
 		new PostgreSqlWorkSessionQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor) =>
+	internal override IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor) =>
 		new PostgreSqlWorkSessionQueryPort(
 			new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance, [interceptor]);
 }

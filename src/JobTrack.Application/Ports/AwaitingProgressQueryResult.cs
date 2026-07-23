@@ -8,7 +8,7 @@ using Domain.Hierarchy;
 ///     <see cref="AwaitingProgressCalculator" /> needs materialized ahead of time — the complete node
 ///     graph, each node's display/filter/sort facts, and every prerequisite edge.
 /// </summary>
-public sealed record AwaitingProgressQueryResult
+internal sealed record AwaitingProgressQueryResult
 {
 	/// <summary>Every node in the tree, keyed by identifier.</summary>
 	public required EquatableDictionary<JobNodeId, HierarchyNode> NodesById { get; init; }

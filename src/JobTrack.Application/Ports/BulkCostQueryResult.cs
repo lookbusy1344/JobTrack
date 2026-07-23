@@ -9,7 +9,7 @@ using Domain.Intervals;
 ///     every candidate node's subtree at once (fresh-eyes review §2.8), so a listing page's cost
 ///     enrichment never opens more than one provider connection regardless of how many rows it holds.
 /// </summary>
-public sealed record BulkCostQueryResult
+internal sealed record BulkCostQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }

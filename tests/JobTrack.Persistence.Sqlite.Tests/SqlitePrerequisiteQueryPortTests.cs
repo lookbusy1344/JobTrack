@@ -25,12 +25,12 @@ public sealed class SqlitePrerequisiteQueryPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IPrerequisiteQueryPort CreateQueryPort(string connectionString) =>
+	internal override IPrerequisiteQueryPort CreateQueryPort(string connectionString) =>
 		new SqlitePrerequisiteQueryPort(connectionString);
 }

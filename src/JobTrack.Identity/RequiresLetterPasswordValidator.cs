@@ -1,5 +1,6 @@
 namespace JobTrack.Identity;
 
+using Abstractions;
 using Microsoft.AspNetCore.Identity;
 
 /// <summary>

@@ -179,6 +179,46 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		changeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 	}
 
+	/// <summary>
+	///     Remediation plan §2.2: the whole password/flag/stamp/PAT-revocation/audit transition is one
+	///     provider transaction, so a rejected current-password check leaves every other part of it
+	///     untouched -- the old password stays usable and no personal access token is revoked.
+	/// </summary>
+	[Fact]
+	public async Task An_incorrect_current_password_leaves_the_old_password_usable_and_pats_unrevoked()
+	{
+		var appUserId = await SeedUserAsync("wilma", KnownPassword);
+		var seedClient = JobTrackSqlite.Create(database.ConnectionString);
+		var issued = await seedClient.Tokens.IssueAsync(new() {
+			Context = new() { Actor = appUserId, CorrelationId = Guid.NewGuid() },
+			TargetUserId = appUserId,
+			Label = "cli-test-token",
+			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
+		});
+		var authCookie = await SignInAsync("wilma", KnownPassword);
+		var (antiforgeryCookie, token) = await GetChangePasswordFormAsync(authCookie);
+
+		using var changeRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
+		changeRequest.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		changeRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.CurrentPassword"] = "Definitely-Wrong-Password-1!",
+			["Input.NewPassword"] = NewPassword,
+			["Input.ConfirmNewPassword"] = NewPassword,
+			["__RequestVerificationToken"] = token,
+		});
+		var changeResponse = await client.SendAsync(changeRequest);
+
+		changeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		using var apiRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/employees/{appUserId.Value}/rates");
+		apiRequest.Headers.Authorization = new("Bearer", issued.Token);
+		var apiResponse = await client.SendAsync(apiRequest);
+		apiResponse.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
+
+		var oldPasswordCookie = await SignInAsync("wilma", KnownPassword);
+		oldPasswordCookie.Should().NotBeNullOrEmpty();
+	}
+
 	[Fact]
 	public async Task Changing_a_password_revokes_the_employees_personal_access_tokens()
 	{
@@ -211,7 +251,7 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task Changing_a_password_writes_an_audit_event()
+	public async Task Changing_a_password_writes_exactly_one_atomic_audit_event()
 	{
 		var appUserId = await SeedUserAsync("helen", KnownPassword);
 		var authCookie = await SignInAsync("helen", KnownPassword);
@@ -226,10 +266,10 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 			["__RequestVerificationToken"] = token,
 		});
 		var changeResponse = await client.SendAsync(changeRequest);
-		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
+		var auditOperations = await GetAuditOperationsAsync(appUserId);
 
 		changeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		auditOperation.Should().Be("authentication.password-change");
+		auditOperations.Should().Equal("authentication.password-change");
 	}
 
 	[Fact]
@@ -307,7 +347,7 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<string> GetLatestAuditOperationAsync(AppUserId actorUserId)
+	private async Task<IReadOnlyList<string>> GetAuditOperationsAsync(AppUserId actorUserId)
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
@@ -317,12 +357,18 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 							  SELECT operation
 							  FROM audit_event
 							  WHERE actor_user_id = $actorUserId
-							  ORDER BY id DESC
-							  LIMIT 1;
+							    AND operation LIKE 'authentication.password-%'
+							  ORDER BY id;
 							  """;
 		_ = command.Parameters.AddWithValue("$actorUserId", actorUserId.Value);
 
-		return (string)(await command.ExecuteScalarAsync())!;
+		var operations = new List<string>();
+		await using var reader = await command.ExecuteReaderAsync();
+		while (await reader.ReadAsync()) {
+			operations.Add(reader.GetString(0));
+		}
+
+		return operations;
 	}
 
 	private async Task<AppUserId> SeedUserAsync(string userName, string password, EmployeeRole role = EmployeeRole.Worker)

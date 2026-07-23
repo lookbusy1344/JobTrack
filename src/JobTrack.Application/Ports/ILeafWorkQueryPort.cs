@@ -7,7 +7,7 @@ using Abstractions;
 ///     5). Carries no actor — the query itself has no authorization gate (see
 ///     <see cref="GetLeafWorkRequest" />).
 /// </summary>
-public interface ILeafWorkQueryPort
+internal interface ILeafWorkQueryPort
 {
 	/// <summary>Loads the leaf's current <c>LeafWork</c>.</summary>
 	/// <exception cref="EntityNotFoundException">The job node has no <c>LeafWork</c> attached.</exception>

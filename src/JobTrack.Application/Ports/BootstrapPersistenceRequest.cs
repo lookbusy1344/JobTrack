@@ -7,7 +7,7 @@ using Abstractions;
 ///     hashed by <see cref="InstallationCommands" /> via the injected <c>IPasswordHasher&lt;T&gt;</c>
 ///     (ADR 0005) — the persistence implementation never sees plaintext.
 /// </summary>
-public sealed record BootstrapPersistenceRequest
+internal sealed record BootstrapPersistenceRequest
 {
 	/// <summary>The new administrator's employee-profile display name (<c>app_user.display_name</c>).</summary>
 	public required string DisplayName { get; init; }

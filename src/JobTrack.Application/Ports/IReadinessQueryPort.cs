@@ -7,7 +7,7 @@ using Abstractions;
 ///     5). Materializes every fact the pure <see cref="Domain.Hierarchy.ReadinessCalculator" /> needs;
 ///     <see cref="JobQueries" /> performs no graph traversal of its own.
 /// </summary>
-public interface IReadinessQueryPort
+internal interface IReadinessQueryPort
 {
 	/// <inheritdoc cref="IJobQueries.GetReadinessAsync" />
 	Task<ReadinessQueryResult> GetReadinessInputsAsync(JobNodeId nodeId, CancellationToken cancellationToken = default);

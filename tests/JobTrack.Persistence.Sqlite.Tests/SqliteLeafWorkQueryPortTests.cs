@@ -25,12 +25,12 @@ public sealed class SqliteLeafWorkQueryPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobCommandPort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
-	protected override ILeafWorkQueryPort CreateQueryPort(string connectionString) =>
+	internal override ILeafWorkQueryPort CreateQueryPort(string connectionString) =>
 		new SqliteLeafWorkQueryPort(connectionString);
 }

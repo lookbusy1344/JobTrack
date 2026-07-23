@@ -6,7 +6,7 @@ namespace JobTrack.Application.Ports;
 ///     <see cref="Domain.Authorization.RateAccessPolicy" /> itself before writing — the same
 ///     mutation-safety shape as the other command ports.
 /// </summary>
-public interface IRateCommandPort
+internal interface IRateCommandPort
 {
 	/// <inheritdoc cref="IRateCommands.AddUserCostRateAsync" />
 	Task<UserCostRateResult> AddUserCostRateAsync(

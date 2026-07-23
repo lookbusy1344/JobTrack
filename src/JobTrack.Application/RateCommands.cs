@@ -6,7 +6,7 @@ using Ports;
 ///     Implements rate commands (plan §7.3 step 9) by delegating each atomic operation to
 ///     <see cref="IRateCommandPort" />, which owns authorization and the transaction.
 /// </summary>
-public sealed class RateCommands : IRateCommands
+internal sealed class RateCommands : IRateCommands
 {
 	private readonly IRateCommandPort _port;
 

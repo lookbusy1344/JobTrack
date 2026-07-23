@@ -27,23 +27,31 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
+	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
 		CreateSessionPort(connectionString, SystemClock.Instance);
 
-	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock) =>
+	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock) =>
 		new SqliteWorkSessionCommandPort(connectionString, clock);
 
-	protected override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
 		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
+
+	[Fact]
+	public Task Concurrent_compound_finish_with_write_up_vs_node_edit_has_exactly_one_complete_outcome() =>
+		AssertConcurrentFinishWithWriteUpVersusNodeEditAsync();
+
+	[Fact]
+	public Task Concurrent_compound_finish_with_write_up_vs_session_finish_has_exactly_one_complete_outcome() =>
+		AssertConcurrentFinishWithWriteUpVersusSessionFinishAsync();
 
 	/// <summary>
 	///     ADR 0045 plan §6 race matrix: "reopen-and-start vs another reopen." SQLite has no advisory

@@ -7,7 +7,7 @@ using Ports;
 ///     atomic operation to <see cref="IWorkSessionCommandPort" />/<see cref="IAchievementCommandPort" />,
 ///     which own authorization, prerequisite rechecking, and the transaction.
 /// </summary>
-public sealed class WorkCommands : IWorkCommands
+internal sealed class WorkCommands : IWorkCommands
 {
 	private readonly IAchievementCommandPort _achievementPort;
 	private readonly IWorkSessionCommandPort _sessionPort;
@@ -50,6 +50,17 @@ public sealed class WorkCommands : IWorkCommands
 		return JobTrackOperation.TraceAsync(
 			"work.finish-session", request.Context, null,
 			() => _sessionPort.FinishSessionAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
+	public Task<FinishSessionAndUpdateWriteUpResult> FinishSessionAndUpdateWriteUpAsync(
+		FinishSessionAndUpdateWriteUpRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return JobTrackOperation.TraceAsync(
+			"work.finish-session-and-update-write-up", request.Context, null,
+			() => _sessionPort.FinishSessionAndUpdateWriteUpAsync(request, cancellationToken));
 	}
 
 	/// <inheritdoc />

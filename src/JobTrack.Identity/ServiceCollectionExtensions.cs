@@ -1,5 +1,6 @@
 namespace JobTrack.Identity;
 
+using Abstractions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;

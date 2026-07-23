@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Runs the fast core test suite: the projects with no PostgreSQL, web-host, or
-# browser dependency (see README's "Fast core suite" section). Intended as a
-# sub-20s sanity check between edits -- it does not replace the full commit
-# gate (`dotnet build/format/test JobTrack.slnx`) required before a commit.
+# browser dependency (see README's "Fast core suite" section). Sub-20s. Part of
+# the per-commit gate, alongside build, format, and a targeted `dotnet test
+# --filter` run against whatever the commit touches (see CLAUDE.md).
 #
 # --longer/-l additionally runs the highest-value PostgreSQL-backed and
 # web-integration projects (contract enforcement, provider-specific

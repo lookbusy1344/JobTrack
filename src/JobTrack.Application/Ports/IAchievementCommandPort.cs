@@ -8,7 +8,7 @@ namespace JobTrack.Application.Ports;
 ///     completed state — rechecks prerequisite readiness, the same shape as
 ///     <see cref="IWorkSessionCommandPort.StartSessionAsync" />.
 /// </summary>
-public interface IAchievementCommandPort
+internal interface IAchievementCommandPort
 {
 	/// <inheritdoc cref="IWorkCommands.SetAchievementAsync" />
 	Task<LeafWorkResult> SetAchievementAsync(SetAchievementRequest request, CancellationToken cancellationToken = default);

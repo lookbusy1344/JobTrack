@@ -7,7 +7,7 @@ using Abstractions;
 ///     account-state queries (plan §7.3 step 2). Loads authoritative data for both the actor (roles
 ///     only) and the target (profile or account state) in one round-trip.
 /// </summary>
-public interface IEmployeeQueryPort
+internal interface IEmployeeQueryPort
 {
 	/// <summary>Loads the actor's current roles for an authorization pre-check before target employee data.</summary>
 	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>

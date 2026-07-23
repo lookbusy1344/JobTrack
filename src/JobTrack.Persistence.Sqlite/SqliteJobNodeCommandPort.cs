@@ -106,11 +106,14 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 			// job_node_no_cycle (schema version 0005) and the self-parent CHECK constraint
 			// (schema version 0004) fire immediately from this UPDATE -- SQLite has no deferred
 			// constraint triggers (impl plan §7.4).
-			affected = await context.Database.ExecuteSqlInterpolatedAsync(
-				$"""
-				 UPDATE job_node SET parent_id = {request.NewParentId.Value}, row_version = row_version + 1
-				 WHERE id = {request.NodeId.Value} AND row_version = {request.Version};
-				 """, cancellationToken).ConfigureAwait(false);
+			affected = await context.Set<JobNodeEntity>()
+				.Where(n => n.Id == request.NodeId && n.RowVersion == request.Version)
+				.ExecuteUpdateAsync(
+					setters => setters
+						.SetProperty(n => n.ParentId, request.NewParentId)
+						.SetProperty(n => n.RowVersion, n => n.RowVersion + 1),
+					cancellationToken)
+				.ConfigureAwait(false);
 		}
 		catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintErrorCode) {
 			throw new InvariantViolationException(
@@ -158,17 +161,10 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not pick up job node {request.NodeId}.");
 		}
 
-		// The conditional WHERE owner_user_id IS NULL is the concurrency mechanism itself (plan §6
-		// risk note): SQLite's BEGIN IMMEDIATE serializes concurrent writes, so a concurrent
-		// claimant that commits first leaves zero rows affected here rather than silently
-		// overwriting their claim.
-		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
-			$"""
-			 UPDATE job_node SET owner_user_id = {request.Context.Actor.Value}, row_version = row_version + 1
-			 WHERE id = {request.NodeId.Value} AND owner_user_id IS NULL;
-			 """, cancellationToken).ConfigureAwait(false);
-
-		if (affected == 0) {
+		// SQLite's BEGIN IMMEDIATE (started above) serializes concurrent writes, so a concurrent
+		// claimant that commits first leaves zero rows affected inside UnassignedNodeClaim.
+		if (!await UnassignedNodeClaim.TryClaimAsync(context, request.NodeId, request.Context.Actor, cancellationToken)
+				.ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"job-node-already-claimed", $"Job node {request.NodeId} has already been claimed.");
 		}
@@ -373,21 +369,7 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 				context, request.Context.Actor, request.RequiredJobId, request.DependentJobId, now, cancellationToken)
 			.ConfigureAwait(false);
 
-		try {
-			// job_prerequisite_no_cycle and job_prerequisite_not_hierarchy_edge (schema version
-			// 0008) fire immediately from this INSERT -- SQLite has no deferred constraint triggers
-			// (impl plan §7.4). The check above already gives a precise, fast-failing category for
-			// every job_prerequisite invariant; this catch-all is a backstop for the (structurally
-			// unreachable under SQLite's single-writer BEGIN IMMEDIATE serialization, but defensive
-			// regardless) case where the check above and this insert disagree.
-			_ = await context.Database.ExecuteSqlInterpolatedAsync(
-				$"INSERT INTO job_prerequisite (from_id, to_id) VALUES ({request.RequiredJobId.Value}, {request.DependentJobId.Value});",
-				cancellationToken).ConfigureAwait(false);
-		}
-		catch (SqliteException ex) {
-			throw new InvariantViolationException(
-				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", ex);
-		}
+		_ = context.Add(new JobPrerequisiteEntity { FromId = request.RequiredJobId, ToId = request.DependentJobId });
 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "add-job-prerequisite", "job_prerequisite",
@@ -396,9 +378,48 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 				["required_job_id"] = request.RequiredJobId.Value.ToString(CultureInfo.InvariantCulture),
 				["dependent_job_id"] = request.DependentJobId.Value.ToString(CultureInfo.InvariantCulture),
 			});
-		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		try {
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (DbUpdateException ex) when (FindSqliteException(ex) is SqliteException sqliteException) {
+			throw new InvariantViolationException(
+				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", sqliteException);
+		}
+	}
+
+	/// <inheritdoc />
+	public async Task AddPrerequisitesAsync(AddPrerequisitesRequest request, CancellationToken cancellationToken = default)
+	{
+		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await context.Database
+			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+		var now = clock.GetCurrentInstant();
+
+		try {
+			foreach (var edge in request.Edges) {
+				await ValidatePrerequisiteEdgeAsync(
+						context, request.Context.Actor, edge.RequiredJobId, edge.DependentJobId, now, cancellationToken)
+					.ConfigureAwait(false);
+				_ = context.Add(new JobPrerequisiteEntity { FromId = edge.RequiredJobId, ToId = edge.DependentJobId });
+
+				AuditEventWriter.Add(
+					context, request.Context.Actor, now, "add-job-prerequisite", "job_prerequisite",
+					edge.DependentJobId.Value, request.Context.CorrelationId, null, null,
+					new Dictionary<string, string?> {
+						["required_job_id"] = edge.RequiredJobId.Value.ToString(CultureInfo.InvariantCulture),
+						["dependent_job_id"] = edge.DependentJobId.Value.ToString(CultureInfo.InvariantCulture),
+					});
+			}
+
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (DbUpdateException ex) when (FindSqliteException(ex) is SqliteException sqliteException) {
+			throw new InvariantViolationException(
+				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", sqliteException);
+		}
 	}
 
 	/// <inheritdoc />
@@ -415,9 +436,9 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, actorRoles, request.Context.Actor, request.DependentJobId, cancellationToken)
 			.ConfigureAwait(false);
 
-		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
-			$"DELETE FROM job_prerequisite WHERE from_id = {request.RequiredJobId.Value} AND to_id = {request.DependentJobId.Value};",
-			cancellationToken).ConfigureAwait(false);
+		var affected = await context.Set<JobPrerequisiteEntity>()
+			.Where(p => p.FromId == request.RequiredJobId && p.ToId == request.DependentJobId)
+			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		if (affected == 0) {
 			throw new EntityNotFoundException(
@@ -458,6 +479,13 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 			null => null,
 			SqliteException sqlite when sqlite.Message.Contains(ActiveSessionsMessage, StringComparison.Ordinal) => sqlite,
 			_ => FindActiveSessionsViolation(ex.InnerException),
+		};
+
+	private static SqliteException? FindSqliteException(Exception? exception) =>
+		exception switch {
+			null => null,
+			SqliteException sqliteException => sqliteException,
+			_ => FindSqliteException(exception.InnerException),
 		};
 
 	/// <summary>

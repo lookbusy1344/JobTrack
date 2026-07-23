@@ -9,7 +9,7 @@ namespace JobTrack.Application.Ports;
 ///     write share one transaction here, the same shape as the bootstrap port's own "already
 ///     initialised" guard (ADR 0005, ADR 0015).
 /// </summary>
-public interface IJobNodeCommandPort
+internal interface IJobNodeCommandPort
 {
 	/// <inheritdoc cref="IJobCommands.AddChildAsync" />
 	Task<JobNodeResult> AddChildAsync(CreateJobNodeRequest request, CancellationToken cancellationToken = default);
@@ -35,6 +35,9 @@ public interface IJobNodeCommandPort
 
 	/// <inheritdoc cref="IJobCommands.AddPrerequisiteAsync" />
 	Task AddPrerequisiteAsync(AddPrerequisiteRequest request, CancellationToken cancellationToken = default);
+
+	/// <inheritdoc cref="IJobCommands.AddPrerequisitesAsync" />
+	Task AddPrerequisitesAsync(AddPrerequisitesRequest request, CancellationToken cancellationToken = default);
 
 	/// <inheritdoc cref="IJobCommands.RemovePrerequisiteAsync" />
 	Task RemovePrerequisiteAsync(RemovePrerequisiteRequest request, CancellationToken cancellationToken = default);

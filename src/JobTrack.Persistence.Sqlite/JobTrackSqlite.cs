@@ -39,7 +39,8 @@ public static class JobTrackSqlite
 		var tokens = new SqlitePersonalAccessTokenPort(connectionString, clock);
 		var requests = new SqliteJobRequestCommandPort(connectionString, clock);
 		var authenticationAudit = new SqliteAuthenticationAuditPort(connectionString, clock);
-		var credentials = new SqliteAccountCredentialPort(connectionString, clock);
+		var credentials = new SqliteAccountCredentialPort(
+			connectionString, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
 		var costQueries = new CostQueries(costs);
 
 		return new JobTrackClient(

@@ -863,6 +863,50 @@ public sealed class JobQueriesTests
 	}
 
 	[Fact]
+	public async Task GetJobSummariesAsync_prices_a_listing_wider_than_the_bulk_cost_cap_in_capped_batches()
+	{
+		// One row past the port's backstop: a single bulk call would overflow it, so enrichment must
+		// chunk to the cap. The old code caught that overflow and returned no costs at all, silently
+		// blanking every row of an over-wide listing rather than pricing it.
+		var overCap = CostQueries.MaxBulkNodeIdCount + 1;
+		var owner = new AppUserId(10);
+		var port = new FakeJobNodeCommandPort();
+		port.SeedRoles(owner, EmployeeRole.Administrator);
+		var leafIds = new List<JobNodeId>();
+		for (var index = 0; index < overCap; index++) {
+			var leafId = new JobNodeId(1000 + index);
+			leafIds.Add(leafId);
+			port.SeedNode(new() {
+				Id = leafId,
+				ParentId = null,
+				Kind = NodeKind.Leaf,
+				Description = $"Leaf {index}",
+				PostedByUserId = owner,
+				OwnerUserId = owner,
+				Priority = Priority.Medium,
+				PostedAt = port.NowToReturn,
+				HasChildren = false,
+				HasLeafWork = false,
+				Version = 1,
+			});
+		}
+
+		var costQueries = new FakeCostQueries();
+		foreach (var leafId in leafIds) {
+			costQueries.SeedBulkCost(leafId, new(10m));
+		}
+
+		var sut = CreateSut(port, costQueries);
+
+		var result = await sut.GetJobSummariesAsync(new() { Context = ContextFor(owner), NodeIds = [.. leafIds] });
+
+		result.Should().HaveCount(overCap);
+		result.Should().OnlyContain(summary => summary.Cost == new Money(10m));
+		costQueries.BulkBatchSizes.Should().OnlyContain(size => size <= CostQueries.MaxBulkNodeIdCount);
+		costQueries.BulkBatchSizes.Sum().Should().Be(overCap);
+	}
+
+	[Fact]
 	public async Task GetJobSubtreeAsync_returns_the_bounded_tree_with_computed_spans_and_omits_cost_without_access()
 	{
 		var owner = new AppUserId(10);

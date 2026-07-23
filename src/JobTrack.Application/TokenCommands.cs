@@ -10,7 +10,7 @@ using Ports;
 ///     plaintext secret is generated and hashed here, mirroring how <see cref="EmployeeCommands" />
 ///     hashes passwords before the port ever sees them.
 /// </summary>
-public sealed class TokenCommands : ITokenCommands
+internal sealed class TokenCommands : ITokenCommands
 {
 	private readonly IClock _clock;
 	private readonly IPersonalAccessTokenPort _port;

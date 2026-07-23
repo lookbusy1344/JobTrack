@@ -9,7 +9,7 @@ namespace JobTrack.Application.Ports;
 ///     the same transaction (spec §6: "the start and completion commands shall recheck prerequisites
 ///     inside their write transaction").
 /// </summary>
-public interface IWorkSessionCommandPort
+internal interface IWorkSessionCommandPort
 {
 	/// <inheritdoc cref="IWorkCommands.StartSessionAsync" />
 	Task<WorkSessionResult> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken = default);
@@ -19,6 +19,10 @@ public interface IWorkSessionCommandPort
 
 	/// <inheritdoc cref="IWorkCommands.FinishSessionAsync" />
 	Task<WorkSessionResult> FinishSessionAsync(FinishSessionRequest request, CancellationToken cancellationToken = default);
+
+	/// <inheritdoc cref="IWorkCommands.FinishSessionAndUpdateWriteUpAsync" />
+	Task<FinishSessionAndUpdateWriteUpResult> FinishSessionAndUpdateWriteUpAsync(
+		FinishSessionAndUpdateWriteUpRequest request, CancellationToken cancellationToken = default);
 
 	/// <inheritdoc cref="IWorkCommands.CorrectSessionAsync" />
 	Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default);

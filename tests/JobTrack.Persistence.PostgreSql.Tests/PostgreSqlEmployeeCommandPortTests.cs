@@ -20,10 +20,10 @@ public sealed class PostgreSqlEmployeeCommandPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
+	internal override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
 		new PostgreSqlEmployeeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value;

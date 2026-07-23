@@ -25,15 +25,15 @@ public sealed class SqliteAchievementCommandPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
 		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
 }

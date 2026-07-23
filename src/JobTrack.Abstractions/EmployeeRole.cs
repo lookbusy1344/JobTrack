@@ -16,7 +16,10 @@ public enum EmployeeRole
 	/// <summary>Creates, edits, moves, archives, and decomposes planning nodes and leaf work.</summary>
 	JobManager = 2,
 
-	/// <summary>Starts, finishes, and corrects their own work sessions.</summary>
+	/// <summary>
+	///     Picks up unassigned nodes, and starts, finishes, and corrects work sessions on nodes they
+	///     control — for any worker on such a node, not only themselves (ADR 0032).
+	/// </summary>
 	Worker = 3,
 
 	/// <summary>Manages user cost rates and node rate overrides.</summary>

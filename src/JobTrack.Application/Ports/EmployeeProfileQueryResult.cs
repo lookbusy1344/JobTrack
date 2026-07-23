@@ -8,7 +8,7 @@ using Abstractions;
 ///     <see cref="Domain.Authorization.EmployeeAccessPolicy" /> without a second round-trip — every
 ///     operation reloads authoritative roles fresh rather than trusting cached claims (plan §7.5).
 /// </summary>
-public sealed record EmployeeProfileQueryResult
+internal sealed record EmployeeProfileQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }

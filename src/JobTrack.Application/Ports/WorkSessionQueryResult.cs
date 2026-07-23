@@ -7,7 +7,7 @@ using Abstractions;
 ///     roles alongside the target worker's sessions so <see cref="JobQueries" /> can apply
 ///     <see cref="Domain.Authorization.WorkSessionAccessPolicy" /> without a second round-trip.
 /// </summary>
-public sealed record WorkSessionQueryResult
+internal sealed record WorkSessionQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }

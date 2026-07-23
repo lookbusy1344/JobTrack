@@ -431,11 +431,11 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IRateCommandPort CreateRatePort(string connectionString);
+	internal abstract IRateCommandPort CreateRatePort(string connectionString);
 
-	protected abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
+	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 

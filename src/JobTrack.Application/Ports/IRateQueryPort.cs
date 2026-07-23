@@ -7,7 +7,7 @@ using Abstractions;
 ///     Loads the target employee's cost rates and node rate overrides alongside the actor's current
 ///     roles in one round-trip, the same shape as <see cref="IScheduleQueryPort" />.
 /// </summary>
-public interface IRateQueryPort
+internal interface IRateQueryPort
 {
 	/// <summary>Loads the employee's cost rates/node rate overrides and the actor's current roles.</summary>
 	/// <exception cref="EntityNotFoundException">The actor or the target employee does not exist.</exception>

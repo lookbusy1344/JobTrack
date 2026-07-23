@@ -144,6 +144,10 @@ public sealed class JobTrackClientUsageExampleTests
 		public Task<SetTwoFactorStateResult> SetTwoFactorStateAsync(
 			SetTwoFactorStateRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<ChangeOwnPasswordResult> ChangeOwnPasswordAsync(
+			ChangeOwnPasswordRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
 	}
 
 	private sealed class FakeAuditQueries : IAuditQueries
@@ -301,6 +305,10 @@ public sealed class JobTrackClientUsageExampleTests
 		public Task<WorkSessionResult> FinishSessionAsync(FinishSessionRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 
+		public Task<FinishSessionAndUpdateWriteUpResult> FinishSessionAndUpdateWriteUpAsync(
+			FinishSessionAndUpdateWriteUpRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
 		public Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 
@@ -340,6 +348,9 @@ public sealed class JobTrackClientUsageExampleTests
 			throw new NotSupportedException("Not exercised by this usage example.");
 
 		public Task AddPrerequisiteAsync(AddPrerequisiteRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task AddPrerequisitesAsync(AddPrerequisitesRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 
 		public Task RemovePrerequisiteAsync(RemovePrerequisiteRequest request, CancellationToken cancellationToken = default) =>

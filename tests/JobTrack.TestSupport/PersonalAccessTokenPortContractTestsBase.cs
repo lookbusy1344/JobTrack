@@ -168,11 +168,11 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IPersonalAccessTokenPort CreatePort(string connectionString);
+	internal abstract IPersonalAccessTokenPort CreatePort(string connectionString);
 
-	protected abstract IPersonalAccessTokenPort CreatePort(string connectionString, IClock clock);
+	internal abstract IPersonalAccessTokenPort CreatePort(string connectionString, IClock clock);
 
 	/// <summary>
 	///     Formats an <see cref="Instant" /> for a raw ADO.NET parameter matching the

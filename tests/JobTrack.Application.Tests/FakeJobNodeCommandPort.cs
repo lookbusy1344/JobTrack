@@ -435,6 +435,23 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		return Task.CompletedTask;
 	}
 
+	public Task AddPrerequisitesAsync(AddPrerequisitesRequest request, CancellationToken cancellationToken = default)
+	{
+		var before = _prerequisites.ToHashSet();
+		try {
+			foreach (var edge in request.Edges) {
+				AddPrerequisiteCore(request.Context.Actor, edge.RequiredJobId, edge.DependentJobId);
+			}
+		}
+		catch {
+			_prerequisites.Clear();
+			_prerequisites.UnionWith(before);
+			throw;
+		}
+
+		return Task.CompletedTask;
+	}
+
 	public Task<ImportSubtreeResult> ImportSubtreeAsync(ImportSubtreeRequest request, CancellationToken cancellationToken = default)
 	{
 		_ = GetExisting(request.ParentId);

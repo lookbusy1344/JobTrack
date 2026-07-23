@@ -40,7 +40,8 @@ public static class JobTrackPostgreSql
 		var tokens = new PostgreSqlPersonalAccessTokenPort(dataSource, clock);
 		var requests = new PostgreSqlJobRequestCommandPort(dataSource, clock);
 		var authenticationAudit = new PostgreSqlAuthenticationAuditPort(dataSource, clock);
-		var credentials = new PostgreSqlAccountCredentialPort(dataSource, clock);
+		var credentials = new PostgreSqlAccountCredentialPort(
+			dataSource, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
 		var costQueries = new CostQueries(costs);
 
 		return new JobTrackClient(

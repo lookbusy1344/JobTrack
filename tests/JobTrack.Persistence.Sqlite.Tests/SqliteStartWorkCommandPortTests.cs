@@ -25,18 +25,18 @@ public sealed class SqliteStartWorkCommandPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
+	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
 		new SqliteWorkSessionCommandPort(connectionString, SystemClock.Instance);
 
-	protected override ILeafWorkQueryPort CreateLeafWorkQueryPort(string connectionString) =>
+	internal override ILeafWorkQueryPort CreateLeafWorkQueryPort(string connectionString) =>
 		new SqliteLeafWorkQueryPort(connectionString);
 
-	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
 		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
 }

@@ -8,7 +8,7 @@ using NodaTime;
 ///     Browse subtree fetch (ADR 0039). Persistence-internal: Stage 3 maps this onto the public
 ///     <c>JobSubtreeResult</c> shape (interval ordinals, cost roll-up) rather than exposing it directly.
 /// </summary>
-public sealed record JobNodeSubtreeRow
+internal sealed record JobNodeSubtreeRow
 {
 	/// <summary>The node's <c>job_node</c> identifier.</summary>
 	public required JobNodeId Id { get; init; }

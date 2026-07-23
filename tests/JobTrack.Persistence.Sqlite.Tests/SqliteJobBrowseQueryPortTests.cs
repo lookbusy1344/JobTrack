@@ -25,18 +25,18 @@ public sealed class SqliteJobBrowseQueryPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateCommandPort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateCommandPort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
 
-	protected override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
+	internal override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
 		new SqliteJobBrowseQueryPort(connectionString);
 
-	protected override IJobBrowseQueryPort CreateBrowsePortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor) =>
+	internal override IJobBrowseQueryPort CreateBrowsePortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor) =>
 		new SqliteJobBrowseQueryPort(connectionString, [interceptor]);
 }

@@ -12,7 +12,7 @@ using NodaTime;
 ///         cref="Domain.Authorization.CostAccessPolicy" />
 ///     decides what a specific caller may see of it.
 /// </summary>
-public sealed record AuditEventRecord
+internal sealed record AuditEventRecord
 {
 	/// <summary>The audit event's identifier.</summary>
 	public required AuditEventId Id { get; init; }

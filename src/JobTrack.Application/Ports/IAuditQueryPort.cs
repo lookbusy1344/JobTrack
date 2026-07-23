@@ -11,7 +11,7 @@ using Abstractions;
 ///     bound, ordering, and limit all execute in SQL (fresh-eyes review §2.3) -- no provider may load a
 ///     full result set and then filter/page it in memory.
 /// </summary>
-public interface IAuditQueryPort
+internal interface IAuditQueryPort
 {
 	/// <summary>Loads the actor's current roles for an authorization pre-check before audit search materialization.</summary>
 	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>

@@ -130,53 +130,29 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 			return RedirectToPage(CurrentRouteValues());
 		}
 
-		var failures = new List<string>();
-		var addedCount = 0;
-
 		try {
-			foreach (var otherId in requiresIds) {
-				addedCount += await AddOneAsync(actor.Value, otherId, new(NodeId), failures, cancellationToken);
-			}
+			PrerequisiteEdge[] edges = [
+				.. requiresIds.Select(otherId => new PrerequisiteEdge(otherId, new(NodeId))),
+				.. requiredByIds.Select(otherId => new PrerequisiteEdge(new(NodeId), otherId)),
+			];
+			await jobTrackClient.Jobs.AddPrerequisitesAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Edges = [.. edges],
+			}, cancellationToken);
 
-			foreach (var otherId in requiredByIds) {
-				addedCount += await AddOneAsync(actor.Value, new(NodeId), otherId, failures, cancellationToken);
-			}
+			SuccessMessage = edges.Length == 1 ? "Dependency added." : $"{edges.Length} dependencies added.";
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
 		}
-
-		if (addedCount > 0) {
-			SuccessMessage = addedCount == 1 ? "Dependency added." : $"{addedCount} dependencies added.";
+		catch (EntityNotFoundException) {
+			ErrorMessage = "One of those job nodes no longer exists.";
 		}
-
-		if (failures.Count > 0) {
-			ErrorMessage = string.Join(" ", failures);
+		catch (InvariantViolationException ex) {
+			ErrorMessage = ex.Message;
 		}
 
 		return RedirectToPage(CurrentRouteValues());
-	}
-
-	private async Task<int> AddOneAsync(
-		AppUserId actor, JobNodeId requiredJobId, JobNodeId dependentJobId, List<string> failures, CancellationToken cancellationToken)
-	{
-		try {
-			await jobTrackClient.Jobs.AddPrerequisiteAsync(
-				new() {
-					Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
-					RequiredJobId = requiredJobId,
-					DependentJobId = dependentJobId,
-				}, cancellationToken);
-			return 1;
-		}
-		catch (EntityNotFoundException) {
-			failures.Add("One of those job nodes no longer exists.");
-			return 0;
-		}
-		catch (InvariantViolationException ex) {
-			failures.Add(ex.Message);
-			return 0;
-		}
 	}
 
 	public async Task<IActionResult> OnPostRemoveAsync(long requiredJobId, long dependentJobId, CancellationToken cancellationToken)

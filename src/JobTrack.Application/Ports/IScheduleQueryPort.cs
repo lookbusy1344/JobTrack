@@ -7,7 +7,7 @@ using Abstractions;
 ///     6). Loads the target employee's schedule versions and exceptions alongside the actor's current
 ///     roles in one round-trip, the same shape as <see cref="IEmployeeQueryPort" />.
 /// </summary>
-public interface IScheduleQueryPort
+internal interface IScheduleQueryPort
 {
 	/// <summary>Loads the employee's schedule versions/exceptions and the actor's current roles.</summary>
 	/// <exception cref="EntityNotFoundException">The actor or the target employee does not exist.</exception>

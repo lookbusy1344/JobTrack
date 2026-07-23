@@ -3,7 +3,7 @@ namespace JobTrack.Application.Ports;
 using Abstractions;
 
 /// <summary>Input to <see cref="IEmployeeCommandPort.CreateEmployeeAsync" /> — carries an already-hashed credential.</summary>
-public sealed record CreateEmployeePersistenceRequest
+internal sealed record CreateEmployeePersistenceRequest
 {
 	/// <summary>The acting user and correlation identifier.</summary>
 	public required CommandContext Context { get; init; }

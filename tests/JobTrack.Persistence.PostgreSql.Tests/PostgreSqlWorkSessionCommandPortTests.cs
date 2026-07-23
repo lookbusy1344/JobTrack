@@ -22,23 +22,31 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
+	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
+	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
 		CreateSessionPort(connectionString, SystemClock.Instance);
 
-	protected override IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock) =>
+	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock) =>
 		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), clock);
 
-	protected override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new PostgreSqlAchievementCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	protected override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
 		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+
+	[Fact]
+	public Task Concurrent_compound_finish_with_write_up_vs_node_edit_has_exactly_one_complete_outcome() =>
+		AssertConcurrentFinishWithWriteUpVersusNodeEditAsync();
+
+	[Fact]
+	public Task Concurrent_compound_finish_with_write_up_vs_session_finish_has_exactly_one_complete_outcome() =>
+		AssertConcurrentFinishWithWriteUpVersusSessionFinishAsync();
 
 	/// <summary>
 	///     There is no advisory lock domain for work sessions (ADR 0012): schema version 0007's GiST

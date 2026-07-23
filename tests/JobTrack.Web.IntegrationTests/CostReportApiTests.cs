@@ -174,6 +174,22 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Cost_details_reports_an_unprocessable_entity_when_no_rate_resolves()
+	{
+		var (_, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.no-rate.worker", addUserRate: false);
+		_ = await SeedEmployeeAsync("cost.no-rate.viewer", EmployeeRole.CostViewer);
+		var authCookie = await SignInAsync("cost.no-rate.viewer");
+
+		var response = await GetAsync($"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
+
+		// A valid, authorized request the server cannot cost because no rate source applies is a
+		// semantic failure of the request against server data, not a caller usage error (spec
+		// jobtrack_spec_claude §12.6: MissingRateException -> 422).
+		response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+		response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+	}
+
+	[Fact]
 	public async Task Hierarchy_totals_rejects_a_subtree_larger_than_the_requested_node_limit()
 	{
 		_ = await SeedWorkedLeafWithFinishedSessionAsync("cost.node-limit.worker");
@@ -188,7 +204,8 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
 	}
 
-	private async Task<(AppUserId WorkerId, JobNodeId LeafId)> SeedWorkedLeafWithFinishedSessionAsync(string workerUserName)
+	private async Task<(AppUserId WorkerId, JobNodeId LeafId)> SeedWorkedLeafWithFinishedSessionAsync(
+		string workerUserName, bool addUserRate = true)
 	{
 		var workerId = await SeedEmployeeAsync(workerUserName, EmployeeRole.Worker);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
@@ -211,11 +228,14 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 				null),
 			Reason = "Full working window for cost-report API tests",
 		});
-		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
-			UserId = workerId,
-			Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
-		});
+		if (addUserRate) {
+			_ = await seedClient.Rates.AddUserCostRateAsync(new() {
+				Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+				UserId = workerId,
+				Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
+			});
+		}
+
 		var started = await seedClient.Work.StartSessionAsync(new() {
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			LeafWorkId = leaf.Id,

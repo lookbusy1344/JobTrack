@@ -15,7 +15,7 @@ using Ports;
 ///     <see cref="ReadinessCalculator" /> directly over the port's materialized inputs, while browsing
 ///     queries pass straight through to <see cref="IJobBrowseQueryPort" />.
 /// </summary>
-public sealed class JobQueries : IJobQueries
+internal sealed class JobQueries : IJobQueries
 {
 	// One employee's rate/schedule history is not offset/limit-paginated like a flat collection --
 	// both snapshots are always returned whole so a caller sees a complete, self-consistent picture
@@ -516,14 +516,23 @@ public sealed class JobQueries : IJobQueries
 		}
 
 		try {
-			var result = await _costQueries.GetBulkNodeCostsAsync(
-				new() { Context = context, NodeIds = [.. candidateIds], AsOf = asOf }, cancellationToken).ConfigureAwait(false);
-			return result.DisplayedCosts;
+			var displayed = new Dictionary<JobNodeId, Money>();
+			// The bulk port rejects a candidate set wider than its cap. A listing page can legitimately
+			// exceed it (a caller-supplied id set via GetJobSummariesAsync is not page-bounded), so chunk
+			// to the cap and merge -- prices are per-node independent, so batching is exact. Overflowing
+			// the port in one call and swallowing the resulting ArgumentOutOfRangeException would blank
+			// every row's cost instead, which is why that is no longer caught below.
+			foreach (var batch in candidateIds.Chunk(CostQueries.MaxBulkNodeIdCount)) {
+				var result = await _costQueries.GetBulkNodeCostsAsync(
+					new() { Context = context, NodeIds = [.. batch], AsOf = asOf }, cancellationToken).ConfigureAwait(false);
+				foreach (var (nodeId, cost) in result.DisplayedCosts) {
+					displayed[nodeId] = cost;
+				}
+			}
+
+			return EquatableDictionaryFactory.CopyOf(displayed);
 		}
 		catch (AuthorizationDeniedException) {
-			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
-		}
-		catch (ArgumentOutOfRangeException) {
 			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
 		}
 		catch (MissingRateException) {

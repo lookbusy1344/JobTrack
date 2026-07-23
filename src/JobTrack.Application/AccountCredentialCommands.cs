@@ -1,9 +1,10 @@
 namespace JobTrack.Application;
 
+using Abstractions;
 using Ports;
 
 /// <summary>Application command surface for credential-sensitive account state transitions.</summary>
-public sealed class AccountCredentialCommands : IAccountCredentialCommands
+internal sealed class AccountCredentialCommands : IAccountCredentialCommands
 {
 	private readonly IAccountCredentialPort port;
 
@@ -30,5 +31,28 @@ public sealed class AccountCredentialCommands : IAccountCredentialCommands
 			new CommandContext { Actor = request.ActorUserId, CorrelationId = request.CorrelationId },
 			null,
 			() => port.SetTwoFactorStateAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
+	public Task<ChangeOwnPasswordResult> ChangeOwnPasswordAsync(
+		ChangeOwnPasswordRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(request.IdentityUserId);
+		if (request.ActorUserId.IsUnspecified) {
+			throw new ArgumentException("Actor user id must be specified.", nameof(request));
+		}
+
+		if (!PasswordPolicy.IsSatisfiedBy(request.NewPassword)) {
+			throw new InvariantViolationException(
+				"account-new-password-policy",
+				$"The new password must be at least {PasswordPolicy.MinimumLength} characters and contain at least one letter and one digit.");
+		}
+
+		return JobTrackOperation.TraceAsync(
+			"credentials.change-own-password",
+			new CommandContext { Actor = request.ActorUserId, CorrelationId = request.CorrelationId },
+			null,
+			() => port.ChangeOwnPasswordAsync(request, cancellationToken));
 	}
 }

@@ -7,7 +7,7 @@ using Abstractions;
 ///     alongside the target employee's schedule snapshot so <see cref="JobQueries" /> can apply
 ///     <see cref="Domain.Authorization.ScheduleAccessPolicy" /> without a second round-trip.
 /// </summary>
-public sealed record ScheduleQueryResult
+internal sealed record ScheduleQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }

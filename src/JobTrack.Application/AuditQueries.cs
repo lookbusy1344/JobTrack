@@ -15,7 +15,7 @@ using Ports;
 ///     asked for one more row than the page size, so the extra row's presence -- never a second count
 ///     query -- decides whether a continuation cursor is returned.
 /// </summary>
-public sealed class AuditQueries : IAuditQueries
+internal sealed class AuditQueries : IAuditQueries
 {
 	private readonly IAuditQueryPort _port;
 

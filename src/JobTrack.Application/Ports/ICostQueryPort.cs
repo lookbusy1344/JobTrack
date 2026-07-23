@@ -15,7 +15,7 @@ using NodaTime;
 ///     performs no I/O or authorization-scoped filtering of its own, only the pure
 ///     engine calls and the exposure boundary the engine already enforces.
 /// </summary>
-public interface ICostQueryPort
+internal interface ICostQueryPort
 {
 	/// <summary>Loads the actor's current roles for an authorization pre-check before heavy cost-input materialization.</summary>
 	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>

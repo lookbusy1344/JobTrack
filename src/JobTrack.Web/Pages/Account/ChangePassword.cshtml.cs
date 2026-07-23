@@ -1,6 +1,7 @@
 namespace JobTrack.Web.Pages.Account;
 
 using System.ComponentModel.DataAnnotations;
+using Abstractions;
 using Application;
 using Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -39,23 +40,29 @@ public sealed class ChangePasswordModel(
 			return Challenge();
 		}
 
-		var changeResult = await userManager.ChangePasswordAsync(user, Input.CurrentPassword, Input.NewPassword);
-		if (!changeResult.Succeeded) {
-			ErrorMessage = string.Join(" ", changeResult.Errors.Select(error => error.Description));
+		try {
+			var updated = await jobTrackClient.Credentials.ChangeOwnPasswordAsync(
+				new() {
+					ActorUserId = user.AppUserId,
+					IdentityUserId = user.Id,
+					CurrentPassword = Input.CurrentPassword,
+					NewPassword = Input.NewPassword,
+					CorrelationId = Guid.NewGuid(),
+				});
+
+			user.SecurityStamp = updated.SecurityStamp;
+			user.ConcurrencyStamp = updated.ConcurrencyStamp;
+			user.RequiresPasswordChange = false;
+			await signInManager.RefreshSignInAsync(user);
+		}
+		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-current-password-incorrect") {
+			ErrorMessage = "The current password is incorrect.";
 			return Page();
 		}
-
-		user.RequiresPasswordChange = false;
-		_ = await userManager.UpdateAsync(user);
-		await signInManager.RefreshSignInAsync(user);
-
-		// A self-service password change is the same credential-sensitivity class as an
-		// administrator-driven reset -- it must revoke every live personal access token too
-		// (ADR 0029), not only the web session RefreshSignInAsync already rotates.
-		await jobTrackClient.Tokens.RevokeAllAsync(
-			new() { Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() }, TargetUserId = user.AppUserId });
-
-		await AuthenticationAudit.RecordKnownAsync(jobTrackClient, user, AuthenticationAuditEventKind.PasswordChanged);
+		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-new-password-policy") {
+			ErrorMessage = ex.Message;
+			return Page();
+		}
 
 		return RedirectToPage("/Index");
 	}

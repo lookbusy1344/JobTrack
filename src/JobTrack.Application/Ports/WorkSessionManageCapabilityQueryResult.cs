@@ -9,7 +9,7 @@ using Abstractions;
 ///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanManage" /> per leaf without a second
 ///     round-trip.
 /// </summary>
-public sealed record WorkSessionManageCapabilityQueryResult
+internal sealed record WorkSessionManageCapabilityQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }

@@ -10,7 +10,7 @@ using Domain.Hierarchy;
 ///     subtree of every required job (achievement derivation is recursive, so a branch's own
 ///     achievement depends on its whole subtree, not just the node itself).
 /// </summary>
-public sealed record ReadinessQueryResult
+internal sealed record ReadinessQueryResult
 {
 	/// <summary>Every node needed to evaluate readiness and derive achievement, keyed by identifier.</summary>
 	public required EquatableDictionary<JobNodeId, HierarchyNode> NodesById { get; init; }

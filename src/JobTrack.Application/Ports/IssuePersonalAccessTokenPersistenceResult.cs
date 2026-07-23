@@ -7,7 +7,7 @@ using NodaTime;
 ///     Persisted state returned by <see cref="IPersonalAccessTokenPort.IssueAsync" /> — see
 ///     <see cref="IssuePersonalAccessTokenPersistenceRequest" />.
 /// </summary>
-public sealed record IssuePersonalAccessTokenPersistenceResult
+internal sealed record IssuePersonalAccessTokenPersistenceResult
 {
 	/// <summary>The new token's identifier.</summary>
 	public required PersonalAccessTokenId Id { get; init; }

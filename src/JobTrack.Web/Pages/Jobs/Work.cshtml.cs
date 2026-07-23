@@ -269,11 +269,6 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
-		var (writeUpSaved, writeUpFailure) = await SaveWriteUpFirstAsync(actor.Value, nodeVersion, writeUp, cancellationToken);
-		if (writeUpFailure is not null) {
-			return writeUpFailure;
-		}
-
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
@@ -281,22 +276,26 @@ public sealed class WorkModel(
 				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 			}
 
-			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
+			var result = await jobTrackClient.Work.FinishSessionAndUpdateWriteUpAsync(new() {
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				SessionId = new(sessionId),
 				Version = version,
 				FinishedAt = finishedAtInstant,
+				WriteUpChange = nodeVersion is long expectedNodeVersion
+					? new() { NodeVersion = expectedNodeVersion, WriteUp = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp }
+					: null,
 			}, cancellationToken);
-			SuccessMessage = WithWriteUpNote("Ends this session; the job stays In Progress.", writeUpSaved);
+			SuccessMessage = WithWriteUpNote("Ends this session; the job stays In Progress.", result.WriteUpChanged);
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
 		}
 		catch (EntityNotFoundException) {
-			ErrorMessage = "That session does not exist.";
+			ErrorMessage = "That session or job node does not exist.";
 		}
 		catch (ConcurrencyConflictException) {
-			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
+			ErrorMessage =
+				"Someone else changed this session or this job's details since the page was loaded. The latest state is shown below.";
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
@@ -333,11 +332,6 @@ public sealed class WorkModel(
 			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 		}
 
-		var (writeUpSaved, writeUpFailure) = await SaveWriteUpFirstAsync(actor.Value, nodeVersion, writeUp, cancellationToken);
-		if (writeUpFailure is not null) {
-			return writeUpFailure;
-		}
-
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(completionFinishedAt, zone, out var finishedAtInstant)) {
@@ -356,9 +350,12 @@ public sealed class WorkModel(
 				FinishedAt = finishedAtInstant,
 				CompletionNote = string.IsNullOrWhiteSpace(completionNote) ? null : completionNote,
 				FinalAchievement = finalAchievement,
+				WriteUpChange = nodeVersion is long expectedNodeVersion
+					? new() { NodeVersion = expectedNodeVersion, WriteUp = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp }
+					: null,
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote(
-				DescribeCompletionOutcome(result.Achievement, result.FinishedSessions.Count), writeUpSaved);
+				DescribeCompletionOutcome(result.Achievement, result.FinishedSessions.Count), result.WriteUpChanged);
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -368,7 +365,7 @@ public sealed class WorkModel(
 		}
 		catch (ConcurrencyConflictException) {
 			ErrorMessage =
-				"Someone else changed this leaf or one of its active sessions since the page was loaded. The latest state is shown below.";
+				"Someone else changed this leaf, one of its active sessions, or this job's details since the page was loaded. The latest state is shown below.";
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
@@ -493,8 +490,11 @@ public sealed class WorkModel(
 	///     <paramref name="nodeVersion" /> is the node's own optimistic-concurrency version captured when
 	///     the page was rendered (<see cref="CurrentNode" />), so a concurrent structural edit (e.g. via
 	///     <c>/Jobs/Edit</c>) is still detected as a conflict even though this handler's own fetch is fresh.
-	///     This is the write-up's own button; the same field also rides along with Pause and Complete,
-	///     which share its one form.
+	///     This is the write-up's own standalone button -- Pause (<see cref="OnPostFinishAsync" />) and
+	///     Complete (<see cref="OnPostCompleteAsync" />) instead carry the same field into
+	///     <see cref="IWorkCommands.FinishSessionAndUpdateWriteUpAsync" />/<see cref="IWorkCommands.CompleteLeafAsync" />'s
+	///     own optional write-up change (remediation plan §2.1), so a write-up submitted alongside Pause
+	///     or Complete commits with that command atomically rather than as a separate mutation.
 	/// </summary>
 	public async Task<IActionResult> OnPostSaveWriteUpAsync(long nodeVersion, string? writeUp, CancellationToken cancellationToken)
 	{
@@ -514,14 +514,11 @@ public sealed class WorkModel(
 	}
 
 	/// <summary>
-	///     Persists the write-up submitted alongside a Pause or Complete before that command runs, so a
-	///     rejected command never silently discards what the worker typed. A no-op when
+	///     Backs the write-up's own standalone Save button (<see cref="OnPostSaveWriteUpAsync" /> only --
+	///     Pause and Complete no longer call this, see that handler's own doc). A no-op when
 	///     <paramref name="nodeVersion" /> is absent (the post came from a form without the field) or when
 	///     the submitted text already matches what is stored — an unchanged write-up must not burn a node
-	///     version or write an audit entry on every pause. Deliberately two calls rather than one
-	///     transaction: the node's write-up and the leaf's work state are separate aggregates with separate
-	///     concurrency tokens, and doing the write-up first means the worst case is a saved write-up on a
-	///     job whose Complete was then rejected — not a completed job with the text thrown away.
+	///     version or write an audit entry.
 	/// </summary>
 	/// <returns>
 	///     Whether the write-up was actually changed, and the result to return instead of continuing when

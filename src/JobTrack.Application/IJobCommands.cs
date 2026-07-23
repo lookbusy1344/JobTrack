@@ -93,6 +93,13 @@ public interface IJobCommands
 	/// </exception>
 	Task AddPrerequisiteAsync(AddPrerequisiteRequest request, CancellationToken cancellationToken = default);
 
+	/// <summary>
+	///     Atomic composite: adds every edge in <see cref="AddPrerequisitesRequest.Edges" /> in one
+	///     provider transaction and correlation. If any edge is invalid or unauthorized, no edge is
+	///     committed.
+	/// </summary>
+	Task AddPrerequisitesAsync(AddPrerequisitesRequest request, CancellationToken cancellationToken = default);
+
 	/// <summary>Removes a prerequisite edge.</summary>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor may not manage the required or dependent job's subtree (see

@@ -17,7 +17,7 @@ using Domain.Schedules;
 ///     0017); <see cref="CostEngine" /> itself is responsible for never exposing a foreign session's
 ///     identity in its output.
 /// </summary>
-public sealed record WorkerCostInputs
+internal sealed record WorkerCostInputs
 {
 	/// <summary>Every one of this worker's sessions database-wide, already eligible-clipped (spec §10.1).</summary>
 	public required EquatableArray<CostableSession> Sessions { get; init; }

@@ -7,7 +7,7 @@ using Abstractions;
 ///     alongside the target employee's rate snapshot so <see cref="JobQueries" /> can apply
 ///     <see cref="Domain.Authorization.CostAccessPolicy" /> without a second round-trip.
 /// </summary>
-public sealed record RateQueryResult
+internal sealed record RateQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }

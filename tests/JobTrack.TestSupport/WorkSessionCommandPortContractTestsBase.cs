@@ -7,6 +7,7 @@ using Application;
 using Application.Ports;
 using AwesomeAssertions;
 using Database;
+using Microsoft.EntityFrameworkCore;
 using NodaTime;
 
 /// <summary>
@@ -869,6 +870,199 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task Completing_a_leaf_with_a_write_up_change_applies_it_in_the_same_commit()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var result = await port.CompleteLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			WriteUpChange = new() { NodeVersion = 1, WriteUp = "All done" },
+		});
+
+		result.WriteUpChanged.Should().BeTrue();
+		result.Node.Should().NotBeNull();
+		result.Node!.WriteUp.Should().Be("All done");
+		result.Node.Version.Should().Be(2);
+	}
+
+	[Fact]
+	public async Task Completing_a_leaf_with_an_unchanged_write_up_text_reports_no_change_and_does_not_burn_a_node_version()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var result = await port.CompleteLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			WriteUpChange = new() { NodeVersion = 1, WriteUp = null },
+		});
+
+		result.WriteUpChanged.Should().BeFalse();
+		result.Node!.Version.Should().Be(1);
+	}
+
+	[Fact]
+	public async Task Completing_a_leaf_with_a_stale_node_version_in_its_write_up_change_throws_a_concurrency_conflict_and_rolls_back_the_completion()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var act = () => port.CompleteLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			WriteUpChange = new() { NodeVersion = 99, WriteUp = "All done" },
+		});
+
+		await act.Should().ThrowAsync<ConcurrencyConflictException>();
+
+		var auditPort = CreateAuditQueryPort(database.ConnectionString);
+		var leafAudit = await auditPort.SearchAuditEventsAsync(
+			new() { EntityType = "leaf_work", EntityId = leafId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+		leafAudit.Events.Should().NotContain(
+			e => e.Operation == "set-achievement" && e.Reason != "Advanced automatically on session start",
+			"the rejected write-up change must roll back the completion's own achievement transition too");
+	}
+
+	[Fact]
+	public async Task Finishing_a_session_with_a_write_up_change_applies_both_in_one_commit()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+
+		var result = await port.FinishSessionAndUpdateWriteUpAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Paused for lunch" },
+		});
+
+		result.Session.FinishedAt.Should().NotBeNull();
+		result.WriteUpChanged.Should().BeTrue();
+		result.Node!.WriteUp.Should().Be("Paused for lunch");
+		result.Node.Version.Should().Be(2);
+	}
+
+	[Fact]
+	public async Task Finishing_a_session_with_no_write_up_change_leaves_the_node_version_untouched()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+
+		var result = await port.FinishSessionAndUpdateWriteUpAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+
+		result.WriteUpChanged.Should().BeFalse();
+		result.Node.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task Audit_persistence_failure_rolls_back_both_the_session_finish_and_write_up()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartSessionAsync(
+			new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var before = await ReadFinishAndWriteUpStateAsync(leafId, session.Id);
+		await using (var connection = await OpenExistingConnectionAsync()) {
+			await AuditFailureInjection.InstallAsync(connection, Provider);
+		}
+
+		var act = () => port.FinishSessionAndUpdateWriteUpAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Must roll back" },
+		});
+
+		await act.Should().ThrowAsync<DbUpdateException>();
+		(await ReadFinishAndWriteUpStateAsync(leafId, session.Id)).Should().Be(
+			before,
+			"the session, node, and both audit events are one provider transaction");
+	}
+
+	[Fact]
+	public async Task Audit_persistence_failure_rolls_back_completion_sessions_achievement_and_write_up()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(
+			new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var before = await ReadCompleteAndWriteUpStateAsync(leafId, session.Id);
+		await using (var connection = await OpenExistingConnectionAsync()) {
+			await AuditFailureInjection.InstallAsync(connection, Provider);
+		}
+
+		var act = () => port.CompleteLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Must all roll back" },
+		});
+
+		await act.Should().ThrowAsync<DbUpdateException>();
+		(await ReadCompleteAndWriteUpStateAsync(leafId, session.Id)).Should().Be(
+			before,
+			"completion's node, session, achievement, and audit writes share one provider transaction");
+	}
+
+	/// <summary>
+	///     ADR 0045 §5: a worker who may finish their own session (the self-finish exception) but does
+	///     not control the node cannot smuggle a write-up change through this composite -- the same
+	///     rejection the old two-call web-layer sequence produced via a separate <c>EditAsync</c>.
+	/// </summary>
+	[Fact]
+	public async Task Finishing_a_session_with_a_write_up_change_by_a_worker_who_does_not_control_the_node_is_denied_and_the_session_stays_active()
+	{
+		var (rootId, jobManagerId, workerId, _) = await SeedReadyLeafAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		// Owned by the job manager, not the worker, so the worker's session-owner self-finish exception
+		// applies but WorkSessionAccessPolicy.CanManage's node-control rule does not.
+		var managerOwnedLeaf = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Manager-owned leaf",
+			OwnerUserId = jobManagerId,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = managerOwnedLeaf.Id });
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartSessionAsync(
+			new() { Context = ContextFor(jobManagerId), LeafWorkId = managerOwnedLeaf.Id, WorkedByUserId = workerId });
+
+		var act = () => port.FinishSessionAndUpdateWriteUpAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Trying to sneak this in" },
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+
+		var auditPort = CreateAuditQueryPort(database.ConnectionString);
+		var sessionAudit = await auditPort.SearchAuditEventsAsync(
+			new() { EntityType = "work_session", EntityId = session.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+		sessionAudit.Events.Should().NotContain(
+			e => e.Operation == "finish-work-session", "the denied write-up change must roll back the session finish too");
+	}
+
+	[Fact]
 	public async Task A_job_manager_can_reopen_and_start_for_a_target_worker_who_neither_controls_nor_participated()
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedTerminalLeafAsync();
@@ -1130,19 +1324,126 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IJobNodeCommandPort CreateJobNodePort(string connectionString);
+	internal abstract IJobNodeCommandPort CreateJobNodePort(string connectionString);
 
-	protected abstract IWorkSessionCommandPort CreateSessionPort(string connectionString);
+	internal abstract IWorkSessionCommandPort CreateSessionPort(string connectionString);
 
-	protected abstract IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock);
+	internal abstract IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock);
 
-	protected abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
+	internal abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
 
-	protected abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
+	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
 	protected static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+
+	/// <summary>
+	///     Runs remediation plan §2.1's provider race between a compound session-finish/write-up
+	///     command and an independent full node edit from the same starting node version.
+	/// </summary>
+	protected async Task AssertConcurrentFinishWithWriteUpVersusNodeEditAsync()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var session = await CreateSessionPort(database.ConnectionString).StartSessionAsync(
+			new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+
+		var results = await Task.WhenAll(
+			TryFinishWithWriteUpAsync(
+				CreateSessionPort(database.ConnectionString), workerId, session.Id, session.Version),
+			TryConcurrentNodeEditAsync(
+				CreateJobNodePort(database.ConnectionString), workerId, leafId));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+		var state = await ReadFinishAndWriteUpStateAsync(leafId, session.Id);
+		state.Should().Be(results[0]
+			? new FinishAndWriteUpState("Compound write-up", 2, true, 2)
+			: new FinishAndWriteUpState("Concurrent edit", 2, false, 1));
+	}
+
+	/// <summary>
+	///     Runs remediation plan §2.1's provider race between the compound command and a concurrent
+	///     standalone finish of the same session.
+	/// </summary>
+	protected async Task AssertConcurrentFinishWithWriteUpVersusSessionFinishAsync()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var session = await CreateSessionPort(database.ConnectionString).StartSessionAsync(
+			new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+
+		var results = await Task.WhenAll(
+			TryFinishWithWriteUpAsync(
+				CreateSessionPort(database.ConnectionString), workerId, session.Id, session.Version),
+			TryStandaloneFinishAsync(
+				CreateSessionPort(database.ConnectionString), workerId, session.Id, session.Version));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+		var state = await ReadFinishAndWriteUpStateAsync(leafId, session.Id);
+		state.Should().Be(results[0]
+			? new FinishAndWriteUpState("Compound write-up", 2, true, 2)
+			: new FinishAndWriteUpState(null, 1, true, 2));
+	}
+
+	private static async Task<bool> TryFinishWithWriteUpAsync(
+		IWorkSessionCommandPort port,
+		AppUserId actorId,
+		WorkSessionId sessionId,
+		long sessionVersion)
+	{
+		try {
+			_ = await port.FinishSessionAndUpdateWriteUpAsync(new() {
+				Context = ContextFor(actorId),
+				SessionId = sessionId,
+				Version = sessionVersion,
+				WriteUpChange = new() { NodeVersion = 1, WriteUp = "Compound write-up" },
+			});
+			return true;
+		}
+		catch (ConcurrencyConflictException) {
+			return false;
+		}
+	}
+
+	private static async Task<bool> TryConcurrentNodeEditAsync(
+		IJobNodeCommandPort port,
+		AppUserId actorId,
+		JobNodeId leafId)
+	{
+		try {
+			_ = await port.EditAsync(new() {
+				Context = ContextFor(actorId),
+				NodeId = leafId,
+				Description = "Do the thing",
+				WriteUp = "Concurrent edit",
+				OwnerUserId = actorId,
+				Priority = Priority.Medium,
+				Version = 1,
+			});
+			return true;
+		}
+		catch (ConcurrencyConflictException) {
+			return false;
+		}
+	}
+
+	private static async Task<bool> TryStandaloneFinishAsync(
+		IWorkSessionCommandPort port,
+		AppUserId actorId,
+		WorkSessionId sessionId,
+		long sessionVersion)
+	{
+		try {
+			_ = await port.FinishSessionAsync(new() {
+				Context = ContextFor(actorId),
+				SessionId = sessionId,
+				Version = sessionVersion,
+			});
+			return true;
+		}
+		catch (ConcurrencyConflictException) {
+			return false;
+		}
+	}
 
 	private static async Task<JobNodeId> CreateReadyLeafAsync(
 		IJobNodeCommandPort jobNodePort, JobNodeId parentId, AppUserId jobManagerId, AppUserId workerId)
@@ -1255,6 +1556,65 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		return connection;
 	}
 
+	private async Task<FinishAndWriteUpState> ReadFinishAndWriteUpStateAsync(
+		JobNodeId leafId,
+		WorkSessionId sessionId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  SELECT jn.write_up,
+							         jn.row_version,
+							         CASE WHEN ws.finished_at IS NULL THEN 0 ELSE 1 END,
+							         ws.row_version
+							  FROM job_node jn
+							  JOIN work_session ws ON ws.leaf_work_id = jn.id
+							  WHERE jn.id = @leafId AND ws.id = @sessionId;
+							  """;
+		AddParameter(command, "@leafId", leafId.Value);
+		AddParameter(command, "@sessionId", sessionId.Value);
+		await using var reader = await command.ExecuteReaderAsync();
+		(await reader.ReadAsync()).Should().BeTrue();
+
+		return new(
+			reader.IsDBNull(0) ? null : reader.GetString(0),
+			Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+			Convert.ToBoolean(reader.GetValue(2), CultureInfo.InvariantCulture),
+			Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture));
+	}
+
+	private async Task<CompleteAndWriteUpState> ReadCompleteAndWriteUpStateAsync(
+		JobNodeId leafId,
+		WorkSessionId sessionId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  SELECT jn.write_up,
+							         jn.row_version,
+							         CASE WHEN ws.finished_at IS NULL THEN 0 ELSE 1 END,
+							         ws.row_version,
+							         lw.achievement_id,
+							         lw.row_version
+							  FROM job_node jn
+							  JOIN leaf_work lw ON lw.job_node_id = jn.id
+							  JOIN work_session ws ON ws.leaf_work_id = lw.job_node_id
+							  WHERE jn.id = @leafId AND ws.id = @sessionId;
+							  """;
+		AddParameter(command, "@leafId", leafId.Value);
+		AddParameter(command, "@sessionId", sessionId.Value);
+		await using var reader = await command.ExecuteReaderAsync();
+		(await reader.ReadAsync()).Should().BeTrue();
+
+		return new(
+			reader.IsDBNull(0) ? null : reader.GetString(0),
+			Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+			Convert.ToBoolean(reader.GetValue(2), CultureInfo.InvariantCulture),
+			Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
+			Convert.ToInt16(reader.GetValue(4), CultureInfo.InvariantCulture),
+			Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture));
+	}
+
 	private static void AddParameter(DbCommand command, string name, object value)
 	{
 		var parameter = command.CreateParameter();
@@ -1262,4 +1622,18 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		parameter.Value = value;
 		command.Parameters.Add(parameter);
 	}
+
+	private sealed record FinishAndWriteUpState(
+		string? WriteUp,
+		long NodeVersion,
+		bool SessionIsFinished,
+		long SessionVersion);
+
+	private sealed record CompleteAndWriteUpState(
+		string? WriteUp,
+		long NodeVersion,
+		bool SessionIsFinished,
+		long SessionVersion,
+		short AchievementId,
+		long LeafWorkVersion);
 }

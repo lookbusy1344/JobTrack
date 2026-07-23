@@ -7,6 +7,7 @@ using Application;
 using Application.Ports;
 using AwesomeAssertions;
 using Database;
+using Domain.Hierarchy;
 using NodaTime;
 
 /// <summary>
@@ -1174,6 +1175,14 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
+	private async Task<long> CountPrerequisitesAsync()
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT COUNT(*) FROM job_prerequisite;";
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
 	[Fact]
 	public async Task Adding_a_prerequisite_between_unrelated_leaves_succeeds()
 	{
@@ -1191,6 +1200,27 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		});
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-already-exists");
+	}
+
+	[Fact]
+	public async Task Adding_a_prerequisite_batch_rolls_back_every_edge_when_one_is_invalid()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var required = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+		var dependent = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+
+		var act = () => port.AddPrerequisitesAsync(new() {
+			Context = ContextFor(jobManagerId),
+			Edges = [
+				new PrerequisiteEdge(required.Id, dependent.Id),
+				new PrerequisiteEdge(dependent.Id, dependent.Id),
+			],
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-prerequisite-not-self");
+		(await CountPrerequisitesAsync()).Should().Be(0);
 	}
 
 	[Fact]
@@ -1453,11 +1483,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	/// <summary>SQLite needs <c>PRAGMA foreign_keys/busy_timeout</c> set per connection; PostgreSQL needs nothing.</summary>
 	protected abstract Task PrepareConnectionAsync(DbConnection connection);
 
-	protected abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
+	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
-	protected abstract IJobNodeCommandPort CreateCommandPort(string connectionString);
+	internal abstract IJobNodeCommandPort CreateCommandPort(string connectionString);
 
-	protected abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
+	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
 	/// <summary>PostgreSQL binds <see cref="DateTimeOffset" /> directly; SQLite needs ADR 0007's unix-epoch-ticks encoding.</summary>
 	protected abstract object EncodeInstant(DateTimeOffset value);

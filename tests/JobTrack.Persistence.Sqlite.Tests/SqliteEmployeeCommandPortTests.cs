@@ -25,10 +25,10 @@ public sealed class SqliteEmployeeCommandPortTests()
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	protected override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
-	protected override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
+	internal override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
 		new SqliteEmployeeCommandPort(connectionString, SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;

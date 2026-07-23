@@ -149,9 +149,9 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 			return new() { UserId = request.TargetUserId, Roles = currentRoles };
 		}
 
-		var affected = await context.Database.ExecuteSqlInterpolatedAsync(
-			$"DELETE FROM identity_user_role WHERE identity_user_id = {targetIdentityUserId} AND identity_role_id = {(short)request.Role};",
-			cancellationToken).ConfigureAwait(false);
+		var affected = await context.Set<IdentityUserRoleEntity>()
+			.Where(ur => ur.IdentityUserId == targetIdentityUserId && ur.IdentityRoleId == (short)request.Role)
+			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		if (affected > 0) {
 			AuditEventWriter.Add(
@@ -378,9 +378,10 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 		PostgreSqlJobTrackDbContext context, long identityUserId, CancellationToken cancellationToken)
 	{
 		var newStamp = Guid.NewGuid().ToString("N");
-		_ = await context.Database.ExecuteSqlInterpolatedAsync(
-			$"UPDATE identity_user SET security_stamp = {newStamp} WHERE id = {identityUserId};",
-			cancellationToken).ConfigureAwait(false);
+		_ = await context.Set<IdentityUserEntity>()
+			.Where(u => u.Id == identityUserId)
+			.ExecuteUpdateAsync(setters => setters.SetProperty(u => u.SecurityStamp, newStamp), cancellationToken)
+			.ConfigureAwait(false);
 	}
 
 	private static async Task<(long TargetIdentityUserId, EquatableArray<EmployeeRole> Roles)> LoadTargetAsync(

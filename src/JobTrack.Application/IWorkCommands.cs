@@ -79,6 +79,34 @@ public interface IWorkCommands
 	/// </exception>
 	Task<WorkSessionResult> FinishSessionAsync(FinishSessionRequest request, CancellationToken cancellationToken = default);
 
+	/// <summary>
+	///     Atomic composite (remediation plan §2.1): finishes the active session named by
+	///     <see cref="FinishSessionAndUpdateWriteUpRequest.SessionId" /> and applies an optional write-up
+	///     change to its leaf's node, in one commit -- so a submitted write-up cannot commit when the
+	///     finish it accompanied is rejected, nor can the finish commit while silently discarding the
+	///     write-up. A caller with no write-up to change (<see cref="FinishSessionAndUpdateWriteUpRequest.WriteUpChange" />
+	///     null) still uses this command's fixed shape rather than the plain <see cref="FinishSessionAsync" />
+	///     primitive gaining conditional UI-orchestration semantics.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor may not manage this session (see <see cref="Domain.Authorization.WorkSessionAccessPolicy" />),
+	///     or -- when a write-up change is supplied -- may not edit the leaf's node
+	///     (see <see cref="Domain.Authorization.JobNodeAccessPolicy" />).
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The session does not exist.</exception>
+	/// <exception cref="ConcurrencyConflictException">
+	///     The supplied session <see cref="FinishSessionAndUpdateWriteUpRequest.Version" /> is stale, or a
+	///     supplied <see cref="FinishSessionAndUpdateWriteUpRequest.WriteUpChange" />'s <c>NodeVersion</c>
+	///     is stale.
+	/// </exception>
+	/// <exception cref="InvariantViolationException">
+	///     A supplied <see cref="FinishSessionAndUpdateWriteUpRequest.FinishedAt" /> is not after the
+	///     session's start instant (<c>ConstraintId</c> <c>"work-session-invalid-interval"</c>) or is in
+	///     the future (<c>ConstraintId</c> <c>"work-session-finish-in-future"</c>, ADR 0028).
+	/// </exception>
+	Task<FinishSessionAndUpdateWriteUpResult> FinishSessionAndUpdateWriteUpAsync(
+		FinishSessionAndUpdateWriteUpRequest request, CancellationToken cancellationToken = default);
+
 	/// <summary>Corrects a historical session's start and/or finish instants (spec §4.4).</summary>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor may not manage this session (see <see cref="Domain.Authorization.WorkSessionAccessPolicy" />).
@@ -124,6 +152,8 @@ public interface IWorkCommands
 	///     <see cref="FinishSessionAsync" /> gains no implicit meaning from this addition: finishing a
 	///     session never implies any particular outcome. A caller not choosing to end active sessions and
 	///     an achievement together still uses <see cref="SetAchievementAsync" /> directly.
+	///     <see cref="CompleteLeafRequest.WriteUpChange" /> optionally applies a write-up change to the
+	///     leaf's node in the same commit (remediation plan §2.1).
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor may not complete this leaf (the same authority <see cref="SetAchievementAsync" />
@@ -132,9 +162,10 @@ public interface IWorkCommands
 	/// </exception>
 	/// <exception cref="EntityNotFoundException">The leaf has no <c>LeafWork</c> attached.</exception>
 	/// <exception cref="ConcurrencyConflictException">
-	///     The supplied leaf <see cref="CompleteLeafRequest.Version" /> is stale, or the leaf's current
+	///     The supplied leaf <see cref="CompleteLeafRequest.Version" /> is stale, the leaf's current
 	///     active-session set no longer matches <see cref="CompleteLeafRequest.ExpectedActiveSessions" />
-	///     exactly, by id and version (ADR 0045 §3).
+	///     exactly, by id and version (ADR 0045 §3), or a supplied
+	///     <see cref="CompleteLeafRequest.WriteUpChange" />'s <c>NodeVersion</c> is stale.
 	/// </exception>
 	/// <exception cref="InvariantViolationException">
 	///     The leaf's achievement is not <see cref="Achievement.InProgress" />, or

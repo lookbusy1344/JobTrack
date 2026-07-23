@@ -7,7 +7,7 @@ using Abstractions;
 ///     roles alongside the target account state so <see cref="JobQueries" /> can apply
 ///     <see cref="Domain.Authorization.EmployeeAccessPolicy" /> without a second round-trip.
 /// </summary>
-public sealed record AccountStateQueryResult
+internal sealed record AccountStateQueryResult
 {
 	/// <summary>The acting user's currently assigned roles.</summary>
 	public required EquatableArray<EmployeeRole> ActorRoles { get; init; }
