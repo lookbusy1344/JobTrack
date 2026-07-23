@@ -13,9 +13,9 @@ rather than stored as a static number.
 
 [Live Google Cloud Run demo](https://jobtrack-web-716005672573.europe-west1.run.app)
 
-Demo deployment (with SQLite backend) is from [`scripts/deploy-cloudrun.sh`](scripts/deploy-cloudrun.sh) see
+That demo (SQLite backend) is deployed by [`scripts/deploy-cloudrun.sh`](scripts/deploy-cloudrun.sh),
+which needs a running local Docker daemon — see
 [`docs/operations/docker-image.md`](docs/operations/docker-image.md#cloud-run-smoke-test-2026-07-17).
-The script requires a working local Docker daemon; on this machine that normally means OrbStack is running.
 See [ADR 0014](docs/decisions/0014-single-server-deployment.md) and
 [`docs/operations/production-deployment.md`](docs/operations/production-deployment.md) for the real
 deployment strategy using Postgres. The code here supports both backends.
@@ -90,7 +90,9 @@ delivery plan:
   credential, so it must never be network-exposed; read it before changing `Dockerfile`.
 - [`docs/operations/local-live-instance.md`](docs/operations/local-live-instance.md) — running a
   single persistent local database (not a disposable `jobtrack_dev`/UAT scenario) for your own
-  ongoing use, without the full production-deployment runbook.
+  ongoing use, without the full production-deployment runbook. `scripts/run-web.sh` is the
+  watch-and-restart launcher for it (`https (jobtrack_live)` profile; https-only, because the auth
+  cookie is `Secure`-only).
 - [`docs/operations/sqlite-limitations-and-configuration.md`](docs/operations/sqlite-limitations-and-configuration.md) —
   SQLite's operational envelope and required per-connection configuration (`busy_timeout`,
   `foreign_keys`, WAL mode).
@@ -102,6 +104,9 @@ delivery plan:
   suites that exercise the external HTTP API and web interface over a real HTTP connection.
   `scripts/run-hurl-tests.sh` runs them in order but does **not** start the host or seed the
   database itself — start `JobTrack.Web` yourself first (see the doc for the exact commands).
+- [`docs/operations/job-tree-import.md`](docs/operations/job-tree-import.md) — `JobTrack.AdminCli`'s
+  `import-tree` command: the JSON file format, the already-happened-work spellings, the validation
+  rules, and the worked examples in `samples/job-tree-imports/`.
 - [`docs/operations/global-tools.md`](docs/operations/global-tools.md) — required .NET global CLI
   tools (mutation testing, package metadata checks) and why they're global rather than a local
   manifest.
@@ -139,7 +144,10 @@ distinction in the rule, and ownership is inherited down the tree):
 
 Work-session recording follows node control too, not session authorship: a controlling owner may
 record or correct a session for *any* worker on that node, and a Worker who controls nothing there
-may record none, not even their own, until they pick up a node (`WorkSessionAccessPolicy.CanManage`).
+may record none, not even their own (`WorkSessionAccessPolicy.CanManage`). An **unassigned** node is
+the exception: starting a session on one claims it for the worker the session is being recorded for,
+in the same transaction, so no separate pickup step is needed (ADR 0048). Explicit `PickUpAsync`
+remains the way to claim a node you are not about to start work on.
 
 **Cost is the one gated read**, in two steps:
 
@@ -176,18 +184,14 @@ Two things are deliberately **not** gated:
   the spec keeps it ungated so a prerequisite added mid-session can't trap an active worker (and the
   recorded time stays costable regardless of later prerequisite state). Finishing a session is
   distinct from completing its `LeafWork`.
-- **Branch completion** — a branch has no stored status to set, because **a branch's status is a
-  computed state, never a stored one**. Achievement is authoritative only on leaves; a branch's (and
-  the root's) achievement is always **derived** from its descendant leaves at read time — a branch is
-  `Success` exactly when every descendant leaf has succeeded — and is never written to a column
-  (spec §5.2, ADR 0035). The Root/Branch/Leaf label itself is likewise derived from `parent_id` and
-  child existence, not stored. There is therefore no direct "complete this branch" command to gate.
-
-  **The same is true of a branch's cost**: cost is *never* stored anywhere in the system. Every
-  cost — a leaf's or a branch's — is computed dynamically at query time from the actual time worked
-  and the effective-dated rates, and a branch's cost is simply the roll-up sum of its descendant
-  leaves' costs (`HierarchicalCostAggregator`; spec §10). A branch carries neither a stored status nor
-  a stored cost — both are derived views over the authoritative leaf-level data.
+- **Branch completion** — there is no "complete this branch" command to gate, because **a branch
+  carries neither a stored status nor a stored cost**. Achievement is authoritative only on leaves;
+  a branch's (and the root's) achievement is derived from its descendant leaves at read time — it is
+  `Success` exactly when every descendant leaf has succeeded — and never written to a column (spec
+  §5.2, ADR 0035), as is the Root/Branch/Leaf label itself (from `parent_id` and child existence).
+  Cost is likewise never stored anywhere in the system: every cost, leaf or branch, is computed at
+  query time from the actual time worked and the effective-dated rates, a branch's being the roll-up
+  sum of its descendant leaves' (`HierarchicalCostAggregator`; spec §10).
 
 The gate is enforced in the persistence layer on both providers: `StartSessionAsync`/`StartWorkAsync`
 and `SetAchievementAsync` recheck readiness *inside their own write transaction* and throw
@@ -235,7 +239,7 @@ rendered a moment earlier.
 Sessions (ADR 0045). It shows one obvious primary action for the current state:
 
 - **Waiting or nothing recorded yet, no active session** — Start session (the same one-click
-  `StartWorkAsync` composite described above).
+  `StartWorkAsync` composite described above; on an unassigned node it also claims ownership, ADR 0048).
 - **In progress, no active session** — *paused*: work started and nobody is clocked on. A valid,
   ordinary state (ADR 0045 allows zero active sessions from `InProgress`) and exactly what Pause job
   produces, so it is named with a **Paused** pill wherever a leaf appears — `/Jobs/Work`, Browse's
@@ -245,7 +249,9 @@ Sessions (ADR 0045). It shows one obvious primary action for the current state:
 - **In progress, at least one active session** — an explicit **Pause job** / **Complete job**
   decision. Pause finishes only the selected session and leaves achievement unchanged; Complete job
   atomically finishes the exact confirmed active-session set (one worker or several, all at the same
-  instant) and records `Success` in one commit (`CompleteLeafAsync`). Neither is ever implicit —
+  instant) and records whichever terminal achievement its "Completion options" dropdown selects —
+  `Success`, `Cancelled`, or `Unsuccessful` — in one commit (`CompleteLeafAsync`, ADR 0047, which
+  supersedes ADR 0045's Success-only framing). Neither is ever implicit —
   finishing a session never silently means "done." Both share one form with the leaf's write-up and
   its own **Save write-up** button, so whichever button is pressed persists the text typed beside it.
 - **A terminal leaf** (`Success`/`Cancelled`/`Unsuccessful`) — **Reopen and start session**, when the
@@ -259,9 +265,10 @@ Sessions (ADR 0045). It shows one obvious primary action for the current state:
 - **Archived** — no active-session action at all; the page names the restore requirement instead of
   silently reactivating a closed node.
 
-A "Change outcome" disclosure covers the remaining, exceptional transitions — Cancel job, Mark
-unsuccessful, and reopening without starting a session — through the original `SetAchievementAsync`
-primitive, unchanged.
+A single "Change outcome" dropdown covers every remaining transition — each one
+`AchievementTransitions.IsPermitted` allows from the current state, filtered to what the actor is
+authorized for, including reopening without starting a session — through the original
+`SetAchievementAsync` primitive, unchanged.
 
 `/Jobs/Achievement`, the page's now-retired predecessor, is a compatibility redirect to
 `/Jobs/Work#status`; nothing links to it directly any more.
@@ -311,6 +318,8 @@ samples/
   JobTrack.Sample.PostgreSql       minimal in-process IJobTrackClient consumer (PostgreSQL)
   JobTrack.Sample.Sqlite           minimal in-process IJobTrackClient consumer (SQLite)
   JobTrack.ExternalApiClient       first-party HTTP client proof — no JobTrack.* library reference
+  JobTrack.UatSeed                 synthetic end-user-testing scenario seeder
+  job-tree-imports/                worked JSON examples for AdminCli `import-tree`
 tests/                             one test project per src project, plus
                                     JobTrack.ArchitectureTests, JobTrack.Database.ContractTests,
                                     JobTrack.PublicApi.Tests, JobTrack.Web.{IntegrationTests,EndToEndTests}
@@ -322,10 +331,11 @@ docs/{decisions,operations,plans,traceability}/
 
 The line count is dominated by the test suite, not the application. At the time of writing the
 `src/` tree (the whole app — dual-provider persistence, costing domain, ASP.NET Identity, the
-external HTTP API, and the admin CLI) is ~18.3k lines of C#, against ~40.4k lines under `tests/` —
-roughly a 2.2:1 test-to-source ratio. That ratio is a property of the mandatory TDD discipline (see
-`CLAUDE.md`), not accumulated fat: the tests are a deliverable, so a large `tests/` total is a sign
-of coverage, not bloat. Recalculate the split with [`tokei`](https://github.com/XAMPPRocky/tokei):
+external HTTP API, and the admin CLI) is ~24.8k lines of C# plus ~3.1k of Razor, against ~52.2k
+lines under `tests/` — roughly a 2:1 test-to-source ratio. That ratio is a property of the mandatory
+TDD discipline (see `CLAUDE.md`), not accumulated fat: the tests are a deliverable, so a large
+`tests/` total is a sign of coverage, not bloat. Recalculate the split with
+[`tokei`](https://github.com/XAMPPRocky/tokei):
 
 ```bash
 tokei src      # application/library code
@@ -383,6 +393,7 @@ dotnet build JobTrack.slnx -warnaserror   # warnings are errors; analyzers + arc
 dotnet format JobTrack.slnx
 dotnet format JobTrack.slnx --verify-no-changes
 ./scripts/fast-test.sh --build
+dotnet test tests/JobTrack.Persistence.PostgreSql.Tests --filter "FullyQualifiedName~TheClassYouChanged"
 ```
 
 The full solution suite is for occasional use — once at the end of a multi-stage plan, or before
@@ -415,10 +426,10 @@ seconds), run only the projects with no external database or browser dependency:
 This runs `JobTrack.Domain.Tests`, `JobTrack.Application.Tests`, `JobTrack.ArchitectureTests`,
 `JobTrack.Identity.Tests`, `JobTrack.Persistence.Shared.Tests`, `JobTrack.Persistence.Sqlite.Tests`,
 and `JobTrack.PublicApi.Tests` with `--no-build` (pass `--build` to build first, e.g. on a clean
-checkout). It is a fast sanity net during iteration, not a substitute for the full commit gate
-above — it covers domain/application logic, architecture-fitness rules, public API surface, and
-SQLite (file-based, no server needed), but skips PostgreSQL-backed, web-integration, and browser
-end-to-end coverage entirely.
+checkout). It covers domain/application logic, architecture-fitness rules, public API surface, and
+SQLite (file-based, no server needed), and skips PostgreSQL-backed, web-integration, and browser
+end-to-end coverage entirely — which is why the commit gate pairs it with a targeted `--filter` run
+against whichever of those projects the commit actually touches.
 
 For a broader check before a commit (under 80 seconds), add `--longer` (or `-l`):
 
@@ -431,8 +442,6 @@ This runs the fast core suite above plus `JobTrack.Database.ContractTests`,
 PostgreSQL-backed, provider-specific concurrency, and web-host integration coverage — while still
 skipping `JobTrack.Database.PerformanceTests`, `JobTrack.AdminCli.Tests`, and the real-browser
 `JobTrack.Web.EndToEndTests` suite. `--longer` combines with `--build` (e.g. `--longer --build`).
-Neither switch is a substitute for the full commit gate above — run the full gate, including full
-`dotnet test JobTrack.slnx`, before any commit.
 
 ### Cleaning up orphaned test databases
 
@@ -580,105 +589,34 @@ account, and audits the operation. See `src/JobTrack.AdminCli/EmergencyTwoFactor
 
 ### Bulk-generating a tree of job nodes from JSON
 
-`JobTrack.AdminCli`'s `import-tree` command reads a flat JSON array of nodes and atomically creates
-them as a job-node subtree, all owned by one existing employee — a bulk-authoring tool for small
-trees, not a general-purpose migration path. It works against either provider, runs the same way
-inside the Docker image (`--entrypoint ./admincli/JobTrack.AdminCli`, see the Dockerfile header), and
-either every node and prerequisite edge is created or none is: the whole batch runs in one database
-transaction (`IJobCommands.ImportSubtreeAsync`), so a validation failure partway through a large
-import leaves nothing behind to clean up by hand.
+`JobTrack.AdminCli`'s `import-tree` command atomically creates a whole job-node subtree from a flat
+JSON array — optionally including work already done against each leaf — in one database transaction.
+`samples/job-tree-imports/` has seven worked examples, from 5 to 30 nodes.
+[`docs/operations/job-tree-import.md`](docs/operations/job-tree-import.md) is the command and
+file-format reference.
 
 ```bash
-# PostgreSQL
-dotnet run --project src/JobTrack.AdminCli -- import-tree --provider postgresql --connection-string "Host=/tmp;Port=5432;Database=jobtrack_dev" --username <username> --file samples/job-tree-imports/building-a-house.json
-
-# SQLite
 dotnet run --project src/JobTrack.AdminCli -- import-tree --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --username <username> --file samples/job-tree-imports/building-a-house.json
 ```
 
-`--username` names the employee every created node is owned by *and* the actor the command runs as
-(there is deliberately no separate actor/owner split — see `JobTreeImportCommand`'s own doc comment).
-`--parent-id <job-node-id>` anchors the import under an existing node; omit it and the import attaches
-under the tree root (`job_node` id `1`).
+### Creating employees and issuing API tokens from the CLI
 
-Each row in the JSON file is:
+Two further commands exist for scripted setup, where the web interface is the normal route:
 
-```jsonc
-{ "id": 2, "parentId": 1, "title": "Excavate foundations", "prerequisiteIds": [6] }
+- `create-employee` provisions a non-administrator employee under an existing administrator
+  (`--actor`), granting `--roles` (first entry as the initial role, the rest assigned after).
+  `--no-force-password-change` clears the ADR 0023 forced-change flag, for a deliberately shared
+  credential such as the container demo's `demo` account.
+- `issue-token` mints a bearer personal access token for an existing account without a browser
+  session — for scripting and tooling, such as the hurl smoke tests of the external HTTP API. The
+  only other issuance path is the self-service API-tokens page (ADR 0029).
+
+```bash
+dotnet run --project src/JobTrack.AdminCli -- create-employee --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --actor <admin-username> --username <username> --password <password> --display-name <name> --roles Worker
+dotnet run --project src/JobTrack.AdminCli -- issue-token --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --username <username> --label <label> [--lifetime-days <days>]
 ```
 
-- `id` — a file-local identifier, unique within the file. Never a real `job_node` id.
-- `parentId` — another row's `id`, or `null`/omitted to attach directly under `--parent-id`.
-- `title` — the new node's description.
-- `prerequisiteIds` (optional) — file-local `id`s of other rows in the same file that must succeed
-  before this one is ready (spec §6); a node may list more than one. An edge may connect any two
-  nodes in the file that are not ancestor/descendant of each other — leaf-leaf, leaf-branch,
-  branch-leaf, and branch-branch are all valid, as long as the edge isn't a hierarchy edge in
-  disguise.
-
-#### Importing work that has already happened
-
-A row may also record work already done against it, so a bulk-authored tree arrives with the history
-its author already knows about instead of uniformly untouched. The import attaches `LeafWork`,
-records one or more work sessions, and sets the achievement — all inside the same transaction that creates
-the nodes, so the "everything or nothing" guarantee still holds.
-
-There are two spellings, and a row uses one or the other, never both:
-
-```jsonc
-// Relative: how long before the import each event happened.
-{ "id": 3, "title": "First-fix plumbing", "open": "2 days", "closed": "1 day" }
-
-// Absolute: ISO 8601 timestamps, each with an explicit offset.
-{ "id": 8, "title": "Fit worktop", "start": "2026-07-16T08:30:00Z", "end": "2026-07-16T16:00:00Z" }
-```
-
-- `open` — how long before the import the work started, e.g. `"2 days"`. Accepts
-  `minutes`/`hours`/`days`/`weeks` (and the short forms `m`/`h`/`d`/`w`), whole or decimal:
-  `"90 minutes"`, `"36 hours"`, `"1.5 days"`, `"3d"`. The import captures the clock once at start, so
-  every row in a file counts back from the same instant.
-- `closed` (optional) — how long before the import the work finished. Requires `open`. Omit it and
-  the leaf is left `InProgress` with an open session — `{ "open": "2 days" }` reads as "started two
-  days ago, still going".
-- `start` / `end` — the absolute alternative to `open`/`closed`, same open/closed rules. An explicit
-  offset (`Z` or `+01:00`) is required rather than assumed, since these instants are compared against
-  prerequisite finish times where an hour's drift changes the answer.
-- `outcome` (optional) — how a closed leaf ended: `success` (the default), `cancelled`, or
-  `unsuccessful`. Only valid on a row that closes; an unfinished job is always in progress.
-
-Only leaves may carry work, and the prerequisite rules (spec §6) are enforced against the recorded
-history, not just the end state. An import is rejected, whole, when a row records work but:
-
-- has children in the same file (a branch cannot hold `LeafWork`);
-- depends on something that never reaches `Success` in the batch — including a prerequisite left
-  open, or a prerequisite branch with any non-succeeding leaf beneath it;
-- starts *before* one of its prerequisites finished, which is a chronologically impossible history
-  even though replaying it in dependency order would otherwise satisfy the gate;
-- closes without ever finishing, finishes before it starts, or is dated in the future.
-
-Prerequisites inherited from ancestors *outside* the file are enforced too — those are rechecked
-against real database state inside the import transaction.
-
-`samples/job-tree-imports/` has seven worked examples, roughly from simplest to largest:
-
-- `experimental-work.json` — 5 nodes, 2 levels, one dependent leaf with two prerequisites.
-- `kitchen-refit-in-progress.json` — 10 nodes, the only example carrying work history: closed
-  leaves, one still open, one `unsuccessful`, one dated absolutely, and three not started yet.
-- `farming-a-field.json` — 16 nodes, 4 levels, mostly a linear branch-dependency chain rather than
-  fan-out.
-- `building-a-house.json` — 17 nodes, 4 levels, exercising every leaf/branch prerequisite-edge
-  combination plus two double-prerequisite nodes.
-- `organising-a-fun-run.json` — 25 nodes, 4 levels, dependencies crossing freely between sibling
-  branches, and one leaf ("Set up start/finish line and timing") decomposed into children of its own.
-- `organising-a-college-election.json` — 30 nodes, 4 levels, the largest: a mostly sequential spine
-  with fan-in (briefing candidates requires both the published candidate list and the approved
-  rules), and a branch — "Verify candidate eligibility", itself two leaves — standing as a
-  prerequisite for a later step.
-- `implementing-ai-enrolment-system.json` — 22 nodes, 4 levels, a complete finished project (every
-  leaf carries absolute `start`/`end` work history, all reaching `success`) spanning three parallel
-  sub-sections — logic engine, MIS write-back, and load testing under 100 simultaneous users — over
-  roughly three working months, every session bounded to weekday 09:00-17:00, demonstrating costing
-  over a realistically-shaped completed subtree.
+Run `JobTrack.AdminCli` with no arguments for the full option list of every command.
 
 ## Seeding a synthetic end-user testing (UAT) scenario
 
