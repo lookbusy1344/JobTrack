@@ -81,6 +81,7 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		jsonDocument.RootElement.GetProperty("rootId").GetInt64().Should().Be(rootId.Value);
+		jsonDocument.RootElement.GetProperty("rootAchievement").GetString().Should().Be(nameof(BranchAchievement.Unfinished));
 		jsonDocument.RootElement.GetProperty("rootTotal").ValueKind.Should().Be(JsonValueKind.Null);
 		var nodes = jsonDocument.RootElement.GetProperty("nodes").EnumerateArray().ToList();
 		nodes.Should().Contain(node => node.GetProperty("id").GetInt64() == branchId.Value);
@@ -103,6 +104,7 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		jsonDocument.RootElement.GetProperty("rootAchievement").ValueKind.Should().Be(JsonValueKind.Null);
 		jsonDocument.RootElement.GetProperty("rootTotal").ValueKind.Should().NotBe(JsonValueKind.Null);
 		var leafNode = jsonDocument.RootElement.GetProperty("nodes").EnumerateArray()
 			.Single(node => node.GetProperty("id").GetInt64() == leafId.Value);

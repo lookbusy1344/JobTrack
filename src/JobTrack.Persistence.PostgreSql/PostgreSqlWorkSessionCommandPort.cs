@@ -339,8 +339,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		return new() {
 			Session = ToResult(session),
 			WriteUpChanged = writeUpChanged,
-			Node = writtenUpNode is null ? null : await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
-				.ConfigureAwait(false),
+			Node = writtenUpNode is null
+				? null
+				: await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
+					.ConfigureAwait(false),
 		};
 	}
 
@@ -505,8 +507,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			Version = leafWork.RowVersion,
 			FinishedSessions = [.. activeSessions.Select(ToResult)],
 			WriteUpChanged = writeUpChanged,
-			Node = writtenUpNode is null ? null : await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
-				.ConfigureAwait(false),
+			Node = writtenUpNode is null
+				? null
+				: await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
+					.ConfigureAwait(false),
 		};
 	}
 

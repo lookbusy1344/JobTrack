@@ -453,6 +453,10 @@ public sealed class JobTrackClientUsageExampleTests
 			GetJobSubtreeRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult(new JobSubtreeResult { RootId = request.RootId, Nodes = [] });
 
+		public Task<BranchAchievement> GetBranchAchievementAsync(
+			GetBranchAchievementRequest request, CancellationToken cancellationToken = default) =>
+			Task.FromResult(BranchAchievement.Success);
+
 		public Task<EquatableArray<AwaitingProgressEntry>> GetAwaitingProgressAsync(
 			GetAwaitingProgressRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult<EquatableArray<AwaitingProgressEntry>>([]);

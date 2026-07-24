@@ -254,6 +254,18 @@ public sealed class JobTrackUserStore :
 		Task.FromResult(user.TwoFactorEnabled);
 
 	/// <summary>
+	///     Overwrites <paramref name="user" />'s current and original tracked values with what is now
+	///     actually committed in the database. Unlike re-querying by id, which EF Core's identity map
+	///     resolves against the already-tracked instance without touching its (possibly locally mutated,
+	///     never-persisted) property values, this forces a genuine round trip -- the correct way to
+	///     recover after this same <paramref name="user" /> lost an optimistic-concurrency race in
+	///     <see cref="UpdateAsync" /> and the caller needs to see what the winning write actually
+	///     persisted.
+	/// </summary>
+	public Task ReloadAsync(JobTrackIdentityUser user, CancellationToken cancellationToken) =>
+		dbContext.Entry(user).ReloadAsync(cancellationToken);
+
+	/// <summary>
 	///     Looks up the credential row by its <c>app_user</c> identifier rather than its own store key.
 	///     Used by the bearer authentication scheme (ADR 0029) to build the same claims principal the
 	///     cookie scheme produces once a personal access token has resolved to an <see cref="AppUserId" />.

@@ -325,6 +325,9 @@ public sealed class JobSubtree
 {
 	public required long RootId { get; init; }
 
+	/// <summary>The computed branch/root rollup, or null when <see cref="RootId" /> identifies a leaf.</summary>
+	public string? RootAchievement { get; init; }
+
 	/// <summary>Null when the caller may not view this subtree's cost (ADR 0040) -- never a failed request.</summary>
 	public decimal? RootTotal { get; init; }
 

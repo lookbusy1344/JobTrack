@@ -326,7 +326,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("<span class=\"visually-hidden\">Pick up</span>");
 		// The Owner field's own copy: the <dd> holding the owner value lays its value and claim button
 		// out on one baseline.
-		body.Should().Contain("class=\"col-sm-9 d-flex flex-wrap align-items-center gap-2\"");
+		body.Should().Contain("class=\"w-75 mb-0 d-flex flex-wrap align-items-center gap-2\"");
 		// One per unassigned subtree row, alongside the word it qualifies.
 		body.Should().Contain("<span class=\"d-inline-flex align-items-center gap-2\">");
 		// Two unassigned nodes on this page (the browsed branch and its one child), one control each,

@@ -93,8 +93,12 @@ public sealed class ExternalApiClientProofTests
 		// roll-up is included without any cost-viewing role.
 		var subtree = await apiClient.GetJobSubtreeAsync(leaf.Id.Value);
 		subtree.RootId.Should().Be(leaf.Id.Value);
+		subtree.RootAchievement.Should().BeNull("a leaf has its own achievement rather than a branch rollup");
 		subtree.Nodes.Should().ContainSingle(node => node.Id == leaf.Id.Value);
 		subtree.RootTotal.Should().NotBeNull();
+
+		var rootSubtree = await apiClient.GetJobSubtreeAsync(bootstrap.RootJobNodeId.Value);
+		rootSubtree.RootAchievement.Should().Be("Unfinished");
 
 		// Mutation workflow.
 		var session = await apiClient.StartSessionAsync(leaf.Id.Value, workerId.Value);

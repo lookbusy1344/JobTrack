@@ -197,6 +197,23 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Filtering_by_search_text_hides_a_non_matching_leaf()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.search");
+		var rootId = bootstrappedRootId!.Value;
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Fit oak cabinets", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Paint the fence", adminId);
+		var authCookie = await SignInAsync("awaiting.search");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress?searchText=oak", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Fit oak cabinets");
+		body.Should().NotContain("Paint the fence");
+	}
+
+	[Fact]
 	public async Task AwaitingProgress_remembers_the_owner_filter_across_a_return_visit()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.filtermem");

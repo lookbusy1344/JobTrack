@@ -35,6 +35,18 @@ public sealed class BrowseModel(
 	// Browse-sessions filter memory: the owner selector's last "person or All owners" choice is
 	// remembered per session under this key so returning to Browse (any node) restores it.
 	private const string OwnerFilterSessionKey = "Jobs.Browse.Owner";
+
+	// Mirrors OwnerFilterSessionKey for the subtree "Show archived" toggle -- the last choice is
+	// remembered per session so navigating to a different node (or back later) keeps it rather than
+	// silently reverting to active-only.
+	private const string ShowArchivedSessionKey = "Jobs.Browse.ShowArchived";
+
+	// The last node actually browsed (not a search view), remembered per session so the search
+	// flow's "Browse" button can return to it -- the search form itself carries no node id, so
+	// without this the only way back would be resetting to the root. An empty stored string means
+	// "the root", matching FilterMemory's own convention; an absent key means nothing browsed yet
+	// this session.
+	private const string LastBrowsedNodeSessionKey = "Jobs.Browse.LastNode";
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
 
 	/// <summary>Captured once per request, per ADR 0016's "one captured instant per operation".</summary>
@@ -56,7 +68,28 @@ public sealed class BrowseModel(
 
 	[BindProperty(SupportsGet = true)] public JobArchiveFilter ArchiveFilter { get; init; } = JobArchiveFilter.ActiveOnly;
 
+	/// <summary>
+	///     The subtree view's own "Show archived" toggle -- unlike <see cref="ArchiveFilter" /> (which
+	///     scopes the Search flow's whole-tree query), this genuinely scopes the currently browsed
+	///     subtree, so it stays on Browse rather than moving out with the rest of the filter box. A
+	///     single toggle only distinguishes "active only" from "everything" — <see cref="JobArchiveFilter.ArchivedOnly" />
+	///     stays a Search-only refinement. Settable so <see cref="LoadAsync" /> can replace an omitted
+	///     value with the remembered choice (<see cref="ShowArchivedSessionKey" />), matching
+	///     <see cref="OwnerUserId" />'s own per-session filter memory.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public bool ShowArchived { get; set; }
+
 	[BindProperty(SupportsGet = true)] public string? SearchText { get; init; }
+
+	/// <summary>
+	///     Set by the toolbar's "Search" link to land on the blank search form
+	///     (<see cref="ShowSearchEntry" />) rather than the root node's tree view — search spans the
+	///     whole job tree (<see cref="IJobQueries.SearchJobNodesAsync" /> carries no subtree scoping), so
+	///     it is a distinct entry point from browsing, not a filter layered onto a node.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public bool Search { get; init; }
 
 	[TempData] public string? ErrorMessage { get; set; }
 
@@ -153,6 +186,13 @@ public sealed class BrowseModel(
 	public Achievement? CurrentNodeAchievement { get; private set; }
 
 	/// <summary>
+	///     The current node's rollup achievement, derived from its complete descendant subtree, when it
+	///     is a branch or the root. <see langword="null" /> for a leaf, where
+	///     <see cref="CurrentNodeAchievement" /> renders instead — the two are mutually exclusive.
+	/// </summary>
+	public BranchAchievement? CurrentNodeBranchAchievement { get; private set; }
+
+	/// <summary>
 	///     The current leaf's Sessions panel (shared with <see cref="WorkModel" /> via
 	///     <c>_LeafWorkSessions</c>) — <see langword="null" /> for a branch/root, where the subtree table
 	///     renders instead (a node never has both children and leaf work, so the two are mutually
@@ -185,7 +225,22 @@ public sealed class BrowseModel(
 	/// </summary>
 	public JobNodeId? HomeNodeId { get; private set; }
 
+	/// <summary>
+	///     The node the viewer was browsing before opening Search (<see cref="LastBrowsedNodeSessionKey" />),
+	///     for the search flow's "Browse" button — the last node actually browsed if session remembers
+	///     one, else <see cref="HomeNodeId" />, else <see langword="null" /> (the root). Only populated
+	///     while <see cref="IsSearch" /> or <see cref="ShowSearchEntry" />.
+	/// </summary>
+	public JobNodeId? SearchOriginNodeId { get; private set; }
+
 	public bool IsSearch => !string.IsNullOrWhiteSpace(SearchText);
+
+	/// <summary>
+	///     The blank search form reached via the toolbar's "Search" link before any
+	///     <see cref="SearchText" /> has been entered — mutually exclusive with <see cref="IsSearch" />,
+	///     which takes over once the form is submitted.
+	/// </summary>
+	public bool ShowSearchEntry => Search && !IsSearch;
 
 	/// <summary>
 	///     The page's own view state, replayed as hidden fields by every per-row work form so a start
@@ -198,6 +253,7 @@ public sealed class BrowseModel(
 		["UnassignedOnly"] = UnassignedOnly.ToString(CultureInfo.InvariantCulture),
 		["ArchiveFilter"] = ArchiveFilter.ToString(),
 		["SearchText"] = SearchText,
+		["ShowArchived"] = ShowArchived.ToString(CultureInfo.InvariantCulture),
 	};
 
 	/// <summary>
@@ -464,6 +520,7 @@ public sealed class BrowseModel(
 		["unassignedOnly"] = UnassignedOnly,
 		["archiveFilter"] = ArchiveFilter,
 		["searchText"] = SearchText,
+		["showArchived"] = ShowArchived,
 	};
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
@@ -477,6 +534,8 @@ public sealed class BrowseModel(
 		OwnerUserId = FilterMemory.Resolve(
 			HttpContext.Session, OwnerFilterSessionKey, Request.Query.ContainsKey(nameof(OwnerUserId)), OwnerUserId, null);
 
+		ShowArchived = ResolveShowArchived();
+
 		var ownerFilter = (UnassignedOnly, OwnerUserId) switch {
 			(true, _) => OwnershipFilter.Unassigned,
 			(false, long ownerUserId) => OwnershipFilter.OwnedBy(new(ownerUserId)),
@@ -486,29 +545,47 @@ public sealed class BrowseModel(
 		await LoadEmployeeDirectoryAsync(context, cancellationToken);
 		await LoadHomeNodeAsync(context, actor, cancellationToken);
 
+		if (IsSearch || ShowSearchEntry) {
+			SearchOriginNodeId = ResolveSearchOrigin();
+		} else {
+			// Not a search view -- this is the node (or root, stored as an empty string) the viewer is
+			// actually browsing, so it becomes the "Browse" button's target next time Search opens.
+			HttpContext.Session.SetString(LastBrowsedNodeSessionKey, NodeId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
+		}
+
+		if (IsSearch) {
+			Children = await jobTrackClient.Query.SearchJobNodesAsync(new() {
+				Context = context,
+				SearchText = SearchText!,
+				Ownership = ownerFilter,
+				ArchiveFilter = ArchiveFilter,
+			}, cancellationToken);
+
+			await LoadActiveSessionsAsync(context, cancellationToken);
+			return;
+		}
+
+		if (ShowSearchEntry) {
+			return;
+		}
+
 		try {
-			if (IsSearch) {
-				Children = await jobTrackClient.Query.SearchJobNodesAsync(new() {
-					Context = context,
-					SearchText = SearchText!,
-					Ownership = ownerFilter,
-					ArchiveFilter = ArchiveFilter,
-				}, cancellationToken);
-
-				await LoadActiveSessionsAsync(context, cancellationToken);
-				return;
-			}
-
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
 				new() { Context = context, NodeId = NodeId.HasValue ? new JobNodeId(NodeId.Value) : null }, cancellationToken);
 
+			// The subtree/children listing is no longer owner-filterable from Browse itself (the owner
+			// filter moved into the dedicated Search flow above, since it was easily mistaken for
+			// scoping the currently browsed subtree when it in fact scoped a whole-tree search) --
+			// always the unfiltered-by-owner subtree here. ShowArchived stays: it is the one toggle
+			// that does genuinely scope this subtree, not a whole-tree search.
 			Subtree = await jobTrackClient.Query.GetJobSubtreeAsync(new() {
 				Context = context,
 				RootId = CurrentNode.Node.Id,
-				Ownership = ownerFilter,
-				ArchiveFilter = ArchiveFilter,
+				Ownership = OwnershipFilter.All,
+				ArchiveFilter = ShowArchived ? JobArchiveFilter.All : JobArchiveFilter.ActiveOnly,
 				AsOf = Now,
 			}, cancellationToken);
+			CurrentNodeBranchAchievement = Subtree.RootAchievement;
 
 			Readiness = await jobTrackClient.Query.GetReadinessAsync(new() { Context = context, NodeId = CurrentNode.Node.Id }, cancellationToken);
 
@@ -570,6 +647,42 @@ public sealed class BrowseModel(
 		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
 			new() { Context = context, LeafWorkIds = [.. leafIds] }, cancellationToken);
 		CanManageByLeaf = capabilities.ToDictionary(c => c.LeafWorkId, c => c.CanManage);
+	}
+
+	/// <summary>
+	///     Resolves the effective "Show archived" toggle and keeps <see cref="ShowArchivedSessionKey" />
+	///     current in one step, mirroring <see cref="FilterMemory.Resolve" />'s own explicit-vs-remembered
+	///     precedence: when the query string carried <see cref="ShowArchived" /> (the toggle link always
+	///     sends it explicitly), that choice is used and remembered; otherwise the last remembered choice
+	///     applies, defaulting to <see langword="false" /> (active-only) when nothing has been remembered
+	///     yet.
+	/// </summary>
+	private bool ResolveShowArchived()
+	{
+		if (Request.Query.ContainsKey(nameof(ShowArchived))) {
+			HttpContext.Session.SetString(ShowArchivedSessionKey, ShowArchived.ToString(CultureInfo.InvariantCulture));
+			return ShowArchived;
+		}
+
+		var remembered = HttpContext.Session.GetString(ShowArchivedSessionKey);
+		return remembered is not null && bool.Parse(remembered);
+	}
+
+	/// <summary>
+	///     Resolves <see cref="SearchOriginNodeId" />: the last node remembered under
+	///     <see cref="LastBrowsedNodeSessionKey" /> (an empty stored string means the root, matching
+	///     <see cref="FilterMemory" />'s own convention), falling back to <see cref="HomeNodeId" /> when
+	///     nothing has been remembered yet this session -- <see langword="null" /> in the end means the
+	///     root, the last-resort fallback.
+	/// </summary>
+	private JobNodeId? ResolveSearchOrigin()
+	{
+		var remembered = HttpContext.Session.GetString(LastBrowsedNodeSessionKey);
+		if (remembered is null) {
+			return HomeNodeId;
+		}
+
+		return remembered.Length == 0 ? null : new JobNodeId(long.Parse(remembered, CultureInfo.InvariantCulture));
 	}
 
 	private async Task LoadEmployeeDirectoryAsync(CommandContext context, CancellationToken cancellationToken)

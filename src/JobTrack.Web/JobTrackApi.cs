@@ -1635,6 +1635,7 @@ internal static partial class JobTrackApi
 	private static JobSubtreeResponse Map(JobSubtreeResult result) =>
 		new() {
 			RootId = result.RootId.Value,
+			RootAchievement = result.RootAchievement,
 			RootTotal = result.RootTotal?.Amount,
 			TzdbVersion = result.TzdbVersion,
 			Nodes = [.. result.Nodes.Select(Map)],
@@ -1696,11 +1697,7 @@ internal static partial class JobTrackApi
 		};
 
 	private static FinishSessionAndUpdateWriteUpResponse Map(FinishSessionAndUpdateWriteUpResult result) =>
-		new() {
-			Session = Map(result.Session),
-			WriteUpChanged = result.WriteUpChanged,
-			Node = result.Node is not null ? Map(result.Node) : null,
-		};
+		new() { Session = Map(result.Session), WriteUpChanged = result.WriteUpChanged, Node = result.Node is not null ? Map(result.Node) : null };
 
 	private static ReopenAndStartWorkResponse Map(ReopenAndStartWorkResult result) =>
 		new() {
@@ -2106,6 +2103,11 @@ internal static partial class JobTrackApi
 	internal sealed class JobSubtreeResponse
 	{
 		public required long RootId { get; init; }
+
+		/// <summary>
+		///     The root's computed rollup when it is a branch or the permanent root; null for a leaf.
+		/// </summary>
+		public BranchAchievement? RootAchievement { get; init; }
 
 		/// <summary>Null when the actor may not view this subtree's cost (ADR 0040) -- never a whole-request denial.</summary>
 		public decimal? RootTotal { get; init; }

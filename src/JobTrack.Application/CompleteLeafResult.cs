@@ -31,6 +31,9 @@ public sealed record CompleteLeafResult
 	/// </summary>
 	public required bool WriteUpChanged { get; init; }
 
-	/// <summary>The leaf's node after this completion, when <see cref="CompleteLeafRequest.WriteUpChange" /> was supplied; otherwise <see langword="null" />.</summary>
+	/// <summary>
+	///     The leaf's node after this completion, when <see cref="CompleteLeafRequest.WriteUpChange" /> was supplied; otherwise <see langword="null" />
+	///     .
+	/// </summary>
 	public JobNodeResult? Node { get; init; }
 }

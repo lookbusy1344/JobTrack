@@ -227,6 +227,15 @@ internal sealed class JobQueries : IJobQueries
 	}
 
 	/// <inheritdoc />
+	public Task<BranchAchievement> GetBranchAchievementAsync(
+		GetBranchAchievementRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetBranchAchievementCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
 	public Task<ScheduleSnapshotResult> GetScheduleAsync(GetScheduleRequest request, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(request);
@@ -358,8 +367,9 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-job-subtree", request.Context, JobTrackOperation.WithNodeId(request.RootId),
 			async () => {
 				var maxDepth = request.MaxDepth ?? JobSubtreeLimits.DefaultMaxDepth;
-				var rows = await _browseQueryPort.GetSubtreeAsync(
+				var subtree = await _browseQueryPort.GetSubtreeAsync(
 					request.RootId, maxDepth, request.Ownership, request.ArchiveFilter, cancellationToken).ConfigureAwait(false);
+				var rows = subtree.Rows;
 
 				var spans = JobSubtreeOrdinals.Compute(rows, request.RootId);
 
@@ -432,11 +442,17 @@ internal sealed class JobQueries : IJobQueries
 
 				return new JobSubtreeResult {
 					RootId = request.RootId,
+					RootAchievement = subtree.RootAchievement,
 					RootTotal = displayedRootTotal,
 					TzdbVersion = tzdbVersion,
 					Nodes = EquatableArray.CopyOf(nodes),
 				};
 			});
+
+	private Task<BranchAchievement> GetBranchAchievementCoreAsync(GetBranchAchievementRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-branch-achievement", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
+			() => _browseQueryPort.GetSubtreeAchievementAsync(request.NodeId, cancellationToken));
 
 	private Task<EquatableArray<AwaitingProgressEntry>> GetAwaitingProgressCoreAsync(
 		GetAwaitingProgressRequest request, int limit, CancellationToken cancellationToken) =>
@@ -450,7 +466,7 @@ internal sealed class JobQueries : IJobQueries
 				}
 
 				var entries = AwaitingProgressCalculator.GetAwaitingProgress(
-					inputs.NodesById, inputs.FactsById, inputs.Prerequisites, request.Ownership, request.SubtreeRootId);
+					inputs.NodesById, inputs.FactsById, inputs.Prerequisites, request.Ownership, request.SubtreeRootId, request.SearchText);
 
 				// Fresh-eyes review §2.8: bound the page before cost enrichment, not after -- the
 				// calculator's own ordering is preserved, only the slice offered to the caller changes.

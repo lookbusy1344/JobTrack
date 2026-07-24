@@ -20,6 +20,13 @@ public sealed record GetAwaitingProgressRequest
 	public JobNodeId? SubtreeRootId { get; init; }
 
 	/// <summary>
+	///     When non-blank, restricts to leaves whose description contains this text (case insensitive).
+	///     Unlike <see cref="SearchJobNodesRequest" />, this scopes the dashboard's own
+	///     owner/subtree-filtered candidate set, not a whole-tree query.
+	/// </summary>
+	public string? SearchText { get; init; }
+
+	/// <summary>
 	///     Zero-based number of matching leaves (in the calculator's own priority/deadline order) to skip
 	///     before returning results. Must be non-negative.
 	/// </summary>

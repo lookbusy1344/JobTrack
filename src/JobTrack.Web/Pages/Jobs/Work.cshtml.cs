@@ -257,8 +257,11 @@ public sealed class WorkModel(
 	///     "Pause job": finishes exactly one session and leaves achievement unchanged (ADR 0045 §3.3).
 	///     <paramref name="nodeVersion" />/<paramref name="writeUp" /> are present only when the post came
 	///     from this page's unified ending form, where the write-up shares one form with Pause/Complete/Save
-	///     — the icon-only row action in <c>_LeafWorkSessions</c> (also used from <c>/Jobs/Browse</c>) posts
-	///     neither and pauses without touching the write-up.
+	///     directly. Every other action on this page (Start, Reopen and start, Change outcome, and the
+	///     icon-only row action in <c>_LeafWorkSessions</c> reused from <c>/Jobs/Browse</c>) carries no
+	///     write-up of its own -- site.js's shared submit listener instead fires a separate SaveWriteUp
+	///     request first when a write-up textarea exists elsewhere on the page, so the edit is still saved,
+	///     just via a distinct request rather than these two fields on this one.
 	/// </summary>
 	public async Task<IActionResult> OnPostFinishAsync(
 		long sessionId, long version, string? finishedAt, long? nodeVersion = null, string? writeUp = null,
@@ -379,12 +382,12 @@ public sealed class WorkModel(
 
 	/// <summary>
 	///     "Reopen and start session": atomically reopens a terminal leaf and starts
-	///     <paramref name="workedByUserId" />'s session (ADR 0045 §1/§2). Authorized more widely than
+	///     <paramref name="reopenWorkedByUserId" />'s session (ADR 0045 §1/§2). Authorized more widely than
 	///     the advanced "Reopen without starting" action below -- see <see cref="LeafWorkPageResult.CanReopenAndStartForSelf" />/
 	///     <see cref="LeafWorkPageResult.CanReopenAndStartForOthers" />, both rendering hints only.
 	/// </summary>
 	public async Task<IActionResult> OnPostReopenAndStartAsync(
-		long leafWorkVersion, string? reason, long workedByUserId, string? startedAt, CancellationToken cancellationToken)
+		long leafWorkVersion, string? reason, long reopenWorkedByUserId, string? startedAt, CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();
 		if (actor is null) {
@@ -408,7 +411,7 @@ public sealed class WorkModel(
 				JobNodeId = new(LeafNodeId),
 				Version = leafWorkVersion,
 				Reason = reason,
-				WorkedByUserId = new(workedByUserId),
+				WorkedByUserId = new(reopenWorkedByUserId),
 				StartedAt = startedAtInstant,
 			}, cancellationToken);
 			SuccessMessage = "Job reopened. Session started.";
@@ -619,7 +622,7 @@ public sealed class WorkModel(
 			return;
 		}
 
-		var workedByUserId = ResolveWorkerFilter(leafId, actor);
+		var workedByUserId = ResolveWorkerFilter(leafId);
 
 		try {
 			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
@@ -648,19 +651,17 @@ public sealed class WorkModel(
 	///     The effective worker filter for this leaf's Sessions panel, honoring remembered choices
 	///     (browse-sessions filter memory): an explicit <c>WorkedByUserId</c> query value is used and
 	///     remembered (empty = "Everyone"); with no query value the last remembered choice for this
-	///     leaf is recalled; failing that the default is "Everyone" when the viewer may manage this
-	///     leaf's sessions, else their own sessions (a plain worker may not read everyone's). This is
-	///     why returning here after correcting a session no longer snaps back to the corrected worker —
-	///     the redirect carries no filter, so the remembered choice (or the default) applies instead.
+	///     leaf is recalled; failing that the default is "Everyone" — <see cref="WorkSessionAccessPolicy.CanView" />
+	///     (ADR 0041) grants every baseline role unqualified visibility of all workers' sessions, so
+	///     there is no permission reason to default to "just me". This is why returning here after
+	///     correcting a session no longer snaps back to the corrected worker — the redirect carries no
+	///     filter, so the remembered choice (or the default) applies instead.
 	/// </summary>
-	private AppUserId? ResolveWorkerFilter(JobNodeId leafId, AppUserId actor)
+	private AppUserId? ResolveWorkerFilter(JobNodeId leafId)
 	{
 		var key = FormattableString.Invariant($"Jobs.Work.WorkedBy.{leafId.Value}");
-		// Default when nothing is remembered: Everyone (null) when the viewer may manage this leaf's
-		// sessions, else their own (a plain worker may not read everyone's).
-		var fallback = WorkPage?.CanManageSessions ?? false ? (long?)null : actor.Value;
 		var resolved = FilterMemory.Resolve(
-			HttpContext.Session, key, Request.Query.ContainsKey(nameof(WorkedByUserId)), WorkedByUserId, fallback);
+			HttpContext.Session, key, Request.Query.ContainsKey(nameof(WorkedByUserId)), WorkedByUserId, null);
 		return resolved.HasValue ? new AppUserId(resolved.Value) : null;
 	}
 

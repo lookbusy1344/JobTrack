@@ -97,6 +97,35 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Starting_a_session_saves_the_write_up_typed_beside_it()
+	{
+		// Start's own handler carries no write-up fields of its own (the architecture rule against a
+		// handler coordinating more than one IJobTrackClient mutation) -- site.js instead fires a
+		// separate SaveWriteUp request before submitting Start, which this reproduces as the two
+		// requests it actually is.
+		var workerId = await SeedEmployeeAsync("work.start-writeup", EmployeeRole.Worker);
+		var leaf = await AddChildAsync(rootId, workerId, "Pour foundation with write-up");
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+		});
+		var authCookie = await SignInAsync("work.start-writeup");
+
+		var (writeUpCookie, writeUpToken) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var writeUpResponse = await PostSaveWriteUpAsync(
+			authCookie, writeUpCookie, writeUpToken, leaf.Id, leaf.Version, "Foundation formwork is square and level.");
+		writeUpResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id });
+		current.Node.WriteUp.Should().Be("Foundation formwork is square and level.");
+	}
+
+	[Fact]
 	public async Task Starting_work_on_the_root_shows_a_helpful_error()
 	{
 		var jobManagerId = await SeedEmployeeAsync("work.root-error", EmployeeRole.JobManager);
@@ -322,7 +351,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 		correctResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		// Returns to Work without forcing the corrected worker as the filter -- Work restores the
-		// viewer's remembered choice (or its permission-aware default) instead.
+		// viewer's remembered choice (or the Everyone default) instead.
 		correctResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Work").And.NotContain("orkedByUserId");
 	}
 
@@ -339,11 +368,12 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().NotContain("Sessions worked by", "an owner may manage the leaf, so the unfiltered Everyone view is the default");
+		body.Should().NotContain("Sessions worked by",
+			"the unfiltered Everyone view is always the default, whether or not the viewer may manage the leaf");
 	}
 
 	[Fact]
-	public async Task Work_defaults_to_the_viewers_own_sessions_when_they_may_not_manage()
+	public async Task Work_defaults_to_everyone_even_when_the_viewer_may_not_manage_the_leaf()
 	{
 		var ownerId = await SeedEmployeeAsync("work.default-self.owner", EmployeeRole.Worker);
 		_ = await SeedEmployeeAsync("work.default-self.viewer", EmployeeRole.Worker);
@@ -356,8 +386,9 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain("Sessions worked by work.default-self.viewer",
-			"a viewer who may not manage the leaf falls back to their own sessions, never an authorization error");
+		body.Should().NotContain("Sessions worked by",
+			"WorkSessionAccessPolicy.CanView (ADR 0041) grants every baseline role unqualified visibility of all sessions, " +
+			"so there is no permission reason to default a non-managing viewer to their own sessions only");
 	}
 
 	[Fact]
@@ -737,6 +768,122 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Reopening_and_starting_for_yourself_does_not_pin_the_sessions_filter_to_yourself()
+	{
+		var workerId = await SeedEmployeeAsync("work.reopen-filter", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Terminal leaf for filter check");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			NewAchievement = Achievement.Unsuccessful,
+			Reason = "Did not work out",
+			Version = 2,
+		});
+		var authCookie = await SignInAsync("work.reopen-filter");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostReopenAndStartAsync(authCookie, cookie, token, leaf.Id, 2, "Work resumed", workerId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		// The reopened-for worker (here, the actor themselves) must never leak into the Sessions
+		// filter -- the "workedByUserId" name collision this regresses used to carry the actor's own
+		// id onto the redirect as an explicit filter value.
+		response.Headers.Location!.OriginalString.Should().NotContain("orkedByUserId");
+		var body = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		body.Should().NotContain("Sessions worked by", "the unfiltered Everyone view must survive reopening for yourself");
+	}
+
+	[Fact]
+	public async Task Reopening_and_starting_a_session_saves_the_write_up_typed_beside_it()
+	{
+		var workerId = await SeedEmployeeAsync("work.reopen-writeup", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Cancelled leaf with write-up");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			NewAchievement = Achievement.Cancelled,
+			Reason = "Client changed their mind",
+			Version = 2,
+		});
+		var authCookie = await SignInAsync("work.reopen-writeup");
+
+		var (writeUpCookie, writeUpToken) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var writeUpResponse = await PostSaveWriteUpAsync(
+			authCookie, writeUpCookie, writeUpToken, leaf.Id, leaf.Version, "Client reinstated the original scope.");
+		writeUpResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostReopenAndStartAsync(
+			authCookie, cookie, token, leaf.Id, 2, "Client changed their mind again", workerId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id });
+		current.Node.WriteUp.Should().Be("Client reinstated the original scope.");
+	}
+
+	[Fact]
+	public async Task Changing_the_outcome_saves_the_write_up_typed_beside_it()
+	{
+		var workerId = await SeedEmployeeAsync("work.outcome-writeup", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Leaf for outcome write-up");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		var authCookie = await SignInAsync("work.outcome-writeup");
+
+		var (writeUpCookie, writeUpToken) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var writeUpResponse = await PostSaveWriteUpAsync(
+			authCookie, writeUpCookie, writeUpToken, leaf.Id, leaf.Version, "Superseded; see the replacement job for details.");
+		writeUpResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=SetAchievement");
+		request.Headers.Add("Cookie", $"{authCookie}; {cookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["LeafNodeId"] = leaf.Id.Value.ToString(CultureInfo.InvariantCulture),
+			["leafWorkVersion"] = "2",
+			["newAchievement"] = nameof(Achievement.Cancelled),
+			["reason"] = "Superseded by another job",
+			["__RequestVerificationToken"] = token,
+		});
+
+		var response = await client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var current = await seedClient.Query.GetJobNodeAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id });
+		current.Node.WriteUp.Should().Be("Superseded; see the replacement job for details.");
+	}
+
+	[Fact]
 	public async Task The_work_page_shows_the_leafs_current_write_up_in_a_prominent_multi_line_field()
 	{
 		var workerId = await SeedEmployeeAsync("work.writeup-shown", EmployeeRole.Worker);
@@ -982,7 +1129,27 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 			["LeafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
 			["leafWorkVersion"] = leafWorkVersion.ToString(CultureInfo.InvariantCulture),
 			["reason"] = reason,
-			["workedByUserId"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
+			["reopenWorkedByUserId"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
+			["__RequestVerificationToken"] = token,
+		});
+
+		return await client.SendAsync(request);
+	}
+
+	/// <summary>
+	///     Posts the write-up's own standalone Save button -- the request site.js fires ahead of any
+	///     other action form whenever a #writeUp textarea is on the page, since those handlers carry no
+	///     write-up fields of their own (the one-handler-one-mutation architecture rule).
+	/// </summary>
+	private async Task<HttpResponseMessage> PostSaveWriteUpAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId, long nodeVersion, string writeUp)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=SaveWriteUp");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["LeafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
+			["nodeVersion"] = nodeVersion.ToString(CultureInfo.InvariantCulture),
+			["writeUp"] = writeUp,
 			["__RequestVerificationToken"] = token,
 		});
 

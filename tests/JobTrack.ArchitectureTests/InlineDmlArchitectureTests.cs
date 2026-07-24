@@ -15,12 +15,6 @@ using TestSupport;
 /// </summary>
 public sealed class InlineDmlArchitectureTests
 {
-	private sealed record AllowedRawSqlCall(
-		string Path,
-		string ContainingMember,
-		string Method,
-		string RequiredArgumentFragment);
-
 	private static readonly AllowedRawSqlCall[] AllowedRawSqlCalls = [
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlInstallationBootstrapPort.cs"),
@@ -65,9 +59,7 @@ public sealed class InlineDmlArchitectureTests
 	];
 
 	private static readonly HashSet<string> RawSqlMethods = new(StringComparer.Ordinal) {
-		"ExecuteSqlInterpolatedAsync",
-		"ExecuteSqlRaw",
-		"ExecuteSqlRawAsync",
+		"ExecuteSqlInterpolatedAsync", "ExecuteSqlRaw", "ExecuteSqlRawAsync",
 	};
 
 	/// <summary>
@@ -83,8 +75,14 @@ public sealed class InlineDmlArchitectureTests
 		new(HierarchyQueries, "PrerequisiteWouldCreateCycleAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetAncestorChainAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetSubtreeAchievementsAsync", "SqlQuery", "WITH RECURSIVE"),
+		new(HierarchyQueries, "IsSubtreeAchievedSqliteAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetRequesterSubtreeAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetBoundedSubtreeAsync", "SqlQuery", "WITH RECURSIVE"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobBrowseQueryPort.cs"),
+			"GetSubtreeAchievementAsync",
+			"SqlQuery",
+			"node_succeeded"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteControlledLeafQuery.cs"),
 			"GetControlledLeafIdsAsync",
@@ -186,8 +184,14 @@ public sealed class InlineDmlArchitectureTests
 			.Select(item => (
 				Path: relativePath,
 				ContainingMember: item.Invocation.FirstAncestorOrSelf<MethodDeclarationSyntax>()?.Identifier.ValueText
-					?? string.Empty,
+								  ?? string.Empty,
 				item.Method,
 				Arguments: item.Invocation.ArgumentList.ToString()));
 	}
+
+	private sealed record AllowedRawSqlCall(
+		string Path,
+		string ContainingMember,
+		string Method,
+		string RequiredArgumentFragment);
 }

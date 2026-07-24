@@ -9,6 +9,12 @@ public sealed record JobSubtreeResult
 	public required JobNodeId RootId { get; init; }
 
 	/// <summary>
+	///     The root's recursively derived achievement when it is a branch or the permanent root;
+	///     <see langword="null" /> when the requested root is a leaf.
+	/// </summary>
+	public BranchAchievement? RootAchievement { get; init; }
+
+	/// <summary>
 	///     The root's penny-rounded, level-reconciled total cost (ADR 0002) -- the sum of every leaf cost
 	///     in the root's <em>entire</em> subtree, not just the nodes this bounded fetch rendered (ADR
 	///     0039 decision 4). <see langword="null" /> when the actor may not view this subtree's cost (

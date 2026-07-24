@@ -94,7 +94,7 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 		return EquatableArray.CopyOf(results);
 	}
 
-	public async Task<EquatableArray<JobNodeSubtreeRow>> GetSubtreeAsync(
+	public async Task<JobSubtreeQueryResult> GetSubtreeAsync(
 		JobNodeId rootId, int maxDepth, OwnershipFilter ownership, JobArchiveFilter archiveFilter,
 		CancellationToken cancellationToken = default)
 	{
@@ -119,7 +119,34 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 
 		var bounded = await JobNodeHierarchyQueries.GetBoundedSubtreeAsync(
 			context, rootId.Value, maxDepth, JobSubtreeLimits.BreadthCap, cancellationToken).ConfigureAwait(false);
-		return EquatableArray.CopyOf(await LoadSubtreeRowsAsync(context, bounded, ownership, archiveFilter, cancellationToken).ConfigureAwait(false));
+		var rows = await LoadSubtreeRowsAsync(context, rootId, bounded, ownership, archiveFilter, cancellationToken).ConfigureAwait(false);
+		var rootRow = rows.Single(row => row.Id == rootId);
+		var rootAchievement = rootRow.Kind == NodeKind.Leaf
+			? (BranchAchievement?)null
+			: await GetSubtreeAchievementAsync(context, rootId, cancellationToken).ConfigureAwait(false);
+		return new() { Rows = EquatableArray.CopyOf(rows), RootAchievement = rootAchievement };
+	}
+
+	public async Task<BranchAchievement> GetSubtreeAchievementAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
+	{
+		await using var context = CreateContext();
+
+		var rootExists = await context.Set<JobNodeEntity>().AsNoTracking()
+			.AnyAsync(node => node.Id == rootId, cancellationToken)
+			.ConfigureAwait(false);
+		if (!rootExists) {
+			throw new EntityNotFoundException($"Job node {rootId} does not exist.");
+		}
+
+		return await GetSubtreeAchievementAsync(context, rootId, cancellationToken).ConfigureAwait(false);
+	}
+
+	private static async Task<BranchAchievement> GetSubtreeAchievementAsync(
+		SqliteJobTrackDbContext context, JobNodeId rootId, CancellationToken cancellationToken)
+	{
+		var achieved = await JobNodeHierarchyQueries.IsSubtreeAchievedSqliteAsync(
+			context, rootId.Value, (short)Achievement.Success, cancellationToken).ConfigureAwait(false);
+		return achieved ? BranchAchievement.Success : BranchAchievement.Unfinished;
 	}
 
 	private static async Task<List<JobNodeAncestorResult>> LoadAncestorsAsync(
@@ -219,8 +246,8 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 	}
 
 	private static async Task<List<JobNodeSubtreeRow>> LoadSubtreeRowsAsync(
-		DbContext context, IReadOnlyList<BoundedSubtreeRow> bounded, OwnershipFilter ownership, JobArchiveFilter archiveFilter,
-		CancellationToken cancellationToken)
+		DbContext context, JobNodeId rootId, IReadOnlyList<BoundedSubtreeRow> bounded, OwnershipFilter ownership,
+		JobArchiveFilter archiveFilter, CancellationToken cancellationToken)
 	{
 		var idList = bounded.Select(r => new JobNodeId(r.Id)).ToList();
 		var depthById = bounded.ToDictionary(r => new JobNodeId(r.Id), r => r.Depth);
@@ -253,7 +280,9 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 		var keepById = new Dictionary<JobNodeId, bool>();
 		foreach (var row in shaped.OrderByDescending(r => depthById[r.Id])) {
 			var descendantMatches = childrenByParent.TryGetValue(row.Id, out var childIds) && childIds.Any(c => keepById[c]);
-			keepById[row.Id] = matchesById[row.Id] || descendantMatches;
+			// The root is always shown regardless of filter match -- Browse is rooted at it, so
+			// dropping it here would leave GetSubtreeAsync's rootRow lookup with nothing to find.
+			keepById[row.Id] = matchesById[row.Id] || descendantMatches || row.Id == rootId;
 		}
 
 		return shaped

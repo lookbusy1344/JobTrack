@@ -135,10 +135,8 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 				.. requiresIds.Select(otherId => new PrerequisiteEdge(otherId, new(NodeId))),
 				.. requiredByIds.Select(otherId => new PrerequisiteEdge(new(NodeId), otherId)),
 			];
-			await jobTrackClient.Jobs.AddPrerequisitesAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
-				Edges = [.. edges],
-			}, cancellationToken);
+			await jobTrackClient.Jobs.AddPrerequisitesAsync(
+				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, Edges = [.. edges] }, cancellationToken);
 
 			SuccessMessage = edges.Length == 1 ? "Dependency added." : $"{edges.Length} dependencies added.";
 		}

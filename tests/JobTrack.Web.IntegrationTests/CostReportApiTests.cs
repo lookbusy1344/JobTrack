@@ -176,7 +176,7 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Cost_details_reports_an_unprocessable_entity_when_no_rate_resolves()
 	{
-		var (_, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.no-rate.worker", addUserRate: false);
+		var (_, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.no-rate.worker", false);
 		_ = await SeedEmployeeAsync("cost.no-rate.viewer", EmployeeRole.CostViewer);
 		var authCookie = await SignInAsync("cost.no-rate.viewer");
 

@@ -296,7 +296,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var activeOnlyBody = await activeOnlyResponse.Content.ReadAsStringAsync();
 		activeOnlyBody.Should().NotContain("Decommissioned wing");
 
-		var allResponse = await GetAsync("/Jobs/Browse?archiveFilter=All", authCookie);
+		var allResponse = await GetAsync("/Jobs/Browse?showArchived=true", authCookie);
 		var allBody = await allResponse.Content.ReadAsStringAsync();
 		allBody.Should().Contain("Decommissioned wing");
 		// Archived is a flag on the row itself, not a column of "no" against every other row.
@@ -383,7 +383,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain("<dt class=\"col-sm-3\">Cost</dt>");
+		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Cost</dt>");
 		body.Should().Contain(">&#xA3;200.00<");
 		body.Should().NotContain("Subtree cost");
 	}

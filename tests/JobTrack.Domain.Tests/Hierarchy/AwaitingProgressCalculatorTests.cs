@@ -193,6 +193,34 @@ public sealed class AwaitingProgressCalculatorTests
 	}
 
 	[Fact]
+	public void A_search_text_filter_restricts_to_descriptions_containing_it_case_insensitively()
+	{
+		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId, "Fit oak cabinets"),
+			[LeafBId] = Facts(LeafBId, "Paint the fence"),
+		};
+
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null, "OAK");
+
+		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId]);
+	}
+
+	[Fact]
+	public void A_blank_search_text_applies_no_filter()
+	{
+		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId, "Fit oak cabinets"),
+			[LeafBId] = Facts(LeafBId, "Paint the fence"),
+		};
+
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null, "   ");
+
+		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId, LeafBId]);
+	}
+
+	[Fact]
 	public void A_subtree_filter_restricts_to_descendants_of_the_scope_root()
 	{
 		var nodes = new Dictionary<JobNodeId, HierarchyNode> {

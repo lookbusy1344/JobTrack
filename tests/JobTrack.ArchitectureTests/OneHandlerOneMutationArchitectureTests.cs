@@ -56,39 +56,50 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	/// </summary>
 	private static readonly string[] HandlerAllowlist = [];
 
+	/// <summary>
+	///     The facade interfaces documenting composites, paired with their concrete handlers. This
+	///     complementary check keeps application handlers as one-port-call adapters.
+	/// </summary>
+	private static readonly (string InterfaceFile, string HandlerFile)[] CompositeCommandSources = [
+		(Path.Combine("src", "JobTrack.Application", "IWorkCommands.cs"), Path.Combine("src", "JobTrack.Application", "WorkCommands.cs")),
+		(
+			Path.Combine("src", "JobTrack.Application", "IAccountCredentialCommands.cs"),
+			Path.Combine("src", "JobTrack.Application", "AccountCredentialCommands.cs")),
+	];
+
 	[Fact]
 	public void Mutation_analysis_follows_helper_indirection()
 	{
 		const string source = """
-			namespace GuardrailProof;
+							  namespace GuardrailProof;
 
-			public interface IWorkCommands
-			{
-				System.Threading.Tasks.Task FinishAsync();
-			}
+							  public interface IWorkCommands
+							  {
+							  	System.Threading.Tasks.Task FinishAsync();
+							  }
 
-			public interface IJobCommands
-			{
-				System.Threading.Tasks.Task EditAsync();
-			}
+							  public interface IJobCommands
+							  {
+							  	System.Threading.Tasks.Task EditAsync();
+							  }
 
-			public interface IJobTrackClient
-			{
-				IWorkCommands Work { get; }
-				IJobCommands Jobs { get; }
-			}
+							  public interface IJobTrackClient
+							  {
+							  	IWorkCommands Work { get; }
+							  	IJobCommands Jobs { get; }
+							  }
 
-			public sealed class Page(IJobTrackClient client)
-			{
-				public async System.Threading.Tasks.Task OnPostAsync()
-				{
-					await SaveWriteUpFirstAsync();
-					await client.Work.FinishAsync();
-				}
+							  public sealed class Page(IJobTrackClient client)
+							  {
+							  	public async System.Threading.Tasks.Task OnPostAsync()
+							  	{
+							  		await SaveWriteUpFirstAsync();
+							  		await client.Work.FinishAsync();
+							  	}
 
-				private System.Threading.Tasks.Task SaveWriteUpFirstAsync() => client.Jobs.EditAsync();
-			}
-			""";
+							  	private System.Threading.Tasks.Task SaveWriteUpFirstAsync() => client.Jobs.EditAsync();
+							  }
+							  """;
 
 		CountMutationsInSyntheticHandler(source, "OnPostAsync").Should().Be(2);
 	}
@@ -97,29 +108,29 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	public void Mutation_analysis_resolves_client_aliases()
 	{
 		const string source = """
-			namespace GuardrailProof;
+							  namespace GuardrailProof;
 
-			public interface IWorkCommands
-			{
-				System.Threading.Tasks.Task StartAsync();
-				System.Threading.Tasks.Task FinishAsync();
-			}
+							  public interface IWorkCommands
+							  {
+							  	System.Threading.Tasks.Task StartAsync();
+							  	System.Threading.Tasks.Task FinishAsync();
+							  }
 
-			public interface IJobTrackClient
-			{
-				IWorkCommands Work { get; }
-			}
+							  public interface IJobTrackClient
+							  {
+							  	IWorkCommands Work { get; }
+							  }
 
-			public sealed class Page(IJobTrackClient client)
-			{
-				public async System.Threading.Tasks.Task OnPostAsync()
-				{
-					var facade = client;
-					await facade.Work.StartAsync();
-					await facade.Work.FinishAsync();
-				}
-			}
-			""";
+							  public sealed class Page(IJobTrackClient client)
+							  {
+							  	public async System.Threading.Tasks.Task OnPostAsync()
+							  	{
+							  		var facade = client;
+							  		await facade.Work.StartAsync();
+							  		await facade.Work.FinishAsync();
+							  	}
+							  }
+							  """;
 
 		CountMutationsInSyntheticHandler(source, "OnPostAsync").Should().Be(2);
 	}
@@ -128,29 +139,29 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	public void Mutation_analysis_takes_the_max_across_a_conditional_expressions_arms()
 	{
 		const string source = """
-			namespace GuardrailProof;
+							  namespace GuardrailProof;
 
-			public interface IEmployeeCommands
-			{
-				System.Threading.Tasks.Task<int> AssignRoleAsync();
-				System.Threading.Tasks.Task<int> RevokeRoleAsync();
-			}
+							  public interface IEmployeeCommands
+							  {
+							  	System.Threading.Tasks.Task<int> AssignRoleAsync();
+							  	System.Threading.Tasks.Task<int> RevokeRoleAsync();
+							  }
 
-			public interface IJobTrackClient
-			{
-				IEmployeeCommands Employees { get; }
-			}
+							  public interface IJobTrackClient
+							  {
+							  	IEmployeeCommands Employees { get; }
+							  }
 
-			public sealed class Page(IJobTrackClient client)
-			{
-				public async System.Threading.Tasks.Task OnPostAsync(bool revoke)
-				{
-					var result = revoke
-						? await client.Employees.RevokeRoleAsync()
-						: await client.Employees.AssignRoleAsync();
-				}
-			}
-			""";
+							  public sealed class Page(IJobTrackClient client)
+							  {
+							  	public async System.Threading.Tasks.Task OnPostAsync(bool revoke)
+							  	{
+							  		var result = revoke
+							  			? await client.Employees.RevokeRoleAsync()
+							  			: await client.Employees.AssignRoleAsync();
+							  	}
+							  }
+							  """;
 
 		CountMutationsInSyntheticHandler(source, "OnPostAsync").Should().Be(1);
 	}
@@ -159,31 +170,31 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	public void Mutation_analysis_takes_the_max_across_if_else_branches()
 	{
 		const string source = """
-			namespace GuardrailProof;
+							  namespace GuardrailProof;
 
-			public interface IEmployeeCommands
-			{
-				System.Threading.Tasks.Task AssignRoleAsync();
-				System.Threading.Tasks.Task RevokeRoleAsync();
-			}
+							  public interface IEmployeeCommands
+							  {
+							  	System.Threading.Tasks.Task AssignRoleAsync();
+							  	System.Threading.Tasks.Task RevokeRoleAsync();
+							  }
 
-			public interface IJobTrackClient
-			{
-				IEmployeeCommands Employees { get; }
-			}
+							  public interface IJobTrackClient
+							  {
+							  	IEmployeeCommands Employees { get; }
+							  }
 
-			public sealed class Page(IJobTrackClient client)
-			{
-				public async System.Threading.Tasks.Task OnPostAsync(bool revoke)
-				{
-					if (revoke) {
-						await client.Employees.RevokeRoleAsync();
-					} else {
-						await client.Employees.AssignRoleAsync();
-					}
-				}
-			}
-			""";
+							  public sealed class Page(IJobTrackClient client)
+							  {
+							  	public async System.Threading.Tasks.Task OnPostAsync(bool revoke)
+							  	{
+							  		if (revoke) {
+							  			await client.Employees.RevokeRoleAsync();
+							  		} else {
+							  			await client.Employees.AssignRoleAsync();
+							  		}
+							  	}
+							  }
+							  """;
 
 		CountMutationsInSyntheticHandler(source, "OnPostAsync").Should().Be(1);
 	}
@@ -192,31 +203,31 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	public void Mutation_analysis_still_sums_sequential_mutations_outside_a_branch()
 	{
 		const string source = """
-			namespace GuardrailProof;
+							  namespace GuardrailProof;
 
-			public interface IEmployeeCommands
-			{
-				System.Threading.Tasks.Task AssignRoleAsync();
-				System.Threading.Tasks.Task RevokeRoleAsync();
-			}
+							  public interface IEmployeeCommands
+							  {
+							  	System.Threading.Tasks.Task AssignRoleAsync();
+							  	System.Threading.Tasks.Task RevokeRoleAsync();
+							  }
 
-			public interface IJobTrackClient
-			{
-				IEmployeeCommands Employees { get; }
-			}
+							  public interface IJobTrackClient
+							  {
+							  	IEmployeeCommands Employees { get; }
+							  }
 
-			public sealed class Page(IJobTrackClient client)
-			{
-				public async System.Threading.Tasks.Task OnPostAsync(bool revoke)
-				{
-					if (revoke) {
-						await client.Employees.RevokeRoleAsync();
-					}
+							  public sealed class Page(IJobTrackClient client)
+							  {
+							  	public async System.Threading.Tasks.Task OnPostAsync(bool revoke)
+							  	{
+							  		if (revoke) {
+							  			await client.Employees.RevokeRoleAsync();
+							  		}
 
-					await client.Employees.AssignRoleAsync();
-				}
-			}
-			""";
+							  		await client.Employees.AssignRoleAsync();
+							  	}
+							  }
+							  """;
 
 		CountMutationsInSyntheticHandler(source, "OnPostAsync").Should().Be(2);
 	}
@@ -261,17 +272,6 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 			"an external API endpoint delegate coordinating more than one IJobTrackClient mutation call belongs as " +
 			"one atomic library command instead (remediation plan §2.5)");
 	}
-
-	/// <summary>
-	///     The facade interfaces documenting composites, paired with their concrete handlers. This
-	///     complementary check keeps application handlers as one-port-call adapters.
-	/// </summary>
-	private static readonly (string InterfaceFile, string HandlerFile)[] CompositeCommandSources = [
-		(Path.Combine("src", "JobTrack.Application", "IWorkCommands.cs"), Path.Combine("src", "JobTrack.Application", "WorkCommands.cs")),
-		(
-			Path.Combine("src", "JobTrack.Application", "IAccountCredentialCommands.cs"),
-			Path.Combine("src", "JobTrack.Application", "AccountCredentialCommands.cs")),
-	];
 
 	[GeneratedRegex(@"Task<[^(]+?>\s+(\w+Async)\s*\(", RegexOptions.Multiline)]
 	private static partial Regex InterfaceMethodSignature();
@@ -424,7 +424,7 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 		var tree = CSharpSyntaxTree.ParseText(source, CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview));
 		var compilation = CreateCompilation([tree]);
 		var method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
-						 .Single(candidate => candidate.Identifier.ValueText == methodName);
+			.Single(candidate => candidate.Identifier.ValueText == methodName);
 		var symbol = compilation.GetSemanticModel(tree).GetDeclaredSymbol(method)
 					 ?? throw new InvalidOperationException($"Could not resolve synthetic handler {methodName}.");
 
@@ -461,7 +461,7 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 			"OneHandlerOneMutationAnalysis",
 			syntaxTrees,
 			CreateMetadataReferences(),
-			new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+			new(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
 	private static IEnumerable<MetadataReference> CreateMetadataReferences()
 	{

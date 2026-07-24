@@ -1,0 +1,23 @@
+@using JobTrack.Abstractions
+@model BranchAchievementIconModel
+@{
+	@* Reuses the leaf achievement icon set's own glyphs/CSS modifiers -- Success draws the leaf
+	   "success" glyph, Unfinished borrows the leaf "waiting" glyph, since a branch's own state has
+	   no separate icon asset and the two read the same way (not yet done vs. done). *@
+	var (iconId, modifier) = Model.Achievement switch {
+		BranchAchievement.Success => ("jt-icon-achievement-success", "success"),
+		BranchAchievement.Unfinished => ("jt-icon-achievement-waiting", "waiting"),
+		_ => throw new ArgumentOutOfRangeException(nameof(Model.Achievement), Model.Achievement, null),
+	};
+	var label = EnumDisplay.Label(Model.Achievement);
+}
+<span class="jt-achievement-icon jt-achievement-icon--@modifier">
+	<svg class="jt-achievement-icon-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+		<use href="#@iconId"></use>
+	</svg>
+	@if (Model.ShowLabel) {
+		<span class="jt-achievement-icon-label">@label</span>
+	} else {
+		<span class="visually-hidden">@label</span>
+	}
+</span>

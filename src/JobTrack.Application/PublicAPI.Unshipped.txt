@@ -566,6 +566,8 @@ JobTrack.Application.GetAwaitingProgressRequest.Offset.get -> int
 JobTrack.Application.GetAwaitingProgressRequest.Offset.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Ownership.get -> JobTrack.Domain.Hierarchy.OwnershipFilter!
 JobTrack.Application.GetAwaitingProgressRequest.Ownership.init -> void
+JobTrack.Application.GetAwaitingProgressRequest.SearchText.get -> string?
+JobTrack.Application.GetAwaitingProgressRequest.SearchText.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.SubtreeRootId.get -> JobTrack.Abstractions.JobNodeId?
 JobTrack.Application.GetAwaitingProgressRequest.SubtreeRootId.init -> void
 JobTrack.Application.GetCostDetailsRequest
@@ -2314,3 +2316,19 @@ JobTrack.Application.ChangeOwnPasswordResult.ConcurrencyStamp.init -> void
 JobTrack.Application.ChangeOwnPasswordResult.SecurityStamp.get -> string!
 JobTrack.Application.ChangeOwnPasswordResult.SecurityStamp.init -> void
 JobTrack.Application.IAccountCredentialCommands.ChangeOwnPasswordAsync(JobTrack.Application.ChangeOwnPasswordRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ChangeOwnPasswordResult!>!
+JobTrack.Application.GetBranchAchievementRequest
+JobTrack.Application.GetBranchAchievementRequest.<Clone>$() -> JobTrack.Application.GetBranchAchievementRequest!
+JobTrack.Application.GetBranchAchievementRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetBranchAchievementRequest.Context.init -> void
+JobTrack.Application.GetBranchAchievementRequest.Equals(JobTrack.Application.GetBranchAchievementRequest? other) -> bool
+JobTrack.Application.GetBranchAchievementRequest.GetBranchAchievementRequest() -> void
+JobTrack.Application.GetBranchAchievementRequest.NodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.GetBranchAchievementRequest.NodeId.init -> void
+override JobTrack.Application.GetBranchAchievementRequest.Equals(object? obj) -> bool
+override JobTrack.Application.GetBranchAchievementRequest.GetHashCode() -> int
+override JobTrack.Application.GetBranchAchievementRequest.ToString() -> string!
+static JobTrack.Application.GetBranchAchievementRequest.operator !=(JobTrack.Application.GetBranchAchievementRequest? left, JobTrack.Application.GetBranchAchievementRequest? right) -> bool
+static JobTrack.Application.GetBranchAchievementRequest.operator ==(JobTrack.Application.GetBranchAchievementRequest? left, JobTrack.Application.GetBranchAchievementRequest? right) -> bool
+JobTrack.Application.IJobQueries.GetBranchAchievementAsync(JobTrack.Application.GetBranchAchievementRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.BranchAchievement>!
+JobTrack.Application.JobSubtreeResult.RootAchievement.get -> JobTrack.Abstractions.BranchAchievement?
+JobTrack.Application.JobSubtreeResult.RootAchievement.init -> void

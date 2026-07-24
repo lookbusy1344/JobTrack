@@ -33,6 +33,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	private TestWebApplicationFactory factory = null!;
 	private JobNodeId rootId;
 	private IJobTrackClient seedClient = null!;
+	private AppUserId workerId;
 
 	public async Task InitializeAsync()
 	{
@@ -49,7 +50,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		});
 		rootId = bootstrap.RootJobNodeId;
 		adminId = bootstrap.AdministratorId;
-		await SeedWorkerEmployeeAsync("browse-nav.worker");
+		workerId = await SeedWorkerEmployeeAsync("browse-nav.worker");
 
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
@@ -84,7 +85,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	{
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync("/Jobs/Browse", authCookie);
+		// The owner filter now lives only on the Search flow (Ownership/ArchiveFilter scope a
+		// whole-tree search, not the currently browsed subtree), reached via the toolbar's "Search"
+		// link -- the blank search-entry view, before any SearchText is submitted.
+		var response = await GetAsync("/Jobs/Browse?search=true", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		// The owner filter is a <select> of employee names defaulting to "All owners" (no filter),
@@ -96,40 +100,40 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
-	public async Task Browse_remembers_the_owner_filter_across_a_return_visit()
+	public async Task Search_remembers_the_owner_filter_across_a_return_visit()
 	{
 		var workerId = await SeedEmployeeAsync("browse-nav.filtermem", EmployeeRole.Worker);
-		_ = await AddChildAsync(rootId, "Admin owned child");
+		_ = await AddChildAsync(rootId, "Admin owned oak cabinet");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		// Explicitly filter root's children to the worker (who owns nothing here); capture the session
-		// that now remembers the choice, and sanity-check the filter actually hides the admin's child.
-		using var chooseRequest = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Browse?ownerUserId={workerId.Value}");
+		// Explicitly filter a search to the worker (who owns nothing here); capture the session that
+		// now remembers the choice, and sanity-check the filter actually hides the admin's match.
+		using var chooseRequest = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Browse?searchText=oak&ownerUserId={workerId.Value}");
 		chooseRequest.Headers.Add("Cookie", authCookie);
 		var chooseResponse = await client.SendAsync(chooseRequest);
-		(await ReadNormalizedBodyAsync(chooseResponse)).Should().NotContain("Admin owned child");
+		(await ReadNormalizedBodyAsync(chooseResponse)).Should().NotContain("Admin owned oak cabinet");
 		var sessionCookie = ExtractCookiePair(
 			FindSetCookie(chooseResponse, "JobTrack.Session") ?? throw new InvalidOperationException("No session cookie was set."));
 
-		// Return with no owner param: the remembered worker filter still hides the admin's child.
-		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/Browse");
+		// Search again with no owner param: the remembered worker filter still hides the admin's match.
+		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/Browse?searchText=oak");
 		returnRequest.Headers.Add("Cookie", $"{authCookie}; {sessionCookie}");
 		var returnResponse = await client.SendAsync(returnRequest);
 		var returnBody = await ReadNormalizedBodyAsync(returnResponse);
 
-		returnBody.Should().NotContain("Admin owned child");
+		returnBody.Should().NotContain("Admin owned oak cabinet");
 	}
 
 	[Fact]
-	public async Task Browse_defaults_to_all_owners_when_nothing_is_remembered()
+	public async Task Search_defaults_to_all_owners_when_nothing_is_remembered()
 	{
-		_ = await AddChildAsync(rootId, "Admin owned child");
+		_ = await AddChildAsync(rootId, "Admin owned oak cabinet");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync("/Jobs/Browse", authCookie);
+		var response = await GetAsync("/Jobs/Browse?searchText=oak", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
-		body.Should().Contain("Admin owned child", "with nothing remembered Browse defaults to all owners");
+		body.Should().Contain("Admin owned oak cabinet", "with nothing remembered Search defaults to all owners");
 	}
 
 	[Fact]
@@ -177,7 +181,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
-	public async Task Browsing_a_leaf_still_shows_prerequisite_and_work_sections()
+	public async Task Browsing_a_leaf_without_prerequisites_hides_the_requires_section_but_still_shows_work_controls()
 	{
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
@@ -185,8 +189,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
-		body.Should().Contain("Requires (must finish first)");
-		body.Should().Contain("Depends on this job");
+		// Neither Requires nor Depends-on has an edge on this leaf, so the shared card is hidden
+		// entirely rather than rendered with two "None." lists.
+		body.Should().NotContain("Requires (must finish first)");
+		body.Should().NotContain("Depends on this job");
 		body.Should().Contain(">Dependencies<");
 		body.Should().Contain(">Decompose<");
 		body.Should().Contain("#jt-icon-start");
@@ -203,13 +209,64 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 
 		var dependentResponse = await GetAsync($"/Jobs/Browse?nodeId={dependentLeafId.Value}", authCookie);
 		var dependentBody = await ReadNormalizedBodyAsync(dependentResponse);
+		dependentBody.Should().Contain("Requires (must finish first)");
 		dependentBody.Should().Contain($"href=\"/Jobs/Browse?nodeId={requiredLeafId.Value}\"");
 		dependentBody.Should().Contain("Old survey");
 
 		var requiredResponse = await GetAsync($"/Jobs/Browse?nodeId={requiredLeafId.Value}", authCookie);
 		var requiredBody = await ReadNormalizedBodyAsync(requiredResponse);
+		requiredBody.Should().Contain("Depends on this job");
 		requiredBody.Should().Contain($"href=\"/Jobs/Browse?nodeId={dependentLeafId.Value}\"");
 		requiredBody.Should().Contain("Frame walls");
+	}
+
+	[Fact]
+	public async Task Search_browse_button_returns_to_the_last_browsed_node()
+	{
+		var leafId = await AddChildAsync(rootId, "Pour foundation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		// Browse the leaf first; capture the session that now remembers it as the last-browsed node.
+		var browseResponse = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var sessionCookie = ExtractCookiePair(
+			FindSetCookie(browseResponse, "JobTrack.Session") ?? throw new InvalidOperationException("No session cookie was set."));
+
+		using var searchRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/Browse?search=true");
+		searchRequest.Headers.Add("Cookie", $"{authCookie}; {sessionCookie}");
+		var searchResponse = await client.SendAsync(searchRequest);
+		var searchBody = await ReadNormalizedBodyAsync(searchResponse);
+
+		searchBody.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Browse</a>");
+	}
+
+	[Fact]
+	public async Task Search_browse_button_falls_back_to_the_home_node_when_nothing_was_browsed_this_session()
+	{
+		// A home node must be a branch (or the root), never a leaf -- give it a child so its derived
+		// kind (ADR 0035) is Branch.
+		var homeNodeId = await AddChildAsync(rootId, "Kitchen renovation");
+		_ = await AddChildAsync(homeNodeId, "Fit cabinets");
+		await SetWorkerHomeNodeAsync(homeNodeId);
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		// A fresh session with nothing browsed yet -- the home node set above is the only fallback.
+		var response = await GetAsync("/Jobs/Browse?search=true", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={homeNodeId.Value}\">Browse</a>");
+	}
+
+	[Fact]
+	public async Task Search_browse_button_falls_back_to_the_root_when_nothing_is_remembered_or_set()
+	{
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		// A fresh session, no home node configured: the last-resort fallback is the root, i.e. a
+		// plain Browse link carrying no node id at all.
+		var response = await GetAsync("/Jobs/Browse?search=true", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain("href=\"/Jobs/Browse\">Browse</a>");
 	}
 
 	[Fact]
@@ -387,6 +444,9 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 			RequiredJobId = requiredJobId,
 			DependentJobId = dependentJobId,
 		});
+
+	private async Task SetWorkerHomeNodeAsync(JobNodeId nodeId) =>
+		await seedClient.Employees.SetHomeNodeAsync(new() { Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() }, NodeId = nodeId });
 
 	private static async Task<string> ReadNormalizedBodyAsync(HttpResponseMessage response) =>
 		WhitespaceRunPattern().Replace(await response.Content.ReadAsStringAsync(), " ");

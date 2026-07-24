@@ -124,7 +124,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		return Task.FromResult<EquatableArray<JobNodeSummaryResult>>([.. summaries]);
 	}
 
-	public Task<EquatableArray<JobNodeSubtreeRow>> GetSubtreeAsync(
+	public async Task<JobSubtreeQueryResult> GetSubtreeAsync(
 		JobNodeId rootId, int maxDepth, OwnershipFilter ownership, JobArchiveFilter archiveFilter,
 		CancellationToken cancellationToken = default)
 	{
@@ -196,7 +196,27 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 				MatchesFilter = matchesById[n.Id],
 			});
 
-		return Task.FromResult<EquatableArray<JobNodeSubtreeRow>>([.. result]);
+		var rootAchievement = GetExisting(rootId).Kind == NodeKind.Leaf
+			? (BranchAchievement?)null
+			: await GetSubtreeAchievementAsync(rootId, cancellationToken);
+		return new() { Rows = [.. result], RootAchievement = rootAchievement };
+	}
+
+	public Task<BranchAchievement> GetSubtreeAchievementAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
+	{
+		_ = GetExisting(rootId);
+
+		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
+		foreach (var node in _nodes.Values) {
+			var childIds = _nodes.Values.Where(n => n.ParentId == node.Id).Select(n => n.Id).ToArray();
+			var leafAchievement = node.Kind == NodeKind.Leaf && _leafWork.TryGetValue(node.Id, out var leafWork)
+				? leafWork.Achievement
+				: (Achievement?)null;
+			nodesById[node.Id] = new(node.Id, node.ParentId, [.. childIds], leafAchievement);
+		}
+
+		var achieved = AchievementCalculator.IsAchieved(rootId, nodesById);
+		return Task.FromResult(achieved ? BranchAchievement.Success : BranchAchievement.Unfinished);
 	}
 
 	public Task<JobNodeResult> AddChildAsync(CreateJobNodeRequest request, CancellationToken cancellationToken = default)

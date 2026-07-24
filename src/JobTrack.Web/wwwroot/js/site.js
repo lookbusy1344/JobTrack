@@ -55,3 +55,52 @@ document.addEventListener('submit', (event) => {
         // Storage unavailable -- nothing to clear.
     }
 });
+
+// Jobs/Work carries one write-up textarea (#writeUp) shared by several independent action forms --
+// Start, Start-for, backdated start, Reopen and start, Change outcome, and each session row's own
+// Pause button. Every action must implicitly save whatever write-up text is currently typed, not
+// just the one form the textarea happens to live inside. The ending-decision form (Pause/Complete)
+// already carries the write-up as part of its own single atomic command, so that case is left alone;
+// every other form here fires a separate SaveWriteUp request first, then submits unmodified -- two
+// requests, each still a single mutation (an architecture rule Jobs/Work's Razor Page handlers keep
+// to), rather than one handler coordinating two. A no-op on every page without a #writeUp textarea,
+// and for the one form the textarea already lives in.
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) {
+        return;
+    }
+
+    const writeUp = document.getElementById('writeUp');
+    if (!writeUp || form.contains(writeUp)) {
+        return;
+    }
+
+    const writeUpForm = writeUp.closest('form');
+    const nodeVersion = document.getElementById('writeUpNodeVersion');
+    if (!writeUpForm || !nodeVersion) {
+        return;
+    }
+
+    event.preventDefault();
+    saveWriteUpThenSubmit(form, writeUpForm, writeUp.value, nodeVersion.value);
+});
+
+async function saveWriteUpThenSubmit(form, writeUpForm, writeUp, nodeVersion) {
+    const body = new URLSearchParams({
+        LeafNodeId: writeUpForm.elements.namedItem('LeafNodeId')?.value ?? '',
+        nodeVersion,
+        writeUp,
+        __RequestVerificationToken: writeUpForm.elements.namedItem('__RequestVerificationToken')?.value ?? '',
+    });
+
+    try {
+        await fetch('/Jobs/Work?handler=SaveWriteUp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body,
+        });
+    } finally {
+        form.submit();
+    }
+}

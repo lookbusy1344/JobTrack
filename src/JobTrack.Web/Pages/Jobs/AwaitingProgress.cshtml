@@ -34,6 +34,10 @@
 			Unassigned only (the pickup pool)
 		</label>
 	</div>
+	<div class="form-group">
+		<label asp-for="SearchText"></label>
+		<input asp-for="SearchText" class="form-control"/>
+	</div>
 	<button type="submit" class="btn btn-primary">Apply</button>
 	<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.SubtreeRootId">Browse</a>
 </form>

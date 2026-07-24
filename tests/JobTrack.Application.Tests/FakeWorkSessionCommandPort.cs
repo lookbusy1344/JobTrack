@@ -174,11 +174,7 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 			(writeUpChanged, writtenUpNode) = ApplyWriteUpChange(existing.LeafWorkId, change);
 		}
 
-		return Task.FromResult(new FinishSessionAndUpdateWriteUpResult {
-			Session = updated,
-			WriteUpChanged = writeUpChanged,
-			Node = writtenUpNode,
-		});
+		return Task.FromResult(new FinishSessionAndUpdateWriteUpResult { Session = updated, WriteUpChanged = writeUpChanged, Node = writtenUpNode });
 	}
 
 	public Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default)

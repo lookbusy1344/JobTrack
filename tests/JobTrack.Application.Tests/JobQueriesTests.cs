@@ -1114,6 +1114,23 @@ public sealed class JobQueriesTests
 	}
 
 	[Fact]
+	public async Task GetJobSubtreeAsync_returns_the_root_achievement_from_the_subtree_snapshot()
+	{
+		var owner = new AppUserId(10);
+		var port = CreateSeededTree(owner, new(11), out var rootId, out _, out var leafId);
+		await SucceedLeafAsync(port, owner, leafId);
+		await SucceedLeafAsync(port, owner, new(4));
+		var costQueries = new FakeCostQueries();
+		costQueries.DenyActor(owner);
+		var sut = CreateSut(port, costQueries);
+
+		var result = await sut.GetJobSubtreeAsync(
+			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+
+		result.RootAchievement.Should().Be(BranchAchievement.Success);
+	}
+
+	[Fact]
 	public async Task GetJobSubtreeAsync_rejects_a_null_request()
 	{
 		var sut = CreateSut(new FakeCostQueries());
@@ -1121,6 +1138,76 @@ public sealed class JobQueriesTests
 		var act = () => sut.GetJobSubtreeAsync(null!);
 
 		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
+
+	[Fact]
+	public async Task GetBranchAchievementAsync_returns_Unfinished_while_a_leaf_is_outstanding()
+	{
+		var owner = new AppUserId(10);
+		var port = CreateSeededTree(owner, new(11), out _, out var branchId, out var leafId);
+		await SucceedLeafAsync(port, owner, leafId);
+		// The archived sibling leaf is deliberately left without leaf work.
+		var sut = CreateSut(port);
+
+		var result = await sut.GetBranchAchievementAsync(new() { Context = ContextFor(owner), NodeId = branchId });
+
+		result.Should().Be(BranchAchievement.Unfinished);
+	}
+
+	[Fact]
+	public async Task GetBranchAchievementAsync_returns_Success_when_every_leaf_in_the_subtree_has_succeeded()
+	{
+		var owner = new AppUserId(10);
+		var port = CreateSeededTree(owner, new(11), out _, out var branchId, out var leafId);
+		var archivedLeafId = new JobNodeId(4);
+		await SucceedLeafAsync(port, owner, leafId);
+		await SucceedLeafAsync(port, owner, archivedLeafId);
+		var sut = CreateSut(port);
+
+		var result = await sut.GetBranchAchievementAsync(new() { Context = ContextFor(owner), NodeId = branchId });
+
+		result.Should().Be(BranchAchievement.Success);
+	}
+
+	[Fact]
+	public async Task GetBranchAchievementAsync_throws_for_a_nonexistent_node()
+	{
+		var sut = CreateSut(new FakeJobNodeCommandPort());
+
+		var act = () => sut.GetBranchAchievementAsync(new() { Context = ContextFor(new(10)), NodeId = new(999) });
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	[Fact]
+	public async Task GetBranchAchievementAsync_rejects_a_null_request()
+	{
+		var sut = CreateSut(new FakeJobNodeCommandPort());
+
+		var act = () => sut.GetBranchAchievementAsync(null!);
+
+		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
+
+	private static async Task SucceedLeafAsync(FakeJobNodeCommandPort port, AppUserId actor, JobNodeId leafId)
+	{
+		var achievementPort = new FakeAchievementCommandPort(port);
+
+		var leafWork = await port.AttachLeafWorkAsync(new() { Context = ContextFor(actor), JobNodeId = leafId });
+		var inProgress = await achievementPort.SetAchievementAsync(new() {
+			Context = ContextFor(actor),
+			JobNodeId = leafId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Work has started",
+			Version = leafWork.Version,
+		});
+		_ = await achievementPort.SetAchievementAsync(new() {
+			Context = ContextFor(actor),
+			JobNodeId = leafId,
+			NewAchievement = Achievement.Success,
+			Reason = "Work is done",
+			Version = inProgress.Version,
+		});
 	}
 
 	[Fact]
@@ -1219,6 +1306,21 @@ public sealed class JobQueriesTests
 			new() { Context = ContextFor(owner), SubtreeRootId = branchId });
 
 		result.Select(e => e.Id).Should().ContainSingle().Which.Should().Be(leafId);
+	}
+
+	[Fact]
+	public async Task GetAwaitingProgressAsync_applies_the_search_text_filter()
+	{
+		var owner = new AppUserId(10);
+		var port = CreateSeededTree(owner, owner, out _, out _, out var leafId);
+		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
+		var sut = CreateSut(port);
+
+		var matching = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), SearchText = "cabinets" });
+		var nonMatching = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), SearchText = "fence" });
+
+		matching.Select(e => e.Id).Should().ContainSingle().Which.Should().Be(leafId);
+		nonMatching.Should().BeEmpty();
 	}
 
 	[Fact]

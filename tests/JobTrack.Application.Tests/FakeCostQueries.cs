@@ -9,6 +9,7 @@ using Abstractions;
 /// </summary>
 internal sealed class FakeCostQueries : ICostQueries
 {
+	private readonly List<int> _bulkBatchSizes = [];
 	private readonly Dictionary<JobNodeId, Money> _bulkCosts = [];
 	private readonly HashSet<AppUserId> _deniedActors = [];
 	private readonly Dictionary<JobNodeId, Exception> _hierarchyFailures = [];
@@ -19,8 +20,6 @@ internal sealed class FakeCostQueries : ICostQueries
 
 	/// <summary>Fresh-eyes review §2.8 efficiency guard: proves listing enrichment is one batched call, never per row.</summary>
 	public int GetBulkNodeCostsCallCount { get; private set; }
-
-	private readonly List<int> _bulkBatchSizes = [];
 
 	/// <summary>The candidate count of each bulk call in order -- lets a caller prove enrichment respects the port's cap.</summary>
 	public IReadOnlyList<int> BulkBatchSizes => _bulkBatchSizes;
@@ -59,7 +58,8 @@ internal sealed class FakeCostQueries : ICostQueries
 		// violation, not something the fake silently absorbs -- so enrichment must chunk to the cap.
 		if (request.NodeIds.Count > CostQueries.MaxBulkNodeIdCount) {
 			throw new ArgumentOutOfRangeException(
-				nameof(request), request.NodeIds.Count, $"A bulk cost request cannot price more than {CostQueries.MaxBulkNodeIdCount} node ids at once.");
+				nameof(request), request.NodeIds.Count,
+				$"A bulk cost request cannot price more than {CostQueries.MaxBulkNodeIdCount} node ids at once.");
 		}
 
 		var displayed = request.NodeIds

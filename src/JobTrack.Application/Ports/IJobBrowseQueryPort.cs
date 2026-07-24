@@ -61,7 +61,17 @@ internal interface IJobBrowseQueryPort
 	/// <exception cref="ArgumentOutOfRangeException">
 	///     <paramref name="maxDepth" /> is negative or exceeds <see cref="Domain.Hierarchy.JobSubtreeLimits.HardMaxDepth" />.
 	/// </exception>
-	Task<EquatableArray<JobNodeSubtreeRow>> GetSubtreeAsync(
+	Task<JobSubtreeQueryResult> GetSubtreeAsync(
 		JobNodeId rootId, int maxDepth, OwnershipFilter ownership, JobArchiveFilter archiveFilter,
 		CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Derives <paramref name="rootId" />'s rollup achievement from its complete descendant subtree
+	///     (every leaf, at any depth) via <see cref="Domain.Hierarchy.AchievementCalculator" /> --
+	///     <see cref="BranchAchievement.Success" /> iff every leaf has succeeded, recursively through any
+	///     nested branches. Works for a leaf node too (trivially, its own achievement), but exists for
+	///     branches/root, whose own leaf-shaped <see cref="Achievement" /> would otherwise be undefined.
+	/// </summary>
+	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>
+	Task<BranchAchievement> GetSubtreeAchievementAsync(JobNodeId rootId, CancellationToken cancellationToken = default);
 }

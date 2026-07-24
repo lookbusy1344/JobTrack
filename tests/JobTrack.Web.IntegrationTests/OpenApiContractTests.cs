@@ -221,6 +221,15 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public void The_subtree_schema_exposes_the_computed_root_achievement()
+	{
+		var schema = document["components"]!["schemas"]!["JobSubtreeResponse"]!.AsObject();
+		var properties = schema["properties"]!.AsObject().Select(entry => entry.Key).ToArray();
+
+		properties.Should().Contain("rootAchievement");
+	}
+
+	[Fact]
 	public void Growable_collection_operations_document_their_paging_parameters()
 	{
 		foreach (var (method, path) in new[] {

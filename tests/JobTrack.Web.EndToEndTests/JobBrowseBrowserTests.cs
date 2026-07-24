@@ -192,6 +192,55 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
+	public async Task A_branch_reads_Unfinished_while_one_of_its_leaves_has_not_succeeded()
+	{
+		var branchId = await fixture.SeedBranchAsync("Unfinished branch");
+		_ = await fixture.SeedSuccessLeafAsync("Succeeded leaf", branchId);
+		_ = await fixture.SeedLeafAsync("Outstanding leaf", branchId);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+
+		(await page.Locator(".jt-achievement-icon--waiting .jt-achievement-icon-label").InnerTextAsync()).Should().Be("Unfinished");
+	}
+
+	[Fact]
+	public async Task A_branch_reads_Success_once_every_leaf_in_its_subtree_has_succeeded()
+	{
+		var branchId = await fixture.SeedBranchAsync("Fully succeeded branch");
+		_ = await fixture.SeedSuccessLeafAsync("First succeeded leaf", branchId);
+		_ = await fixture.SeedSuccessLeafAsync("Second succeeded leaf", branchId);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+
+		(await page.Locator(".jt-achievement-icon--success .jt-achievement-icon-label").InnerTextAsync()).Should().Be("Success");
+	}
+
+	[Fact]
+	public async Task A_branch_of_branches_reads_Success_only_once_every_descendant_leaf_has_succeeded()
+	{
+		var outerBranchId = await fixture.SeedBranchAsync("Outer branch");
+		var innerBranchId = await fixture.SeedBranchAsync("Inner branch", outerBranchId);
+		_ = await fixture.SeedSuccessLeafAsync("Inner branch's succeeded leaf", innerBranchId);
+		_ = await fixture.SeedLeafAsync("Outer branch's own outstanding leaf", outerBranchId);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={outerBranchId.Value}");
+
+		(await page.Locator(".jt-achievement-icon--waiting .jt-achievement-icon-label").InnerTextAsync()).Should().Be("Unfinished");
+	}
+
+	[Fact]
 	public async Task Visiting_a_dead_breadcrumb_link_removes_it_from_the_recently_visited_history()
 	{
 		const long NonExistentNodeId = 9_999_999L;
@@ -293,15 +342,16 @@ public abstract class JobBrowseBrowserTestsBase
 	///     a blocking one (stop glyph), and a plain dependent row (no glyph -- only Requires ever
 	///     carries a readiness marker) all render through the same <c>.jt-list &gt; li</c> box, so none
 	///     of them should stand taller than another (row-height regression guard for the icon-scale
-	///     fix below). Two page loads supply every state: an unrelated leaf gives the "None." row on
-	///     both sides, and a leaf with both prerequisite outcomes plus a dependent of its own gives
-	///     "Blocked", "Unblocked", and a plain Depends-on-this-job row.
+	///     fix below). The card is hidden entirely when both sides are empty, so a "None." row is only
+	///     reachable on a node with exactly one populated side: the satisfied prerequisite has no
+	///     requirements of its own (Requires = "None.", one populated Depends-on row), and the
+	///     grand-dependent has no dependents of its own (Depends-on = "None.", one populated Requires
+	///     row). A third page load, for the node with both prerequisite outcomes, supplies "Blocked",
+	///     "Unblocked", and a second Depends-on-this-job comparison row.
 	/// </summary>
 	[Fact]
 	public async Task Requires_and_depends_on_rows_are_all_the_same_height_whether_empty_blocked_or_unblocked()
 	{
-		var unrelatedId = await fixture.SeedLeafAsync("No prerequisites or dependents");
-
 		var satisfiedRequiredId = await fixture.SeedSuccessLeafAsync("Foundation poured");
 		var blockingRequiredId = await fixture.SeedLeafAsync("Wiring not done");
 		var dependentId = await fixture.SeedLeafAsync("Fit cabinets");
@@ -314,10 +364,11 @@ public abstract class JobBrowseBrowserTestsBase
 		var page = await context.NewPageAsync();
 		await SignInAsync(page);
 
-		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={unrelatedId.Value}");
-		var unrelatedColumns = page.Locator(".jt-card .jt-prereq-col");
-		var noneRequiresHeight = await RowHeightAsync(unrelatedColumns.Nth(0).Locator("li"));
-		var noneDependsOnHeight = await RowHeightAsync(unrelatedColumns.Nth(1).Locator("li"));
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={satisfiedRequiredId.Value}");
+		var noneRequiresHeight = await RowHeightAsync(page.Locator(".jt-card .jt-prereq-col").Nth(0).Locator("li"));
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={grandDependentId.Value}");
+		var noneDependsOnHeight = await RowHeightAsync(page.Locator(".jt-card .jt-prereq-col").Nth(1).Locator("li"));
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={dependentId.Value}");
 		var columns = page.Locator(".jt-card .jt-prereq-col");

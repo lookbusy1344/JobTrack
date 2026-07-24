@@ -7,7 +7,6 @@ using Application;
 using Application.Ports;
 using AwesomeAssertions;
 using Database;
-using Domain.Hierarchy;
 using NodaTime;
 
 /// <summary>
@@ -1213,8 +1212,8 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var act = () => port.AddPrerequisitesAsync(new() {
 			Context = ContextFor(jobManagerId),
 			Edges = [
-				new PrerequisiteEdge(required.Id, dependent.Id),
-				new PrerequisiteEdge(dependent.Id, dependent.Id),
+				new(required.Id, dependent.Id),
+				new(dependent.Id, dependent.Id),
 			],
 		});
 

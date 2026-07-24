@@ -184,6 +184,16 @@ public interface IJobQueries
 	Task<JobSubtreeResult> GetJobSubtreeAsync(GetJobSubtreeRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	///     Derives a branch's (or the root's) rollup achievement from its complete descendant subtree:
+	///     <see cref="BranchAchievement.Success" /> iff every leaf, at any depth, has succeeded,
+	///     recursively through any nested branches; <see cref="BranchAchievement.Unfinished" /> otherwise.
+	///     Carries no ownership-based authorization gate (see <see cref="GetJobNodeAsync" />).
+	/// </summary>
+	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>
+	Task<BranchAchievement> GetBranchAchievementAsync(
+		GetBranchAchievementRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	///     Retrieves an employee's schedule versions and exceptions (plan §8.5 slice 6). The actor may
 	///     always view their own; viewing another employee's requires <see cref="EmployeeRole.Administrator" />
 	///     (see <see cref="Domain.Authorization.ScheduleAccessPolicy" />).

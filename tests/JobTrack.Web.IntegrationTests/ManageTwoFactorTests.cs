@@ -103,6 +103,36 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Concurrent_first_visits_converge_on_the_same_authenticator_key_instead_of_erroring()
+	{
+		var appUserId = await SeedUserAsync("concurrent.enrol");
+		var authCookie = await SignInAsync("concurrent.enrol");
+
+		using var requestA = new HttpRequestMessage(HttpMethod.Get, "/Account/ManageTwoFactor");
+		requestA.Headers.Add("Cookie", authCookie);
+		using var requestB = new HttpRequestMessage(HttpMethod.Get, "/Account/ManageTwoFactor");
+		requestB.Headers.Add("Cookie", authCookie);
+
+		var responseATask = client.SendAsync(requestA);
+		var responseBTask = client.SendAsync(requestB);
+		await Task.WhenAll(responseATask, responseBTask);
+		var (responseA, responseB) = (await responseATask, await responseBTask);
+		var (bodyA, bodyB) = (await responseA.Content.ReadAsStringAsync(), await responseB.Content.ReadAsStringAsync());
+
+		responseA.StatusCode.Should().Be(HttpStatusCode.OK);
+		responseB.StatusCode.Should().Be(HttpStatusCode.OK);
+		var secretA = AuthenticatorKeyPattern().Match(bodyA) is { Success: true } matchA
+			? matchA.Groups["key"].Value
+			: throw new InvalidOperationException("No authenticator key in response A's body.");
+		var secretB = AuthenticatorKeyPattern().Match(bodyB) is { Success: true } matchB
+			? matchB.Groups["key"].Value
+			: throw new InvalidOperationException("No authenticator key in response B's body.");
+		secretB.Should().Be(secretA);
+		var (_, keyProtected) = await GetTwoFactorStateAsync(appUserId);
+		keyProtected.Should().NotBeNull();
+	}
+
+	[Fact]
 	public async Task Confirming_an_incorrect_code_does_not_enable_two_factor()
 	{
 		var appUserId = await SeedUserAsync("grace.enrol");

@@ -285,3 +285,6 @@ static JobTrack.Abstractions.JobRequestNoteId.operator !=(JobTrack.Abstractions.
 static JobTrack.Abstractions.JobRequestNoteId.operator ==(JobTrack.Abstractions.JobRequestNoteId left, JobTrack.Abstractions.JobRequestNoteId right) -> bool
 ~override JobTrack.Abstractions.JobRequestNoteId.Equals(object obj) -> bool
 ~override JobTrack.Abstractions.JobRequestNoteId.ToString() -> string
+JobTrack.Abstractions.BranchAchievement
+JobTrack.Abstractions.BranchAchievement.Unfinished = 0 -> JobTrack.Abstractions.BranchAchievement
+JobTrack.Abstractions.BranchAchievement.Success = 1 -> JobTrack.Abstractions.BranchAchievement

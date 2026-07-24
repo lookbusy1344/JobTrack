@@ -4,6 +4,7 @@ using System.Data.Common;
 using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using TestSupport;
 
@@ -37,6 +38,6 @@ public sealed class SqliteJobBrowseQueryPortTests()
 	internal override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
 		new SqliteJobBrowseQueryPort(connectionString);
 
-	internal override IJobBrowseQueryPort CreateBrowsePortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor) =>
+	internal override IJobBrowseQueryPort CreateBrowsePortWithInterceptor(string connectionString, DbCommandInterceptor interceptor) =>
 		new SqliteJobBrowseQueryPort(connectionString, [interceptor]);
 }

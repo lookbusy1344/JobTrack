@@ -23,14 +23,18 @@ public static class AwaitingProgressCalculator
 	/// <summary>
 	///     Filters and orders <paramref name="nodesById" /> into the awaiting-progress list. Both
 	///     dictionaries must be keyed by the same complete node set; <paramref name="factsById" /> is
-	///     looked up only for candidate leaves.
+	///     looked up only for candidate leaves. <paramref name="searchText" />, when non-blank, restricts
+	///     to leaves whose <see cref="AwaitingProgressNodeFacts.Description" /> contains it (case
+	///     insensitive) — unlike <c>IJobQueries.SearchJobNodesAsync</c>, this scopes the dashboard's own
+	///     owner/subtree-filtered candidate set rather than the whole tree.
 	/// </summary>
 	public static EquatableArray<AwaitingProgressEntry> GetAwaitingProgress(
 		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
 		IReadOnlyDictionary<JobNodeId, AwaitingProgressNodeFacts> factsById,
 		IReadOnlyCollection<PrerequisiteEdge> prerequisites,
 		OwnershipFilter ownership,
-		JobNodeId? subtreeRootId)
+		JobNodeId? subtreeRootId,
+		string? searchText = null)
 	{
 		ArgumentNullException.ThrowIfNull(ownership);
 
@@ -41,6 +45,8 @@ public static class AwaitingProgressCalculator
 			.Where(candidate => candidate.Facts.ArchivedAt is null)
 			.Where(candidate => ownership.Matches(candidate.Facts.OwnerUserId))
 			.Where(candidate => !subtreeRootId.HasValue || IsInSubtree(candidate.Node.Id, subtreeRootId.Value, nodesById))
+			.Where(candidate => string.IsNullOrWhiteSpace(searchText)
+								|| candidate.Facts.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase))
 			.Select(candidate => new AwaitingProgressEntry(
 				candidate.Node.Id,
 				candidate.Node.ParentId,

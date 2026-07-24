@@ -3,6 +3,7 @@ namespace JobTrack.Database.PerformanceTests;
 using System.Diagnostics;
 using AwesomeAssertions;
 using Npgsql;
+using Persistence.PostgreSql;
 using TestSupport;
 
 /// <summary>
@@ -24,21 +25,18 @@ public sealed class HierarchyAchievementReadinessPerformanceTests : IAsyncLifeti
 	public Task DisposeAsync() => database.DisposeAsync();
 
 	[Fact]
-	public async Task Recursively_derived_achievement_for_one_branch_meets_the_latency_and_plan_budget()
+	public async Task Recursively_derived_achievement_for_the_production_scale_root_meets_the_latency_and_plan_budget()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var ownerUserId = await PerformanceScaleGenerator.SeedAppUserAsync(connection, "Combined tree owner");
-		var (_, branchId, _, _) = await PerformanceScaleGenerator.SeedCombinedProductionTreeAsync(connection, ownerUserId);
+		var (rootId, _, _, _) = await PerformanceScaleGenerator.SeedCombinedProductionTreeAsync(connection, ownerUserId);
+		await using var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
+		var port = new PostgreSqlJobBrowseQueryPort(dataSource);
+
+		_ = await port.GetSubtreeAchievementAsync(new(rootId));
 
 		var stopwatch = Stopwatch.StartNew();
-		await using (var command = connection.CreateCommand()) {
-			command.CommandText = "SELECT node_succeeded(@branchId)";
-			var parameter = command.CreateParameter();
-			parameter.ParameterName = "branchId";
-			parameter.Value = branchId;
-			command.Parameters.Add(parameter);
-			_ = await command.ExecuteScalarAsync();
-		}
+		_ = await port.GetSubtreeAchievementAsync(new(rootId));
 
 		stopwatch.Elapsed.Should().BeLessThan(AchievementBudget);
 	}

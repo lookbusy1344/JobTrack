@@ -1,8 +1,8 @@
 namespace JobTrack.Application.Tests;
 
 using Abstractions;
-using Application.Ports;
 using AwesomeAssertions;
+using Ports;
 
 public sealed class AccountCredentialCommandsTests
 {
@@ -56,10 +56,7 @@ public sealed class AccountCredentialCommandsTests
 			ChangeOwnPasswordRequest request, CancellationToken cancellationToken = default)
 		{
 			ChangeOwnPasswordCallCount++;
-			return Task.FromResult(new ChangeOwnPasswordResult {
-				SecurityStamp = "security-stamp",
-				ConcurrencyStamp = "concurrency-stamp",
-			});
+			return Task.FromResult(new ChangeOwnPasswordResult { SecurityStamp = "security-stamp", ConcurrencyStamp = "concurrency-stamp" });
 		}
 	}
 }

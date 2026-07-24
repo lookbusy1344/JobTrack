@@ -11,6 +11,38 @@ using Microsoft.EntityFrameworkCore;
 public static class JobNodeHierarchyQueries
 {
 	/// <summary>
+	///     Returns whether every childless node in <paramref name="rootId" />'s subtree has canonical
+	///     <c>Success</c> leaf work. This is the set-based SQLite equivalent of PostgreSQL's
+	///     source-controlled <c>node_succeeded</c> function: it returns one scalar rather than
+	///     materializing the complete subtree into the application process.
+	/// </summary>
+	public static async Task<bool> IsSubtreeAchievedSqliteAsync(
+		DbContext context, long rootId, short successAchievementId, CancellationToken cancellationToken)
+	{
+		var achieved = await context.Database.SqlQuery<int>(
+			$"""
+			 WITH RECURSIVE subtree(id) AS (
+			     SELECT id FROM job_node WHERE id = {rootId}
+			     UNION ALL
+			     SELECT jn.id FROM job_node jn JOIN subtree s ON jn.parent_id = s.id
+			 )
+			 SELECT CASE WHEN EXISTS (
+			     SELECT 1
+			     FROM subtree s
+			     WHERE NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = s.id)
+			       AND NOT EXISTS (
+			           SELECT 1
+			           FROM leaf_work lw
+			           WHERE lw.job_node_id = s.id
+			             AND lw.achievement_id = {successAchievementId}
+			       )
+			 ) THEN 0 ELSE 1 END AS "Value"
+			 """).SingleAsync(cancellationToken).ConfigureAwait(false);
+
+		return achieved != 0;
+	}
+
+	/// <summary>
 	///     Returns the <c>owner_user_id</c> of <paramref name="nodeId" /> and every one of its ancestors
 	///     up to the root, skipping ancestors with a <see langword="null" /> owner (ownership model §3:
 	///     an unassigned node on the path contributes no controller). Note this means an empty result is

@@ -97,14 +97,19 @@
 							<option value="Work resumed"></option>
 						</datalist>
 					</div>
+					@* Named reopenWorkedByUserId, not workedByUserId -- model binding is case-insensitive, so
+					   the plain name would double-bind onto this page's own WorkedByUserId sessions-filter
+					   property (same pattern as Browse's PickUpAsync/pickUpNodeId) and the redirect below
+					   would then carry it as an explicit query value, silently pinning the Sessions filter
+					   to whoever was just reopened for -- usually the actor themselves. *@
 					@if (workPage.CanReopenAndStartForOthers) {
 						<div class="form-group">
 							<label for="reopenWorkedByUserId">Worker</label>
-							<select id="reopenWorkedByUserId" name="workedByUserId" class="form-control"
+							<select id="reopenWorkedByUserId" name="reopenWorkedByUserId" class="form-control"
 							        asp-items="Model.ReopenWorkerOptions"></select>
 						</div>
 					} else {
-						<input type="hidden" name="workedByUserId" value="@Model.CurrentActorId?.Value"/>
+						<input type="hidden" name="reopenWorkedByUserId" value="@Model.CurrentActorId?.Value"/>
 					}
 					<div class="form-group">
 						<label for="reopenStartedAt">Started at (optional backdate)</label>

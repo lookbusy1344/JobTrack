@@ -69,6 +69,14 @@ public sealed class AwaitingProgressModel(
 	[BindProperty(SupportsGet = true)]
 	public bool ShowWholeTree { get; init; }
 
+	/// <summary>
+	///     When non-blank, restricts to leaves whose description contains this text (case insensitive) —
+	///     scopes the same owner/subtree-filtered candidate set as the rest of this dashboard's filters,
+	///     unlike Browse's Search flow which queries the whole tree.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public string? SearchText { get; init; }
+
 	[TempData] public string? ErrorMessage { get; set; }
 
 	[TempData] public string? SuccessMessage { get; set; }
@@ -120,6 +128,7 @@ public sealed class AwaitingProgressModel(
 		["UnassignedOnly"] = UnassignedOnly.ToString(),
 		["SubtreeRootId"] = SubtreeRootId?.ToString(CultureInfo.InvariantCulture),
 		["ShowWholeTree"] = ShowWholeTree.ToString(),
+		["SearchText"] = SearchText,
 		["Offset"] = Offset.ToString(CultureInfo.InvariantCulture),
 	};
 
@@ -261,6 +270,7 @@ public sealed class AwaitingProgressModel(
 		["unassignedOnly"] = UnassignedOnly,
 		["subtreeRootId"] = SubtreeRootId,
 		["showWholeTree"] = ShowWholeTree,
+		["searchText"] = SearchText,
 		["offset"] = Offset,
 	};
 
@@ -308,6 +318,7 @@ public sealed class AwaitingProgressModel(
 					Context = context,
 					Ownership = ownership,
 					SubtreeRootId = SubtreeRootId.HasValue ? new JobNodeId(SubtreeRootId.Value) : null,
+					SearchText = SearchText,
 					Offset = Math.Max(0, Offset),
 					Limit = PageSize + 1,
 				},

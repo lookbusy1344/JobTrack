@@ -291,6 +291,14 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	/// <summary>Seeds a leaf that has reached the terminal <see cref="Achievement.Success" /> state.</summary>
 	public async Task<JobNodeId> SeedSuccessLeafAsync(string description) => await SeedTerminalLeafAsync(description, Achievement.Success);
 
+	/// <summary>
+	///     Seeds a leaf under <paramref name="parentId" /> that has reached the terminal
+	///     <see cref="Achievement.Success" /> state -- for branch-rollup-achievement browser tests, where
+	///     the leaf must sit under a specific branch rather than directly under the root.
+	/// </summary>
+	public async Task<JobNodeId> SeedSuccessLeafAsync(string description, JobNodeId parentId) =>
+		await SeedTerminalLeafAsync(description, Achievement.Success, parentId);
+
 	/// <summary>Seeds a leaf that reached a terminal achievement and was then archived.</summary>
 	public async Task<JobNodeId> SeedArchivedTerminalLeafAsync(string description)
 	{
@@ -305,9 +313,9 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		return leafId;
 	}
 
-	private async Task<JobNodeId> SeedTerminalLeafAsync(string description, Achievement achievement)
+	private async Task<JobNodeId> SeedTerminalLeafAsync(string description, Achievement achievement, JobNodeId? parentId = null)
 	{
-		var leafId = await SeedLeafAsync(description);
+		var leafId = await SeedLeafAsync(description, parentId);
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
 			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
 			JobNodeId = leafId,

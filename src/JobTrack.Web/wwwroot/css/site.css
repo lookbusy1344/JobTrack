@@ -664,6 +664,15 @@ dl.row {
     margin-inline: 0;
 }
 
+/* Browse's record card runs full-bleed (two field columns on wide, one on phones, via the markup's
+   row-cols; write-up spans both). Lift the shared 44rem cap so the section fills the content column,
+   and zero the base row-gap so Bootstrap's `.g-2` gutter is the sole source of vertical rhythm (the
+   two stacking gaps were the excess space). */
+.jt-record--full {
+    max-width: none;
+    row-gap: 0;
+}
+
 dt {
     font-size: var(--jt-font-size-xxs);
     font-weight: 600;
@@ -1778,42 +1787,9 @@ nav[aria-label="breadcrumb"] li + li::before {
     max-width: 44rem;
 }
 
-/* Collapsed to a small pill by default; only takes on the full jt-card padding/border/shadow
-   once the disclosure is opened, so "Filter & search" doesn't dominate the page at rest. */
-.jt-card--filter {
+/* Caps a jt-card's width for content that reads badly stretched full-width, e.g. the Search form. */
+.jt-card--narrow {
     max-width: 44rem;
-    padding: 0;
-    border: none;
-    box-shadow: none;
-    background: transparent;
-}
-
-.jt-card--filter[open] {
-    padding: var(--jt-space-4);
-    border: 1px solid var(--jt-line);
-    border-radius: var(--jt-radius-lg);
-    box-shadow: var(--jt-shadow-sm);
-    background: var(--jt-surface);
-}
-
-.jt-card--filter .jt-disclosure-summary {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--jt-space-1) var(--jt-space-3);
-    background: var(--jt-surface);
-    border: 1px solid var(--jt-line);
-    border-radius: var(--jt-radius-lg);
-    box-shadow: var(--jt-shadow-sm);
-    font-size: 0.875rem;
-}
-
-.jt-card--filter[open] .jt-disclosure-summary {
-    padding: 0;
-    margin-bottom: var(--jt-space-3);
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
 }
 
 /* Compact client-side browse history — links only, sits below the children table. */

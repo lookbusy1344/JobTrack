@@ -139,11 +139,8 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var result = await port.StartSessionAsync(new() {
-			Context = ContextFor(workerId),
-			LeafWorkId = unassignedLeaf.Id,
-			WorkedByUserId = workerId,
-		});
+		var result = await port.StartSessionAsync(
+			new() { Context = ContextFor(workerId), LeafWorkId = unassignedLeaf.Id, WorkedByUserId = workerId });
 
 		result.WorkedByUserId.Should().Be(workerId);
 		var reclaim = () => jobNodePort.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassignedLeaf.Id });
@@ -401,6 +398,39 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task Starting_a_session_at_the_instant_a_prior_session_finished_does_not_overlap()
+	{
+		// Session intervals are half-open [start, end) throughout the stack (domain
+		// IntervalAlgebra, the Postgres exclusion constraint's tstzrange '[)' bound, and the
+		// SQLite triggers): a session ending at exactly 10:00 and a new one starting at exactly
+		// 10:00 are adjacent, not overlapping, so this must succeed rather than throw.
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var firstStart = Instant.FromUtc(2026, 1, 1, 9, 0);
+		var firstFinish = Instant.FromUtc(2026, 1, 1, 10, 0);
+		var first = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		first = await port.FinishSessionAsync(
+			new() { Context = ContextFor(workerId), SessionId = first.Id, Version = first.Version });
+		_ = await port.CorrectSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = first.Id,
+			StartedAt = firstStart,
+			FinishedAt = firstFinish,
+			Reason = "Establish a fixed historical interval",
+			Version = first.Version,
+		});
+
+		var result = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+			StartedAt = firstFinish,
+		});
+
+		result.StartedAt.Should().Be(firstFinish);
+	}
+
+	[Fact]
 	public async Task Finishing_a_session_sets_finished_at_and_bumps_the_version()
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
@@ -593,6 +623,38 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("work-session-overlap");
+	}
+
+	[Fact]
+	public async Task Correcting_a_session_to_start_at_the_instant_another_session_finished_does_not_overlap()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var firstStart = Instant.FromUtc(2026, 1, 1, 9, 0);
+		var firstFinish = Instant.FromUtc(2026, 1, 1, 10, 0);
+		var first = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		first = await port.FinishSessionAsync(
+			new() { Context = ContextFor(workerId), SessionId = first.Id, Version = first.Version });
+		first = await port.CorrectSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = first.Id,
+			StartedAt = firstStart,
+			FinishedAt = firstFinish,
+			Reason = "Establish a fixed historical interval",
+			Version = first.Version,
+		});
+		var second = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+
+		var result = await port.CorrectSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = second.Id,
+			StartedAt = firstFinish,
+			FinishedAt = null,
+			Reason = "Adjacent correction",
+			Version = second.Version,
+		});
+
+		result.StartedAt.Should().Be(firstFinish);
 	}
 
 	[Fact]
@@ -1433,11 +1495,7 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		long sessionVersion)
 	{
 		try {
-			_ = await port.FinishSessionAsync(new() {
-				Context = ContextFor(actorId),
-				SessionId = sessionId,
-				Version = sessionVersion,
-			});
+			_ = await port.FinishSessionAsync(new() { Context = ContextFor(actorId), SessionId = sessionId, Version = sessionVersion });
 			return true;
 		}
 		catch (ConcurrencyConflictException) {

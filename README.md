@@ -302,6 +302,9 @@ and ADRs 0024, 0029, 0030 record the design decisions and rationale behind it. I
 
 ## Project layout
 
+See [`docs/architecture-overview.md`](docs/architecture-overview.md) for a file-by-file table of
+each layer (database, reusable library, HTTP API, web site) plus `spikes/` and `samples/`.
+
 ```
 src/
   JobTrack.Abstractions            identifiers, value types, exception hierarchy — no deps

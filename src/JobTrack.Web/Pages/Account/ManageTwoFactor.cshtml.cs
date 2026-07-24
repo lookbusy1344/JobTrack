@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 using QRCoder;
 
 /// <summary>
@@ -125,20 +126,42 @@ public sealed class ManageTwoFactorModel(
 			return;
 		}
 
-		var key = await userManager.GetAuthenticatorKeyAsync(user);
-		if (key is null) {
-			key = userManager.GenerateNewAuthenticatorKey();
-			await userStore.SetAuthenticatorKeyAsync(user, key, HttpContext.RequestAborted);
+		var key = await userManager.GetAuthenticatorKeyAsync(user) ?? await GenerateAndPersistAuthenticatorKeyAsync(user);
+
+		AuthenticatorKey = key;
+		QrCodeDataUri = BuildQrCodeDataUri(user.UserName, key);
+	}
+
+	/// <summary>
+	///     Generates a fresh authenticator key and persists it, tolerating a concurrent request doing the
+	///     same thing for the first time (e.g. this page opened in two tabs before any key exists): if
+	///     <see cref="JobTrackUserStore" />'s optimistic-concurrency-guarded update loses the race because
+	///     another request's key committed first, that would otherwise surface as an unhandled
+	///     <see cref="DbUpdateConcurrencyException" />; instead, <see cref="JobTrackUserStore.ReloadAsync" />
+	///     overwrites <paramref name="user" />'s tracked values with what the winning request actually
+	///     persisted -- re-querying by id here would not do that, since EF Core's identity map would just
+	///     hand back this same tracked-but-never-persisted instance -- so both requests converge on the
+	///     same key rather than one failing with a server error or, worse, rendering a key that was never
+	///     actually saved.
+	/// </summary>
+	private async Task<string> GenerateAndPersistAuthenticatorKeyAsync(JobTrackIdentityUser user)
+	{
+		var key = userManager.GenerateNewAuthenticatorKey();
+		await userStore.SetAuthenticatorKeyAsync(user, key, HttpContext.RequestAborted);
+		try {
 			var update = await userManager.UpdateAsync(user);
 			if (!update.Succeeded) {
 				throw new InvalidOperationException("Could not persist the pending authenticator key.");
 			}
-
-			key = await userManager.GetAuthenticatorKeyAsync(user);
+		}
+		catch (DbUpdateConcurrencyException) {
+			await userStore.ReloadAsync(user, HttpContext.RequestAborted);
+			return await userManager.GetAuthenticatorKeyAsync(user)
+				   ?? throw new InvalidOperationException("A concurrent authenticator key write lost the race but left no key persisted.");
 		}
 
-		AuthenticatorKey = key;
-		QrCodeDataUri = BuildQrCodeDataUri(user.UserName, key!);
+		return await userManager.GetAuthenticatorKeyAsync(user)
+			   ?? throw new InvalidOperationException("The authenticator key was not persisted.");
 	}
 
 	private static string BuildQrCodeDataUri(string userName, string authenticatorKey)

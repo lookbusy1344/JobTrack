@@ -194,6 +194,36 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task Reload_after_a_lost_concurrency_race_recovers_the_winners_value_not_the_losers_stale_one()
+	{
+		var appUserId = await InsertAppUserAsync("Reload After Race");
+		var user = await WithStoreAsync(store => CreatePersistedUserAsync(store, appUserId, "reload.after.race"));
+
+		await using var contextA = CreateContext();
+		using var storeA = new JobTrackUserStore(contextA, dataProtectionProvider, SystemClock.Instance);
+		var userA = await storeA.FindByIdAsync(user.Id.ToString(CultureInfo.InvariantCulture), CancellationToken.None);
+
+		await using var contextB = CreateContext();
+		using var storeB = new JobTrackUserStore(contextB, dataProtectionProvider, SystemClock.Instance);
+		var userB = await storeB.FindByIdAsync(user.Id.ToString(CultureInfo.InvariantCulture), CancellationToken.None);
+
+		await storeA.SetAuthenticatorKeyAsync(userA!, "winners-key", CancellationToken.None);
+		_ = await storeA.UpdateAsync(userA!, CancellationToken.None);
+
+		await storeB.SetAuthenticatorKeyAsync(userB!, "losers-key", CancellationToken.None);
+		var act = () => storeB.UpdateAsync(userB!, CancellationToken.None);
+		await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+		// Re-querying by id here would be a trap: EF Core's identity map would hand back this same
+		// tracked-but-never-persisted instance, still holding "losers-key" locally. ReloadAsync must
+		// overwrite it with what actually made it to the database.
+		await storeB.ReloadAsync(userB!, CancellationToken.None);
+		var recoveredKey = await storeB.GetAuthenticatorKeyAsync(userB!, CancellationToken.None);
+
+		recoveredKey.Should().Be("winners-key");
+	}
+
+	[Fact]
 	public async Task Assigning_a_role_makes_it_visible_through_get_roles_and_is_in_role()
 	{
 		var appUserId = await InsertAppUserAsync("Ada Lovelace (roles)");
