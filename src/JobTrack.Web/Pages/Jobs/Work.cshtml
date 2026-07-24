@@ -16,7 +16,10 @@
 }
 
 <div class="jt-page-head">
-	<h1 class="jt-preserve-whitespace">@(workPage?.Description ?? "Sessions")</h1>
+	<h1>Work sessions</h1>
+	@if (workPage is not null && Model.CurrentNode is not null) {
+		<h2 class="jt-preserve-whitespace"><a asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></h2>
+	}
 </div>
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
@@ -24,11 +27,6 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (workPage is not null) {
-	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2">
-		<span>Leaf</span>
-		<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Back to Browse</a>
-	</p>
-
 	<div class="jt-card mb-4" id="status">
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 			<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = workPage.Achievement })"/>
@@ -151,6 +149,7 @@
 						</form>
 						<partial name="_BackdateTrigger" model="toolbarActions.StartBackdate"/>
 						<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
+						<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Browse</a>
 					</div>
 					<partial name="_BackdatePanel" model="toolbarActions.StartBackdate"/>
 				} else {
@@ -173,76 +172,73 @@
 			   (sessionId/version) and the Complete arrays (completeSessionId/completeSessionVersion)
 			   coexist here, which is why the latter carry a prefix. *@
 			if (hasEndingSection) {
-				<div class="jt-form-card" id="end-session">
-					<h2 class="h5">How is this job ending?</h2>
-					<form method="post" asp-page-handler="Complete">
-						<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
-						<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+				<form method="post" asp-page-handler="Complete" id="end-session">
+					<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+					<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+					@if (pausable is not null) {
+						<input type="hidden" name="sessionId" value="@pausable.Id.Value"/>
+						<input type="hidden" name="version" value="@pausable.Version"/>
+					}
+					@if (workPage.CanComplete) {
+						foreach (var session in presentation.StableOrder) {
+							<input type="hidden" name="completeSessionId" value="@session.Id.Value"/>
+							<input type="hidden" name="completeSessionVersion" value="@session.Version"/>
+						}
+					}
+					@if (Model.CurrentNode is not null) {
+						<partial name="_WriteUpField"
+						         model="@(new WriteUpFieldModel { NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp })"/>
+					}
+					@if (workPage.CanComplete) {
+						<div class="jt-completion-review mt-3">
+							<details>
+								<summary>Completion options</summary>
+								<div class="form-group mt-2">
+									<label for="completionAchievement">Outcome</label>
+									<select id="completionAchievement" name="finalAchievement" class="form-control"
+									        asp-items="Model.CompletionAchievementOptions"></select>
+								</div>
+								<div class="form-group">
+									<label for="completionFinishedAt">Finished at (optional backdate)</label>
+									<input type="datetime-local" id="completionFinishedAt" name="completionFinishedAt" class="form-control"/>
+								</div>
+								<div class="form-group">
+									<label for="completionNote">Completion note (optional)</label>
+									<input id="completionNote" name="completionNote" class="form-control"/>
+								</div>
+							</details>
+						</div>
+					}
+					<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mt-3">
 						@if (pausable is not null) {
-							<input type="hidden" name="sessionId" value="@pausable.Id.Value"/>
-							<input type="hidden" name="version" value="@pausable.Version"/>
+							<button type="submit" asp-page-handler="Finish" class="btn btn-secondary"
+							        title="Ends this session; the job stays In Progress.">
+								<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<use href="#jt-icon-finish"></use>
+								</svg>
+								Pause job
+							</button>
 						}
 						@if (workPage.CanComplete) {
-							foreach (var session in presentation.StableOrder) {
-								<input type="hidden" name="completeSessionId" value="@session.Id.Value"/>
-								<input type="hidden" name="completeSessionVersion" value="@session.Version"/>
-							}
+							<button type="submit" class="btn btn-primary">
+								<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<use href="#jt-icon-go"></use>
+								</svg>
+								@(workPage.ActiveSessions.Count <= 1
+									? "Complete job"
+									: $"Finish {workPage.ActiveSessions.Count} sessions and complete job")
+							</button>
+						} else if (pausable is null) {
+							<p class="jt-muted">A controlling owner, Job Manager, or Administrator can end this job here.</p>
 						}
 						@if (Model.CurrentNode is not null) {
-							<partial name="_WriteUpField"
-							         model="@(new WriteUpFieldModel { NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp })"/>
+							<button type="submit" asp-page-handler="SaveWriteUp" class="btn btn-secondary"
+							        title="Saves the write-up only; the job's status is unchanged.">
+								Save write-up
+							</button>
 						}
-						@if (workPage.CanComplete) {
-							<div class="jt-completion-review mt-3">
-								<details>
-									<summary>Completion options</summary>
-									<div class="form-group mt-2">
-										<label for="completionAchievement">Outcome</label>
-										<select id="completionAchievement" name="finalAchievement" class="form-control"
-										        asp-items="Model.CompletionAchievementOptions"></select>
-									</div>
-									<div class="form-group">
-										<label for="completionFinishedAt">Finished at (optional backdate)</label>
-										<input type="datetime-local" id="completionFinishedAt" name="completionFinishedAt" class="form-control"/>
-									</div>
-									<div class="form-group">
-										<label for="completionNote">Completion note (optional)</label>
-										<input id="completionNote" name="completionNote" class="form-control"/>
-									</div>
-								</details>
-							</div>
-						}
-						<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mt-3">
-							@if (pausable is not null) {
-								<button type="submit" asp-page-handler="Finish" class="btn btn-secondary"
-								        title="Ends this session; the job stays In Progress.">
-									<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-										<use href="#jt-icon-finish"></use>
-									</svg>
-									Pause job
-								</button>
-							}
-							@if (workPage.CanComplete) {
-								<button type="submit" class="btn btn-primary">
-									<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-										<use href="#jt-icon-go"></use>
-									</svg>
-									@(workPage.ActiveSessions.Count <= 1
-										? "Complete job"
-										: $"Finish {workPage.ActiveSessions.Count} sessions and complete job")
-								</button>
-							} else if (pausable is null) {
-								<p class="jt-muted">A controlling owner, Job Manager, or Administrator can end this job here.</p>
-							}
-							@if (Model.CurrentNode is not null) {
-								<button type="submit" asp-page-handler="SaveWriteUp" class="btn btn-secondary"
-								        title="Saves the write-up only; the job's status is unchanged.">
-									Save write-up
-								</button>
-							}
-						</div>
-					</form>
-				</div>
+					</div>
+				</form>
 			}
 		}
 

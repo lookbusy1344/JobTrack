@@ -340,7 +340,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
-	public async Task Work_page_links_the_leafs_own_name_to_browse_and_titles_the_page_with_the_leafs_description()
+	public async Task Work_page_titles_itself_Work_sessions_and_links_the_leafs_own_name_to_browse()
 	{
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
@@ -348,8 +348,8 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var response = await GetAsync($"/Jobs/Work?leafNodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
-		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
-		body.Should().Contain("Pour foundation</h1>");
+		body.Should().Contain("<h1>Work sessions</h1>");
+		body.Should().Contain($"<a href=\"/Jobs/Browse?nodeId={leafId.Value}\">Pour foundation (ID {leafId.Value})</a>");
 		body.Should().NotContain("jt-eyebrow", "the eyebrow kicker was removed project-wide -- a page shows one title, not two");
 		body.Should().NotContain("Leaf work");
 	}

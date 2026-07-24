@@ -513,7 +513,7 @@ public sealed class WorkModel(
 
 		SuccessMessage = "Write-up saved.";
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
 	}
 
 	/// <summary>
