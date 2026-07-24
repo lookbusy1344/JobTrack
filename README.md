@@ -273,6 +273,55 @@ authorized for, including reopening without starting a session — through the o
 `/Jobs/Achievement`, the page's now-retired predecessor, is a compatibility redirect to
 `/Jobs/Work#status`; nothing links to it directly any more.
 
+### Who can pause, complete, and resolve a paused leaf
+
+Two distinct authorization rules govern a leaf's work sessions, and they're deliberately not the
+same rule:
+
+- **Finishing (pausing) your own session needs no ownership at all.** `WorkSessionAccessPolicy.CanFinishSession`
+  ([`src/JobTrack.Domain/Authorization/WorkSessionAccessPolicy.cs:70-75`](src/JobTrack.Domain/Authorization/WorkSessionAccessPolicy.cs#L70-L75))
+  grants finish authority to `CanManage` (below) **or** simply `Worker role && isOwnSession` — the
+  ADR 0045 §5 exception that lets a worker always stop their own clock, even if node ownership moved
+  elsewhere after they started. It grants pause authority only, nothing more. The command port checks
+  it per session at [`SqliteWorkSessionCommandPort.cs:857-869`](src/JobTrack.Persistence.Sqlite/SqliteWorkSessionCommandPort.cs#L857-L869).
+- **Starting a session, correcting one, or completing the leaf all require node control.**
+  `WorkSessionAccessPolicy.CanManage`
+  ([`WorkSessionAccessPolicy.cs:23-28`](src/JobTrack.Domain/Authorization/WorkSessionAccessPolicy.cs#L23-L28))
+  and `AchievementAccessPolicy.CanSetAchievement`
+  ([`src/JobTrack.Domain/Authorization/AchievementAccessPolicy.cs:15-24`](src/JobTrack.Domain/Authorization/AchievementAccessPolicy.cs#L15-L24))
+  both resolve to the same rule: **Administrator or JobManager unconditionally, or a Worker who
+  controls the leaf** (owns it directly or via an owned ancestor). `CompleteLeafAsync` checks this
+  once per call at [`SqliteWorkSessionCommandPort.cs:447`](src/JobTrack.Persistence.Sqlite/SqliteWorkSessionCommandPort.cs#L447)
+  (via `AuthorizeCompleteOrThrowAsync`,
+  [`:692-702`](src/JobTrack.Persistence.Sqlite/SqliteWorkSessionCommandPort.cs#L692-L702)) — an
+  ordinary worker with no ownership stake cannot complete the leaf even if they did all the work on
+  it.
+
+**A leaf that ends up paused — `LeafWork.Achievement == InProgress` with zero active sessions
+(`LeafActivity.IsPaused`, [`src/JobTrack.Web/LeafActivity.cs:22-23`](src/JobTrack.Web/LeafActivity.cs#L22-L23))
+— is not a dead end.** A worker with no control over the node can trivially reach this state (they
+paused their own, only session, per the exception above), but resolving it — starting a new session
+or completing the leaf — needs `CanManageSessions`/`CanComplete`, so it falls to a controlling owner,
+JobManager, or Administrator. Because Administrator/JobManager authority is unconditional in both
+policies (no ownership check at all), there's always someone who can move it forward regardless of
+who owns the node. `/Jobs/Work` reflects this directly: with no active session and no completion
+authority, the actor sees "A controlling owner, Job Manager, or Administrator can start work on this
+job" ([`Work.cshtml:156`](src/JobTrack.Web/Pages/Jobs/Work.cshtml#L156)) instead of Start session,
+and the ending decision itself is gated by `hasEndingSection`/`workPage.CanComplete`
+([`Work.cshtml:14-15`](src/JobTrack.Web/Pages/Jobs/Work.cshtml#L14-L15),
+[`:182`](src/JobTrack.Web/Pages/Jobs/Work.cshtml#L182)), computed server-side in
+[`JobQueries.cs:669-677`](src/JobTrack.Application/JobQueries.cs#L669-L677).
+
+**"Finish N sessions and complete job" uses the same single completion check, not one per session.**
+`CompleteLeafAsync` authorizes once against the node
+([`SqliteWorkSessionCommandPort.cs:447`](src/JobTrack.Persistence.Sqlite/SqliteWorkSessionCommandPort.cs#L447)),
+then finishes every currently active session on the leaf in the same transaction
+([`:482-491`](src/JobTrack.Persistence.Sqlite/SqliteWorkSessionCommandPort.cs#L482-L491)) with no
+check that the actor is the worker on each one. A controlling owner (or JobManager/Administrator)
+closing out a job therefore also ends every other worker's active session on it as a side effect —
+intentional per ADR 0045 §5, not a gap: the self-finish exception governs pausing one's own session
+only and never extends to `CompleteLeafAsync`.
+
 ## External HTTP API
 
 Beyond the server-rendered Razor Pages, `JobTrack.Web` exposes a resource-oriented JSON API under
