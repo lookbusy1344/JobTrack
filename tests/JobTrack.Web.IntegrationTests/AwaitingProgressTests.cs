@@ -346,11 +346,11 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 	[Fact]
 	/// <summary>
-	/// The active-session pill has its own column here too, in the slot Priority used to hold, so the
-	/// dashboard and Browse's subtree read the same way rather than each putting the pill somewhere
-	/// different.
+	/// The active-session pill has its own column, so the dashboard and Browse's subtree read the same
+	/// way rather than each putting the pill somewhere different. Priority sits beside Deadline in its
+	/// own column too -- the two attention-ordering facts (spec: priority, then deadline) read together.
 	/// </summary>
-	public async Task The_active_session_pill_has_its_own_column_in_place_of_priority()
+	public async Task The_active_session_pill_and_priority_each_have_their_own_column()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.activecolumn");
 		var rootId = bootstrappedRootId!.Value;
@@ -363,7 +363,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var body = await reloaded.Content.ReadAsStringAsync();
 
 		body.Should().Contain("<th class=\"jt-col-active\">Active</th>");
-		body.Should().NotContain(">Priority</th>");
+		body.Should().Contain(">Priority</th>");
 		body.Should().Contain("Active since");
 	}
 

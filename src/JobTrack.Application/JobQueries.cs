@@ -423,6 +423,8 @@ internal sealed class JobQueries : IJobQueries
 					Description = row.Description,
 					OwnerUserId = row.OwnerUserId,
 					Priority = row.Priority,
+					NeededStart = row.NeededStart,
+					NeededFinish = row.NeededFinish,
 					ArchivedAt = row.ArchivedAt,
 					HasChildren = row.HasChildren,
 					HasLeafWork = row.HasLeafWork,

@@ -1,0 +1,5 @@
+@using JobTrack.Abstractions
+@model PriorityLabelModel
+@* One shared rendering for a priority everywhere it appears as text (Browse's node detail and
+   subtree table, AwaitingProgress) -- see PriorityLabelModel for why only High carries a rule today. *@
+<span class="jt-priority jt-priority--@Model.Priority.ToString().ToLowerInvariant()">@EnumDisplay.Label(Model.Priority)</span>

@@ -40,12 +40,15 @@ internal static class JobNodeDisplay
 
 	internal static string Title(AwaitingProgressEntry entry) => Title(entry.Description, entry.Id.Value);
 
+	internal static string Title(AwaitingProgressEntry entry, int maxDescriptionLength) =>
+		Title(Truncate(entry.Description, maxDescriptionLength), entry.Id.Value);
+
 	internal static string Title(string description, long id) =>
 		$"{description} (ID {id.ToString(CultureInfo.InvariantCulture)})";
 
+	internal static string Truncate(string value, int maxLength) =>
+		value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength), TruncationSuffix);
+
 	private static string Title(string description, long id, NodeKind kind) =>
 		kind == NodeKind.Root ? RootTitle : Title(description, id);
-
-	private static string Truncate(string value, int maxLength) =>
-		value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength), TruncationSuffix);
 }

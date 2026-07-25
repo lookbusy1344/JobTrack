@@ -90,10 +90,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	/// <summary>
 	/// The active-session pill has its own column rather than sharing the actions cell, where it
-	/// pushed the start/finish buttons out of vertical alignment with every other row. It takes the
-	/// slot Priority used to hold.
+	/// pushed the start/finish buttons out of vertical alignment with every other row. Priority (and
+	/// Deadline, which replaced Owner) is a separate, tablet-and-up column beside it.
 	/// </summary>
-	public async Task The_active_session_pill_has_its_own_column_in_place_of_priority()
+	public async Task The_active_session_pill_has_its_own_column_alongside_priority()
 	{
 		var workerId = await SeedEmployeeAsync("browse.activecolumn", EmployeeRole.Worker);
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Screed floor");
@@ -105,9 +105,11 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var body = await reloaded.Content.ReadAsStringAsync();
 
 		// jt-col-active, not jt-col-secondary: which jobs are being worked on right now survives the
-		// 992px cut that drops owner/priority, and goes only at phone width.
+		// 992px cut that drops owner/priority/deadline, and goes only at phone width.
 		body.Should().Contain("<th scope=\"col\" class=\"jt-col-active\">Active</th>");
-		body.Should().NotContain(">Priority</th>");
+		body.Should().Contain(">Priority</th>");
+		body.Should().Contain(">Deadline</th>");
+		body.Should().NotContain(">Owner</th>");
 	}
 
 	[Fact]
@@ -238,67 +240,12 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 	[Fact]
 	/// <summary>
-	/// Submits the pick-up form exactly as the page renders it (every hidden field, names included)
-	/// rather than a hand-built minimal body: the row form replays the page's own browsing state
-	/// alongside the row's target, so a field name that collides with the page's bound
-	/// <c>NodeId</c> makes the handler claim whatever node is being browsed instead of the row that
-	/// was clicked. Posting only the target id hides that class of defect entirely.
+	/// The claim control is drawn from the shared sprite and lives on the record card's Owner field
+	/// beside the "Unassigned" value — the field the action changes. The subtree table no longer
+	/// carries a second copy per unassigned row (Owner's column was replaced by Priority/Deadline);
+	/// picking up a child now happens by browsing to it first, same as every other node-scoped action.
 	/// </summary>
-	public async Task Picking_up_a_child_row_claims_that_child_rather_than_the_browsed_parent()
-	{
-		var pickerId = await SeedEmployeeAsync("browse.picker.row", EmployeeRole.Worker);
-		var branch = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
-			ParentId = rootId,
-			Description = "Owned branch",
-			OwnerUserId = administratorId,
-			Priority = Priority.Medium,
-		});
-		var child = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
-			ParentId = branch.Id,
-			Description = "Unassigned child row",
-			OwnerUserId = null,
-			Priority = Priority.Medium,
-		});
-		var authCookie = await SignInAsync("browse.picker.row");
-
-		var browse = await GetAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
-		var (antiforgeryCookie, token) = await ExtractFormAsync(browse, string.Empty);
-		var fields = ExtractHiddenFields(await browse.Content.ReadAsStringAsync(), "handler=PickUp", child.Id);
-		fields["__RequestVerificationToken"] = token;
-
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=PickUp");
-		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
-		request.Content = new FormUrlEncodedContent(fields);
-		var response = await client.SendAsync(request);
-
-		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
-		(await reloaded.Content.ReadAsStringAsync()).Should().Contain("Job node claimed");
-
-		var claimedChild = await seedClient.Query.GetJobNodeAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
-			NodeId = child.Id,
-		});
-		claimedChild.Node.OwnerUserId.Should().Be(pickerId);
-
-		var untouchedBranch = await seedClient.Query.GetJobNodeAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
-			NodeId = branch.Id,
-		});
-		untouchedBranch.Node.OwnerUserId.Should().Be(administratorId);
-	}
-
-	[Fact]
-	/// <summary>
-	/// The claim control is drawn from the shared sprite like every other row action, and it lives on
-	/// the record card's Owner field beside the "Unassigned" value — the field the action changes.
-	/// Exactly one control per unassigned node: the toolbar does not carry a second copy for the node
-	/// being browsed, which would make the reader resolve a choice between two identical actions
-	/// before acting.
-	/// </summary>
-	public async Task An_unassigned_node_offers_the_pick_up_glyph_on_its_owner_field_and_its_rows()
+	public async Task An_unassigned_node_offers_the_pick_up_glyph_on_its_owner_field()
 	{
 		_ = await SeedEmployeeAsync("browse.picker.glyph", EmployeeRole.Worker);
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
@@ -327,12 +274,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		// The Owner field's own copy: the <dd> holding the owner value lays its value and claim button
 		// out on one baseline.
 		body.Should().Contain("class=\"w-75 mb-0 d-flex flex-wrap align-items-center gap-2\"");
-		// One per unassigned subtree row, alongside the word it qualifies.
-		body.Should().Contain("<span class=\"d-inline-flex align-items-center gap-2\">");
-		// Two unassigned nodes on this page (the browsed branch and its one child), one control each,
-		// contributing a title and a visually-hidden name apiece. A toolbar duplicate for the browsed
-		// node would push this to six.
-		(body.Split("Pick up").Length - 1).Should().Be(4);
+		// Exactly one control, for the browsed branch itself -- its unassigned grandchild no longer
+		// gets a row-level copy now that the subtree table's Owner column is gone.
+		(body.Split("Pick up").Length - 1).Should().Be(2);
 	}
 
 	[Fact]
@@ -1062,35 +1006,8 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
-	/// <summary>
-	///     The hidden fields of the one rendered <c>&lt;form&gt;</c> that posts to
-	///     <paramref name="actionContains" /> and carries <paramref name="targetNodeId" /> as a field
-	///     value — i.e. the form belonging to that node's own row, whatever its fields happen to be
-	///     named. Matching on the value rather than a field name is deliberate: it lets a test submit
-	///     the real form without restating the markup's field names, so a rename cannot quietly turn a
-	///     test that exercised the page into one that only exercises the handler signature.
-	/// </summary>
-	private static Dictionary<string, string> ExtractHiddenFields(string body, string actionContains, JobNodeId targetNodeId)
-	{
-		var targetValue = targetNodeId.Value.ToString(CultureInfo.InvariantCulture);
-		var form = body.Split("<form", StringSplitOptions.RemoveEmptyEntries)
-					   .Where(segment => segment.Contains(actionContains, StringComparison.Ordinal))
-					   .Select(segment => segment[..segment.IndexOf("</form>", StringComparison.Ordinal)])
-					   .SingleOrDefault(segment => HiddenFieldPattern().Matches(segment)
-						   .Any(field => field.Groups["value"].Value == targetValue))
-				   ?? throw new InvalidOperationException(
-					   $"No '{actionContains}' form carrying node {targetValue} in the rendered body.");
-
-		return HiddenFieldPattern().Matches(form)
-			.ToDictionary(field => field.Groups["name"].Value, field => field.Groups["value"].Value);
-	}
-
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-	[GeneratedRegex("<input type=\"hidden\" name=\"(?<name>[^\"]+)\" value=\"(?<value>[^\"]*)\"")]
-	private static partial Regex HiddenFieldPattern();
-
 
 	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
 	{

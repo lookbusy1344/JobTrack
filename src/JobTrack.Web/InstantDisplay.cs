@@ -16,8 +16,16 @@ internal static class InstantDisplay
 	private static readonly LocalDateTimePattern Pattern = LocalDateTimePattern.CreateWithInvariantCulture("d MMM yyyy HH:mm");
 	private static readonly LocalTimePattern CompactTimePattern = LocalTimePattern.CreateWithInvariantCulture("HH:mm");
 	private static readonly LocalDatePattern CompactDatePattern = LocalDatePattern.CreateWithInvariantCulture("d MMM");
+	private static readonly LocalDatePattern DatePattern = LocalDatePattern.CreateWithInvariantCulture("d MMM yyyy");
 
 	internal static string Format(Instant instant, DateTimeZone zone) => Pattern.Format(instant.InZone(zone).LocalDateTime);
+
+	/// <summary>
+	///     Just the calendar date (<c>d MMM yyyy</c>), no time-of-day -- for a deadline shown inline
+	///     beside another field (e.g. "Priority High (deadline 26 Jul 2026)"), where the full timestamp
+	///     would read as more precision than a deadline actually carries.
+	/// </summary>
+	internal static string FormatDate(Instant instant, DateTimeZone zone) => DatePattern.Format(instant.InZone(zone).Date);
 
 	/// <summary>
 	///     A narrower rendering for "Active since" status pills, where the full date-and-time stamp

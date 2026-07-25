@@ -28,7 +28,7 @@
 			<thead>
 			<tr>
 				<th>Worked by</th>
-				<th>Started</th>
+				<th class="jt-session-started">Started</th>
 				<th>Finished</th>
 				<th class="text-end">Actions</th>
 			</tr>
@@ -48,7 +48,7 @@
 					: null;
 				<tr>
 					<td>@Model.DescribeWorker(session.WorkedByUserId)</td>
-					<td>@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
+					<td class="jt-session-started">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
 					<td>
 						@if (session.FinishedAt is Instant finishedAt) {
 							@InstantDisplay.Format(finishedAt, Model.ViewerZone)
@@ -57,6 +57,12 @@
 						}
 					</td>
 					<td class="text-end text-nowrap">
+						@* On a phone (.jt-row-action-extra, site.css) exactly one button survives here: Pause
+						   for an active session, Correct for a finished one -- the backdate trigger, and
+						   Correct on an active row, are one tap away from the row's own worker/session, and
+						   piling them into a repeating cell forces the horizontal scroll this reflow avoids.
+						   Correct is only wrapped when Pause is also present -- a finished row has no Pause
+						   to fall back to, so its Correct button must never be the one thing this cell hides. *@
 						<div class="jt-toolbar d-flex flex-nowrap gap-2 align-items-center justify-content-end">
 							@if (sessionBackdate is not null) {
 								<form method="post" asp-page-handler="Finish" class="inline-form">
@@ -70,19 +76,23 @@
 										<span class="visually-hidden">Pause job</span>
 									</button>
 								</form>
-								<partial name="_BackdateTrigger" model="sessionBackdate"/>
+								<div class="jt-row-action-extra">
+									<partial name="_BackdateTrigger" model="sessionBackdate"/>
+								</div>
 							}
 							@* The list can span several workers, so each row corrects its own worker's
 							   session, not whoever the panel happens to be filtered to. *@
-							<a class="jt-icon-button" asp-page="/Jobs/CorrectSession"
-							   asp-route-leafNodeId="@Model.LeafNodeId"
-							   asp-route-workedByUserId="@session.WorkedByUserId.Value"
-							   asp-route-sessionId="@session.Id.Value" title="Correct">
-								<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-									<use href="#jt-icon-edit"></use>
-								</svg>
-								<span class="visually-hidden">Correct</span>
-							</a>
+							<div class="@(sessionBackdate is not null ? "jt-row-action-extra" : null)">
+								<a class="jt-icon-button" asp-page="/Jobs/CorrectSession"
+								   asp-route-leafNodeId="@Model.LeafNodeId"
+								   asp-route-workedByUserId="@session.WorkedByUserId.Value"
+								   asp-route-sessionId="@session.Id.Value" title="Correct">
+									<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+										<use href="#jt-icon-edit"></use>
+									</svg>
+									<span class="visually-hidden">Correct</span>
+								</a>
+							</div>
 						</div>
 					</td>
 				</tr>

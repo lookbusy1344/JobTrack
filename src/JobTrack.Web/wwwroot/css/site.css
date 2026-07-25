@@ -137,6 +137,7 @@
     --jt-amber-700: #8a5606;
     --jt-amber-100: #fbeed3;
     --jt-red-700: #b3261e;
+    --jt-red-600: #d32f2f;
     --jt-red-100: #fbe6e5;
 
     --bs-primary: var(--jt-orange-600);
@@ -1319,6 +1320,14 @@ fieldset legend {
     list-style: none;
 }
 
+/* Groups the Start/Backdate/"Start for…" controls inside a row's Actions cell (_WorkRowActions)
+   without adding a box of its own -- `display: contents` keeps each child a direct flex item of
+   `.jt-toolbar` exactly as if the wrapper were not there. It exists purely as a hook the phone-width
+   rule below can hide as a unit; see the "Tree table reflow" section for why. */
+.jt-row-action-extra {
+    display: contents;
+}
+
 /* Start is the action the row exists for, so it carries the accent at rest rather than only on
    hover — the muted default belongs to the corrections sitting beside it. */
 .jt-icon-button--primary {
@@ -1449,10 +1458,25 @@ fieldset legend {
    The active-session column keeps the same treatment: which jobs are being worked on right now is a
    live fact that changes under the reader, unlike owner or priority, so it is not something they can
    reasonably be sent to the row's own page for at tablet width. It goes at phone width with the
-   rest. */
+   rest.
+
+   The same cut drops every row action except Sessions (`.jt-row-action-extra`, defined above): at
+   this width the row's own page is one tap away for Start/Backdate/"Start for…" too, and keeping
+   them squeezed into a repeating cell is what forces the horizontal scroll this section exists to
+   avoid.
+
+   `.jt-session-started` is the equivalent cut for the leaf's own Sessions table
+   (_LeafWorkSessions): Worked by, Finished (which already carries the Active status pill), and one
+   Pause button are what a phone reader needs at a glance -- Started, the backdate trigger, and
+   Correct all stay one tap away via that same row. */
 @media (max-width: 767.98px) {
     .jt-col-cost,
     .jt-col-active {
+        display: none;
+    }
+
+    .jt-row-action-extra,
+    .jt-session-started {
         display: none;
     }
 }
@@ -1669,6 +1693,19 @@ nav[aria-label="breadcrumb"] li + li::before {
 
 .jt-muted {
     color: var(--jt-muted);
+}
+
+/* ---- Priority label ------------------------------------------------------------------------ */
+
+/* _PriorityLabel's per-level modifier classes. High and Urgent carry a rule so far -- Low/Medium
+   render as plain text pending a future pass giving each its own colour/weight (PriorityLabelModel).
+   jt-red-600, not the darker/duller jt-red-700 used for validation/danger elsewhere: against this
+   palette's own warm orange saturation, jt-red-700 reads as too close to brown/orange at a glance --
+   this brighter, more saturated red stays unambiguous red beside it (still >4.5:1 on white, bold). */
+.jt-priority--high,
+.jt-priority--urgent {
+    color: var(--jt-red-600);
+    font-weight: 700;
 }
 
 /* ---- Page head + lede --------------------------------------------------------------------- */

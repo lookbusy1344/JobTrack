@@ -226,6 +226,8 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 				Description = n.Description,
 				OwnerUserId = n.OwnerUserId,
 				Priority = n.Priority,
+				NeededStart = n.NeededStart,
+				NeededFinish = n.NeededFinish,
 				ArchivedAt = n.ArchivedAt,
 				HasChildren = n.HasChildren,
 				HasLeafWork = n.HasLeafWork,

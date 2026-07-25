@@ -8,6 +8,10 @@
 
 	const int BreadcrumbMaxDescriptionLength = 50;
 
+	// Keeps a child-node title readable in a table row -- the node's own page (one tap away via the
+	// same link) is where the full text lives.
+	const int RowTitleMaxDescriptionLength = 100;
+
 	// Sprite symbol id and the spoken noun for a node's kind — the two halves of the tree row's
 	// leading glyph: the drawn icon (aria-hidden) and the screen-reader label that replaces it.
 	static string KindIconId(NodeKind kind) => kind switch {
@@ -112,7 +116,10 @@
 		</div>
 		<div class="col d-flex gap-2">
 			<dt class="w-25 text-nowrap">Priority</dt>
-			<dd class="w-75 mb-0">@EnumDisplay.Label(Model.CurrentNode.Node.Priority)</dd>
+			<dd class="w-75 mb-0">@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }<partial
+					name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority })"/>@(priorityDeadline is Instant priorityDeadlineInstant
+				                    	? $" (deadline {InstantDisplay.FormatDate(priorityDeadlineInstant, Model.ViewerZone)})"
+				                    	: null)</dd>
 		</div>
 		@if (showActive) {
 			<div class="col d-flex gap-2">
@@ -472,7 +479,8 @@
 					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
 					   archived row is flagged in place beside its name. *@
 					<th scope="col">Description</th>
-					<th scope="col" class="jt-col-secondary jt-col-owner">Owner</th>
+					<th scope="col" class="jt-col-secondary">Priority</th>
+					<th scope="col" class="jt-col-secondary">Deadline</th>
 					<th scope="col" class="jt-col-active">Active</th>
 					<th scope="col" class="jt-col-cost text-end">Cost</th>
 					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
@@ -515,7 +523,7 @@
 								<span class="jt-tree-text">
 									<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
 									<a class="jt-tree-name-link jt-preserve-whitespace" asp-page="/Jobs/Browse"
-									   asp-route-nodeId="@node.Id.Value">@node.Description</a>
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Truncate(node.Description, RowTitleMaxDescriptionLength)</a>
 									@* Trails the name rather than leading it: unlike the blocked palm, an achievement
 									   is present on most leaves in a healthy tree, so it belongs where the eye lands
 									   after reading the row, not competing with the kind glyph for the leading slot. *@
@@ -538,17 +546,11 @@
 								</span>
 							</span>
 						</td>
-						<td class="jt-col-secondary jt-col-owner">
-							@if (node.OwnerUserId is AppUserId nodeOwnerUserId) {
-								@Model.DescribeOwner(nodeOwnerUserId)
-							} else {
-								<span class="d-inline-flex align-items-center gap-2">
-									<span>Unassigned</span>
-									<partial name="_PickUpButton"
-									         model="@(new PickUpButtonModel { NodeId = node.Id.Value, PageStateFields = Model.RowStateFields })"/>
-								</span>
-							}
+						<td class="jt-col-secondary">
+							<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = node.Priority })"/>
 						</td>
+						<td class="jt-col-secondary">@{ var needed = node.NeededFinish ?? node.NeededStart; }
+							@(needed.HasValue ? InstantDisplay.Format(needed.Value, Model.ViewerZone) : null)</td>
 						<td class="jt-col-active">
 							<partial name="_ActiveSincePill"
 							         model="@(new ActiveSessionSummaryModel {
@@ -587,7 +589,7 @@
 					</tr>
 					@if (nodeActions is { ViewerSession: null, IsStartClosed: false }) {
 						<partial name="_BackdateRow"
-						         model="@(new BackdateRowModel { Disclosure = nodeActions.StartBackdate, ColumnCount = 6 })"/>
+						         model="@(new BackdateRowModel { Disclosure = nodeActions.StartBackdate, ColumnCount = 7 })"/>
 					}
 				}
 				</tbody>

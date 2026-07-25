@@ -970,6 +970,40 @@ public sealed class JobQueriesTests
 	}
 
 	[Fact]
+	public async Task GetJobSubtreeAsync_carries_each_nodes_priority_and_deadline_fields()
+	{
+		var owner = new AppUserId(10);
+		var neededStart = Instant.FromUtc(2026, 8, 1, 9, 0);
+		var neededFinish = Instant.FromUtc(2026, 8, 15, 17, 0);
+		var port = CreateSeededTree(owner, new(11), out var rootId, out var branchId, out var leafId);
+		port.SeedNode(new() {
+			Id = leafId,
+			ParentId = branchId,
+			Kind = NodeKind.Leaf,
+			Description = "Install cabinets",
+			PostedByUserId = owner,
+			OwnerUserId = owner,
+			Priority = Priority.Urgent,
+			NeededStart = neededStart,
+			NeededFinish = neededFinish,
+			PostedAt = port.NowToReturn,
+			HasChildren = false,
+			HasLeafWork = false,
+			Version = 1,
+		});
+		var costQueries = new FakeCostQueries();
+		costQueries.DenyActor(owner);
+		var sut = CreateSut(port, costQueries);
+
+		var result = await sut.GetJobSubtreeAsync(new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+
+		var leaf = result.Nodes.Single(n => n.Id == leafId);
+		leaf.Priority.Should().Be(Priority.Urgent);
+		leaf.NeededStart.Should().Be(neededStart);
+		leaf.NeededFinish.Should().Be(neededFinish);
+	}
+
+	[Fact]
 	public async Task GetJobSubtreeAsync_omits_cost_when_the_full_cost_hierarchy_exceeds_its_bound()
 	{
 		var owner = new AppUserId(10);

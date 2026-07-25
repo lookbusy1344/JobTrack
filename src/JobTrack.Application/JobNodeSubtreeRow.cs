@@ -31,6 +31,12 @@ internal sealed record JobNodeSubtreeRow
 	/// <summary>The node's priority.</summary>
 	public required Priority Priority { get; init; }
 
+	/// <summary>The instant this node's work is needed to start, if set.</summary>
+	public Instant? NeededStart { get; init; }
+
+	/// <summary>The instant this node's work is needed to finish, if set.</summary>
+	public Instant? NeededFinish { get; init; }
+
 	/// <summary>The instant this node was archived, if archived.</summary>
 	public Instant? ArchivedAt { get; init; }
 

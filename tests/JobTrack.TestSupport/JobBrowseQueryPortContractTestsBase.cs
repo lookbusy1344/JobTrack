@@ -9,6 +9,7 @@ using AwesomeAssertions;
 using Database;
 using Domain.Hierarchy;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using NodaTime;
 
 /// <summary>
 ///     Shared contract for <see cref="IJobBrowseQueryPort" /> (plan §8.5 slice 2), asserted identically
@@ -277,6 +278,31 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		result.Rows.Should().ContainSingle(r => r.Id == rootId && r.Depth == 0);
 		result.Rows.Should().ContainSingle(r => r.Id == branchId && r.Depth == 1);
 		result.Rows.Should().ContainSingle(r => r.Id == tree.CabinetsLeafId && r.Depth == 2);
+	}
+
+	[Fact]
+	public async Task GetSubtreeAsync_returns_the_needed_start_and_finish_deadline_fields()
+	{
+		var (_, branchId, tree) = await SeedTreeAsync();
+		var commandPort = CreateCommandPort(database.ConnectionString);
+		var neededStart = Instant.FromUtc(2026, 8, 1, 9, 0);
+		var neededFinish = Instant.FromUtc(2026, 8, 15, 17, 0);
+		var deadlineLeaf = await commandPort.AddChildAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			ParentId = branchId,
+			Description = "Deadline leaf",
+			OwnerUserId = tree.JobManagerId,
+			Priority = Priority.Urgent,
+			NeededStart = neededStart,
+			NeededFinish = neededFinish,
+		});
+		var port = CreateBrowsePort(database.ConnectionString);
+
+		var result = await port.GetSubtreeAsync(branchId, 1, OwnershipFilter.All, JobArchiveFilter.All);
+
+		var row = result.Rows.Should().ContainSingle(r => r.Id == deadlineLeaf.Id).Which;
+		row.NeededStart.Should().Be(neededStart);
+		row.NeededFinish.Should().Be(neededFinish);
 	}
 
 	[Fact]

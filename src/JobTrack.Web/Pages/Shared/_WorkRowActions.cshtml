@@ -14,22 +14,29 @@
    it is always decided on the leaf's own Sessions page (/Jobs/Work, the always-present link below),
    where pause-vs-complete is actually decided and every session has its own control. *@
 <div class="jt-toolbar d-flex flex-nowrap justify-content-end gap-2 align-items-center">
+	@* Below phone width (.jt-row-action-extra, site.css) only Sessions survives in this cell — the
+	   row's own page is one tap away for everything else, and Start/Backdate/"Start for…" squeezed
+	   into a repeating table cell at that width is the thing that forces horizontal scroll. *@
 	@if (Model.ViewerSession is null && !Model.IsStartClosed) {
-		<form method="post" asp-page-handler="@Model.StartHandler" class="inline-form">
-			@foreach (var field in Model.StartFields) {
-				<input type="hidden" name="@field.Key" value="@field.Value"/>
-			}
-			<button type="submit" class="jt-icon-button jt-icon-button--primary" title="Start session">
-				<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-					<use href="#jt-icon-start"></use>
-				</svg>
-				<span class="visually-hidden">Start session</span>
-			</button>
-		</form>
-		<partial name="_BackdateTrigger" model="Model.StartBackdate"/>
+		<div class="jt-row-action-extra">
+			<form method="post" asp-page-handler="@Model.StartHandler" class="inline-form">
+				@foreach (var field in Model.StartFields) {
+					<input type="hidden" name="@field.Key" value="@field.Value"/>
+				}
+				<button type="submit" class="jt-icon-button jt-icon-button--primary" title="Start session">
+					<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+						<use href="#jt-icon-start"></use>
+					</svg>
+					<span class="visually-hidden">Start session</span>
+				</button>
+			</form>
+			<partial name="_BackdateTrigger" model="Model.StartBackdate"/>
+		</div>
 	}
 	@if (Model.CanManage && !Model.IsStartClosed) {
-		<partial name="_StartForTrigger" model="Model.StartFor"/>
+		<div class="jt-row-action-extra">
+			<partial name="_StartForTrigger" model="Model.StartFor"/>
+		</div>
 	}
 	<a class="jt-icon-button" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId" title="Sessions">
 		<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">

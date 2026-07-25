@@ -1110,6 +1110,10 @@ JobTrack.Application.JobSubtreeNodeResult.Kind.get -> JobTrack.Abstractions.Node
 JobTrack.Application.JobSubtreeNodeResult.Kind.init -> void
 JobTrack.Application.JobSubtreeNodeResult.MatchesFilter.get -> bool
 JobTrack.Application.JobSubtreeNodeResult.MatchesFilter.init -> void
+JobTrack.Application.JobSubtreeNodeResult.NeededFinish.get -> NodaTime.Instant?
+JobTrack.Application.JobSubtreeNodeResult.NeededFinish.init -> void
+JobTrack.Application.JobSubtreeNodeResult.NeededStart.get -> NodaTime.Instant?
+JobTrack.Application.JobSubtreeNodeResult.NeededStart.init -> void
 JobTrack.Application.JobSubtreeNodeResult.OwnerUserId.get -> JobTrack.Abstractions.AppUserId?
 JobTrack.Application.JobSubtreeNodeResult.OwnerUserId.init -> void
 JobTrack.Application.JobSubtreeNodeResult.ParentId.get -> JobTrack.Abstractions.JobNodeId?

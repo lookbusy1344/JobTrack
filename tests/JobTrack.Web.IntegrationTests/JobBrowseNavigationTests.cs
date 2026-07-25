@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -163,6 +164,39 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		body.Should().Contain("href=\"/Jobs/Browse\"");
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={branchId.Value}\"");
 		body.Should().Contain("Kitchen renovation");
+	}
+
+	[Fact]
+	public async Task Browsing_a_node_with_a_deadline_shows_it_next_to_priority()
+	{
+		var deadline = Instant.FromUtc(2026, 7, 26, 12, 0);
+		var branch = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Kitchen renovation",
+			OwnerUserId = adminId,
+			Priority = Priority.High,
+			NeededFinish = deadline,
+		});
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain("class=\"jt-priority jt-priority--high\">High</span> (deadline 26 Jul 2026)");
+	}
+
+	[Fact]
+	public async Task Browsing_a_node_without_a_deadline_shows_only_its_priority()
+	{
+		var branchId = await AddChildAsync(rootId, "Kitchen renovation");
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		body.Should().Contain("class=\"jt-priority jt-priority--medium\">Medium</span>");
+		body.Should().NotContain("(deadline");
 	}
 
 	[Fact]

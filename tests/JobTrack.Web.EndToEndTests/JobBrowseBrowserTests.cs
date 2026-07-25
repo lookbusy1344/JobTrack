@@ -268,9 +268,10 @@ public abstract class JobBrowseBrowserTestsBase
 	[Fact]
 	/// <summary>
 	/// On a phone the subtree table keeps what a person navigating a tree needs — where a row sits,
-	/// what it is called, and how to start work on it — and drops the columns that would force the
-	/// name into a two-character-wide column or the page into a horizontal scroll. The same columns
-	/// are present again on a desktop viewport, so this is a reflow, not a permanent removal.
+	/// what it is called, and the one way off the row (Sessions, which doubles as Browse-to-child-and-
+	/// view) — and drops the columns and row actions that would force the name into a two-character-
+	/// wide column or the page into a horizontal scroll. The same columns and actions are present
+	/// again on a desktop viewport, so this is a reflow, not a permanent removal.
 	/// </summary>
 	public async Task The_subtree_table_drops_its_secondary_columns_on_a_phone_and_restores_them_on_desktop()
 	{
@@ -285,8 +286,10 @@ public abstract class JobBrowseBrowserTestsBase
 		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
 		(await phoneRow.Locator(".jt-tree-name-link").First.IsVisibleAsync()).Should().BeTrue("the name is the point of the row");
 		(await phoneRow.Locator(".jt-tree-icon").First.IsVisibleAsync()).Should().BeTrue("the kind glyph replaces the dropped Kind column");
+		(await phoneRow.GetByRole(AriaRole.Link, new() { Name = "Sessions", Exact = true }).IsVisibleAsync()).Should()
+			.BeTrue("Sessions is the one row action that must stay reachable on a phone");
 		(await phoneRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should()
-			.BeTrue("starting work must stay reachable on a phone");
+			.BeFalse("Start is one tap away via Sessions/Browse and would crowd a phone-width row");
 		(await phoneRow.Locator(".jt-col-secondary").First.IsVisibleAsync()).Should().BeFalse("owner/priority/cost/span are secondary on a phone");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
@@ -296,6 +299,8 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
 		(await desktopRow.Locator(".jt-col-secondary").First.IsVisibleAsync()).Should().BeTrue("the columns come back when there is room for them");
+		(await desktopRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should()
+			.BeTrue("Start comes back when there is room for it");
 	}
 
 	[Fact]
@@ -320,6 +325,59 @@ public abstract class JobBrowseBrowserTestsBase
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
 		(await desktopRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
 		(await desktopRow.GetByText($"{RequiredSimultaneousWorkerCount} active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
+	}
+
+	[Fact]
+	/// <summary>
+	/// On a phone the leaf's own Sessions table (_LeafWorkSessions, shown inline on Browse for a leaf)
+	/// keeps Worked by, Finished (which already carries the Active status pill), and exactly one
+	/// action button per row -- Pause for an active session, Correct for a finished one -- and drops
+	/// Started plus the backdate trigger, all of which stay one tap away via the row's own worker/
+	/// session. The same columns and actions are present again on desktop.
+	/// </summary>
+	public async Task The_leaf_sessions_table_drops_to_a_single_action_button_on_a_phone_and_restores_the_rest_on_desktop()
+	{
+		var (leafId, _) = await fixture.SeedActiveSessionsAsync("Responsive session leaf", 1);
+
+		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
+		var phone = await phoneContext.NewPageAsync();
+		await SignInAsync(phone);
+		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+
+		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Active Worker 1" }).First;
+		(await phoneRow.GetByTitle("Pause job").IsVisibleAsync()).Should().BeTrue("Pause is the one row action that must stay reachable on a phone");
+		(await phoneRow.Locator(".jt-session-started").IsVisibleAsync()).Should().BeFalse("Started is one tap away via the row's own session");
+		(await phoneRow.GetByTitle("Correct").IsVisibleAsync()).Should().BeFalse("an active row keeps Pause, not Correct, as its one phone action");
+		(await phoneRow.GetByTitle("Backdate finish").IsVisibleAsync()).Should().BeFalse("the backdate trigger is one tap away via the row's own session");
+		(await phoneRow.GetByText("Active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue("Finished keeps the Active status pill on a phone");
+
+		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var desktop = await desktopContext.NewPageAsync();
+		await SignInAsync(desktop);
+		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+
+		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Active Worker 1" }).First;
+		(await desktopRow.Locator(".jt-session-started").IsVisibleAsync()).Should().BeTrue("Started comes back when there is room for it");
+		(await desktopRow.GetByTitle("Correct").IsVisibleAsync()).Should().BeTrue("Correct comes back when there is room for it");
+	}
+
+	[Fact]
+	/// <summary>
+	/// A finished session has no Pause to fall back to, so on a phone its one surviving row action must
+	/// be Correct, not nothing -- the opposite case from the active-session row above.
+	/// </summary>
+	public async Task The_leaf_sessions_table_keeps_correct_as_the_one_phone_action_for_a_finished_session()
+	{
+		var (leafId, _, _) = await fixture.SeedFinishedSessionAsync("Responsive finished session leaf");
+
+		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
+		var phone = await phoneContext.NewPageAsync();
+		await SignInAsync(phone);
+		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+
+		var phoneRow = phone.Locator("tbody tr").First;
+		(await phoneRow.GetByTitle("Correct").IsVisibleAsync()).Should().BeTrue("a finished row has no Pause, so Correct must be its one phone action");
+		(await phoneRow.GetByTitle("Pause job").IsVisibleAsync()).Should().BeFalse("a finished session has nothing to pause");
 	}
 
 	[Fact]
