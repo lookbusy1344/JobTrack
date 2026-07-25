@@ -4,7 +4,7 @@ using Abstractions;
 using NodaTime;
 
 /// <summary>
-///     One row of <see cref="AwaitingProgressCalculator.GetAwaitingProgress" />. <see cref="Achievement" />
+///     One row produced by <see cref="AwaitingProgressCalculator" />. <see cref="Achievement" />
 ///     is <see langword="null" /> when the leaf has no <c>LeafWork</c> attached yet — it still needs
 ///     someone to attach work or decompose it further, so it belongs on the list alongside
 ///     <see cref="Abstractions.Achievement.Waiting" /> and <see cref="Abstractions.Achievement.InProgress" /> leaves.

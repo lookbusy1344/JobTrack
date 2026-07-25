@@ -108,6 +108,76 @@ public sealed class InlineDmlArchitectureTests
 			"LoadWorkerSessionsAsync",
 			"SqlQuery",
 			"worker_overlapping_sessions"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlCostQueryPort.cs"),
+			"LoadSubtreeAsync",
+			"SqlQuery",
+			"job_node_subtrees"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlCostQueryPort.cs"),
+			"ExtendAncestryAsync",
+			"SqlQuery",
+			"job_node_ancestor_chains"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteCostQueryPort.cs"),
+			"LoadSubtreeAsync",
+			"SqlQueryRaw",
+			"sql"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteCostQueryPort.cs"),
+			"ExtendAncestryAsync",
+			"SqlQueryRaw",
+			"sql"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlAwaitingProgressQueryPort.cs"),
+			"LoadAncestorChainsAsync",
+			"SqlQuery",
+			"job_node_ancestor_chains"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlAwaitingProgressQueryPort.cs"),
+			"LoadRequiredJobAchievementsAsync",
+			"SqlQuery",
+			"node_succeeded"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlAwaitingProgressQueryPort.cs"),
+			"LoadSubtreeNodes",
+			"FromSql",
+			"job_node_subtrees"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteAwaitingProgressQueryPort.cs"),
+			"LoadSubtreeNodes",
+			"FromSqlRaw",
+			"WITH RECURSIVE"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteAwaitingProgressQueryPort.cs"),
+			"LoadAncestorChainsAsync",
+			"SqlQueryRaw",
+			"sql"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteAwaitingProgressQueryPort.cs"),
+			"LoadRequiredJobAchievementsAsync",
+			"SqlQueryRaw",
+			"WITH RECURSIVE"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlReadinessQueryPort.cs"),
+			"LoadAncestorChainsAsync",
+			"SqlQuery",
+			"job_node_ancestor_chains"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlReadinessQueryPort.cs"),
+			"LoadAsync",
+			"SqlQuery",
+			"job_node_subtrees"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteReadinessQueryPort.cs"),
+			"LoadAncestorChainsAsync",
+			"SqlQueryRaw",
+			"sql"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteReadinessQueryPort.cs"),
+			"LoadAsync",
+			"SqlQueryRaw",
+			"sql"),
 	];
 
 	private static readonly HashSet<string> RawSqlReadMethods = new(StringComparer.Ordinal) {

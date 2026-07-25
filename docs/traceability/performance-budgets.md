@@ -51,6 +51,167 @@ against a warmed connection pool, single concurrent caller unless the row says o
 | Bulk cost enrichment for one listing page (200 candidates, the HTTP API's `MaxPageSize`) | 200-leaf single-branch, single-worker fixture (`CostQueryPortContractTestsBase.GetBulkNodeCostsAsync_prices_a_maximum_width_page_of_candidates_promptly` and `.GetBulkNodeCostsAsync_keeps_commands_and_connections_constant_at_maximum_width`) | 10 s; at most 16 database commands; at most 1 concurrently open connection (the command count must also equal the one-candidate baseline) | `ICostQueryPort.GetBulkCostInputsAsync` materializes one snapshot regardless of candidate count; PostgreSQL invokes `worker_overlapping_sessions` once through a set-based lateral query across every contributing worker, never once per row or worker |
 | Schema deployment, empty database | — | 30 s | N/A (one-time operation; budget guards against an accidentally slow migration script) |
 | Schema deployment, upgrade from oldest supported version | Combined production tree | 5 min | N/A; recorded per ADR 0011's "any prior version" upgrade window — a script exceeding this budget on production-scale data is reviewed before merge, not after |
+| Awaiting Progress page load (`GetAwaitingProgressInputsAsync`) | Broad tree / Combined production tree | No formal budget yet — see curve below | Loads unfinished leaves, their ancestor chains, and required-job achievement facts; regression suite asserts both latency and materialized-node bounds |
+| Single-leaf cost read, zero sessions (`GetCostInputsAsync`) | Broad tree / Combined production tree | 150 ms (broad tree) / 400 ms (combined production tree), regression ceilings | Loads only the requested subtree plus needed ancestor chains (`CostQueryAssembly.LoadSubtreeAsync`/`ExtendAncestryAsync`) — narrowed 2026-07-24, see below |
+
+**Full-table hierarchy load curve (2026-07-24, code-review-scalability-remediation-plan §2.2).**
+Originally, `PostgreSqlAwaitingProgressQueryPort` and `PostgreSqlCostQueryPort`'s node load both
+materialized the entire `job_node` (+ `leaf_work` + prerequisite) table before doing any
+request-specific work — the cost read's `maxHierarchyNodes` cap only bounded the *requested
+subtree*, not this upfront load. Measured end to end through the ports (EF materialization included,
+warmed connection pool, single caller), zero work sessions so the cost figure isolates the node-load
+cost from ADR 0017's separate per-worker session load:
+
+| Scale | `job_node` rows | Awaiting Progress (before) | Awaiting Progress (after §2.2 step 4) | Single-leaf cost read (before) | Single-leaf cost read (after §2.2 step 2) |
+|---|---|---|---|---|---|
+| Broad tree | 10,002 | 31.5 ms | 30.1 ms (10,002 nodes loaded — every leaf still `Waiting`) | 21.4 ms (10,002 nodes loaded) | 7.1 ms (3 nodes loaded) |
+| Combined production tree, every leaf `Waiting` | 193,570 | 783.0–806.0 ms | 744–1,285 ms (193,570 nodes loaded — every leaf legitimately unfinished, so the narrowing has nothing to exclude) | 360.2 ms (193,570 nodes loaded) | 100.9 ms (7 nodes loaded) |
+| Combined production tree, realistic ~98% completion ratio | 193,570 | *(not measured — no fixture existed for this scale before step 4)* | 572 ms (3,887 nodes loaded) | — | — |
+
+Both operations originally scaled linearly with *total* table size (≈4.1 µs/node for Awaiting
+Progress, ≈1.85 µs/node for the cost read) — every additional installation-wide `job_node` row cost
+every view the same fixed amount, regardless of whose data it was. At the combined production tree
+scale — this project's own standing definition of a plausible production install size (§1) — a
+*single-leaf, zero-session* cost read cost 360 ms purely from this upfront load, before the operation
+had done anything the request actually asked for.
+
+**Step 2 (cost read) is fixed.** `CostQueryAssembly.LoadSubtreeAsync` now loads only the requested
+root(s)' own subtree, through a new set-based recursive query (PostgreSQL: `job_node_subtrees`/
+`job_node_ancestor_chains` stored functions, schema version 0013; SQLite: a parameterized recursive
+CTE mirroring `SqliteControlledLeafQuery`'s established pattern). `ExtendAncestryAsync` then extends
+the loaded node/owner maps with exactly the ancestor chains ADR 0017's elevated read scope still
+needs: each requested root's own path to the true root (a rate override can be declared above the
+requested subtree; ADR 0040's owner carve-out walk needs it too), and, for any contributing worker's
+session on a leaf outside the requested subtree, that leaf's own path to the root (`RateResolver`'s
+nearest-ancestor-override walk). The node count actually loaded dropped from the whole table
+(193,570) to 7 for a single leaf at combined-production-tree scale — a >27,000x reduction — and
+latency from 360 ms to ~101 ms (the residual is largely fixed per-request overhead: connection open,
+transaction snapshot, `GetActorRolesAsync`, ANALYZE-less-table planning — not proportional to
+installation size any more). `CostQueryPortContractTestsBase.
+GetCostInputsAsync_excludes_nodes_outside_the_requested_subtree_while_still_resolving_a_true_root_override`
+proves both the narrowing (a 30-node decoy subtree never appears in `NodesById`) and correctness (a
+rate override on the true root, above the requested leaf's own subtree, still resolves) on both
+providers. `FullTableHierarchyLoadPerformanceTests` now asserts a 150 ms / 400 ms regression ceiling
+for the cost read (broad tree / combined production tree) — tight, not generous, since the operation
+is no longer installation-size-dependent.
+
+**Step 4 (Awaiting Progress) is fixed 2026-07-25.** `PostgreSqlAwaitingProgressQueryPort`/
+`SqliteAwaitingProgressQueryPort` no longer load the whole `job_node`/`leaf_work`/`job_prerequisite`
+tables. The earlier premise — that a fix here needed "a different, larger mechanism" because
+Awaiting Progress's roll-up "genuinely needs every node" — turned out to be false once investigated:
+`AwaitingProgressCalculator` never aggregates branch achievement itself; only the readiness check for
+a *blocking prerequisite's required job* ever needs recursive achievement, and that can be resolved
+one required job at a time through the same already-correct `node_succeeded` (PostgreSQL) /
+`JobNodeHierarchyQueries.IsSubtreeAchievedSqliteAsync` (SQLite) mechanisms the single-node readiness
+and Browse achievement checks already use — no new stored function, no maintained aggregate.
+
+The narrowed load is: every currently-unfinished leaf (childless, not archived, no `leaf_work` or a
+non-terminal achievement) via plain EF LINQ; each candidate's own ancestor chain to the true root
+(reusing `job_node_ancestor_chains` on PostgreSQL, a parameterized recursive CTE on SQLite — the same
+elevated-scope shape as step 2's cost-read narrowing); the prerequisite edges reachable from that
+scope; and, only for a required job *outside* that scope, its achievement resolved through the
+mechanisms above rather than materializing its subtree.
+
+The table above shows why this needed a *third* measurement scale, not just the existing two: the
+"combined production tree" fixture seeds every leaf `Waiting`, so every leaf legitimately belongs on
+Awaiting Progress's list regardless of whether the load itself is narrowed — that scale mainly proves
+no regression (744–1,285 ms observed, within the unchanged 1.5 s ceiling; the narrowing even costs a
+little there, since the query now runs a correlated "has no children" check per row instead of a
+plain sequential scan, and there is nothing to exclude when literally every leaf is a candidate). The
+new realistic-completion-ratio scale (~98% of leaves finished, a mature installation's typical
+shape) is where the narrowing actually pays off: 3,887 of 193,570 nodes loaded, 572 ms. This remains
+an O(total `job_node` rows) database-side scan (no index yet accelerates "find every childless,
+unfinished leaf"), so the improvement here is the avoided full in-memory graph construction, not a
+sub-linear query — a future covering index is the natural next step if this ever needs tightening
+further, but is not needed to close this finding. A new dual-provider contract test,
+`AwaitingProgressQueryPortContractTestsBase
+.Excludes_a_large_unrelated_finished_subtree_while_a_cross_branch_prerequisite_still_resolves_correctly`,
+proves both the narrowing (a 30-node finished decoy subtree never appears in `NodesById`) and
+correctness (a cross-branch required job that is itself finished, and so is not an unfinished-leaf
+candidate, still resolves through the override path). `FullTableHierarchyLoadPerformanceTests` keeps
+its 500 ms / 1.5 s ceilings for the two pre-existing scales and adds an 800 ms ceiling for the new
+realistic scale.
+
+**2026-07-25 scalability-follow-up plan (§2.1-§2.7): request-scoped Awaiting Progress, cost
+authorization, and cost history reads.** All figures below are warm (§2.7's protocol: a throwaway
+port call pays the one-time EF query-compilation/connection-establishment cost before any stopwatch
+starts) unless marked cold; none of this section's rows carry a separate cold-start budget.
+
+- **§2.1 (request scoping).** `GetAwaitingProgressInputsAsync` now takes an `AwaitingProgressQueryFilter`
+  (ownership, optional subtree root, search text, offset/limit) and applies it — plus the exact
+  descending-priority/ascending-deadline-nulls-last/ascending-id ordering `AwaitingProgressCalculator`
+  used to apply in memory — in the port's own query, before paging. A subtree root's recursive
+  relation is composed into that same candidate query; the subtree's IDs are not first materialized
+  into the application process. The permanent installation root short-circuits that recursion (a
+  production-scale regression measured ~762 ms for needless true-root traversal versus ~84 ms
+  unscoped before the short-circuit, and now guards both shapes with the existing 500 ms ceiling --
+  widened from 300 ms after a full-suite `dotnet test JobTrack.slnx` run measured 317 ms, the same
+  contention already documented for the search row below).
+  No new latency row: existing
+  ceilings already cover the unfiltered/unbounded shape (kept as a deliberate worst-case regression
+  guard, see below) and the new default-page shape (next row).
+- **§2.2 (candidate-discovery index decision).** `EXPLAIN (ANALYZE, BUFFERS)` for the production-
+  realistic shape (no ownership/subtree/search filter, one default page) against the realistic ~98%-
+  finished combined-production-tree fixture: ~34 ms, dominated by the childless-check anti-join
+  against the existing `job_node_parent_id_idx` (17,211 index probes), not a sequential-scan
+  bottleneck. No partial index is evidence-backed at this scale. Regression-guarded at 500 ms
+  (`FullTableHierarchyLoadPerformanceTests.Awaiting_progress_with_a_realistic_default_page_at_combined_production_tree_scale_stays_within_ceiling`).
+- **§2.3 (search-index decision).** A zero-match `LOWER(description) LIKE '%term%'` search (the
+  worst case — PostgreSQL cannot stop early the way a selective match would let it) against the
+  plain combined-production-tree fixture (~193,500 rows, no narrowing filter applies to a whole-tree
+  search): a parallel sequential scan completes in ~20 ms. Not material at this scale, so neither an
+  index (pg_trgm/GIN) nor the cross-provider tokenizer/prefix-semantics ADR the plan's target design
+  calls for if one were needed is currently justified. Regression-guarded at 700 ms
+  (`FullTableHierarchyLoadPerformanceTests.Search_with_no_matches_at_combined_production_tree_scale_stays_within_ceiling`);
+  after the required full-suite run exposed shared-PostgreSQL contention
+  (~450 ms contended versus ~20 ms isolated), as recorded below.
+- **§2.4 (cost authorization).** A single-node cost read previously fetched actor roles and ancestor
+  owners via two separate round trips, then `GetCostInputsAsync` resolved roles a third time
+  internally (a copy never read on this path). `ICostQueryPort.GetCostAccessInputsAsync` now returns
+  both from one repeatable-read transaction; `GetCostInputsAsync` takes no actor id and does not
+  resolve roles. The transaction boundary matters: without it, the two statements could observe
+  different role/ownership states under a concurrent update even though they shared one port call.
+  Command-count contract tests prove the single-node read stays bounded (≤16 commands, matching the
+  bulk path's own ceiling) and that a denied actor's read issues strictly fewer commands than an
+  authorized one (never opens the worker-materialization connection).
+- **§2.5 (schedule/override history).** Cost assembly previously loaded every schedule version a
+  contributing worker has ever had (no time filter) and every node-rate override that worker has on
+  any node anywhere (time-bounded, but not node-scoped). Schedule versions are now prefiltered by a
+  one-day-widened UTC window around the cost bounds (safe regardless of a version's own IANA zone,
+  since any zone's offset is under 24h and `ScheduleExpander` clips exactly per-zone downstream
+  regardless). Node-rate overrides are now loaded after `ExtendAncestryAsync` determines the final
+  node set, filtered by that set — `RateResolver` only ever walks a session's own node and its
+  ancestors, so an override elsewhere can never be consulted. `UserCostRate` stays worker-wide/time-
+  only (it carries no `NodeId`). Contract tests prove a decade of superseded schedule versions and
+  unrelated node overrides on decoy nodes change neither the calculated total nor
+  `WorkerCostInputs.NodeOverrides`.
+- **§2.6 (partitioner output cardinality).** The heaviest realistic fixture this codebase seeds (one
+  worker, 5,000 sessions, 6-deep staircase) produces 30,000 cost-trace segments — 60% of
+  `CostQueries.MaxCostTraceSegments`'s hard allocation cap (50,000). `PartitionBounded` counts every
+  active session in the concurrency divisor but emits only requested-subtree allocations, and throws
+  before materializing more than the remaining trace budget across workers; hierarchy-only reads skip
+  trace construction altogether. The cap therefore bounds computation output and memory rather than
+  rejecting only after an oversized trace has already been built. No bounded aggregate trace
+  representation is introduced yet (the plan's own trigger is exceeding the response limit, not
+  approaching it). Regression-guarded at 35,000 segments
+  (`OverlappingCostScalePerformanceTests.Heavy_worker_with_5000_sessions_bounds_the_partitioners_quadratic_tail`).
+- **§2.7 (benchmark protocol).** `FullTableHierarchyLoadPerformanceTests` now explicitly warms its
+  pooled `NpgsqlDataSource` before timing in every test (a throwaway port call before the stopwatch
+  starts), rather than relying on an earlier test in the same run having already paid that cost —
+  this project's `xunit.runner.json` sets `stopOnFail`, so a test can otherwise legitimately run
+  alone. Isolating a test that lacked this discipline previously showed ~550-570 ms cold (first-ever
+  query of that shape in the process) versus ~34-120 ms warm for the identical query — the gap is
+  JIT/EF-compilation/connection-establishment cost, not the query itself.
+
+**Per-request security-stamp validation tax:** `Program.cs` sets `SecurityStampValidatorOptions.
+ValidationInterval = TimeSpan.Zero`, so every authenticated request re-validates the security stamp
+against the identity store — one DB round-trip before the request's own reads, on every page view
+and API call (spec §7.1's instant-revocation requirement motivates it; this is not a defect). It
+compounds whichever of the above rows a given request also hits and is not itself included in any
+measured number in this document. If the full-table-load curve above ever needs remediation, revisit
+this fixed tax at the same time rather than separately — a short validation interval (5–15 s) is the
+documented relaxation option (code-review-scalability-remediation-plan.md §2.3), not a change to make
+unilaterally without an ADR.
 
 **Rows not yet tested (§6.7 database-phase performance-test work):** the cost engine (plan §7.2) has
 now landed (M6 library gate, ADR 0026; M8 web gate, ADR 0027), so the two "cost calculation" rows
@@ -111,7 +272,10 @@ Revised to 200 ms, headroom above the measured contended case, following the sam
 session-overlap row's revision in §3: the query is not slower, the shared test environment is
 noisier when every PostgreSQL-backed project runs at once. This is also why the full solution suite
 is not the routine commit gate (see the project's `CLAUDE.md` and README's "Fast core suite"
-section) — `./scripts/fast-test.sh` plus a targeted `--filter` run is.
+section) — `./scripts/fast-test.sh` plus a targeted `--filter` run is. The §2.3 zero-match search
+ceiling (`Search_with_no_matches_at_combined_production_tree_scale_stays_within_ceiling`) hit the
+identical contention when the full suite ran once at the close of the 2026-07-25 scalability-
+follow-up plan (~450 ms contended vs. ~20 ms isolated) and was revised the same way, to 700 ms.
 
 SQLite functional budget (not a latency target, since SQLite's single-writer envelope makes
 head-to-head latency comparison misleading, §6.4): every operation above must complete without

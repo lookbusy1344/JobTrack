@@ -1,5 +1,6 @@
 namespace JobTrack.Persistence.Sqlite;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -28,6 +29,7 @@ internal static class SqliteDbContextFactory
 
 		var context = new SqliteJobTrackDbContext(optionsBuilder.Options);
 		context.Database.OpenConnection();
+		SqliteTextSearchFunctions.Register((SqliteConnection)context.Database.GetDbConnection());
 		_ = context.Database.ExecuteSqlRaw(SqliteConnectionPragmas.ConfigureConnectionSql);
 
 		return context;
@@ -42,6 +44,7 @@ internal static class SqliteDbContextFactory
 		var context = new SqliteJobTrackDbContext(options);
 
 		await context.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+		SqliteTextSearchFunctions.Register((SqliteConnection)context.Database.GetDbConnection());
 		_ = await context.Database
 			.ExecuteSqlRawAsync(SqliteConnectionPragmas.ConfigureConnectionSql, cancellationToken)
 			.ConfigureAwait(false);

@@ -8,6 +8,7 @@ using Application.Ports;
 using AwesomeAssertions;
 using Database;
 using Domain.Hierarchy;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 /// <summary>
 ///     Shared contract for <see cref="IAwaitingProgressQueryPort" />, asserted identically against
@@ -39,12 +40,12 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync();
-		var entries = AwaitingProgressCalculator.GetAwaitingProgress(
-			result.NodesById, result.FactsById, result.Prerequisites, OwnershipFilter.All, null);
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([
 			tree.WaitingLeafId, tree.InProgressLeafId, tree.RequiredLeafId, tree.UnassignedLeafId, tree.NoLeafWorkLeafId, tree.BlockedLeafId,
+			tree.OutsideBranchLeafId,
 		]);
 	}
 
@@ -54,11 +55,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync();
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
 
 		result.NodesById[tree.NoLeafWorkLeafId].LeafAchievement.Should().BeNull();
-		var entries = AwaitingProgressCalculator.GetAwaitingProgress(
-			result.NodesById, result.FactsById, result.Prerequisites, OwnershipFilter.All, null);
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 		entries.Single(e => e.Id == tree.NoLeafWorkLeafId).Achievement.Should().BeNull();
 	}
 
@@ -68,9 +68,8 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync();
-		var entries = AwaitingProgressCalculator.GetAwaitingProgress(
-			result.NodesById, result.FactsById, result.Prerequisites, OwnershipFilter.All, null);
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().NotContain(tree.ArchivedLeafId);
 	}
@@ -81,9 +80,8 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync();
-		var entries = AwaitingProgressCalculator.GetAwaitingProgress(
-			result.NodesById, result.FactsById, result.Prerequisites, OwnershipFilter.All, null);
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Single(e => e.Id == tree.BlockedLeafId).IsReady.Should().BeFalse();
 	}
@@ -94,7 +92,7 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync();
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
 
 		var facts = result.FactsById[tree.WaitingLeafId];
 		facts.OwnerUserId.Should().Be(tree.WorkerId);
@@ -107,10 +105,238 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync();
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
 
 		var facts = result.FactsById[tree.UnassignedLeafId];
 		facts.OwnerUserId.Should().BeNull();
+	}
+
+	/// <summary>2026-07-25 scalability-follow-up plan §2.1: ownership is the port's own query now.</summary>
+	[Fact]
+	public async Task An_owner_filter_restricts_the_query_to_that_owners_leaves()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Ownership = OwnershipFilter.OwnedBy(tree.WorkerId) });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
+	}
+
+	[Fact]
+	public async Task An_unassigned_filter_restricts_the_query_to_leaves_with_no_owner()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Ownership = OwnershipFilter.Unassigned });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.UnassignedLeafId]);
+	}
+
+	[Fact]
+	public async Task A_search_text_filter_restricts_the_query_to_matching_descriptions()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SearchText = "cabinets" });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
+	}
+
+	[Fact]
+	public async Task Search_is_ordinal_ignore_case_for_non_ascii_text()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SearchText = "ångström" });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
+	}
+
+	[Fact]
+	public async Task A_subtree_filter_restricts_the_query_to_descendants_of_the_scope_root()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SubtreeRootId = tree.BranchId });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([
+			tree.WaitingLeafId, tree.InProgressLeafId, tree.RequiredLeafId, tree.UnassignedLeafId, tree.NoLeafWorkLeafId, tree.BlockedLeafId,
+		]);
+	}
+
+	[Fact]
+	public async Task A_subtree_filter_with_no_unfinished_descendants_returns_an_empty_result()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SubtreeRootId = tree.SuccessLeafId });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task A_subtree_filter_is_composed_into_candidate_selection_without_an_extra_id_materialization_command()
+	{
+		var tree = await SeedScenarioAsync();
+
+		var unfilteredCommands = new CommandCountInterceptor();
+		var unfilteredPort = CreatePort(database.ConnectionString, [unfilteredCommands]);
+		_ = await unfilteredPort.GetAwaitingProgressInputsAsync(DefaultFilter());
+
+		var subtreeCommands = new CommandCountInterceptor();
+		var subtreePort = CreatePort(database.ConnectionString, [subtreeCommands]);
+		_ = await subtreePort.GetAwaitingProgressInputsAsync(DefaultFilter() with { SubtreeRootId = tree.BranchId });
+
+		subtreeCommands.Count.Should().Be(unfilteredCommands.Count);
+	}
+
+	/// <summary>
+	///     2026-07-25 scalability-follow-up plan §2.1: ordering and paging are the port's own query
+	///     now -- consecutive pages over the exact descending-priority/ascending-deadline-nulls-last/
+	///     ascending-id ordering must not gap or overlap.
+	/// </summary>
+	[Fact]
+	public async Task Offset_and_limit_page_the_ordered_result_without_gaps_or_overlap()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var unpaged = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
+		var unpagedEntries = AwaitingProgressCalculator.GetAwaitingProgress(unpaged.NodesById, unpaged.FactsById, unpaged.Prerequisites);
+
+		var firstPageResult = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Offset = 0, Limit = 3 });
+		var firstPage = AwaitingProgressCalculator.GetAwaitingProgress(
+			firstPageResult.NodesById, firstPageResult.FactsById, firstPageResult.Prerequisites);
+		var secondPageResult = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Offset = 3, Limit = 4 });
+		var secondPage = AwaitingProgressCalculator.GetAwaitingProgress(
+			secondPageResult.NodesById, secondPageResult.FactsById, secondPageResult.Prerequisites);
+
+		firstPage.Should().HaveCount(3);
+		secondPage.Select(e => e.Id).Should().BeEquivalentTo(unpagedEntries.Skip(3).Select(e => e.Id));
+		firstPage.Select(e => e.Id).Concat(secondPage.Select(e => e.Id)).Should().BeEquivalentTo(unpagedEntries.Select(e => e.Id));
+	}
+
+	/// <summary>
+	///     2026-07-24 code-review-scalability-remediation-plan §2.2 step 4: the port must load only
+	///     currently-unfinished leaves (plus the ancestor/required-job facts readiness needs), never the
+	///     whole <c>job_node</c> table. A finished, otherwise-unrelated decoy subtree proves the
+	///     narrowing; a cross-branch prerequisite whose required job is itself finished (so it is not an
+	///     unfinished-leaf candidate) proves the required-job achievement is still resolved correctly
+	///     through the narrowed load, not just omitted.
+	/// </summary>
+	[Fact]
+	public async Task Excludes_a_large_unrelated_finished_subtree_while_a_cross_branch_prerequisite_still_resolves_correctly()
+	{
+		await using (var connection = await OpenExistingConnectionAsync()) {
+			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
+			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
+			await deployer.DeployAsync(scripts, CancellationToken.None);
+		}
+
+		var bootstrapPort = CreateBootstrapPort(database.ConnectionString);
+		var bootstrap = await bootstrapPort.BootstrapAsync(new() {
+			DisplayName = "Grace Hopper",
+			IanaTimeZone = "Europe/London",
+			UserName = "grace.hopper.narrowing",
+			PasswordHash = "test-hash",
+			SecurityStamp = Guid.NewGuid().ToString("N"),
+		});
+		var administratorId = bootstrap.AdministratorId;
+		var context = ContextFor(administratorId);
+
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var achievementPort = CreateAchievementPort(database.ConnectionString);
+
+		var branchMain = await jobNodePort.AddChildAsync(new() {
+			Context = context,
+			ParentId = bootstrap.RootJobNodeId,
+			Description = "Main branch",
+			OwnerUserId = administratorId,
+			Priority = Priority.Medium,
+		});
+		var candidateLeaf = await jobNodePort.AddChildAsync(new() {
+			Context = context,
+			ParentId = branchMain.Id,
+			Description = "Candidate leaf",
+			OwnerUserId = administratorId,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = context, JobNodeId = candidateLeaf.Id });
+
+		var branchDecoy = await jobNodePort.AddChildAsync(new() {
+			Context = context,
+			ParentId = bootstrap.RootJobNodeId,
+			Description = "Decoy branch",
+			OwnerUserId = administratorId,
+			Priority = Priority.Medium,
+		});
+
+		var requiredLeaf = await jobNodePort.AddChildAsync(new() {
+			Context = context,
+			ParentId = branchDecoy.Id,
+			Description = "Required leaf, elsewhere in the tree",
+			OwnerUserId = administratorId,
+			Priority = Priority.Medium,
+		});
+		await FinishAsSuccessAsync(jobNodePort, achievementPort, context, requiredLeaf.Id);
+
+		await jobNodePort.AddPrerequisiteAsync(new() { Context = context, RequiredJobId = requiredLeaf.Id, DependentJobId = candidateLeaf.Id });
+
+		var decoyIds = new List<JobNodeId>();
+		for (var index = 0; index < 30; index++) {
+			var decoy = await jobNodePort.AddChildAsync(new() {
+				Context = context,
+				ParentId = branchDecoy.Id,
+				Description = $"Decoy {index}",
+				OwnerUserId = administratorId,
+				Priority = Priority.Medium,
+			});
+			await FinishAsSuccessAsync(jobNodePort, achievementPort, context, decoy.Id);
+			decoyIds.Add(decoy.Id);
+		}
+
+		var port = CreatePort(database.ConnectionString);
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Single(e => e.Id == candidateLeaf.Id).IsReady.Should().BeTrue();
+		result.NodesById.Keys.Should().NotContain(decoyIds);
+		result.NodesById.Keys.Should().NotContain(branchDecoy.Id);
+	}
+
+	/// <summary>A generous default page covering every leaf <see cref="SeedScenarioAsync" /> creates.</summary>
+	private static AwaitingProgressQueryFilter DefaultFilter() => new() { Ownership = OwnershipFilter.All, Offset = 0, Limit = 100 };
+
+	private static async Task FinishAsSuccessAsync(
+		IJobNodeCommandPort jobNodePort, IAchievementCommandPort achievementPort, CommandContext context, JobNodeId nodeId)
+	{
+		var attached = await jobNodePort.AttachLeafWorkAsync(new() { Context = context, JobNodeId = nodeId });
+		var inProgress = await achievementPort.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = nodeId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Work has started",
+			Version = attached.Version,
+		});
+		_ = await achievementPort.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = nodeId,
+			NewAchievement = Achievement.Success,
+			Reason = "Done",
+			Version = inProgress.Version,
+		});
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);
@@ -129,6 +355,8 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 	internal abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
 
 	internal abstract IAwaitingProgressQueryPort CreatePort(string connectionString);
+
+	internal abstract IAwaitingProgressQueryPort CreatePort(string connectionString, IReadOnlyList<IInterceptor> interceptors);
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 
@@ -176,7 +404,7 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var waitingLeaf = await jobNodePort.AddChildAsync(new() {
 			Context = ContextFor(jobManagerId),
 			ParentId = branch.Id,
-			Description = "Install cabinets",
+			Description = "Install Ångström cabinets",
 			OwnerUserId = workerId,
 			Priority = Priority.High,
 		});
@@ -273,9 +501,21 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			DependentJobId = blockedLeaf.Id,
 		});
 
+		// Sibling of "Kitchen renovation", directly under root -- outside branch.Id's own subtree, so
+		// A_subtree_filter_restricts_the_query_to_descendants_of_the_scope_root can prove the port's
+		// subtree scoping actually excludes a leaf that would otherwise qualify.
+		var outsideBranchLeaf = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = bootstrap.RootJobNodeId,
+			Description = "Outside the branch",
+			OwnerUserId = jobManagerId,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = outsideBranchLeaf.Id });
+
 		return new(
-			jobManagerId, workerId, waitingLeaf.Id, inProgressLeaf.Id, successLeaf.Id, noLeafWorkLeaf.Id, archivedLeaf.Id, blockedLeaf.Id,
-			requiredLeaf.Id, unassignedLeaf.Id);
+			jobManagerId, workerId, branch.Id, waitingLeaf.Id, inProgressLeaf.Id, successLeaf.Id, noLeafWorkLeaf.Id, archivedLeaf.Id,
+			blockedLeaf.Id, requiredLeaf.Id, unassignedLeaf.Id, outsideBranchLeaf.Id);
 	}
 
 	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
@@ -346,6 +586,7 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 	private sealed record SeededTree(
 		AppUserId JobManagerId,
 		AppUserId WorkerId,
+		JobNodeId BranchId,
 		JobNodeId WaitingLeafId,
 		JobNodeId InProgressLeafId,
 		JobNodeId SuccessLeafId,
@@ -353,5 +594,6 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		JobNodeId ArchivedLeafId,
 		JobNodeId BlockedLeafId,
 		JobNodeId RequiredLeafId,
-		JobNodeId UnassignedLeafId);
+		JobNodeId UnassignedLeafId,
+		JobNodeId OutsideBranchLeafId);
 }

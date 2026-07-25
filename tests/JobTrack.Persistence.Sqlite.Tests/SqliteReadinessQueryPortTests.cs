@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using TestSupport;
 
-public sealed class SqliteAwaitingProgressQueryPortTests()
-	: AwaitingProgressQueryPortContractTestsBase(new SqliteDatabaseFixture())
+public sealed class SqliteReadinessQueryPortTests()
+	: ReadinessQueryPortContractTestsBase(new SqliteDatabaseFixture())
 {
 	protected override SchemaProvider Provider => SchemaProvider.Sqlite;
 
@@ -32,12 +32,9 @@ public sealed class SqliteAwaitingProgressQueryPortTests()
 	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
-	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
-		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
+	internal override IReadinessQueryPort CreatePort(string connectionString) =>
+		new SqliteReadinessQueryPort(connectionString);
 
-	internal override IAwaitingProgressQueryPort CreatePort(string connectionString) =>
-		new SqliteAwaitingProgressQueryPort(connectionString);
-
-	internal override IAwaitingProgressQueryPort CreatePort(string connectionString, IReadOnlyList<IInterceptor> interceptors) =>
-		new SqliteAwaitingProgressQueryPort(connectionString, interceptors);
+	internal override IReadinessQueryPort CreatePort(string connectionString, IReadOnlyList<IInterceptor> interceptors) =>
+		new SqliteReadinessQueryPort(connectionString, interceptors);
 }

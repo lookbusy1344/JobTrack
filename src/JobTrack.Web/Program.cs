@@ -53,6 +53,7 @@ public sealed class Program
 	// tracks the authentication cookie's own lifetime so a filter choice survives exactly as long as
 	// the sign-in it belongs to. The store is in-process (AddDistributedMemoryCache): filter prefs are
 	// non-durable convenience state, so losing them on restart or across instances is acceptable.
+	// See docs/operations/production-deployment.md's multi-instance in-process-state table.
 	private const int SessionIdleTimeoutHours = AuthenticationCookieExpirationHours;
 	private const string SessionCookieName = "JobTrack.Session";
 
@@ -295,6 +296,9 @@ public sealed class Program
 		var loginRateLimitWindowSeconds =
 			builder.Configuration.GetValue(LoginRateLimitWindowSecondsConfigKey, LoginRateLimitWindowSeconds);
 
+		// In-process limiter: the configured limit effectively multiplies under 2+ instances, since
+		// each counts attempts independently. See docs/operations/production-deployment.md's
+		// multi-instance in-process-state table.
 		_ = builder.Services.AddSingleton(new LoginAttemptRateLimiter(
 			loginRateLimitPermitLimit,
 			TimeSpan.FromSeconds(loginRateLimitWindowSeconds)));
@@ -304,6 +308,8 @@ public sealed class Program
 		var apiRateLimitWindowSeconds =
 			builder.Configuration.GetValue(ApiRateLimitWindowSecondsConfigKey, ApiRateLimitWindowSeconds);
 
+		// GetFixedWindowLimiter's partitions are in-process, same multi-instance caveat as the login
+		// limiter above -- see docs/operations/production-deployment.md's multi-instance table.
 		_ = builder.Services.AddRateLimiter(options => {
 			_ = options.AddPolicy(JobTrackApi.RateLimiterPolicyName, httpContext =>
 				RateLimitPartition.GetFixedWindowLimiter(

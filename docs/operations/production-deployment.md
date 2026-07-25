@@ -238,3 +238,22 @@ Per ADR 0014 and plan §9.1–§9.4, the following are explicitly out of scope f
 single-server release and are not addressed by this runbook: multi-node deployment, a managed
 database service with automatic failover, distributed caching, and container orchestration. Revisit
 only when a measured capacity or availability requirement justifies it.
+
+### In-process state that breaks under a second web instance
+
+ADR 0014's single-server decision is embodied in four separate in-process stores, each holding
+state that a second instance would not share. None of these is a defect under the current
+topology — they are the direct, correct consequence of "no distributed cache" above — but standing
+up a second instance without addressing all four fails silently (stale filters, doubled rate
+limits, missed PAT delivery) rather than refusing to start. Before ever running more than one
+instance, replace all four with a shared backing store (e.g. a distributed cache or the database
+itself) in the same change:
+
+| Store | File | Symptom under 2+ instances |
+|---|---|---|
+| Remembered per-page filter selections | `src/JobTrack.Web/Program.cs` (`AddDistributedMemoryCache` + `AddSession`) | A user's filter choice is only visible on the instance that set it; it appears to reset when a load balancer routes them elsewhere. |
+| Login attempt rate limiting | `src/JobTrack.Web/LoginAttemptRateLimiter.cs` | The configured limit effectively multiplies by instance count, since each instance counts attempts independently. |
+| Pending personal-access-token delivery | `src/JobTrack.Web/PendingPatDeliveryStore.cs` | A PAT issued on one instance and fetched via the immediately-following redirect can miss if the redirect lands on a different instance. |
+| External API per-user rate limiting | `src/JobTrack.Web/Program.cs` (`AddRateLimiter`'s `GetFixedWindowLimiter` partition) | Same multiplication as the login limiter, for `/api/*` traffic. |
+
+Each file above carries a short comment pointing back to this table.

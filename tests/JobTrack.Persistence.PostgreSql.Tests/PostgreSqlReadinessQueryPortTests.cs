@@ -8,8 +8,8 @@ using NodaTime;
 using Npgsql;
 using TestSupport;
 
-public sealed class PostgreSqlAwaitingProgressQueryPortTests()
-	: AwaitingProgressQueryPortContractTestsBase(new PostgreSqlDatabaseFixture())
+public sealed class PostgreSqlReadinessQueryPortTests()
+	: ReadinessQueryPortContractTestsBase(new PostgreSqlDatabaseFixture())
 {
 	protected override SchemaProvider Provider => SchemaProvider.PostgreSql;
 
@@ -27,13 +27,10 @@ public sealed class PostgreSqlAwaitingProgressQueryPortTests()
 	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
-	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
-		new PostgreSqlAchievementCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+	internal override IReadinessQueryPort CreatePort(string connectionString) =>
+		new PostgreSqlReadinessQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
 
-	internal override IAwaitingProgressQueryPort CreatePort(string connectionString) =>
-		new PostgreSqlAwaitingProgressQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
-
-	internal override IAwaitingProgressQueryPort CreatePort(string connectionString, IReadOnlyList<IInterceptor> interceptors) =>
-		new PostgreSqlAwaitingProgressQueryPort(
+	internal override IReadinessQueryPort CreatePort(string connectionString, IReadOnlyList<IInterceptor> interceptors) =>
+		new PostgreSqlReadinessQueryPort(
 			new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), interceptors);
 }

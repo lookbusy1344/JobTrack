@@ -5,6 +5,14 @@ using AwesomeAssertions;
 using Domain.Hierarchy;
 using NodaTime;
 
+/// <summary>
+///     2026-07-25 scalability-follow-up plan §2.1: ownership, subtree-root, search-text, and
+///     offset/limit scoping moved out of <see cref="AwaitingProgressCalculator" /> into
+///     <c>IAwaitingProgressQueryPort</c>'s own query -- those scenarios are now covered by
+///     <c>AwaitingProgressQueryPortContractTestsBase</c> against the real providers instead of here.
+///     This file keeps only what the calculator itself still owns: candidate shape, readiness, and
+///     ordering.
+/// </summary>
 public sealed class AwaitingProgressCalculatorTests
 {
 	private static readonly JobNodeId RootId = new(1);
@@ -22,8 +30,7 @@ public sealed class AwaitingProgressCalculatorTests
 	/// <summary>
 	///     A standalone leaf parented directly under the shared root-like <see cref="BranchId" />
 	///     stub that <see cref="NodesWithParent" /> adds — readiness resolution walks the full ancestor
-	///     chain for every candidate, not only when <c>subtreeRootId</c> is supplied, so every leaf's
-	///     parent must actually exist in the node set.
+	///     chain for every candidate, so every leaf's parent must actually exist in the node set.
 	/// </summary>
 	private static HierarchyNode Leaf(JobNodeId id, Achievement? achievement) => Node(id, BranchId, [], achievement);
 
@@ -52,7 +59,7 @@ public sealed class AwaitingProgressCalculatorTests
 		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.InProgress));
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId), [LeafBId] = Facts(LeafBId) };
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId, LeafBId]);
 	}
@@ -66,7 +73,7 @@ public sealed class AwaitingProgressCalculatorTests
 		var nodes = NodesWithParent(Leaf(LeafAId, achievement));
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId) };
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Should().BeEmpty();
 	}
@@ -77,7 +84,7 @@ public sealed class AwaitingProgressCalculatorTests
 		var nodes = NodesWithParent(Leaf(LeafAId, null));
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId) };
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Should().ContainSingle().Which.Achievement.Should().BeNull();
 	}
@@ -96,7 +103,7 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafAId] = Facts(LeafAId),
 		};
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId]);
 	}
@@ -107,7 +114,7 @@ public sealed class AwaitingProgressCalculatorTests
 		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RootId] = Node(RootId, null, [], null) };
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [RootId] = Facts(RootId) };
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Should().BeEmpty();
 	}
@@ -119,7 +126,7 @@ public sealed class AwaitingProgressCalculatorTests
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [RequiredId] = Facts(RequiredId), [LeafAId] = Facts(LeafAId) };
 		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId) };
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges, OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
 
 		result.Single(e => e.Id == LeafAId).IsReady.Should().BeFalse();
 	}
@@ -131,7 +138,7 @@ public sealed class AwaitingProgressCalculatorTests
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [RequiredId] = Facts(RequiredId), [LeafAId] = Facts(LeafAId) };
 		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId) };
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges, OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
 
 		result.Single(e => e.Id == LeafAId).IsReady.Should().BeTrue();
 	}
@@ -144,38 +151,9 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafAId] = Facts(LeafAId, archivedAt: Instant.FromUtc(2026, 1, 1, 0, 0)),
 		};
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Should().BeEmpty();
-	}
-
-	[Fact]
-	public void An_owner_filter_restricts_to_the_matching_owner()
-	{
-		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
-			[LeafAId] = Facts(LeafAId, owner: Alice),
-			[LeafBId] = Facts(LeafBId, owner: Bob),
-		};
-
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.OwnedBy(Alice), null);
-
-		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId]);
-	}
-
-	[Fact]
-	public void An_unassigned_filter_restricts_to_leaves_with_no_owner()
-	{
-		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
-			[LeafAId] = new(LeafAId, "Job", null, Priority.Medium, null, null, null),
-			[LeafBId] = Facts(LeafBId, owner: Bob),
-		};
-
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(
-			nodes, facts, [], OwnershipFilter.Unassigned, null);
-
-		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId]);
 	}
 
 	[Fact]
@@ -186,42 +164,13 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafAId] = new(LeafAId, "Job", null, Priority.Medium, null, null, null),
 		};
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(
-			nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Single().OwnerUserId.Should().BeNull();
 	}
 
 	[Fact]
-	public void A_search_text_filter_restricts_to_descriptions_containing_it_case_insensitively()
-	{
-		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
-			[LeafAId] = Facts(LeafAId, "Fit oak cabinets"),
-			[LeafBId] = Facts(LeafBId, "Paint the fence"),
-		};
-
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null, "OAK");
-
-		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId]);
-	}
-
-	[Fact]
-	public void A_blank_search_text_applies_no_filter()
-	{
-		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
-			[LeafAId] = Facts(LeafAId, "Fit oak cabinets"),
-			[LeafBId] = Facts(LeafBId, "Paint the fence"),
-		};
-
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null, "   ");
-
-		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId, LeafBId]);
-	}
-
-	[Fact]
-	public void A_subtree_filter_restricts_to_descendants_of_the_scope_root()
+	public void Compatibility_overload_retains_ownership_subtree_and_ordinal_ignore_case_search_filters()
 	{
 		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
 			[RootId] = Node(RootId, null, [BranchId, LeafCId], null),
@@ -231,17 +180,15 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafCId] = Node(LeafCId, RootId, [], Achievement.Waiting),
 		};
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
-			[RootId] = Facts(RootId),
-			[BranchId] = Facts(BranchId),
-			[LeafAId] = Facts(LeafAId),
-			[LeafBId] = Facts(LeafBId),
-			[LeafCId] = Facts(LeafCId),
+			[LeafAId] = Facts(LeafAId, "Fit Ångström cabinets", Alice),
+			[LeafBId] = Facts(LeafBId, "Fit Ångström shelves", Bob),
+			[LeafCId] = Facts(LeafCId, "Fit Ångström doors", Alice),
 		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(
-			nodes, facts, [], OwnershipFilter.All, BranchId);
+			nodes, facts, [], OwnershipFilter.OwnedBy(Alice), BranchId, "ångström");
 
-		result.Select(e => e.Id).Should().BeEquivalentTo([LeafAId, LeafBId]);
+		result.Should().ContainSingle().Which.Id.Should().Be(LeafAId);
 	}
 
 	[Fact]
@@ -256,7 +203,7 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafCId] = Facts(LeafCId, priority: Priority.Urgent, neededFinish: null),
 		};
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Select(e => e.Id).Should().ContainInOrder(LeafCId, LeafBId, LeafAId);
 	}
@@ -272,7 +219,7 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafBId] = Facts(LeafBId, neededStart: soon),
 		};
 
-		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null);
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
 		result.Select(e => e.Id).Should().ContainInOrder(LeafBId, LeafAId);
 	}

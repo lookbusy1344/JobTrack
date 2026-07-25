@@ -102,6 +102,35 @@ public sealed class CostSegmentPartitionerTests
 	}
 
 	[Fact]
+	public void Bounded_partition_emits_only_included_sessions_but_counts_every_active_session_in_N()
+	{
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(11))), new CostableSession(Session2, OtherLeafId, new(At(10), At(12))),
+		};
+
+		var allocations = CostSegmentPartitioner.PartitionBounded(
+			sessions, [FullDay], TwoLeavesUnderRoot(), [], [], [], FullDay, new HashSet<JobNodeId> { LeafId }, 2);
+
+		allocations.Should().HaveCount(2);
+		allocations.Select(allocation => allocation.SessionId).Should().OnlyContain(sessionId => sessionId == Session1);
+		allocations.Single(allocation => allocation.Segment == new WorkInterval(At(10), At(11)))
+			.Share.ConcurrencyDivisor.Should().Be(2);
+	}
+
+	[Fact]
+	public void Bounded_partition_rejects_before_emitting_more_than_the_allocation_limit()
+	{
+		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(12))) };
+		var overtime = new ScheduleExceptionEntry(
+			ScheduleExceptionEffect.AddWorkingTime, new(At(10), At(11)), new HourlyRate(100m));
+
+		var act = () => CostSegmentPartitioner.PartitionBounded(
+			sessions, [FullDay], SingleLeafUnderRoot(), [overtime], [], [], FullDay, new HashSet<JobNodeId> { LeafId }, 2);
+
+		act.Should().Throw<ArgumentOutOfRangeException>();
+	}
+
+	[Fact]
 	public void A_node_override_on_an_ancestor_introduces_a_boundary_even_though_it_is_not_the_active_session_edge()
 	{
 		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(0), At(24))) };

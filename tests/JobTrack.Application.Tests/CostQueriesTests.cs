@@ -78,7 +78,7 @@ public sealed class CostQueriesTests
 		var act = () => sut.GetCostDetailsAsync(new() { Context = ContextFor(WorkerId), NodeId = LeafId, AsOf = At(24) });
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
-		port.GetActorRolesCallCount.Should().Be(1);
+		port.GetCostAccessInputsCallCount.Should().Be(1);
 		port.GetCostInputsCallCount.Should().Be(0);
 	}
 
@@ -172,7 +172,8 @@ public sealed class CostQueriesTests
 			MaxTraceSegments = 1,
 		});
 
-		await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+		var exception = await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+		exception.WithParameterName("maximumAllocationCount");
 	}
 
 	[Fact]
@@ -278,7 +279,7 @@ public sealed class CostQueriesTests
 		});
 
 		// Fresh-eyes review §2.8: one snapshot regardless of how many candidates were requested.
-		port.GetActorRolesCallCount.Should().Be(0);
+		port.GetCostAccessInputsCallCount.Should().Be(0);
 		port.GetBulkCostInputsCallCount.Should().Be(1);
 	}
 
@@ -345,7 +346,7 @@ public sealed class CostQueriesTests
 		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(CostViewerId), NodeIds = [], AsOf = At(24) });
 
 		bulk.DisplayedCosts.Should().BeEmpty();
-		port.GetActorRolesCallCount.Should().Be(0);
+		port.GetCostAccessInputsCallCount.Should().Be(0);
 		port.GetBulkCostInputsCallCount.Should().Be(0);
 	}
 

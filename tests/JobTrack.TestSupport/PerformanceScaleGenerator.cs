@@ -1,5 +1,6 @@
 namespace JobTrack.TestSupport;
 
+using Abstractions;
 using Npgsql;
 
 /// <summary>
@@ -35,7 +36,29 @@ public static class PerformanceScaleGenerator
 	// distinct referenced rows instead of relying on a larger server
 	// configuration.
 	private const int LockSafeBatchSize = 300;
+
+	// Npgsql's 30 s default Command Timeout was never a deliberate budget for this generator's bulk
+	// seeding statements (tens of thousands of rows per scale) -- it's just the untouched default,
+	// and a shared local Postgres instance under load from other test projects in the same `dotnet
+	// test JobTrack.slnx` run can push a single batch past it even though the whole seed normally
+	// completes in well under a minute. This is setup plumbing, not a measured quantity, so widening
+	// it doesn't weaken any regression guard.
+	private const int SeedCommandTimeoutSeconds = 120;
 	private static readonly TimeSpan OverlapSlotDuration = TimeSpan.FromHours(1);
+
+	/// <summary>
+	///     Opens a connection for scale-generation seeding with <see cref="SeedCommandTimeoutSeconds" />
+	///     as every command's default <c>CommandTimeout</c>, rather than each performance-test class's
+	///     own connection using Npgsql's 30 s default.
+	/// </summary>
+	public static async Task<NpgsqlConnection> OpenConnectionForSeedingAsync(string connectionString)
+	{
+		var seedingConnectionString =
+			new NpgsqlConnectionStringBuilder(connectionString) { CommandTimeout = SeedCommandTimeoutSeconds }.ConnectionString;
+		var connection = new NpgsqlConnection(seedingConnectionString);
+		await connection.OpenAsync();
+		return connection;
+	}
 
 	public static async Task<long> SeedAppUserAsync(NpgsqlConnection connection, string displayName)
 	{
@@ -207,6 +230,53 @@ public static class PerformanceScaleGenerator
 		}
 
 		return (rootId, branchIdForLeaves, leafIds[0], deepChainParent);
+	}
+
+	/// <summary>
+	///     The same combined production tree as <see cref="SeedCombinedProductionTreeAsync" />, except
+	///     all but every <paramref name="unfinishedEveryNth" />th leaf is marked <c>Success</c> --
+	///     a mature installation's realistic completion ratio, as opposed to every leaf starting
+	///     <c>Waiting</c> (2026-07-24 code-review-scalability-remediation-plan §2.2 step 4: the
+	///     all-<c>Waiting</c> fixture cannot exercise Awaiting Progress's narrowed load at all, since
+	///     every leaf legitimately still belongs on the list).
+	/// </summary>
+	public static async Task<(long RootId, long BranchId, long LeafId, long DeepNodeId)> SeedCombinedProductionTreeMostlyFinishedAsync(
+		NpgsqlConnection connection, long ownerUserId, int unfinishedEveryNth = 50)
+	{
+		var tree = await SeedCombinedProductionTreeAsync(connection, ownerUserId);
+
+		var finishableLeafIds = new List<long>();
+		await using (var selectCommand = connection.CreateCommand()) {
+			selectCommand.CommandText = """
+										SELECT jn.id FROM job_node jn
+										WHERE NOT EXISTS (SELECT 1 FROM job_node c WHERE c.parent_id = jn.id)
+										AND jn.id % @unfinishedEveryNth <> 0;
+										""";
+			selectCommand.Parameters.AddWithValue("unfinishedEveryNth", unfinishedEveryNth);
+			await using var reader = await selectCommand.ExecuteReaderAsync();
+			while (await reader.ReadAsync()) {
+				finishableLeafIds.Add(reader.GetInt64(0));
+			}
+		}
+
+		// Batched the same way every bulk insert above is (this class's own header comment): one
+		// UPDATE touching all ~180,000 leaves at once exhausts the shared lock-table pool the same way
+		// a single oversized INSERT would.
+		for (var offset = 0; offset < finishableLeafIds.Count; offset += LockSafeBatchSize) {
+			var batch = finishableLeafIds.GetRange(offset, Math.Min(LockSafeBatchSize, finishableLeafIds.Count - offset));
+
+			await using var updateCommand = connection.CreateCommand();
+			updateCommand.CommandText = "UPDATE leaf_work SET achievement_id = @successAchievementId WHERE job_node_id = ANY(@leafIds);";
+			updateCommand.Parameters.AddWithValue("successAchievementId", (short)Achievement.Success);
+			updateCommand.Parameters.AddWithValue("leafIds", batch.ToArray());
+			_ = await updateCommand.ExecuteNonQueryAsync();
+		}
+
+		await using var analyzeCommand = connection.CreateCommand();
+		analyzeCommand.CommandText = "ANALYZE leaf_work;";
+		_ = await analyzeCommand.ExecuteNonQueryAsync();
+
+		return tree;
 	}
 
 	private static async Task<long[]> InsertLevelAsync(

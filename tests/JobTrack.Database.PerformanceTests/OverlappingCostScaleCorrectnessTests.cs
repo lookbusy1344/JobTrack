@@ -53,8 +53,7 @@ public sealed class OverlappingCostScaleCorrectnessTests : IAsyncLifetime
 		var totalSlots = LeavesPerWorker + OverlapDepth - 1;
 
 		foreach (var (workerId, branchId) in workerIds) {
-			var inputs = await port.GetCostInputsAsync(
-				new(workerId), new(branchId), asOf, CorrectnessQueryHierarchyNodeLimit);
+			var inputs = await port.GetCostInputsAsync(new(branchId), asOf, CorrectnessQueryHierarchyNodeLimit);
 			var worker = inputs.Workers.Should().ContainSingle(w => w.Sessions.Count == LeavesPerWorker).Subject;
 
 			var allocations = CostSegmentPartitioner.Partition(
@@ -140,8 +139,7 @@ public sealed class OverlappingCostScaleCorrectnessTests : IAsyncLifetime
 
 	private async Task<NpgsqlConnection> OpenDeployedConnectionAsync()
 	{
-		var connection = new NpgsqlConnection(database.ConnectionString);
-		await connection.OpenAsync();
+		var connection = await PerformanceScaleGenerator.OpenConnectionForSeedingAsync(database.ConnectionString);
 
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.PostgreSql));
 		var deployer = new SchemaDeployer(

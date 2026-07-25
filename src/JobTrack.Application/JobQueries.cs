@@ -406,11 +406,14 @@ internal sealed class JobQueries : IJobQueries
 						? displayedCosts?.GetValueOrDefault(nodeId)
 						: null;
 
-				// ADR 0043: one materialization of the readiness facts, then the pure calculator per
-				// row -- the same inputs a single-node readiness check already loads, so this is one
-				// extra round trip whatever the row count, and never one per row.
+				// ADR 0043: one materialization of the readiness facts for every displayed row, then the
+				// pure calculator per row -- one extra round trip whatever the row count, never one per
+				// row. Must be the batch form: rows other than request.RootId are not necessarily on
+				// request.RootId's own ancestor chain (siblings, cousins), so reusing a single-node
+				// result here previously threw for any such row once the port stopped over-fetching the
+				// whole job_node table (regression fixed alongside this call).
 				var readinessInputs = await _readinessQueryPort
-					.GetReadinessInputsAsync(request.RootId, cancellationToken).ConfigureAwait(false);
+					.GetReadinessInputsForNodesAsync([.. rows.Select(row => row.Id)], cancellationToken).ConfigureAwait(false);
 
 				var nodes = rows.OrderBy(row => spans[row.Id].Lft).Select(row => new JobSubtreeNodeResult {
 					Id = row.Id,
@@ -459,20 +462,28 @@ internal sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.get-awaiting-progress", request.Context, null,
 			async () => {
-				var inputs = await _awaitingProgressQueryPort.GetAwaitingProgressInputsAsync(cancellationToken).ConfigureAwait(false);
-
-				if (request.SubtreeRootId is JobNodeId subtreeRootId && !inputs.NodesById.ContainsKey(subtreeRootId)) {
-					throw new EntityNotFoundException($"Job node {subtreeRootId} does not exist.");
+				// 2026-07-24 remediation plan §2.2 step 4 (still true under §2.1's request-scoped
+				// query): a subtree root with no unfinished descendant legitimately never appears in
+				// the port's own narrowed load, so existence is checked directly rather than inferred.
+				if (request.SubtreeRootId is JobNodeId subtreeRootId) {
+					_ = await _browseQueryPort.GetNodeAsync(subtreeRootId, cancellationToken).ConfigureAwait(false);
 				}
 
-				var entries = AwaitingProgressCalculator.GetAwaitingProgress(
-					inputs.NodesById, inputs.FactsById, inputs.Prerequisites, request.Ownership, request.SubtreeRootId, request.SearchText);
+				// 2026-07-25 scalability-follow-up plan §2.1: ownership/subtree/search/paging are the
+				// port's own query now, not an in-memory filter over every unfinished leaf in the
+				// installation -- AwaitingProgressCalculator receives only the resulting page.
+				var filter = new AwaitingProgressQueryFilter {
+					Ownership = request.Ownership,
+					SubtreeRootId = request.SubtreeRootId,
+					SearchText = request.SearchText,
+					Offset = request.Offset,
+					Limit = limit,
+				};
+				var inputs = await _awaitingProgressQueryPort.GetAwaitingProgressInputsAsync(filter, cancellationToken).ConfigureAwait(false);
 
-				// Fresh-eyes review §2.8: bound the page before cost enrichment, not after -- the
-				// calculator's own ordering is preserved, only the slice offered to the caller changes.
-				var page = entries.Skip(request.Offset).Take(limit);
+				var entries = AwaitingProgressCalculator.GetAwaitingProgress(inputs.NodesById, inputs.FactsById, inputs.Prerequisites);
 
-				return await EnrichAwaitingProgressWithCostAsync(request.Context, [.. page], cancellationToken).ConfigureAwait(false);
+				return await EnrichAwaitingProgressWithCostAsync(request.Context, entries, cancellationToken).ConfigureAwait(false);
 			});
 
 	private async Task<EquatableArray<JobNodeSummaryResult>> EnrichSummariesWithCostAsync(

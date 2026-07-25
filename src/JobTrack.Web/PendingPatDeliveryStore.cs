@@ -12,7 +12,9 @@ using NodaTime;
 ///     mint another live credential. The GET consumes the slot exactly once, scoped to the
 ///     originally reserving actor. Nothing here is ever logged. An unpublished reservation (the
 ///     process crashes between the database commit and <see cref="Publish" />) simply expires
-///     unconsumed -- that window is accepted, not compensated for.
+///     unconsumed -- that window is accepted, not compensated for. In-process store: under 2+
+///     instances the issuing redirect can land on a different instance and miss the slot -- see
+///     docs/operations/production-deployment.md's multi-instance in-process-state table.
 /// </summary>
 public sealed class PendingPatDeliveryStore : IDisposable
 {

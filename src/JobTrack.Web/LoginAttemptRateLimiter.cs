@@ -2,6 +2,11 @@ namespace JobTrack.Web;
 
 using System.Collections.Concurrent;
 
+/// <summary>
+///     In-process store: under 2+ instances the configured limit effectively multiplies, since each
+///     instance counts attempts independently -- see
+///     docs/operations/production-deployment.md's multi-instance in-process-state table.
+/// </summary>
 public sealed class LoginAttemptRateLimiter
 {
 	private const int DefaultBackstopPermitMultiplier = 20;

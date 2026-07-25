@@ -88,6 +88,59 @@ $$
     WHERE a.owner_user_id = p_actor_id;
 $$ LANGUAGE sql STABLE;
 
+-- For each requested root, its complete descendant subtree (root included),
+-- each row carrying its own parent_id, owner_user_id, and leaf achievement --
+-- exactly the facts CostQueryAssembly needs, scoped to the requested subtree
+-- rather than the whole job_node table (2026-07-24 code-review-scalability-
+-- remediation-plan §2.2). origin_root_id lets a bulk request with several
+-- roots at once distinguish which requested root(s) actually exist -- a root
+-- id absent from job_node contributes no seed row and so never appears as an
+-- origin_root_id. DISTINCT because overlapping requested subtrees (one root
+-- an ancestor of another) legitimately revisit the same node from multiple
+-- origins.
+CREATE FUNCTION job_node_subtrees(p_root_ids bigint[])
+RETURNS TABLE(origin_root_id bigint, id bigint, parent_id bigint, owner_user_id bigint, achievement_id smallint) AS
+$$
+    WITH RECURSIVE subtree(origin_root_id, id) AS (
+        SELECT jn.id, jn.id
+        FROM job_node jn
+        WHERE jn.id = ANY(p_root_ids)
+        UNION ALL
+        SELECT s.origin_root_id, jn.id
+        FROM job_node jn
+        JOIN subtree s ON jn.parent_id = s.id
+    )
+    SELECT DISTINCT s.origin_root_id, s.id, jn.parent_id, jn.owner_user_id, lw.achievement_id
+    FROM subtree s
+    JOIN job_node jn ON jn.id = s.id
+    LEFT JOIN leaf_work lw ON lw.job_node_id = s.id;
+$$ LANGUAGE sql STABLE;
+
+-- Every requested node's own ancestor chain up to the root (each node
+-- included), each row carrying id/parent_id/owner_user_id. Complements
+-- job_node_subtrees above: a cost read's contributing workers can have
+-- sessions on leaves anywhere in the tree, not only inside the requested
+-- subtree (ADR 0017's elevated read scope for a correct concurrency
+-- divisor), and RateResolver's nearest-ancestor-override walk needs every
+-- such leaf's own path to the root, plus the requested root's own path
+-- above itself (a rate override can be declared on an ancestor of the
+-- requested subtree). DISTINCT because multiple requested leaves commonly
+-- share the same upper ancestors.
+CREATE FUNCTION job_node_ancestor_chains(p_leaf_ids bigint[])
+RETURNS TABLE(id bigint, parent_id bigint, owner_user_id bigint) AS
+$$
+    WITH RECURSIVE ancestors(id, parent_id, owner_user_id) AS (
+        SELECT jn.id, jn.parent_id, jn.owner_user_id
+        FROM job_node jn
+        WHERE jn.id = ANY(p_leaf_ids)
+        UNION ALL
+        SELECT jn.id, jn.parent_id, jn.owner_user_id
+        FROM job_node jn
+        JOIN ancestors a ON jn.id = a.parent_id
+    )
+    SELECT DISTINCT id, parent_id, owner_user_id FROM ancestors;
+$$ LANGUAGE sql STABLE;
+
 -- Readiness (spec §6): p_node_id is ready iff every prerequisite declared
 -- directly on it or inherited from any ancestor has a succeeded required
 -- job.

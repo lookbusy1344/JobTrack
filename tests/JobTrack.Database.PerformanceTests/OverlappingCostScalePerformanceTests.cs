@@ -22,6 +22,14 @@ using Xunit.Abstractions;
 public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 {
 	private const int ScaleQueryHierarchyNodeLimit = 50_000;
+
+	// 2026-07-25 scalability-follow-up plan §2.6: measured 30,000 trace segments for the heaviest
+	// realistic fixture this codebase seeds (one worker, 5,000 sessions, 6-deep staircase) -- 60% of
+	// CostQueries.MaxCostTraceSegments's hard cap (50,000). That is close enough to be worth watching,
+	// but does not exceed the cap, so no bounded aggregate representation is warranted yet (the plan's
+	// own trigger for that is exceeding the response limit, not merely approaching it). This ceiling
+	// guards against silent regression with headroom over the measured figure.
+	private const int HeavyWorkerTraceSegmentCeiling = 35_000;
 	private static readonly TimeSpan LeafCostBudget = TimeSpan.FromMilliseconds(150);
 	private static readonly TimeSpan BranchCostBudget = TimeSpan.FromSeconds(2);
 	private static readonly DateTimeOffset BaseInstant = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -83,8 +91,7 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 
 		// DB-materialization vs pure-engine breakdown (plan §6 step 4), over the same branch query.
 		var portStopwatch = Stopwatch.StartNew();
-		var inputs = await port.GetCostInputsAsync(
-			new(seed.OwnerActorId), new(seed.OneBranchId), asOf, ScaleQueryHierarchyNodeLimit);
+		var inputs = await port.GetCostInputsAsync(new(seed.OneBranchId), asOf, ScaleQueryHierarchyNodeLimit);
 		portStopwatch.Stop();
 
 		var engineStopwatch = Stopwatch.StartNew();
@@ -134,6 +141,20 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		output.WriteLine(
 			$"Heavy worker (5,000 sessions) hierarchy totals: {stopwatch.Elapsed.TotalMilliseconds:F1} ms, nodes={result.ExactCosts.Count}");
 		result.ExactCosts.Should().NotBeEmpty();
+
+		// 2026-07-25 scalability-follow-up plan §2.6: measure allocation/trace cardinality
+		// independently -- one allocation per active session per boundary is the partitioner's
+		// intrinsic worst case for this trace model, and this is the heaviest realistic fixture this
+		// codebase seeds. Reported and bounded against the existing hard validation ceiling
+		// (CostQueries.MaxCostTraceSegments) with real headroom, not budget-asserted against a tighter
+		// number -- there is no separate performance-budgets.md row for this deliberately unrealistic
+		// worst case (plan §7), matching this test's own sibling assertion above.
+		var detailsResult = await costQueries.GetCostDetailsAsync(
+			new() { Context = context, NodeId = new(seed.HeavyWorkerBranchId!.Value), AsOf = asOf });
+		output.WriteLine($"Heavy worker (5,000 sessions) cost details trace: {detailsResult.Trace.Count} segments");
+		detailsResult.Trace.Count.Should().BeLessThan(
+			HeavyWorkerTraceSegmentCeiling,
+			"a single heavy-worker branch's trace must stay well clear of the hard MaxCostTraceSegments validation ceiling");
 	}
 
 	/// <summary>
@@ -229,8 +250,7 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 
 	private async Task<NpgsqlConnection> OpenDeployedConnectionAsync()
 	{
-		var connection = new NpgsqlConnection(database.ConnectionString);
-		await connection.OpenAsync();
+		var connection = await PerformanceScaleGenerator.OpenConnectionForSeedingAsync(database.ConnectionString);
 
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.PostgreSql));
 		var deployer = new SchemaDeployer(

@@ -18,7 +18,8 @@
 <div class="jt-page-head">
 	<h1>Work sessions</h1>
 	@if (workPage is not null && Model.CurrentNode is not null) {
-		<h2 class="jt-preserve-whitespace"><a asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></h2>
+		<h2 class="jt-preserve-whitespace"><a asp-page="/Jobs/Browse"
+		                                      asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></h2>
 	}
 </div>
 

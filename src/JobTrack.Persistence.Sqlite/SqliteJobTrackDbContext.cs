@@ -63,6 +63,7 @@ internal sealed class SqliteJobTrackDbContext : DbContext
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		JobTrackModelConfiguration.Configure(modelBuilder);
+		SqliteTextSearchFunctions.Configure(modelBuilder);
 
 		_ = modelBuilder.Entity<AppUserEntity>().Property(e => e.DefaultHourlyRate).HasConversion(NullableHourlyRateConverter);
 

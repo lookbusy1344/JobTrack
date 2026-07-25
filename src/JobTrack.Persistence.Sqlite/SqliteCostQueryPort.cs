@@ -1,5 +1,6 @@
 namespace JobTrack.Persistence.Sqlite;
 
+using System.Data;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -8,6 +9,7 @@ using Domain.Hierarchy;
 using Domain.Intervals;
 using Domain.Rates;
 using Domain.Schedules;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
@@ -17,15 +19,16 @@ using Shared.Entities;
 /// <summary>
 ///     SQLite implementation of <see cref="ICostQueryPort" /> (impl plan §7.3/§7.4 slice 10: calculate
 ///     cost details and hierarchy totals). One <see cref="SqliteJobTrackDbContext" /> per call,
-///     read-only throughout. Materializes the whole <c>job_node</c> tree and every worker's
-///     database-wide sessions, schedules, exceptions, overrides, and rates -- the internal elevated
-///     read scope ADR 0017 requires for a correct concurrency divisor -- leaving every authorization
-///     decision and the actual cost calculation to <see cref="CostQueries" /> and the pure domain engine.
-///     Schedule expansion (<see cref="ScheduleExpander" />) and exception resolution (
-///     <see
-///         cref="ScheduleExceptionResolver" />
-///     ) are explicitly domain, not schema-layer, concerns, so this
-///     port calls them itself over the raw historical schedule rows.
+///     read-only throughout. Materializes only the requested subtree(s) and each contributing worker's
+///     sessions/schedules/exceptions/overrides/rates bounded to the costed window (2026-07-24
+///     code-review-scalability-remediation-plan §2.2) -- never the whole <c>job_node</c> table -- while
+///     still honoring ADR 0017's elevated read scope (a contributing worker's sessions can be on any
+///     leaf, not only the requested subtree, for a correct concurrency divisor) by extending the loaded
+///     node/owner maps with exactly the ancestor chains that scope needs (<see cref="CostQueryAssembly.ExtendAncestryAsync" />).
+///     Leaves every authorization decision and the actual cost calculation to <see cref="CostQueries" />
+///     and the pure domain engine. Schedule expansion (<see cref="ScheduleExpander" />) and exception
+///     resolution (<see cref="ScheduleExceptionResolver" />) are explicitly domain, not schema-layer,
+///     concerns, so this port calls them itself over the raw historical schedule rows.
 /// </summary>
 internal sealed class SqliteCostQueryPort : ICostQueryPort
 {
@@ -47,54 +50,42 @@ internal sealed class SqliteCostQueryPort : ICostQueryPort
 		this.interceptors = interceptors;
 
 	/// <inheritdoc />
-	public async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		AppUserId actorId, CancellationToken cancellationToken = default)
+	public async Task<CostAccessInputs> GetCostAccessInputsAsync(
+		AppUserId actorId, JobNodeId nodeId, CancellationToken cancellationToken = default)
 	{
 		await using var context = CreateContext();
-		return await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		await using var transaction = await context.Database.BeginTransactionAsync(
+			IsolationLevel.RepeatableRead, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
+		var ownerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken).ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		return new() { ActorRoles = actorRoles, AncestorOwnerIds = EquatableArray.CopyOf(ownerIds.Select(id => new AppUserId(id))) };
 	}
 
 	/// <inheritdoc />
 	public async Task<CostQueryResult> GetCostInputsAsync(
-		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default)
+		JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default)
 	{
 		await using var context = CreateContext();
 		await using var transaction = await SqliteCostQuerySnapshot.BeginAsync(context, cancellationToken).ConfigureAwait(false);
 
-		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
-
-		var (nodesById, _) = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
-		if (!nodesById.ContainsKey(nodeId)) {
+		var subtree = await CostQueryAssembly.LoadSubtreeAsync(context, [nodeId], cancellationToken).ConfigureAwait(false);
+		if (!subtree.ExistingRootIds.Contains(nodeId)) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 		}
 
-		var subtreeNodeCount = CostQueryAssembly.CountSubtreeNodes([nodeId], nodesById);
-		if (subtreeNodeCount > maxHierarchyNodes) {
+		if (subtree.NodesById.Count > maxHierarchyNodes) {
 			throw new ArgumentOutOfRangeException(
 				nameof(maxHierarchyNodes),
-				subtreeNodeCount,
-				$"This node's subtree has {subtreeNodeCount} nodes, exceeding the {maxHierarchyNodes}-node maximum. Query a smaller subtree.");
+				subtree.NodesById.Count,
+				$"This node's subtree has {subtree.NodesById.Count} nodes, exceeding the {maxHierarchyNodes}-node maximum. Query a smaller subtree.");
 		}
 
-		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAsync(
-			context, [nodeId], nodesById, asOf, cancellationToken).ConfigureAwait(false);
+		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAndExtendAncestryAsync(
+			context, subtree, asOf, cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-		return new() {
-			ActorRoles = actorRoles,
-			NodesById = EquatableDictionaryFactory.CopyOf(nodesById),
-			Bounds = bounds,
-			Workers = EquatableArray.CopyOf(workers),
-		};
-	}
-
-	/// <inheritdoc />
-	public async Task<EquatableArray<AppUserId>> GetAncestorOwnerIdsAsync(
-		JobNodeId nodeId, CancellationToken cancellationToken = default)
-	{
-		await using var context = CreateContext();
-		var ownerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken).ConfigureAwait(false);
-		return EquatableArray.CopyOf(ownerIds.Select(id => new AppUserId(id)));
+		return new() { NodesById = EquatableDictionaryFactory.CopyOf(subtree.NodesById), Bounds = bounds, Workers = EquatableArray.CopyOf(workers) };
 	}
 
 	/// <inheritdoc />
@@ -106,25 +97,23 @@ internal sealed class SqliteCostQueryPort : ICostQueryPort
 
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
-		var (nodesById, ownersById) = await CostQueryAssembly.LoadNodesByIdAsync(context, cancellationToken).ConfigureAwait(false);
-		var existingNodeIds = nodeIds.Where(nodesById.ContainsKey).ToArray();
+		var subtree = await CostQueryAssembly.LoadSubtreeAsync(context, nodeIds, cancellationToken).ConfigureAwait(false);
 
-		var unionNodeCount = CostQueryAssembly.CountSubtreeNodes(existingNodeIds, nodesById);
-		if (unionNodeCount > maxHierarchyNodes) {
+		if (subtree.NodesById.Count > maxHierarchyNodes) {
 			throw new ArgumentOutOfRangeException(
 				nameof(maxHierarchyNodes),
-				unionNodeCount,
-				$"These nodes' combined subtrees have {unionNodeCount} nodes, exceeding the {maxHierarchyNodes}-node maximum.");
+				subtree.NodesById.Count,
+				$"These nodes' combined subtrees have {subtree.NodesById.Count} nodes, exceeding the {maxHierarchyNodes}-node maximum.");
 		}
 
-		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAsync(
-			context, existingNodeIds, nodesById, asOf, cancellationToken).ConfigureAwait(false);
+		var (bounds, workers) = await CostQueryAssembly.LoadWorkersAndExtendAncestryAsync(
+			context, subtree, asOf, cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			ActorRoles = actorRoles,
-			NodesById = EquatableDictionaryFactory.CopyOf(nodesById),
-			OwnerUserIdsById = EquatableDictionaryFactory.CopyOf(ownersById),
+			NodesById = EquatableDictionaryFactory.CopyOf(subtree.NodesById),
+			OwnerUserIdsById = EquatableDictionaryFactory.CopyOf(subtree.OwnersById),
 			Bounds = bounds,
 			Workers = EquatableArray.CopyOf(workers),
 		};
@@ -162,153 +151,261 @@ internal sealed class SqliteCostQueryPort : ICostQueryPort
 /// </summary>
 internal static class CostQueryAssembly
 {
-	public static async Task<(Dictionary<JobNodeId, HierarchyNode> NodesById, Dictionary<JobNodeId, AppUserId?> OwnersById)> LoadNodesByIdAsync(
-		DbContext context, CancellationToken cancellationToken)
+	/// <summary>
+	///     Loads exactly <paramref name="rootIds" />' own subtrees (2026-07-24
+	///     code-review-scalability-remediation-plan §2.2 step 2) through a set-based parameterized
+	///     recursive query, rather than the whole <c>job_node</c> table -- SQLite has no composable
+	///     stored set-returning function, so the recursive query stays here as a minimal parameterized
+	///     statement rather than leaking into the shared persistence layer (mirroring
+	///     <c>SqliteControlledLeafQuery</c>'s own established pattern). A requested root absent from
+	///     <see cref="SubtreeLoad.ExistingRootIds" /> does not exist.
+	/// </summary>
+	public static async Task<SubtreeLoad> LoadSubtreeAsync(
+		DbContext context, IReadOnlyCollection<JobNodeId> rootIds, CancellationToken cancellationToken)
 	{
-		var nodes = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Select(n => new { n.Id, n.ParentId, n.OwnerUserId })
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
-
-		var achievements = await context.Set<LeafWorkEntity>().AsNoTracking()
-			.ToDictionaryAsync(lw => lw.JobNodeId, lw => lw.Achievement, cancellationToken).ConfigureAwait(false);
-
-		var childrenByParent = nodes
-			.Where(n => n.ParentId is not null)
-			.GroupBy(n => n.ParentId!.Value)
-			.ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(n => n.Id)));
-
-		var nodesById = nodes.ToDictionary(
-			n => n.Id,
-			n => new HierarchyNode(
-				n.Id,
-				n.ParentId,
-				childrenByParent.TryGetValue(n.Id, out var children) ? children : [],
-				achievements.TryGetValue(n.Id, out var achievement) ? achievement : null));
-		var ownersById = nodes.ToDictionary(n => n.Id, n => n.OwnerUserId);
-
-		return (nodesById, ownersById);
-	}
-
-	public static async Task<(WorkInterval Bounds, List<WorkerCostInputs> Workers)> LoadWorkersAsync(
-		DbContext context, IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
-		Instant asOf, CancellationToken cancellationToken)
-	{
-		var requestedNodeIds = GetSubtreeIds(rootIds, nodesById);
-		var requestedSessionStarts = await context.Set<WorkSessionEntity>().AsNoTracking()
-			.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
-			.Select(s => s.StartedAt)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
-		if (requestedSessionStarts.Count == 0) {
-			return (new(Instant.MinValue, asOf), []);
+		var rootIdValues = rootIds.Select(id => id.Value).ToList();
+		if (rootIdValues.Count == 0) {
+			return new([], [], []);
 		}
 
-		var bounds = new WorkInterval(requestedSessionStarts.Min(), asOf);
-		var workerIds = await context.Set<WorkSessionEntity>().AsNoTracking()
+		var rootIdParameters = rootIdValues.Select((_, index) => $"@rootId{index}").ToArray();
+		var sql = $"""
+				   WITH RECURSIVE subtree(origin_root_id, id) AS (
+				       SELECT id, id FROM job_node WHERE id IN ({string.Join(',', rootIdParameters)})
+				       UNION ALL
+				       SELECT s.origin_root_id, jn.id
+				       FROM job_node jn
+				       JOIN subtree s ON jn.parent_id = s.id
+				   )
+				   SELECT DISTINCT s.origin_root_id AS "OriginRootId", s.id AS "Id", jn.parent_id AS "ParentId",
+				          jn.owner_user_id AS "OwnerUserId", lw.achievement_id AS "AchievementId"
+				   FROM subtree s
+				   JOIN job_node jn ON jn.id = s.id
+				   LEFT JOIN leaf_work lw ON lw.job_node_id = s.id
+				   """;
+		var parameters = rootIdValues.Select((rootId, index) => (object)new SqliteParameter(rootIdParameters[index], rootId)).ToArray();
+		var rows = await context.Database.SqlQueryRaw<SubtreeRow>(sql, parameters)
+			.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+		var existingRootIds = new HashSet<JobNodeId>(
+			rows.Where(row => row.Id == row.OriginRootId).Select(row => new JobNodeId(row.Id)));
+
+		var distinctRows = rows.GroupBy(row => row.Id).Select(group => group.First()).ToList();
+		var childrenByParent = distinctRows
+			.Where(row => row.ParentId is not null)
+			.GroupBy(row => row.ParentId!.Value)
+			.ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(row => new JobNodeId(row.Id))));
+
+		var nodesById = distinctRows.ToDictionary(
+			row => new JobNodeId(row.Id),
+			row => new HierarchyNode(
+				new(row.Id),
+				row.ParentId is long parentId ? new JobNodeId(parentId) : null,
+				childrenByParent.TryGetValue(row.Id, out var children) ? children : [],
+				row.AchievementId is short achievementId ? (Achievement)achievementId : null));
+		var ownersById = distinctRows.ToDictionary(
+			row => new JobNodeId(row.Id), row => row.OwnerUserId is long ownerUserId ? new AppUserId(ownerUserId) : (AppUserId?)null);
+
+		return new(nodesById, ownersById, existingRootIds);
+	}
+
+	/// <summary>
+	///     Loads every contributing worker's cost inputs for <paramref name="subtree" />'s requested
+	///     node set, then extends <paramref name="subtree" />'s node/owner maps in place with every
+	///     ancestor-chain node needed above it: each requested root's own path to the true root (a rate
+	///     override can be declared above the requested subtree; ADR 0040's owner carve-out walk needs
+	///     it too) and, for any contributing session on a leaf outside the requested subtree (ADR 0017's
+	///     elevated read scope), that leaf's own path to the root -- <see cref="Domain.Rates.RateResolver" />
+	///     walks every session's own node upward looking for the nearest override.
+	/// </summary>
+	public static async Task<(WorkInterval Bounds, List<WorkerCostInputs> Workers)> LoadWorkersAndExtendAncestryAsync(
+		DbContext context, SubtreeLoad subtree, Instant asOf, CancellationToken cancellationToken)
+	{
+		var requestedNodeIds = subtree.NodesById.Keys.ToArray();
+		var earliestRequestedSessionStart = await context.Set<WorkSessionEntity>().AsNoTracking()
 			.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
-			.Select(s => s.WorkedByUserId)
-			.Distinct()
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
-		var sessions = await context.Set<WorkSessionEntity>().AsNoTracking()
-			.Where(s => workerIds.Contains(s.WorkedByUserId)
-						&& s.StartedAt < bounds.End && (s.FinishedAt == null || s.FinishedAt > bounds.Start))
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+			.Select(s => (Instant?)s.StartedAt)
+			.MinAsync(cancellationToken).ConfigureAwait(false);
 
-		var scheduleVersions = await context.Set<ScheduleVersionEntity>().AsNoTracking()
-			.Where(v => workerIds.Contains(v.UserId)).ToListAsync(cancellationToken).ConfigureAwait(false);
-		var scheduleVersionIds = scheduleVersions.Select(v => v.Id).ToList();
-		var scheduleIntervals = await context.Set<ScheduleIntervalEntity>().AsNoTracking()
-			.Where(i => scheduleVersionIds.Contains(i.ScheduleVersionId)).ToListAsync(cancellationToken).ConfigureAwait(false);
-		var exceptions = await context.Set<ScheduleExceptionEntity>().AsNoTracking()
-			.Where(e => workerIds.Contains(e.UserId) && e.StartedAt < bounds.End && e.FinishedAt > bounds.Start)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
-		var nodeOverrides = await context.Set<NodeRateOverrideEntity>().AsNoTracking()
-			.Where(o => workerIds.Contains(o.UserId) && o.EffectiveStart < bounds.End
-													 && (o.EffectiveEnd == null || o.EffectiveEnd > bounds.Start))
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
-		var userCostRates = await context.Set<UserCostRateEntity>().AsNoTracking()
-			.Where(r => workerIds.Contains(r.UserId) && r.EffectiveStart < bounds.End
-													 && (r.EffectiveEnd == null || r.EffectiveEnd > bounds.Start))
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
-		var appUsersById = await context.Set<AppUserEntity>().AsNoTracking()
-			.Where(u => workerIds.Contains(u.Id))
-			.ToDictionaryAsync(u => u.Id, cancellationToken).ConfigureAwait(false);
-
-		var intervalsByVersion = scheduleIntervals.GroupBy(i => i.ScheduleVersionId).ToDictionary(group => group.Key, group => group.ToList());
-
+		var bounds = new WorkInterval(Instant.MinValue, asOf);
 		var workers = new List<WorkerCostInputs>();
-		foreach (var workerId in workerIds) {
-			var workerSessions = sessions
-				.Where(s => s.WorkedByUserId == workerId)
-				.Select(s => new CostableSession(s.Id, s.LeafWorkId, new(s.StartedAt, ClipEnd(s.FinishedAt, asOf))))
-				.ToArray();
+		var workerIds = new List<AppUserId>();
+		if (earliestRequestedSessionStart is Instant earliestStart) {
+			bounds = new(earliestStart, asOf);
+			workerIds = await context.Set<WorkSessionEntity>().AsNoTracking()
+				.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
+				.Select(s => s.WorkedByUserId)
+				.Distinct()
+				.ToListAsync(cancellationToken).ConfigureAwait(false);
+			var sessions = await context.Set<WorkSessionEntity>().AsNoTracking()
+				.Where(s => workerIds.Contains(s.WorkedByUserId)
+							&& s.StartedAt < bounds.End && (s.FinishedAt == null || s.FinishedAt > bounds.Start))
+				.ToListAsync(cancellationToken).ConfigureAwait(false);
 
-			var expandedScheduleIntervals = new List<WorkInterval>();
-			foreach (var version in scheduleVersions.Where(v => v.UserId == workerId)) {
-				var weeklyIntervals = intervalsByVersion.GetValueOrDefault(version.Id, [])
-					.Select(i => new WeeklyInterval(i.DayOfWeek, i.StartTime, i.EndTime));
-				var scheduleVersion = new ScheduleVersion(
-					StoredTimeZoneResolver.Resolve(version.IanaTimeZone, $"Schedule version {version.Id}"),
-					version.EffectiveStart, version.EffectiveEnd,
-					EquatableArray.CopyOf(weeklyIntervals));
-				expandedScheduleIntervals.AddRange(ScheduleExpander.Expand(scheduleVersion, bounds));
+			// 2026-07-25 scalability-follow-up plan §2.5: a schedule version's own EffectiveStart/End
+			// are civil LocalDates in its own IanaTimeZone, not directly comparable to the Instant-based
+			// bounds -- but any zone's offset is under 24h, so a one-day-widened UTC-date window (the
+			// same slack ScheduleExpander.Expand already tolerates for midnight-crossing/DST shifts) is a
+			// safe, portable, provider-agnostic prefilter: it cannot exclude a version that could
+			// actually produce a working interval inside bounds, since ScheduleExpander clips exactly
+			// per-zone downstream regardless.
+			var widenedStart = bounds.Start.InZone(DateTimeZone.Utc).Date.PlusDays(-1);
+			var widenedEnd = bounds.End.InZone(DateTimeZone.Utc).Date.PlusDays(1);
+			var scheduleVersions = await context.Set<ScheduleVersionEntity>().AsNoTracking()
+				.Where(v => workerIds.Contains(v.UserId) && v.EffectiveStart < widenedEnd
+														 && (v.EffectiveEnd == null || v.EffectiveEnd > widenedStart))
+				.ToListAsync(cancellationToken).ConfigureAwait(false);
+			var scheduleVersionIds = scheduleVersions.Select(v => v.Id).ToList();
+			var scheduleIntervals = await context.Set<ScheduleIntervalEntity>().AsNoTracking()
+				.Where(i => scheduleVersionIds.Contains(i.ScheduleVersionId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+			var exceptions = await context.Set<ScheduleExceptionEntity>().AsNoTracking()
+				.Where(e => workerIds.Contains(e.UserId) && e.StartedAt < bounds.End && e.FinishedAt > bounds.Start)
+				.ToListAsync(cancellationToken).ConfigureAwait(false);
+			var userCostRates = await context.Set<UserCostRateEntity>().AsNoTracking()
+				.Where(r => workerIds.Contains(r.UserId) && r.EffectiveStart < bounds.End
+														 && (r.EffectiveEnd == null || r.EffectiveEnd > bounds.Start))
+				.ToListAsync(cancellationToken).ConfigureAwait(false);
+			var appUsersById = await context.Set<AppUserEntity>().AsNoTracking()
+				.Where(u => workerIds.Contains(u.Id))
+				.ToDictionaryAsync(u => u.Id, cancellationToken).ConfigureAwait(false);
+
+			var intervalsByVersion = scheduleIntervals.GroupBy(i => i.ScheduleVersionId).ToDictionary(group => group.Key, group => group.ToList());
+			var sessionsByWorker = sessions.ToLookup(session => session.WorkedByUserId);
+			var versionsByWorker = scheduleVersions.ToLookup(version => version.UserId);
+			var exceptionsByWorker = exceptions.ToLookup(exception => exception.UserId);
+			var ratesByWorker = userCostRates.ToLookup(rate => rate.UserId);
+
+			foreach (var workerId in workerIds) {
+				var workerSessions = sessionsByWorker[workerId]
+					.Select(s => new CostableSession(s.Id, s.LeafWorkId, new(s.StartedAt, SessionEndClipping.ClipEnd(s.FinishedAt, asOf))))
+					.ToArray();
+
+				var expandedScheduleIntervals = new List<WorkInterval>();
+				foreach (var version in versionsByWorker[workerId]) {
+					var weeklyIntervals = intervalsByVersion.GetValueOrDefault(version.Id, [])
+						.Select(i => new WeeklyInterval(i.DayOfWeek, i.StartTime, i.EndTime));
+					var scheduleVersion = new ScheduleVersion(
+						StoredTimeZoneResolver.Resolve(version.IanaTimeZone, $"Schedule version {version.Id}"),
+						version.EffectiveStart, version.EffectiveEnd,
+						EquatableArray.CopyOf(weeklyIntervals));
+					expandedScheduleIntervals.AddRange(ScheduleExpander.Expand(scheduleVersion, bounds));
+				}
+
+				var workerExceptions = exceptionsByWorker[workerId]
+					.Select(e => new ScheduleExceptionEntry(
+						(ScheduleExceptionEffect)e.ScheduleExceptionEffectId, new(e.StartedAt, e.FinishedAt), e.RateOverride))
+					.ToArray();
+
+				var normalizedScheduled = IntervalAlgebra.Normalize(expandedScheduleIntervals);
+				var effectiveWorkingIntervals = ScheduleExceptionResolver.Apply(expandedScheduleIntervals, workerExceptions);
+
+				var workerUserCostRates = ratesByWorker[workerId]
+					.Select(r => new UserCostRate(r.Rate, r.EffectiveStart, r.EffectiveEnd))
+					.ToArray();
+
+				// NodeOverrides is filled in below, once ExtendAncestryAsync has determined the final
+				// node set (2026-07-25 scalability-follow-up plan §2.5: an override on a node outside
+				// that set can never be consulted by RateResolver, which only walks a session's own node
+				// and its ancestors -- see NodeOverrides' own remarks).
+				workers.Add(new() {
+					Sessions = EquatableArray.CopyOf(workerSessions),
+					EffectiveWorkingIntervals = EquatableArray.CopyOf(effectiveWorkingIntervals),
+					ScheduledWorkingIntervals = EquatableArray.CopyOf(normalizedScheduled),
+					Exceptions = EquatableArray.CopyOf(workerExceptions),
+					NodeOverrides = [],
+					UserCostRates = EquatableArray.CopyOf(workerUserCostRates),
+					UserDefaultRate = appUsersById.TryGetValue(workerId, out var appUser) ? appUser.DefaultHourlyRate : null,
+				});
 			}
+		}
 
-			var workerExceptions = exceptions
-				.Where(e => e.UserId == workerId)
-				.Select(e => new ScheduleExceptionEntry(
-					(ScheduleExceptionEffect)e.ScheduleExceptionEffectId, new(e.StartedAt, e.FinishedAt), e.RateOverride))
-				.ToArray();
+		await ExtendAncestryAsync(context, subtree, workers, cancellationToken).ConfigureAwait(false);
 
-			var normalizedScheduled = IntervalAlgebra.Normalize(expandedScheduleIntervals);
-			var effectiveWorkingIntervals = ScheduleExceptionResolver.Apply(expandedScheduleIntervals, workerExceptions);
+		if (workers.Count > 0) {
+			// Only nodes actually reachable from a session's own ancestor walk (subtree.NodesById, now
+			// fully extended) can ever be consulted by RateResolver, so this is safe to filter by node
+			// id as well as by time window and worker, unlike UserCostRates (user-wide, not node-scoped).
+			var finalNodeIds = subtree.NodesById.Keys.ToArray();
+			var nodeOverrides = await context.Set<NodeRateOverrideEntity>().AsNoTracking()
+				.Where(o => workerIds.Contains(o.UserId) && finalNodeIds.Contains(o.NodeId)
+														 && o.EffectiveStart < bounds.End &&
+														 (o.EffectiveEnd == null || o.EffectiveEnd > bounds.Start))
+				.ToListAsync(cancellationToken).ConfigureAwait(false);
+			var overridesByWorker = nodeOverrides.ToLookup(overrideEntry => overrideEntry.UserId);
 
-			var workerNodeOverrides = nodeOverrides
-				.Where(o => o.UserId == workerId)
-				.Select(o => new NodeRateOverride(o.NodeId, o.Rate, o.EffectiveStart, o.EffectiveEnd))
-				.ToArray();
-
-			var workerUserCostRates = userCostRates
-				.Where(r => r.UserId == workerId)
-				.Select(r => new UserCostRate(r.Rate, r.EffectiveStart, r.EffectiveEnd))
-				.ToArray();
-
-			workers.Add(new() {
-				Sessions = EquatableArray.CopyOf(workerSessions),
-				EffectiveWorkingIntervals = EquatableArray.CopyOf(effectiveWorkingIntervals),
-				ScheduledWorkingIntervals = EquatableArray.CopyOf(normalizedScheduled),
-				Exceptions = EquatableArray.CopyOf(workerExceptions),
-				NodeOverrides = EquatableArray.CopyOf(workerNodeOverrides),
-				UserCostRates = EquatableArray.CopyOf(workerUserCostRates),
-				UserDefaultRate = appUsersById.TryGetValue(workerId, out var appUser) ? appUser.DefaultHourlyRate : null,
-			});
+			for (var index = 0; index < workers.Count; index++) {
+				var workerNodeOverrides = overridesByWorker[workerIds[index]]
+					.Select(o => new NodeRateOverride(o.NodeId, o.Rate, o.EffectiveStart, o.EffectiveEnd))
+					.ToArray();
+				workers[index] = workers[index] with { NodeOverrides = EquatableArray.CopyOf(workerNodeOverrides) };
+			}
 		}
 
 		return (bounds, workers);
 	}
 
-	public static int CountSubtreeNodes(IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById) =>
-		GetSubtreeIds(rootIds, nodesById).Count;
-
-	private static List<JobNodeId> GetSubtreeIds(
-		IReadOnlyCollection<JobNodeId> rootIds, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
+	private static async Task ExtendAncestryAsync(
+		DbContext context, SubtreeLoad subtree, IReadOnlyList<WorkerCostInputs> workers, CancellationToken cancellationToken)
 	{
-		var result = new List<JobNodeId>();
-		var seen = new HashSet<JobNodeId>();
-		var pending = new Stack<JobNodeId>(rootIds);
-		while (pending.TryPop(out var current)) {
-			if (!seen.Add(current)) {
-				continue;
-			}
-
-			result.Add(current);
-			foreach (var childId in nodesById[current].ChildIds) {
-				pending.Push(childId);
+		var missingIds = new HashSet<JobNodeId>(subtree.ExistingRootIds);
+		foreach (var session in workers.SelectMany(worker => worker.Sessions)) {
+			if (!subtree.NodesById.ContainsKey(session.NodeId)) {
+				_ = missingIds.Add(session.NodeId);
 			}
 		}
 
-		return result;
-	}
+		if (missingIds.Count == 0) {
+			return;
+		}
 
-	private static Instant ClipEnd(Instant? finishedAt, Instant asOf) =>
-		finishedAt.HasValue && finishedAt.Value < asOf ? finishedAt.Value : asOf;
+		var missingIdValues = missingIds.Select(id => id.Value).ToList();
+		var missingIdParameters = missingIdValues.Select((_, index) => $"@leafId{index}").ToArray();
+		var sql = $"""
+				   WITH RECURSIVE ancestors(id, parent_id, owner_user_id) AS (
+				       SELECT id, parent_id, owner_user_id FROM job_node WHERE id IN ({string.Join(',', missingIdParameters)})
+				       UNION ALL
+				       SELECT jn.id, jn.parent_id, jn.owner_user_id
+				       FROM job_node jn
+				       JOIN ancestors a ON jn.id = a.parent_id
+				   )
+				   SELECT DISTINCT id AS "Id", parent_id AS "ParentId", owner_user_id AS "OwnerUserId" FROM ancestors
+				   """;
+		var parameters = missingIdValues.Select((leafId, index) => (object)new SqliteParameter(missingIdParameters[index], leafId)).ToArray();
+		var ancestorRows = await context.Database.SqlQueryRaw<AncestorRow>(sql, parameters)
+			.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+		foreach (var row in ancestorRows) {
+			var id = new JobNodeId(row.Id);
+			if (subtree.NodesById.ContainsKey(id)) {
+				continue;
+			}
+
+			subtree.NodesById[id] = new(id, row.ParentId is long parentId ? new JobNodeId(parentId) : null, [], null);
+			subtree.OwnersById[id] = row.OwnerUserId is long ownerUserId ? new AppUserId(ownerUserId) : null;
+		}
+	}
 }
+
+/// <summary>
+///     <see cref="CostQueryAssembly.LoadSubtreeAsync" />'s materialized result: the requested roots'
+///     own subtrees only, plus which of the requested root ids actually exist. A plain class, not a
+///     record -- <see cref="CostQueryAssembly.ExtendAncestryAsync" /> mutates <see cref="NodesById" />/
+///     <see cref="OwnersById" /> in place, so this deliberately carries no value-equality semantics.
+/// </summary>
+internal sealed class SubtreeLoad(
+	Dictionary<JobNodeId, HierarchyNode> nodesById,
+	Dictionary<JobNodeId, AppUserId?> ownersById,
+	HashSet<JobNodeId> existingRootIds)
+{
+	public Dictionary<JobNodeId, HierarchyNode> NodesById { get; } = nodesById;
+
+	public Dictionary<JobNodeId, AppUserId?> OwnersById { get; } = ownersById;
+
+	public HashSet<JobNodeId> ExistingRootIds { get; } = existingRootIds;
+}
+
+/// <summary>One row of <see cref="CostQueryAssembly.LoadSubtreeAsync" />'s recursive subtree query.</summary>
+internal sealed record SubtreeRow(long OriginRootId, long Id, long? ParentId, long? OwnerUserId, short? AchievementId);
+
+/// <summary>One row of <see cref="CostQueryAssembly.ExtendAncestryAsync" />'s recursive ancestor-chain query.</summary>
+internal sealed record AncestorRow(long Id, long? ParentId, long? OwnerUserId);

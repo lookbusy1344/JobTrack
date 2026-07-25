@@ -34,6 +34,30 @@ public static class CostSegmentPartitioner
 		Partition(sessions, effectiveWorkingIntervals, nodesById, [], nodeOverrides, userCostRates, bounds);
 
 	/// <summary>
+	///     Computes allocations for sessions on <paramref name="includedNodeIds" /> only, while still
+	///     counting every active session in each concurrency divisor, and throws before materializing
+	///     more than <paramref name="maximumAllocationCount" /> allocations.
+	/// </summary>
+	public static IReadOnlyList<SessionSegmentAllocation> PartitionBounded(
+		IReadOnlyCollection<CostableSession> sessions,
+		IReadOnlyCollection<WorkInterval> effectiveWorkingIntervals,
+		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
+		IReadOnlyCollection<NodeRateOverride> nodeOverrides,
+		IReadOnlyCollection<UserCostRate> userCostRates,
+		WorkInterval bounds,
+		IReadOnlySet<JobNodeId> includedNodeIds,
+		int maximumAllocationCount)
+	{
+		ArgumentNullException.ThrowIfNull(includedNodeIds);
+		ArgumentOutOfRangeException.ThrowIfNegative(maximumAllocationCount);
+
+		return PartitionCore(
+			sessions, effectiveWorkingIntervals, nodesById, exceptions, nodeOverrides, userCostRates,
+			bounds, includedNodeIds, maximumAllocationCount);
+	}
+
+	/// <summary>
 	///     Computes allocations while retaining schedule-exception edges that working-set normalization
 	///     may otherwise erase, particularly priced additive exceptions inside normal working time.
 	/// </summary>
@@ -44,7 +68,21 @@ public static class CostSegmentPartitioner
 		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
 		IReadOnlyCollection<NodeRateOverride> nodeOverrides,
 		IReadOnlyCollection<UserCostRate> userCostRates,
-		WorkInterval bounds)
+		WorkInterval bounds) =>
+		PartitionCore(
+			sessions, effectiveWorkingIntervals, nodesById, exceptions, nodeOverrides, userCostRates,
+			bounds, null, int.MaxValue);
+
+	private static List<SessionSegmentAllocation> PartitionCore(
+		IReadOnlyCollection<CostableSession> sessions,
+		IReadOnlyCollection<WorkInterval> effectiveWorkingIntervals,
+		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
+		IReadOnlyCollection<NodeRateOverride> nodeOverrides,
+		IReadOnlyCollection<UserCostRate> userCostRates,
+		WorkInterval bounds,
+		IReadOnlySet<JobNodeId>? includedNodeIds,
+		int maximumAllocationCount)
 	{
 		ValidateNoSameLeafOverlap(sessions);
 		var eligiblePieces = EligiblePieces(sessions, effectiveWorkingIntervals, bounds);
@@ -53,17 +91,49 @@ public static class CostSegmentPartitioner
 		}
 
 		var boundaries = Boundaries(eligiblePieces, nodesById, exceptions, nodeOverrides, userCostRates, bounds);
+		var startingAt = eligiblePieces.Select((piece, index) => (piece, index))
+			.GroupBy(entry => entry.piece.Interval.Start)
+			.ToDictionary(group => group.Key, group => group.Select(entry => entry.index).ToArray());
+		var endingAt = eligiblePieces.Select((piece, index) => (piece, index))
+			.GroupBy(entry => entry.piece.Interval.End)
+			.ToDictionary(group => group.Key, group => group.Select(entry => entry.index).ToArray());
+		var activeIndexes = new SortedSet<int>();
 
 		var allocations = new List<SessionSegmentAllocation>();
 		for (var i = 0; i < boundaries.Count - 1; i++) {
+			if (endingAt.TryGetValue(boundaries[i], out var endingIndexes)) {
+				foreach (var index in endingIndexes) {
+					_ = activeIndexes.Remove(index);
+				}
+			}
+
+			if (startingAt.TryGetValue(boundaries[i], out var startingIndexes)) {
+				foreach (var index in startingIndexes) {
+					_ = activeIndexes.Add(index);
+				}
+			}
+
 			var segment = new WorkInterval(boundaries[i], boundaries[i + 1]);
-			var active = eligiblePieces.Where(piece => IntervalAlgebra.Overlaps(piece.Interval, segment)).ToList();
-			if (active.Count == 0) {
+			if (activeIndexes.Count == 0) {
 				continue;
 			}
 
-			var share = new AllocatedShare(segment.Duration.BclCompatibleTicks, active.Count);
-			allocations.AddRange(active.Select(piece => new SessionSegmentAllocation(segment, piece.Session.SessionId, piece.Session.NodeId, share)));
+			var share = new AllocatedShare(segment.Duration.BclCompatibleTicks, activeIndexes.Count);
+			foreach (var index in activeIndexes) {
+				var piece = eligiblePieces[index];
+				if (includedNodeIds is not null && !includedNodeIds.Contains(piece.Session.NodeId)) {
+					continue;
+				}
+
+				if (allocations.Count >= maximumAllocationCount) {
+					throw new ArgumentOutOfRangeException(
+						nameof(maximumAllocationCount),
+						maximumAllocationCount,
+						$"The cost allocation count exceeds the {maximumAllocationCount}-allocation maximum.");
+				}
+
+				allocations.Add(new(segment, piece.Session.SessionId, piece.Session.NodeId, share));
+			}
 		}
 
 		return allocations;

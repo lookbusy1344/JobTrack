@@ -13,20 +13,25 @@ using NodaTime;
 ///     invisible to the queue. A leaf blocked by an unsatisfied prerequisite (see
 ///     <see cref="ReadinessCalculator" />) stays on the list too, rather than disappearing — someone
 ///     still needs to be aware of it — but carries <see cref="AwaitingProgressEntry.IsReady" /> so the
-///     caller can surface it as blocked instead of actionable. Optionally scoped to one owner and/or
-///     one subtree, ordered by descending <see cref="Priority" /> then ascending deadline
-///     (<see cref="AwaitingProgressNodeFacts.NeededFinish" />, falling back to
-///     <see cref="AwaitingProgressNodeFacts.NeededStart" />), nulls last.
+///     caller can surface it as blocked instead of actionable. Ordered by descending
+///     <see cref="Priority" /> then ascending deadline (<see cref="AwaitingProgressNodeFacts.NeededFinish" />,
+///     falling back to <see cref="AwaitingProgressNodeFacts.NeededStart" />), nulls last.
 /// </summary>
+/// <remarks>
+///     2026-07-25 scalability-follow-up plan §2.1: ownership, subtree-root, search-text, and
+///     offset/limit scoping now happen in <c>IAwaitingProgressQueryPort</c>'s own query (the port
+///     receives an <c>AwaitingProgressQueryFilter</c> and returns only the already-filtered,
+///     already-paged candidate page plus the ancestor/required-job facts readiness needs) — this
+///     calculator is the pure authority for readiness and output mapping only, and must not reapply
+///     any of those request-scoped filters against its own node dictionary, which is deliberately
+///     narrowed to the requested page, not the whole installation's unfinished leaves.
+/// </remarks>
 public static class AwaitingProgressCalculator
 {
 	/// <summary>
-	///     Filters and orders <paramref name="nodesById" /> into the awaiting-progress list. Both
-	///     dictionaries must be keyed by the same complete node set; <paramref name="factsById" /> is
-	///     looked up only for candidate leaves. <paramref name="searchText" />, when non-blank, restricts
-	///     to leaves whose <see cref="AwaitingProgressNodeFacts.Description" /> contains it (case
-	///     insensitive) — unlike <c>IJobQueries.SearchJobNodesAsync</c>, this scopes the dashboard's own
-	///     owner/subtree-filtered candidate set rather than the whole tree.
+	///     Filters and orders a complete hierarchy snapshot into the awaiting-progress list.
+	///     Retained for compatibility with consumers that perform ownership, subtree, and search
+	///     filtering in the functional core.
 	/// </summary>
 	public static EquatableArray<AwaitingProgressEntry> GetAwaitingProgress(
 		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
@@ -38,15 +43,43 @@ public static class AwaitingProgressCalculator
 	{
 		ArgumentNullException.ThrowIfNull(ownership);
 
+		var candidates = nodesById.Values
+			.Where(IsUnfinishedLeaf)
+			.Where(node => ownership.Matches(factsById[node.Id].OwnerUserId))
+			.Where(node => !subtreeRootId.HasValue || IsInSubtree(node.Id, subtreeRootId.Value, nodesById))
+			.Where(node => string.IsNullOrWhiteSpace(searchText)
+						   || factsById[node.Id].Description.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+		return MapCandidates(candidates, nodesById, factsById, prerequisites);
+	}
+
+	/// <summary>
+	///     Maps the already-filtered, already-paged candidate set in <paramref name="nodesById" /> into
+	///     the awaiting-progress list, re-deriving that set by its shape (childless, non-terminal
+	///     achievement) to distinguish genuine candidates from the ancestor/required-job waypoints the
+	///     port also includes for <see cref="ReadinessCalculator" />'s own use. Both dictionaries must be
+	///     keyed by the same complete node set; <paramref name="factsById" /> is looked up only for
+	///     candidate leaves.
+	/// </summary>
+	public static EquatableArray<AwaitingProgressEntry> GetAwaitingProgress(
+		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		IReadOnlyDictionary<JobNodeId, AwaitingProgressNodeFacts> factsById,
+		IReadOnlyCollection<PrerequisiteEdge> prerequisites)
+	{
 		var candidates = nodesById.Values.Where(IsUnfinishedLeaf);
 
+		return MapCandidates(candidates, nodesById, factsById, prerequisites);
+	}
+
+	private static EquatableArray<AwaitingProgressEntry> MapCandidates(
+		IEnumerable<HierarchyNode> candidates,
+		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		IReadOnlyDictionary<JobNodeId, AwaitingProgressNodeFacts> factsById,
+		IReadOnlyCollection<PrerequisiteEdge> prerequisites)
+	{
 		var entries = candidates
 			.Select(node => (Node: node, Facts: factsById[node.Id]))
 			.Where(candidate => candidate.Facts.ArchivedAt is null)
-			.Where(candidate => ownership.Matches(candidate.Facts.OwnerUserId))
-			.Where(candidate => !subtreeRootId.HasValue || IsInSubtree(candidate.Node.Id, subtreeRootId.Value, nodesById))
-			.Where(candidate => string.IsNullOrWhiteSpace(searchText)
-								|| candidate.Facts.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase))
 			.Select(candidate => new AwaitingProgressEntry(
 				candidate.Node.Id,
 				candidate.Node.ParentId,

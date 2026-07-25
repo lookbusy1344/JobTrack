@@ -17,26 +17,27 @@ using NodaTime;
 /// </summary>
 internal interface ICostQueryPort
 {
-	/// <summary>Loads the actor's current roles for an authorization pre-check before heavy cost-input materialization.</summary>
+	/// <summary>
+	///     Loads the actor's current roles and <paramref name="nodeId" />'s ancestor-chain owners (ADR
+	///     0040: an actor who owns the queried node or an ancestor may view its cost alongside
+	///     <see cref="EmployeeRole.Administrator" />/<see cref="EmployeeRole.CostViewer" />), from one
+	///     snapshot, for the authorization pre-check <see cref="CostQueries" /> runs before heavy
+	///     cost-input materialization (2026-07-25 scalability-follow-up plan §2.4) -- replaces two
+	///     separate round trips with one.
+	/// </summary>
 	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>
-	Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		AppUserId actorId, CancellationToken cancellationToken = default);
+	Task<CostAccessInputs> GetCostAccessInputsAsync(
+		AppUserId actorId, JobNodeId nodeId, CancellationToken cancellationToken = default);
 
 	/// <summary>
 	///     Materializes the cost inputs for <paramref name="nodeId" />'s subtree as of <paramref name="asOf" />.
 	///     The provider rejects subtrees larger than <paramref name="maxHierarchyNodes" /> before
-	///     materializing worker sessions and rate data.
+	///     materializing worker sessions and rate data. Callers must authorize (via
+	///     <see cref="GetCostAccessInputsAsync" />) before calling this -- it takes no actor id and does
+	///     not re-resolve actor roles itself.
 	/// </summary>
 	Task<CostQueryResult> GetCostInputsAsync(
-		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default);
-
-	/// <summary>
-	///     Loads <paramref name="nodeId" />'s owner and every ancestor's owner, skipping unassigned nodes
-	///     on the path (ADR 0040: an actor who owns the queried node or an ancestor may view its cost
-	///     alongside <see cref="EmployeeRole.Administrator" />/<see cref="EmployeeRole.CostViewer" />).
-	/// </summary>
-	Task<EquatableArray<AppUserId>> GetAncestorOwnerIdsAsync(
-		JobNodeId nodeId, CancellationToken cancellationToken = default);
+		JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default);
 
 	/// <summary>
 	///     Materializes the cost inputs for every candidate in <paramref name="nodeIds" />' subtrees, as a

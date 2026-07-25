@@ -89,8 +89,7 @@ public sealed class RateResolutionPerformanceTests : IAsyncLifetime
 
 	private async Task<NpgsqlConnection> OpenDeployedConnectionAsync()
 	{
-		var connection = new NpgsqlConnection(database.ConnectionString);
-		await connection.OpenAsync();
+		var connection = await PerformanceScaleGenerator.OpenConnectionForSeedingAsync(database.ConnectionString);
 
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.PostgreSql));
 		var deployer = new SchemaDeployer(

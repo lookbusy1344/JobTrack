@@ -40,19 +40,56 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	/// </summary>
 	public IReadOnlyDictionary<AppUserId, EquatableArray<EmployeeRole>> SeededRoles => _roles;
 
-	public Task<AwaitingProgressQueryResult> GetAwaitingProgressInputsAsync(CancellationToken cancellationToken = default)
+	/// <summary>
+	///     2026-07-25 scalability-follow-up plan §2.1: the real ports now apply ownership/subtree/
+	///     search/paging in their own query rather than leaving it to <c>AwaitingProgressCalculator</c>,
+	///     so this fake must reproduce that scoping itself -- application-slice tests exercising those
+	///     filters through <c>IJobQueries.GetAwaitingProgressAsync</c> rely on it. A genuine unfinished
+	///     leaf outside the resulting page is masked with a terminal achievement in
+	///     <see cref="AwaitingProgressQueryResult.NodesById" /> so it does not re-match the calculator's
+	///     own shape check, mirroring the real ports' <c>NotACandidateSentinel</c>.
+	/// </summary>
+	public Task<AwaitingProgressQueryResult> GetAwaitingProgressInputsAsync(
+		AwaitingProgressQueryFilter filter, CancellationToken cancellationToken = default)
 	{
+		var page = _nodes.Values
+			.Where(IsUnfinishedLeafCandidate)
+			.Where(node => filter.Ownership.Matches(node.OwnerUserId))
+			.Where(node => filter.SubtreeRootId is not JobNodeId subtreeRootId || IsInSubtree(node.Id, subtreeRootId))
+			.Where(node => string.IsNullOrWhiteSpace(filter.SearchText)
+						   || node.Description.Contains(filter.SearchText, StringComparison.OrdinalIgnoreCase))
+			.OrderByDescending(node => node.Priority)
+			.ThenBy(node => Deadline(node) is null)
+			.ThenBy(node => Deadline(node))
+			.ThenBy(node => node.Id.Value)
+			.Skip(filter.Offset)
+			.Take(filter.Limit)
+			.ToList();
+		var pageIds = new HashSet<JobNodeId>(page.Select(node => node.Id));
+
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
-		var factsById = new Dictionary<JobNodeId, AwaitingProgressNodeFacts>();
 		foreach (var node in _nodes.Values) {
 			var childIds = _nodes.Values.Where(n => n.ParentId == node.Id).Select(n => n.Id).ToArray();
 			var leafAchievement = node.Kind == NodeKind.Leaf && _leafWork.TryGetValue(node.Id, out var leafWork)
 				? leafWork.Achievement
 				: (Achievement?)null;
+			// AwaitingProgressCalculator's own IsUnfinishedLeaf shape check (childless, non-terminal
+			// achievement) does not itself test ArchivedAt -- that filter runs afterward against
+			// factsById, which this fake now populates only for the page. An archived leaf therefore
+			// still matches the shape check and must be masked here too, not just a leaf excluded by
+			// ownership/subtree/search/paging -- otherwise it re-matches the shape check with no
+			// corresponding factsById entry and the calculator throws.
+			if (!pageIds.Contains(node.Id) && IsUnfinishedLeafShape(node)) {
+				leafAchievement = Achievement.Cancelled;
+			}
+
 			nodesById[node.Id] = new(node.Id, node.ParentId, [.. childIds], leafAchievement);
-			factsById[node.Id] = new(
-				node.Id, node.Description, node.OwnerUserId, node.Priority, node.NeededStart, node.NeededFinish, node.ArchivedAt);
 		}
+
+		var factsById = page.ToDictionary(
+			node => node.Id,
+			node => new AwaitingProgressNodeFacts(
+				node.Id, node.Description, node.OwnerUserId, node.Priority, node.NeededStart, node.NeededFinish, node.ArchivedAt));
 
 		var prerequisites = _prerequisites.Select(edge => new PrerequisiteEdge(edge.RequiredJobId, edge.DependentJobId));
 
@@ -541,7 +578,56 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	public Task<ReadinessQueryResult> GetReadinessInputsAsync(JobNodeId nodeId, CancellationToken cancellationToken = default)
 	{
 		_ = GetExisting(nodeId);
+		return Task.FromResult(BuildReadinessInputs());
+	}
 
+	public Task<ReadinessQueryResult> GetReadinessInputsForNodesAsync(
+		IReadOnlyCollection<JobNodeId> nodeIds, CancellationToken cancellationToken = default)
+	{
+		foreach (var nodeId in nodeIds) {
+			_ = GetExisting(nodeId);
+		}
+
+		return Task.FromResult(BuildReadinessInputs());
+	}
+
+	/// <summary>Childless, non-terminal achievement -- exactly <c>AwaitingProgressCalculator.IsUnfinishedLeaf</c>'s own shape check.</summary>
+	private bool IsUnfinishedLeafShape(JobNodeResult node)
+	{
+		if (node.ParentId is null || _nodes.Values.Any(n => n.ParentId == node.Id)) {
+			return false;
+		}
+
+		var achievement = _leafWork.TryGetValue(node.Id, out var leafWork) ? leafWork.Achievement : (Achievement?)null;
+		return achievement is null or Achievement.Waiting or Achievement.InProgress;
+	}
+
+	/// <summary>The DB-level candidate predicate: <see cref="IsUnfinishedLeafShape" /> plus not archived.</summary>
+	private bool IsUnfinishedLeafCandidate(JobNodeResult node) => node.ArchivedAt is null && IsUnfinishedLeafShape(node);
+
+	private bool IsInSubtree(JobNodeId id, JobNodeId rootId)
+	{
+		JobNodeId? current = id;
+		while (current is JobNodeId currentId) {
+			if (currentId == rootId) {
+				return true;
+			}
+
+			current = GetExisting(currentId).ParentId;
+		}
+
+		return false;
+	}
+
+	private static Instant? Deadline(JobNodeResult node) => node.NeededFinish ?? node.NeededStart;
+
+	/// <summary>
+	///     This fake already keeps the whole hierarchy in memory, so both the single-node and batch
+	///     readiness reads return the same fully materialized graph -- the narrowed, ancestor-chain-only
+	///     scoping that distinguishes the two real ports' implementations has no equivalent cost here.
+	/// </summary>
+	private ReadinessQueryResult BuildReadinessInputs()
+	{
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
 		foreach (var node in _nodes.Values) {
 			var childIds = _nodes.Values.Where(n => n.ParentId == node.Id).Select(n => n.Id).ToArray();
@@ -553,10 +639,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 
 		var prerequisites = _prerequisites.Select(edge => new PrerequisiteEdge(edge.RequiredJobId, edge.DependentJobId));
 
-		return Task.FromResult(new ReadinessQueryResult {
-			NodesById = EquatableDictionaryFactory.CopyOf(nodesById),
-			Prerequisites = [.. prerequisites],
-		});
+		return new() { NodesById = EquatableDictionaryFactory.CopyOf(nodesById), Prerequisites = [.. prerequisites] };
 	}
 
 	/// <summary>

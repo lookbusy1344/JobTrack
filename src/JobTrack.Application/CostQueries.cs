@@ -79,38 +79,70 @@ internal sealed class CostQueries : ICostQueries
 	}
 
 	private async Task<(CostQueryResult Inputs, Dictionary<JobNodeId, Money> ExactCosts, List<CostSegmentTrace> Trace)> CalculateAsync(
-		AppUserId actorId, JobNodeId nodeId, Instant asOf, CancellationToken cancellationToken) =>
-		await CalculateAsync(actorId, nodeId, asOf, MaxHierarchyNodeCount, cancellationToken).ConfigureAwait(false);
+		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxTraceSegments, CancellationToken cancellationToken) =>
+		await CalculateAsync(actorId, nodeId, asOf, MaxHierarchyNodeCount, maxTraceSegments, cancellationToken).ConfigureAwait(false);
 
 	private async Task<(CostQueryResult Inputs, Dictionary<JobNodeId, Money> ExactCosts, List<CostSegmentTrace> Trace)> CalculateAsync(
-		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken)
+		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, int? maxTraceSegments,
+		CancellationToken cancellationToken)
 	{
-		var actorRoles = await _port.GetActorRolesAsync(actorId, cancellationToken).ConfigureAwait(false);
-		var ancestorOwnerIds = await _port.GetAncestorOwnerIdsAsync(nodeId, cancellationToken).ConfigureAwait(false);
-		if (!CostAccessPolicy.CanView(actorRoles, ancestorOwnerIds.Contains(actorId))) {
+		var access = await _port.GetCostAccessInputsAsync(actorId, nodeId, cancellationToken).ConfigureAwait(false);
+		if (!CostAccessPolicy.CanView(access.ActorRoles, access.AncestorOwnerIds.Contains(actorId))) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not view costs for node {nodeId}.");
 		}
 
-		var inputs = await _port.GetCostInputsAsync(actorId, nodeId, asOf, maxHierarchyNodes, cancellationToken).ConfigureAwait(false);
+		var inputs = await _port.GetCostInputsAsync(nodeId, asOf, maxHierarchyNodes, cancellationToken).ConfigureAwait(false);
 
 		var exactCosts = new Dictionary<JobNodeId, Money>();
 		var trace = new List<CostSegmentTrace>();
+		var includedNodeIds = GetSubtreeNodeIds(nodeId, inputs.NodesById);
 		foreach (var worker in inputs.Workers) {
-			var allocations = CostSegmentPartitioner.Partition(
+			var remainingTraceSegments = maxTraceSegments.HasValue ? maxTraceSegments.Value - trace.Count : int.MaxValue;
+			var allocations = CostSegmentPartitioner.PartitionBounded(
 				worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
-				worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds);
-			var calculation = CostEngine.Calculate(
-				nodeId, allocations, inputs.NodesById, worker.ScheduledWorkingIntervals, worker.Exceptions, worker.NodeOverrides,
-				worker.UserCostRates, worker.UserDefaultRate);
+				worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds,
+				includedNodeIds, remainingTraceSegments);
 
-			foreach (var (id, amount) in calculation.ExactCosts) {
-				exactCosts[id] = new(exactCosts.GetValueOrDefault(id, new(0m)).Amount + amount.Amount);
+			IReadOnlyDictionary<JobNodeId, Money> workerExactCosts;
+			if (maxTraceSegments.HasValue) {
+				var calculation = CostEngine.Calculate(
+					nodeId, allocations, inputs.NodesById, worker.ScheduledWorkingIntervals, worker.Exceptions, worker.NodeOverrides,
+					worker.UserCostRates, worker.UserDefaultRate);
+				workerExactCosts = calculation.ExactCosts;
+				trace.AddRange(calculation.Trace);
+			} else {
+				var leafCosts = CostEngine.ComputeLeafCosts(
+					allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides,
+					worker.UserCostRates, worker.UserDefaultRate);
+				workerExactCosts = HierarchicalCostAggregator.Aggregate(nodeId, inputs.NodesById, leafCosts);
 			}
 
-			trace.AddRange(calculation.Trace);
+			foreach (var (id, amount) in workerExactCosts) {
+				exactCosts[id] = new(exactCosts.GetValueOrDefault(id, new(0m)).Amount + amount.Amount);
+			}
 		}
 
 		return (inputs, exactCosts, trace);
+	}
+
+	private static HashSet<JobNodeId> GetSubtreeNodeIds(
+		JobNodeId rootId, EquatableDictionary<JobNodeId, HierarchyNode> nodesById)
+	{
+		var result = new HashSet<JobNodeId>();
+		var pending = new Stack<JobNodeId>();
+		pending.Push(rootId);
+		while (pending.Count > 0) {
+			var id = pending.Pop();
+			if (!result.Add(id)) {
+				continue;
+			}
+
+			foreach (var childId in nodesById[id].ChildIds) {
+				pending.Push(childId);
+			}
+		}
+
+		return result;
 	}
 
 	private static int ResolveBound(int? requested, int maximum, string parameterName)
@@ -164,7 +196,8 @@ internal sealed class CostQueries : ICostQueries
 		JobTrackOperation.TraceAsync(
 			"costs.get-details", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			async () => {
-				var (_, exactCosts, trace) = await CalculateAsync(request.Context.Actor, request.NodeId, request.AsOf, cancellationToken)
+				var (_, exactCosts, trace) = await CalculateAsync(
+						request.Context.Actor, request.NodeId, request.AsOf, maxTraceSegments, cancellationToken)
 					.ConfigureAwait(false);
 
 				if (trace.Count > maxTraceSegments) {
@@ -191,7 +224,7 @@ internal sealed class CostQueries : ICostQueries
 			"costs.get-hierarchy-totals", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			async () => {
 				var (inputs, exactCosts, _) = await CalculateAsync(
-						request.Context.Actor, request.NodeId, request.AsOf, maxHierarchyNodes, cancellationToken)
+						request.Context.Actor, request.NodeId, request.AsOf, maxHierarchyNodes, null, cancellationToken)
 					.ConfigureAwait(false);
 
 				var displayedCosts = ReconcileHierarchy(request.NodeId, inputs.NodesById, exactCosts);

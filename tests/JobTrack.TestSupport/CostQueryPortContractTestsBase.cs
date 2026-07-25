@@ -31,6 +31,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
 	private const int BulkCostMaximumCommandCount = 16;
+	private const int SingleNodeCostMaximumCommandCount = 16;
 
 	private readonly IDisposableTestDatabase database;
 
@@ -275,6 +276,69 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		wideConnections.MaximumConcurrentConnections.Should().Be(1);
 	}
 
+	/// <summary>
+	///     2026-07-25 scalability-follow-up plan §2.4: a single-node cost read's authorization
+	///     pre-check (<c>ICostQueryPort.GetCostAccessInputsAsync</c>) and its cost-input materialization
+	///     each still open their own connection (they cannot share one transaction/snapshot the way the
+	///     bulk path's single call does, since authorization must gate the expensive read), but neither
+	///     one is a repeated resource-per-candidate cost, and the actor's roles are resolved exactly
+	///     once -- not once for the pre-check and again inside cost-input materialization.
+	/// </summary>
+	[Fact]
+	public async Task GetCostDetailsAsync_keeps_commands_bounded_and_resolves_actor_roles_exactly_once()
+	{
+		var (_, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+
+		var commands = new CommandCountInterceptor();
+		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [commands]));
+
+		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+
+		commands.Count.Should().BeLessThanOrEqualTo(SingleNodeCostMaximumCommandCount);
+	}
+
+	[Fact]
+	public async Task GetCostAccessInputsAsync_reads_roles_and_ancestor_owners_in_one_snapshot()
+	{
+		var (_, _, leafId, _, administratorId, _) = await SeedTreeAsync();
+		var transactions = new TransactionCountInterceptor();
+		var port = CreateCostQueryPortWithInterceptors(database.ConnectionString, [transactions]);
+
+		_ = await port.GetCostAccessInputsAsync(administratorId, leafId);
+
+		transactions.Count.Should().Be(1);
+	}
+
+	/// <summary>
+	///     2026-07-25 scalability-follow-up plan §2.4: authorization must gate the expensive
+	///     cost-input materialization -- a denied actor's read touches only the lightweight access-check
+	///     connection, never the one that loads worker sessions/schedules/rates, so it must issue
+	///     strictly fewer commands than an authorized read against the same tree.
+	/// </summary>
+	[Fact]
+	public async Task GetCostDetailsAsync_denies_authorization_without_opening_the_cost_inputs_connection()
+	{
+		var (_, branchId, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+
+		var deniedCommands = new CommandCountInterceptor();
+		var deniedSut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [deniedCommands]));
+		var act = () => deniedSut.GetCostDetailsAsync(new() { Context = ContextFor(workerId), NodeId = branchId, AsOf = At(24) });
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+
+		var authorizedCommands = new CommandCountInterceptor();
+		var authorizedSut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [authorizedCommands]));
+		_ = await authorizedSut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+
+		deniedCommands.Count.Should().BeLessThan(
+			authorizedCommands.Count, "an authorization denial must never open the worker-materialization connection");
+	}
+
 	[Fact]
 	public async Task Calculating_cost_details_for_a_nonexistent_node_throws_not_found()
 	{
@@ -321,6 +385,130 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var act = () => sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
 
 		await act.Should().ThrowAsync<MissingRateException>();
+	}
+
+	/// <summary>
+	///     2026-07-24 code-review-scalability-remediation-plan §2.2 step 2: a cost read must not
+	///     materialize the whole <c>job_node</c> table. Seeds a decoy subtree of many nodes unrelated to
+	///     <c>leafId</c>'s own subtree and asserts none of them appear in the raw port's <c>NodesById</c>.
+	///     Also proves the narrowing did not break correctness: a rate override declared on the true
+	///     root -- an ancestor <em>above</em> <c>leafId</c>'s own requested subtree, and outside the decoy
+	///     subtree entirely -- still resolves (ADR 0040's owner carve-out and
+	///     <see cref="Domain.Rates.RateResolver" />'s nearest-ancestor walk both need every requested
+	///     root's own path to the true root, not just its descendants).
+	/// </summary>
+	[Fact]
+	public async Task GetCostInputsAsync_excludes_nodes_outside_the_requested_subtree_while_still_resolving_a_true_root_override()
+	{
+		var (rootId, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await AddNodeRateOverrideAsync(administratorId, workerId, rootId, new(100m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var decoyIds = new List<JobNodeId>();
+		for (var index = 0; index < 30; index++) {
+			var decoy = await jobNodePort.AddChildAsync(new() {
+				Context = ContextFor(administratorId),
+				ParentId = rootId,
+				Description = $"Decoy {index}",
+				OwnerUserId = administratorId,
+				Priority = Priority.Medium,
+			});
+			decoyIds.Add(decoy.Id);
+		}
+
+		var port = CreateCostQueryPort(database.ConnectionString);
+		var inputs = await port.GetCostInputsAsync(leafId, At(24), 10_000);
+
+		inputs.NodesById.Keys.Should().NotContain(decoyIds);
+		inputs.NodesById.Count.Should().BeLessThan(decoyIds.Count, "the decoy subtree must not be materialized");
+
+		// [09:00,11:00) at the 100/hr root override (not the 60/hr plain user rate) = 200: proves the
+		// override above leafId's own requested subtree was still found.
+		var sut = new CostQueries(port);
+		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		result.ExactCost.Should().Be(new Money(200m));
+	}
+
+	/// <summary>
+	///     2026-07-25 scalability-follow-up plan §2.5: a node rate override only affects
+	///     <see cref="Domain.Rates.RateResolver" /> when its node is the session's own node or one of its
+	///     ancestors -- an override on an unrelated node (here, a sibling of <c>leafId</c>'s own branch)
+	///     can never be consulted, so it must neither change the total nor be materialized into
+	///     <see cref="WorkerCostInputs.NodeOverrides" />.
+	/// </summary>
+	[Fact]
+	public async Task Unrelated_node_overrides_outside_the_final_node_set_do_not_affect_the_total_or_materialize()
+	{
+		var (rootId, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		for (var index = 0; index < 20; index++) {
+			var decoy = await jobNodePort.AddChildAsync(new() {
+				Context = ContextFor(administratorId),
+				ParentId = rootId,
+				Description = $"Unrelated override decoy {index}",
+				OwnerUserId = administratorId,
+				Priority = Priority.Medium,
+			});
+			await AddNodeRateOverrideAsync(administratorId, workerId, decoy.Id, new(999m));
+		}
+
+		var port = CreateCostQueryPort(database.ConnectionString);
+		var inputs = await port.GetCostInputsAsync(leafId, At(24), 10_000);
+		var worker = inputs.Workers.Should().ContainSingle().Subject;
+		worker.NodeOverrides.Should().BeEmpty("none of the seeded overrides are on leafId or one of its ancestors");
+
+		var sut = new CostQueries(port);
+		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		result.ExactCost.Should().Be(new Money(120m));
+	}
+
+	/// <summary>
+	///     2026-07-25 scalability-follow-up plan §2.5: a schedule version's own civil-date window,
+	///     resolved in its own IANA zone, must exclude it from expansion once it no longer overlaps the
+	///     cost window -- a decade of superseded, non-overlapping versions with a deliberately different
+	///     weekly pattern (Monday 01:00-02:00, versus the active version's Thursday 09:00-17:00) proves
+	///     none of that history leaks into the [09:00,11:00) Thursday session this test actually costs.
+	/// </summary>
+	[Fact]
+	public async Task Obsolete_schedule_versions_outside_the_cost_window_do_not_affect_the_total()
+	{
+		var (_, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		var schedulePort = CreateSchedulePort(database.ConnectionString);
+		for (var year = 2016; year < 2026; year++) {
+			_ = await schedulePort.AddScheduleVersionAsync(new() {
+				Context = ContextFor(administratorId),
+				UserId = workerId,
+				Schedule = new(
+					DateTimeZoneProviders.Tzdb["Europe/London"],
+					new(year, 1, 1),
+					new(year + 1, 1, 1),
+					[new(IsoDayOfWeek.Monday, new(1, 0), new(2, 0))]),
+			});
+		}
+
+		_ = await schedulePort.AddScheduleVersionAsync(new() {
+			Context = ContextFor(administratorId),
+			UserId = workerId,
+			Schedule = new(
+				DateTimeZoneProviders.Tzdb["Europe/London"],
+				new(2026, 1, 1),
+				null,
+				[new(IsoDayOfWeek.Thursday, new(9, 0), new(17, 0))]),
+		});
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
+
+		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+
+		result.ExactCost.Should().Be(new Money(120m));
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);
@@ -377,6 +565,16 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(administratorId),
 			UserId = workerId,
 			Rate = new(rate, Instant.FromUtc(2000, 1, 1, 0, 0), null),
+		});
+	}
+
+	private async Task AddNodeRateOverrideAsync(AppUserId administratorId, AppUserId workerId, JobNodeId nodeId, HourlyRate rate)
+	{
+		var ratePort = CreateRatePort(database.ConnectionString);
+		_ = await ratePort.AddNodeRateOverrideAsync(new() {
+			Context = ContextFor(administratorId),
+			UserId = workerId,
+			Override = new(nodeId, rate, Instant.FromUtc(2000, 1, 1, 0, 0), null),
 		});
 	}
 

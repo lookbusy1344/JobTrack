@@ -1,10 +1,31 @@
 # Architecture Boundary Remediation Plan
 
 **Date:** 2026-07-23
-**Status:** Proposed
+**Status:** Implemented (verified 2026-07-24; see below)
 **Scope:** Fresh-eyes review of layer responsibilities, compound mutations, reusable-library
 boundaries, and dual-provider consistency. This plan records only current findings; it does not
 reopen implemented product plans or the accepted phase gates.
+
+**Implementation evidence (2026-07-24 code-review verification pass):**
+
+- Stage 1: `Work.cshtml.cs`'s `OnPostFinishAsync`/`OnPostCompleteAsync` call
+  `IWorkCommands.FinishSessionAndUpdateWriteUpAsync`/`CompleteLeafAsync` with a nested optional
+  `WriteUpChange`, one command, one correlation id. `SaveWriteUpFirstAsync` is retained only for the
+  standalone write-up Save button, as the plan specified.
+- Stage 2: `ChangePassword.cshtml.cs`'s `OnPostAsync` calls the single
+  `IAccountCredentialCommands.ChangeOwnPasswordAsync` command; no split `UserManager`/token/audit
+  sequence remains in the page.
+- Stage 3: the application SPI ports (`IJobNodeCommandPort` etc.) are `internal` (ADR 0049).
+  `InlineDmlArchitectureTests` enforces an explicit named allowlist of the remaining raw-SQL calls
+  (each tied to a specific stored function/procedure), closing the "inventory remaining inline SQL"
+  item.
+- Stage 4: `OneHandlerOneMutationArchitectureTests`, `InlineDmlArchitectureTests`,
+  `ApplicationPublicSurfaceTests`, and `PersistencePublicSurfaceTests` all exist and pass. The
+  brace-formatting directive is resolved and stated in `CLAUDE.md` (Allman for
+  type/member declarations, same-line for control-flow blocks). `docs/traceability/test-catalogue.md`
+  documents ADR 0048 with an explicit note on the superseded test case, not contradictory evidence.
+
+No completion criterion in §4 was found unmet.
 
 ## 1. Review verdict
 

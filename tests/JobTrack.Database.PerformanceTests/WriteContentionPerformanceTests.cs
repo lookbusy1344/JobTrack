@@ -228,8 +228,7 @@ public sealed class WriteContentionPerformanceTests : IAsyncLifetime
 
 	private async Task<NpgsqlConnection> OpenExistingConnectionAsync()
 	{
-		var connection = new NpgsqlConnection(database.ConnectionString);
-		await connection.OpenAsync();
+		var connection = await PerformanceScaleGenerator.OpenConnectionForSeedingAsync(database.ConnectionString);
 		return connection;
 	}
 }
