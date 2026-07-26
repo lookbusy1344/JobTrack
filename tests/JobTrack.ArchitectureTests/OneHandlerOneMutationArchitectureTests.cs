@@ -520,11 +520,11 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 
 			var depth = 0;
 			var index = braceStart;
-			for (; index < content.Length; index++) {
+			for (; index < content.Length; ++index) {
 				if (content[index] == '{') {
-					depth++;
+					++depth;
 				} else if (content[index] == '}') {
-					depth--;
+					--depth;
 					if (depth == 0) {
 						break;
 					}

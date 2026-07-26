@@ -67,12 +67,12 @@ public sealed class WriteContentionPerformanceTests : IAsyncLifetime
 		var branchBId = await InsertNodeAsync(seedConnection, ownerUserId, rootId);
 
 		var movingNodeIds = new long[10];
-		for (var i = 0; i < movingNodeIds.Length; i++) {
+		for (var i = 0; i < movingNodeIds.Length; ++i) {
 			movingNodeIds[i] = await InsertNodeAsync(seedConnection, ownerUserId, branchAId);
 		}
 
 		var connections = new NpgsqlConnection[movingNodeIds.Length];
-		for (var i = 0; i < connections.Length; i++) {
+		for (var i = 0; i < connections.Length; ++i) {
 			connections[i] = await OpenExistingConnectionAsync();
 		}
 
@@ -119,7 +119,7 @@ public sealed class WriteContentionPerformanceTests : IAsyncLifetime
 		await using var seedConnection = await OpenDeployedConnectionAsync();
 
 		var connections = new NpgsqlConnection[5];
-		for (var i = 0; i < connections.Length; i++) {
+		for (var i = 0; i < connections.Length; ++i) {
 			connections[i] = await OpenExistingConnectionAsync();
 		}
 

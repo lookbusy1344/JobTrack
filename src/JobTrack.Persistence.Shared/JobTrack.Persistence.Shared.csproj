@@ -3,6 +3,10 @@
     <PropertyGroup>
         <PackageId>JobTrack.Persistence.Shared</PackageId>
         <Description>Internal EF Core model configuration (entity mappings, strongly typed identifier converters, concurrency-token setup) shared by JobTrack.Persistence.PostgreSql and JobTrack.Persistence.Sqlite, so the two providers cannot drift independently of each other or of the reviewed SQL schema (impl plan §7.4, ADR 0010). Every type is internal; nothing here is part of the public library surface.</Description>
+        <!-- The Description's "every type is internal" claim is not self-enforcing: this assembly is
+             packaged, so any type that silently becomes public would ship. The analyzer holds both
+             PublicAPI files empty, turning that claim into a build error rather than a convention. -->
+        <EnablePublicApiAnalyzers>true</EnablePublicApiAnalyzers>
         <!-- CA1716 flags the "Shared" namespace segment as a cross-language keyword collision
              (VB.NET's Shared modifier). This solution is C#-only (impl plan/CLAUDE.md); the
              project name itself was a reviewed, user-approved decision (impl plan §7.4 step 1),

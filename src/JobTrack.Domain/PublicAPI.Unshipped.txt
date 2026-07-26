@@ -66,6 +66,7 @@ JobTrack.Domain.Costing.AllocatedShare.AllocatedShare() -> void
 JobTrack.Domain.Costing.AllocatedShare.AllocatedShare(long segmentTicks, int concurrencyDivisor) -> void
 JobTrack.Domain.Costing.AllocatedShare.ConcurrencyDivisor.get -> int
 JobTrack.Domain.Costing.AllocatedShare.Equals(JobTrack.Domain.Costing.AllocatedShare other) -> bool
+JobTrack.Domain.Costing.AllocatedShare.IsUninitialized.get -> bool
 JobTrack.Domain.Costing.AllocatedShare.SegmentTicks.get -> long
 JobTrack.Domain.Costing.CostableSession
 JobTrack.Domain.Costing.CostableSession.<Clone>$() -> JobTrack.Domain.Costing.CostableSession!
@@ -436,3 +437,4 @@ const JobTrack.Domain.Hierarchy.JobSubtreeLimits.BreadthCap = 25 -> int
 JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy
 static JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool actorParticipatedPreviously, JobTrack.Abstractions.AppUserId actorUserId, JobTrack.Abstractions.AppUserId targetWorkedByUserId) -> bool
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanFinishSession(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool isOwnSession) -> bool
+static JobTrack.Domain.Costing.HierarchicalCostAggregator.SumSubtreeTotals(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.JobNodeId>! rootIds, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>! leafCosts) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>!

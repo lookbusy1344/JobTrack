@@ -115,7 +115,7 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = CertificatePassword;
 		startInfo.EnvironmentVariables["DataProtection__KeyPath"] = keyPath;
 
-		for (var i = 0; i < knownProxies.Length; i++) {
+		for (var i = 0; i < knownProxies.Length; ++i) {
 			startInfo.EnvironmentVariables[$"ForwardedHeaders__KnownProxies__{i}"] = knownProxies[i];
 		}
 

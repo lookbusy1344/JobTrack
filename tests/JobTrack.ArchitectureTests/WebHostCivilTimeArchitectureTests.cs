@@ -51,7 +51,7 @@ public sealed class WebHostCivilTimeArchitectureTests
 
 			var lineNumber = 0;
 			foreach (var line in File.ReadLines(path)) {
-				lineNumber++;
+				++lineNumber;
 				if (!line.Contains('@', StringComparison.Ordinal)
 					|| line.Contains("asp-for", StringComparison.Ordinal)
 					|| line.Contains("asp-validation-for", StringComparison.Ordinal)

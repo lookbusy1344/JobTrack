@@ -8,7 +8,12 @@ using Intervals;
 /// </summary>
 internal static class WorkingTimeEligibility
 {
-	internal static bool IsScheduledWorkingTime(
-		WorkInterval segment, IReadOnlyCollection<WorkInterval> scheduledWorkingIntervals) =>
-		scheduledWorkingIntervals.Any(scheduled => IntervalAlgebra.Intersect(segment, scheduled) is not null);
+	/// <summary>
+	///     Stamps one segment against an index built once for the whole trace. Takes the index rather
+	///     than the raw collection because the caller stamps every trace entry against the same
+	///     unchanging set — rebuilding or rescanning it per entry is what made this
+	///     <c>O(segments x intervals)</c>.
+	/// </summary>
+	internal static bool IsScheduledWorkingTime(WorkInterval segment, IntervalIndex scheduledWorkingIntervals) =>
+		scheduledWorkingIntervals.Intersects(segment);
 }

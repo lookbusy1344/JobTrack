@@ -49,7 +49,7 @@
 			@foreach (var row in Model.OrderedSubtree) {
 				<tr>
 					<td class="jt-tree-row jt-preserve-whitespace"
-					    data-tree-depth="@row.Depth">@JobNodeDisplay.Title(row.Node.Description, row.Node.JobNodeId.Value)</td>
+					    data-tree-depth="@row.Depth">@JobNodeDisplay.Title(row.Node.Description, row.Node.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</td>
 					<td>@EnumDisplay.Label(row.Node.Status)</td>
 					<td>@InstantDisplay.Format(row.Node.LastUpdatedAt, Model.ViewerZone)</td>
 				</tr>

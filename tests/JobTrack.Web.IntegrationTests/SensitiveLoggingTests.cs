@@ -61,7 +61,7 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 	{
 		_ = await PostLoginAsync("edith", "wrong-password");
 		_ = await PostLoginAsync("edith", KnownPassword);
-		for (var attempt = 0; attempt < MaxFailedAccessAttempts; attempt++) {
+		for (var attempt = 0; attempt < MaxFailedAccessAttempts; ++attempt) {
 			_ = await PostLoginAsync("edith", "wrong-password");
 		}
 

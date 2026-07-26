@@ -122,6 +122,8 @@
 				</p>
 			}
 		} else {
+			var presentation = ActiveSessionPresentation.Derive(workPage.ActiveSessions, Model.CurrentActorId ?? new AppUserId(0));
+
 			@if (workPage.ActiveSessions.Count > 0) {
 				<div class="mb-3">
 					<partial name="_ActiveSincePill" model="@(new ActiveSessionSummaryModel {
@@ -133,10 +135,17 @@
 						                                        Compact = false,
 					                                        })"/>
 				</div>
-			} else {
-				var toolbarActions = Model.ToolbarActions;
-				@if (workPage.CanManageSessions) {
-					<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-3">
+			}
+
+			@* Same gating as Browse's leaf toolbar: only the viewer's *own* one-click Start toggles when
+			   they clock on. A leaf can carry several simultaneous workers, so an active session -- theirs
+			   or anyone's -- never withdraws "Start for…", which would otherwise make starting a second
+			   worker impossible from the page that owns this decision. *@
+			var toolbarActions = Model.ToolbarActions;
+			var canStartForSelf = presentation.ViewerSession is null;
+			@if (workPage.CanManageSessions) {
+				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-3">
+					@if (canStartForSelf) {
 						<form method="post" asp-page-handler="Start" class="inline-form">
 							@foreach (var field in Model.ToolbarStateFields) {
 								<input type="hidden" name="@field.Key" value="@field.Value"/>
@@ -149,19 +158,22 @@
 							</button>
 						</form>
 						<partial name="_BackdateTrigger" model="toolbarActions.StartBackdate"/>
-						<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
-						<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Browse</a>
-					</div>
+					}
+					<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
+					<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Browse</a>
+				</div>
+				@if (canStartForSelf) {
 					<partial name="_BackdatePanel" model="toolbarActions.StartBackdate"/>
-				} else {
-					<p class="jt-muted">A controlling owner, Job Manager, or Administrator can start work on this job.</p>
 				}
+			} else if (workPage.ActiveSessions.Count == 0) {
+				<p class="jt-muted">A controlling owner, Job Manager, or Administrator can start work on this job.</p>
 			}
 
-			var presentation = ActiveSessionPresentation.Derive(workPage.ActiveSessions, Model.CurrentActorId ?? new AppUserId(0));
-
-			var pausable = presentation.ViewerSession
-			               ?? (workPage.CanManageSessions && presentation.Count == 1 ? presentation.OtherSessions[0] : null);
+			@* Pausing stops the whole job, not one person's clock: it ends every worker's session on the
+			   leaf. So it needs the authority to finish each of them -- the viewer's own always, anyone
+			   else's only with management rights. A rendering hint; PauseLeafAsync re-authorizes itself. *@
+			var canPause = presentation.Count > 0
+			               && (workPage.CanManageSessions || (presentation.ViewerSession is not null && presentation.Count == 1));
 
 			@* The same ending decision whether sessions are running or the leaf is merely paused --
 			   completing from zero sessions is the supported path (ADR 0045), so a paused leaf gets
@@ -169,22 +181,17 @@
 
 			   One form, three buttons: Pause job, Complete job and Save write-up all post the same
 			   fields to their own handler (asp-page-handler on the button becomes formaction), so
-			   whichever the worker presses carries the write-up they just typed. The Pause pair
-			   (sessionId/version) and the Complete arrays (completeSessionId/completeSessionVersion)
-			   coexist here, which is why the latter carry a prefix. *@
+			   whichever the worker presses carries the write-up they just typed. Pause and Complete
+			   share one confirmed active-session set (endSessionId/endSessionVersion) -- both end
+			   exactly the sessions this page rendered, and both conflict rather than guess if that set
+			   moved underneath them. *@
 			if (hasEndingSection) {
 				<form method="post" asp-page-handler="Complete" id="end-session">
 					<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
 					<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
-					@if (pausable is not null) {
-						<input type="hidden" name="sessionId" value="@pausable.Id.Value"/>
-						<input type="hidden" name="version" value="@pausable.Version"/>
-					}
-					@if (workPage.CanComplete) {
-						foreach (var session in presentation.StableOrder) {
-							<input type="hidden" name="completeSessionId" value="@session.Id.Value"/>
-							<input type="hidden" name="completeSessionVersion" value="@session.Version"/>
-						}
+					@foreach (var session in presentation.StableOrder) {
+						<input type="hidden" name="endSessionId" value="@session.Id.Value"/>
+						<input type="hidden" name="endSessionVersion" value="@session.Version"/>
 					}
 					@if (Model.CurrentNode is not null) {
 						<partial name="_WriteUpField"
@@ -211,9 +218,11 @@
 						</div>
 					}
 					<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mt-3">
-						@if (pausable is not null) {
-							<button type="submit" asp-page-handler="Finish" class="btn btn-secondary"
-							        title="Ends this session; the job stays In Progress.">
+						@if (canPause) {
+							<button type="submit" asp-page-handler="Pause" class="btn btn-secondary"
+							        title="@(presentation.Count == 1
+								                ? "Ends this session; the job stays In Progress."
+								                : $"Ends all {presentation.Count} active sessions; the job stays In Progress.")">
 								<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 									<use href="#jt-icon-finish"></use>
 								</svg>
@@ -229,7 +238,7 @@
 									? "Complete job"
 									: $"Finish {workPage.ActiveSessions.Count} sessions and complete job")
 							</button>
-						} else if (pausable is null) {
+						} else if (!canPause) {
 							<p class="jt-muted">A controlling owner, Job Manager, or Administrator can end this job here.</p>
 						}
 						@if (Model.CurrentNode is not null) {

@@ -150,7 +150,7 @@ public abstract class RateAdministrationBrowserTestsBase
 
 	private static async Task TabToAsync(IPage page, string targetElementId, int maxTabs)
 	{
-		for (var attempt = 0; attempt < maxTabs; attempt++) {
+		for (var attempt = 0; attempt < maxTabs; ++attempt) {
 			await page.Keyboard.PressAsync("Tab");
 			var focusedId = await page.EvaluateAsync<string>("document.activeElement.id");
 			if (focusedId == targetElementId) {

@@ -66,7 +66,7 @@ public sealed class OverlappingCostScaleGeneratorTests : IAsyncLifetime
 
 			var totalSlots = LeavesPerWorker + OverlapDepth - 1;
 			var observedMax = 0;
-			for (var m = 1; m <= totalSlots; m++) {
+			for (var m = 1; m <= totalSlots; ++m) {
 				var sampleInstant = BaseInstant + TimeSpan.FromTicks((Slot.Ticks * (m - 1)) + (Slot.Ticks / 2));
 				var observed = sessions.Count(session => session.StartedAt <= sampleInstant && sampleInstant < session.FinishedAt);
 				var expected = ExpectedDepth(m, LeavesPerWorker, OverlapDepth);

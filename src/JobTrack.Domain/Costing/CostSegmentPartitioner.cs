@@ -91,16 +91,18 @@ public static class CostSegmentPartitioner
 		}
 
 		var boundaries = Boundaries(eligiblePieces, nodesById, exceptions, nodeOverrides, userCostRates, bounds);
-		var startingAt = eligiblePieces.Select((piece, index) => (piece, index))
-			.GroupBy(entry => entry.piece.Interval.Start)
-			.ToDictionary(group => group.Key, group => group.Select(entry => entry.index).ToArray());
-		var endingAt = eligiblePieces.Select((piece, index) => (piece, index))
-			.GroupBy(entry => entry.piece.Interval.End)
-			.ToDictionary(group => group.Key, group => group.Select(entry => entry.index).ToArray());
+		var startingAt = new Dictionary<Instant, List<int>>();
+		var endingAt = new Dictionary<Instant, List<int>>();
+		for (var index = 0; index < eligiblePieces.Count; ++index) {
+			var interval = eligiblePieces[index].Interval;
+			IndexAt(startingAt, interval.Start, index);
+			IndexAt(endingAt, interval.End, index);
+		}
+
 		var activeIndexes = new SortedSet<int>();
 
 		var allocations = new List<SessionSegmentAllocation>();
-		for (var i = 0; i < boundaries.Count - 1; i++) {
+		for (var i = 0; i < boundaries.Count - 1; ++i) {
 			if (endingAt.TryGetValue(boundaries[i], out var endingIndexes)) {
 				foreach (var index in endingIndexes) {
 					_ = activeIndexes.Remove(index);
@@ -139,9 +141,26 @@ public static class CostSegmentPartitioner
 		return allocations;
 	}
 
+	private static void IndexAt(Dictionary<Instant, List<int>> index, Instant at, int pieceIndex)
+	{
+		if (!index.TryGetValue(at, out var indexes)) {
+			indexes = [];
+			index[at] = indexes;
+		}
+
+		indexes.Add(pieceIndex);
+	}
+
+	/// <summary>
+	///     Intersects every session with the working set. Queries a <see cref="IntervalIndex" /> built
+	///     once instead of scanning every working interval per session: the working set holds one
+	///     interval per working day across the costed window, so the previous nested scan grew with the
+	///     window's length even though the eligible pieces it found did not.
+	/// </summary>
 	private static List<(CostableSession Session, WorkInterval Interval)> EligiblePieces(
 		IReadOnlyCollection<CostableSession> sessions, IReadOnlyCollection<WorkInterval> effectiveWorkingIntervals, WorkInterval bounds)
 	{
+		var workingIndex = IntervalIndex.Build(effectiveWorkingIntervals);
 		var pieces = new List<(CostableSession Session, WorkInterval Interval)>();
 		foreach (var session in sessions) {
 			var clippedToBounds = IntervalAlgebra.Intersect(session.Interval, bounds);
@@ -149,7 +168,7 @@ public static class CostSegmentPartitioner
 				continue;
 			}
 
-			foreach (var workingInterval in effectiveWorkingIntervals) {
+			foreach (var workingInterval in workingIndex.Overlapping(clipped)) {
 				if (IntervalAlgebra.Intersect(clipped, workingInterval) is WorkInterval piece) {
 					pieces.Add((session, piece));
 				}
@@ -167,39 +186,47 @@ public static class CostSegmentPartitioner
 		IReadOnlyCollection<UserCostRate> userCostRates,
 		WorkInterval bounds)
 	{
-		var overridesByNode = nodeOverrides.GroupBy(over => over.NodeId).ToDictionary(group => group.Key, group => group.ToList());
+		var overridesByNode = RateResolver.IndexOverridesByNode(nodeOverrides);
 
 		var boundaries = new SortedSet<Instant> { bounds.Start, bounds.End };
+		// Every piece on the same leaf walks the same ancestor chain and contributes the same override
+		// edges; walking each node once is enough, since `boundaries` is a set either way.
+		var walkedNodes = new HashSet<JobNodeId>();
 		foreach (var (session, interval) in eligiblePieces) {
 			_ = boundaries.Add(interval.Start);
 			_ = boundaries.Add(interval.End);
 
 			JobNodeId? ancestorId = session.NodeId;
-			while (ancestorId is JobNodeId id) {
+			while (ancestorId is JobNodeId id && walkedNodes.Add(id)) {
 				if (overridesByNode.TryGetValue(id, out var overrides)) {
-					AddClippedBoundaries(boundaries, overrides.Select(over => (over.EffectiveStart, over.EffectiveEnd)), bounds);
+					foreach (var nodeOverride in overrides) {
+						AddClippedBoundary(boundaries, nodeOverride.EffectiveStart, nodeOverride.EffectiveEnd, bounds);
+					}
 				}
 
 				ancestorId = HierarchyNodeLookup.GetRequired(nodesById, id).ParentId;
 			}
 		}
 
-		AddClippedBoundaries(boundaries, userCostRates.Select(rate => (rate.EffectiveStart, rate.EffectiveEnd)), bounds);
-		AddClippedBoundaries(boundaries, exceptions.Select(exception => (exception.Interval.Start, (Instant?)exception.Interval.End)), bounds);
+		foreach (var rate in userCostRates) {
+			AddClippedBoundary(boundaries, rate.EffectiveStart, rate.EffectiveEnd, bounds);
+		}
+
+		foreach (var exception in exceptions) {
+			AddClippedBoundary(boundaries, exception.Interval.Start, exception.Interval.End, bounds);
+		}
 
 		return [.. boundaries];
 	}
 
-	private static void AddClippedBoundaries(SortedSet<Instant> boundaries, IEnumerable<(Instant Start, Instant? End)> ranges, WorkInterval bounds)
+	private static void AddClippedBoundary(SortedSet<Instant> boundaries, Instant start, Instant? end, WorkInterval bounds)
 	{
-		foreach (var (start, end) in ranges) {
-			if (start > bounds.Start && start < bounds.End) {
-				_ = boundaries.Add(start);
-			}
+		if (start > bounds.Start && start < bounds.End) {
+			_ = boundaries.Add(start);
+		}
 
-			if (end is Instant exclusiveEnd && exclusiveEnd > bounds.Start && exclusiveEnd < bounds.End) {
-				_ = boundaries.Add(exclusiveEnd);
-			}
+		if (end is Instant exclusiveEnd && exclusiveEnd > bounds.Start && exclusiveEnd < bounds.End) {
+			_ = boundaries.Add(exclusiveEnd);
 		}
 	}
 

@@ -53,6 +53,10 @@ public sealed class SqliteWorkSessionCommandPortTests()
 	public Task Concurrent_compound_finish_with_write_up_vs_session_finish_has_exactly_one_complete_outcome() =>
 		AssertConcurrentFinishWithWriteUpVersusSessionFinishAsync();
 
+	[Fact]
+	public Task Concurrent_pause_vs_pause_of_the_same_leaf_has_exactly_one_complete_outcome() =>
+		AssertConcurrentPauseVersusPauseAsync();
+
 	/// <summary>
 	///     ADR 0045 plan §6 race matrix: "reopen-and-start vs another reopen." SQLite has no advisory
 	///     lock; <c>BEGIN IMMEDIATE</c> serializes the two attempts through SQLite's single-writer model

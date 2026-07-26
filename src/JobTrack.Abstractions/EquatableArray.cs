@@ -40,10 +40,18 @@ public readonly struct EquatableArray<T>(ImmutableArray<T> items) : IReadOnlyLis
 		return hash.ToHashCode();
 	}
 
-	/// <summary>Enumerates the elements in order.</summary>
-	public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)Items).GetEnumerator();
+	/// <summary>
+	///     Enumerates the elements in order. Returns <see cref="ImmutableArray{T}" />'s own struct
+	///     enumerator, which <c>foreach</c> binds to by pattern in preference to
+	///     <see cref="IEnumerable{T}" /> — a plain interface-returning overload would box both the
+	///     underlying array and its enumerator on every iteration of what is meant to be an
+	///     allocation-free wrapper.
+	/// </summary>
+	public ImmutableArray<T>.Enumerator GetEnumerator() => Items.GetEnumerator();
 
-	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+	IEnumerator<T> IEnumerable<T>.GetEnumerator() => ((IEnumerable<T>)Items).GetEnumerator();
+
+	IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable<T>)Items).GetEnumerator();
 
 	/// <inheritdoc cref="Equals(EquatableArray{T})" />
 	public static bool operator ==(EquatableArray<T> left, EquatableArray<T> right) => left.Equals(right);

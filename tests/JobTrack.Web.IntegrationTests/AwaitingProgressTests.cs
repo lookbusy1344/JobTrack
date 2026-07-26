@@ -118,7 +118,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.paging");
 		var rootId = bootstrappedRootId!.Value;
-		for (var index = 0; index < AwaitingProgressModel.PageSize + 1; index++) {
+		for (var index = 0; index < AwaitingProgressModel.PageSize + 1; ++index) {
 			_ = await AddChildAsync(rootId, workerId, $"Leaf {index}", adminId);
 		}
 

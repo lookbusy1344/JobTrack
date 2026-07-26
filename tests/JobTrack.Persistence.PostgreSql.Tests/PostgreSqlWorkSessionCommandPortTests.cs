@@ -48,6 +48,10 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 	public Task Concurrent_compound_finish_with_write_up_vs_session_finish_has_exactly_one_complete_outcome() =>
 		AssertConcurrentFinishWithWriteUpVersusSessionFinishAsync();
 
+	[Fact]
+	public Task Concurrent_pause_vs_pause_of_the_same_leaf_has_exactly_one_complete_outcome() =>
+		AssertConcurrentPauseVersusPauseAsync();
+
 	/// <summary>
 	///     There is no advisory lock domain for work sessions (ADR 0012): schema version 0007's GiST
 	///     exclusion constraint plus partial unique index is the sole mutual-exclusion mechanism, so this

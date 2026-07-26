@@ -1,8 +1,8 @@
 #nullable enable
 JobTrack.Abstractions.Achievement
-JobTrack.Abstractions.Achievement.None = 0 -> JobTrack.Abstractions.Achievement
 JobTrack.Abstractions.Achievement.Cancelled = 4 -> JobTrack.Abstractions.Achievement
 JobTrack.Abstractions.Achievement.InProgress = 2 -> JobTrack.Abstractions.Achievement
+JobTrack.Abstractions.Achievement.None = 0 -> JobTrack.Abstractions.Achievement
 JobTrack.Abstractions.Achievement.Success = 3 -> JobTrack.Abstractions.Achievement
 JobTrack.Abstractions.Achievement.Unsuccessful = 5 -> JobTrack.Abstractions.Achievement
 JobTrack.Abstractions.Achievement.Waiting = 1 -> JobTrack.Abstractions.Achievement
@@ -27,16 +27,27 @@ JobTrack.Abstractions.AuthorizationDeniedException
 JobTrack.Abstractions.AuthorizationDeniedException.AuthorizationDeniedException() -> void
 JobTrack.Abstractions.AuthorizationDeniedException.AuthorizationDeniedException(string! message) -> void
 JobTrack.Abstractions.AuthorizationDeniedException.AuthorizationDeniedException(string! message, System.Exception! innerException) -> void
+JobTrack.Abstractions.BranchAchievement
+JobTrack.Abstractions.BranchAchievement.Success = 1 -> JobTrack.Abstractions.BranchAchievement
+JobTrack.Abstractions.BranchAchievement.Unfinished = 0 -> JobTrack.Abstractions.BranchAchievement
 JobTrack.Abstractions.ConcurrencyConflictException
 JobTrack.Abstractions.ConcurrencyConflictException.ConcurrencyConflictException() -> void
 JobTrack.Abstractions.ConcurrencyConflictException.ConcurrencyConflictException(string! message) -> void
 JobTrack.Abstractions.ConcurrencyConflictException.ConcurrencyConflictException(string! message, System.Exception! innerException) -> void
+JobTrack.Abstractions.DepartmentId
+JobTrack.Abstractions.DepartmentId.Deconstruct(out long Value) -> void
+JobTrack.Abstractions.DepartmentId.DepartmentId() -> void
+JobTrack.Abstractions.DepartmentId.DepartmentId(long Value) -> void
+JobTrack.Abstractions.DepartmentId.Equals(JobTrack.Abstractions.DepartmentId other) -> bool
+JobTrack.Abstractions.DepartmentId.IsUnspecified.get -> bool
+JobTrack.Abstractions.DepartmentId.Value.get -> long
+JobTrack.Abstractions.DepartmentId.Value.init -> void
 JobTrack.Abstractions.EmployeeRole
-JobTrack.Abstractions.EmployeeRole.None = 0 -> JobTrack.Abstractions.EmployeeRole
 JobTrack.Abstractions.EmployeeRole.Administrator = 1 -> JobTrack.Abstractions.EmployeeRole
 JobTrack.Abstractions.EmployeeRole.Auditor = 6 -> JobTrack.Abstractions.EmployeeRole
 JobTrack.Abstractions.EmployeeRole.CostViewer = 5 -> JobTrack.Abstractions.EmployeeRole
 JobTrack.Abstractions.EmployeeRole.JobManager = 2 -> JobTrack.Abstractions.EmployeeRole
+JobTrack.Abstractions.EmployeeRole.None = 0 -> JobTrack.Abstractions.EmployeeRole
 JobTrack.Abstractions.EmployeeRole.RateManager = 4 -> JobTrack.Abstractions.EmployeeRole
 JobTrack.Abstractions.EmployeeRole.Requester = 7 -> JobTrack.Abstractions.EmployeeRole
 JobTrack.Abstractions.EmployeeRole.Worker = 3 -> JobTrack.Abstractions.EmployeeRole
@@ -50,24 +61,26 @@ JobTrack.Abstractions.EquatableArray<T>.Count.get -> int
 JobTrack.Abstractions.EquatableArray<T>.Equals(JobTrack.Abstractions.EquatableArray<T> other) -> bool
 JobTrack.Abstractions.EquatableArray<T>.EquatableArray() -> void
 JobTrack.Abstractions.EquatableArray<T>.EquatableArray(System.Collections.Immutable.ImmutableArray<T> items) -> void
-JobTrack.Abstractions.EquatableArray<T>.GetEnumerator() -> System.Collections.Generic.IEnumerator<T>!
+JobTrack.Abstractions.EquatableArray<T>.GetEnumerator() -> System.Collections.Immutable.ImmutableArray<T>.Enumerator
 JobTrack.Abstractions.EquatableArray<T>.this[int index].get -> T
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.ContainsKey(TKey key) -> bool
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.Count.get -> int
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.Equals(JobTrack.Abstractions.EquatableDictionary<TKey, TValue> other) -> bool
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.EquatableDictionary() -> void
-JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.GetEnumerator() -> System.Collections.Generic.IEnumerator<System.Collections.Generic.KeyValuePair<TKey, TValue>>!
+JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.GetEnumerator() -> System.Collections.Generic.Dictionary<TKey, TValue>.Enumerator
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.Keys.get -> System.Collections.Generic.IEnumerable<TKey>!
-JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.this[TKey key].get -> TValue
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.TryGetValue(TKey key, out TValue value) -> bool
 JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.Values.get -> System.Collections.Generic.IEnumerable<TValue>!
+JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.this[TKey key].get -> TValue
 JobTrack.Abstractions.EquatableDictionaryFactory
 JobTrack.Abstractions.HourlyRate
 JobTrack.Abstractions.HourlyRate.AmountPerHour.get -> decimal
+JobTrack.Abstractions.HourlyRate.CompareTo(JobTrack.Abstractions.HourlyRate other) -> int
 JobTrack.Abstractions.HourlyRate.Equals(JobTrack.Abstractions.HourlyRate other) -> bool
 JobTrack.Abstractions.HourlyRate.HourlyRate() -> void
 JobTrack.Abstractions.HourlyRate.HourlyRate(decimal amountPerHour) -> void
+JobTrack.Abstractions.HourlyRate.ToString(string? format, System.IFormatProvider? formatProvider) -> string!
 JobTrack.Abstractions.InvariantViolationException
 JobTrack.Abstractions.InvariantViolationException.ConstraintId.get -> string!
 JobTrack.Abstractions.InvariantViolationException.InvariantViolationException() -> void
@@ -101,14 +114,16 @@ JobTrack.Abstractions.MissingRateException.MissingRateException(string! message)
 JobTrack.Abstractions.MissingRateException.MissingRateException(string! message, System.Exception! innerException) -> void
 JobTrack.Abstractions.Money
 JobTrack.Abstractions.Money.Amount.get -> decimal
+JobTrack.Abstractions.Money.CompareTo(JobTrack.Abstractions.Money other) -> int
 JobTrack.Abstractions.Money.Equals(JobTrack.Abstractions.Money other) -> bool
 JobTrack.Abstractions.Money.Money() -> void
 JobTrack.Abstractions.Money.Money(decimal amount) -> void
 JobTrack.Abstractions.Money.RoundToPennies() -> JobTrack.Abstractions.Money
+JobTrack.Abstractions.Money.ToString(string? format, System.IFormatProvider? formatProvider) -> string!
 JobTrack.Abstractions.NodeKind
-JobTrack.Abstractions.NodeKind.None = 0 -> JobTrack.Abstractions.NodeKind
 JobTrack.Abstractions.NodeKind.Branch = 2 -> JobTrack.Abstractions.NodeKind
 JobTrack.Abstractions.NodeKind.Leaf = 3 -> JobTrack.Abstractions.NodeKind
+JobTrack.Abstractions.NodeKind.None = 0 -> JobTrack.Abstractions.NodeKind
 JobTrack.Abstractions.NodeKind.Root = 1 -> JobTrack.Abstractions.NodeKind
 JobTrack.Abstractions.NodeRateOverrideId
 JobTrack.Abstractions.NodeRateOverrideId.Deconstruct(out long Value) -> void
@@ -118,16 +133,41 @@ JobTrack.Abstractions.NodeRateOverrideId.NodeRateOverrideId() -> void
 JobTrack.Abstractions.NodeRateOverrideId.NodeRateOverrideId(long Value) -> void
 JobTrack.Abstractions.NodeRateOverrideId.Value.get -> long
 JobTrack.Abstractions.NodeRateOverrideId.Value.init -> void
+JobTrack.Abstractions.PasswordPolicy
+JobTrack.Abstractions.PersonalAccessTokenId
+JobTrack.Abstractions.PersonalAccessTokenId.Deconstruct(out long Value) -> void
+JobTrack.Abstractions.PersonalAccessTokenId.Equals(JobTrack.Abstractions.PersonalAccessTokenId other) -> bool
+JobTrack.Abstractions.PersonalAccessTokenId.IsUnspecified.get -> bool
+JobTrack.Abstractions.PersonalAccessTokenId.PersonalAccessTokenId() -> void
+JobTrack.Abstractions.PersonalAccessTokenId.PersonalAccessTokenId(long Value) -> void
+JobTrack.Abstractions.PersonalAccessTokenId.Value.get -> long
+JobTrack.Abstractions.PersonalAccessTokenId.Value.init -> void
 JobTrack.Abstractions.PrerequisiteBlockedException
 JobTrack.Abstractions.PrerequisiteBlockedException.PrerequisiteBlockedException() -> void
 JobTrack.Abstractions.PrerequisiteBlockedException.PrerequisiteBlockedException(string! message) -> void
 JobTrack.Abstractions.PrerequisiteBlockedException.PrerequisiteBlockedException(string! message, System.Exception! innerException) -> void
 JobTrack.Abstractions.Priority
-JobTrack.Abstractions.Priority.Unspecified = 0 -> JobTrack.Abstractions.Priority
 JobTrack.Abstractions.Priority.High = 3 -> JobTrack.Abstractions.Priority
 JobTrack.Abstractions.Priority.Low = 1 -> JobTrack.Abstractions.Priority
 JobTrack.Abstractions.Priority.Medium = 2 -> JobTrack.Abstractions.Priority
+JobTrack.Abstractions.Priority.Unspecified = 0 -> JobTrack.Abstractions.Priority
 JobTrack.Abstractions.Priority.Urgent = 4 -> JobTrack.Abstractions.Priority
+JobTrack.Abstractions.RequestHoldingAreaId
+JobTrack.Abstractions.RequestHoldingAreaId.Deconstruct(out long Value) -> void
+JobTrack.Abstractions.RequestHoldingAreaId.Equals(JobTrack.Abstractions.RequestHoldingAreaId other) -> bool
+JobTrack.Abstractions.RequestHoldingAreaId.IsUnspecified.get -> bool
+JobTrack.Abstractions.RequestHoldingAreaId.RequestHoldingAreaId() -> void
+JobTrack.Abstractions.RequestHoldingAreaId.RequestHoldingAreaId(long Value) -> void
+JobTrack.Abstractions.RequestHoldingAreaId.Value.get -> long
+JobTrack.Abstractions.RequestHoldingAreaId.Value.init -> void
+JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.RequesterStatus.Accepted = 2 -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.RequesterStatus.Cancelled = 6 -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.RequesterStatus.Completed = 5 -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.RequesterStatus.InProgress = 3 -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.RequesterStatus.None = 0 -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.RequesterStatus.Submitted = 1 -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Abstractions.RequesterStatus.Waiting = 4 -> JobTrack.Abstractions.RequesterStatus
 JobTrack.Abstractions.ScheduleExceptionId
 JobTrack.Abstractions.ScheduleExceptionId.Deconstruct(out long Value) -> void
 JobTrack.Abstractions.ScheduleExceptionId.Equals(JobTrack.Abstractions.ScheduleExceptionId other) -> bool
@@ -164,29 +204,27 @@ JobTrack.Abstractions.WorkSessionId.Value.get -> long
 JobTrack.Abstractions.WorkSessionId.Value.init -> void
 JobTrack.Abstractions.WorkSessionId.WorkSessionId() -> void
 JobTrack.Abstractions.WorkSessionId.WorkSessionId(long Value) -> void
-JobTrack.Abstractions.PersonalAccessTokenId
-JobTrack.Abstractions.PersonalAccessTokenId.Deconstruct(out long Value) -> void
-JobTrack.Abstractions.PersonalAccessTokenId.Equals(JobTrack.Abstractions.PersonalAccessTokenId other) -> bool
-JobTrack.Abstractions.PersonalAccessTokenId.IsUnspecified.get -> bool
-JobTrack.Abstractions.PersonalAccessTokenId.Value.get -> long
-JobTrack.Abstractions.PersonalAccessTokenId.Value.init -> void
-JobTrack.Abstractions.PersonalAccessTokenId.PersonalAccessTokenId() -> void
-JobTrack.Abstractions.PersonalAccessTokenId.PersonalAccessTokenId(long Value) -> void
+const JobTrack.Abstractions.PasswordPolicy.MinimumLength = 6 -> int
 override JobTrack.Abstractions.AppUserId.GetHashCode() -> int
 override JobTrack.Abstractions.AuditEventId.GetHashCode() -> int
+override JobTrack.Abstractions.DepartmentId.GetHashCode() -> int
 override JobTrack.Abstractions.EquatableArray<T>.Equals(object? obj) -> bool
 override JobTrack.Abstractions.EquatableArray<T>.GetHashCode() -> int
 override JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.Equals(object? obj) -> bool
 override JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.GetHashCode() -> int
 override JobTrack.Abstractions.HourlyRate.GetHashCode() -> int
+override JobTrack.Abstractions.HourlyRate.ToString() -> string!
 override JobTrack.Abstractions.JobNodeId.GetHashCode() -> int
+override JobTrack.Abstractions.JobRequestNoteId.GetHashCode() -> int
 override JobTrack.Abstractions.Money.GetHashCode() -> int
+override JobTrack.Abstractions.Money.ToString() -> string!
 override JobTrack.Abstractions.NodeRateOverrideId.GetHashCode() -> int
+override JobTrack.Abstractions.PersonalAccessTokenId.GetHashCode() -> int
+override JobTrack.Abstractions.RequestHoldingAreaId.GetHashCode() -> int
 override JobTrack.Abstractions.ScheduleExceptionId.GetHashCode() -> int
 override JobTrack.Abstractions.ScheduleVersionId.GetHashCode() -> int
 override JobTrack.Abstractions.UserCostRateId.GetHashCode() -> int
 override JobTrack.Abstractions.WorkSessionId.GetHashCode() -> int
-override JobTrack.Abstractions.PersonalAccessTokenId.GetHashCode() -> int
 static JobTrack.Abstractions.AppUserId.operator !=(JobTrack.Abstractions.AppUserId left, JobTrack.Abstractions.AppUserId right) -> bool
 static JobTrack.Abstractions.AppUserId.operator ==(JobTrack.Abstractions.AppUserId left, JobTrack.Abstractions.AppUserId right) -> bool
 static JobTrack.Abstractions.AuditEventId.operator !=(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
@@ -195,6 +233,8 @@ static JobTrack.Abstractions.AuditEventId.operator <=(JobTrack.Abstractions.Audi
 static JobTrack.Abstractions.AuditEventId.operator ==(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
 static JobTrack.Abstractions.AuditEventId.operator >(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
 static JobTrack.Abstractions.AuditEventId.operator >=(JobTrack.Abstractions.AuditEventId left, JobTrack.Abstractions.AuditEventId right) -> bool
+static JobTrack.Abstractions.DepartmentId.operator !=(JobTrack.Abstractions.DepartmentId left, JobTrack.Abstractions.DepartmentId right) -> bool
+static JobTrack.Abstractions.DepartmentId.operator ==(JobTrack.Abstractions.DepartmentId left, JobTrack.Abstractions.DepartmentId right) -> bool
 static JobTrack.Abstractions.EquatableArray.CopyOf<T>(System.Collections.Generic.IEnumerable<T>! items) -> JobTrack.Abstractions.EquatableArray<T>
 static JobTrack.Abstractions.EquatableArray.CopyOf<T>(System.Collections.Immutable.ImmutableArray<T> items) -> JobTrack.Abstractions.EquatableArray<T>
 static JobTrack.Abstractions.EquatableArray.Create<T>(System.ReadOnlySpan<T> items) -> JobTrack.Abstractions.EquatableArray<T>
@@ -204,13 +244,28 @@ static JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.operator !=(JobTr
 static JobTrack.Abstractions.EquatableDictionary<TKey, TValue>.operator ==(JobTrack.Abstractions.EquatableDictionary<TKey, TValue> left, JobTrack.Abstractions.EquatableDictionary<TKey, TValue> right) -> bool
 static JobTrack.Abstractions.EquatableDictionaryFactory.CopyOf<TKey, TValue>(System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>! entries) -> JobTrack.Abstractions.EquatableDictionary<TKey, TValue>
 static JobTrack.Abstractions.HourlyRate.operator !=(JobTrack.Abstractions.HourlyRate left, JobTrack.Abstractions.HourlyRate right) -> bool
+static JobTrack.Abstractions.HourlyRate.operator <(JobTrack.Abstractions.HourlyRate left, JobTrack.Abstractions.HourlyRate right) -> bool
+static JobTrack.Abstractions.HourlyRate.operator <=(JobTrack.Abstractions.HourlyRate left, JobTrack.Abstractions.HourlyRate right) -> bool
 static JobTrack.Abstractions.HourlyRate.operator ==(JobTrack.Abstractions.HourlyRate left, JobTrack.Abstractions.HourlyRate right) -> bool
+static JobTrack.Abstractions.HourlyRate.operator >(JobTrack.Abstractions.HourlyRate left, JobTrack.Abstractions.HourlyRate right) -> bool
+static JobTrack.Abstractions.HourlyRate.operator >=(JobTrack.Abstractions.HourlyRate left, JobTrack.Abstractions.HourlyRate right) -> bool
 static JobTrack.Abstractions.JobNodeId.operator !=(JobTrack.Abstractions.JobNodeId left, JobTrack.Abstractions.JobNodeId right) -> bool
 static JobTrack.Abstractions.JobNodeId.operator ==(JobTrack.Abstractions.JobNodeId left, JobTrack.Abstractions.JobNodeId right) -> bool
+static JobTrack.Abstractions.JobRequestNoteId.operator !=(JobTrack.Abstractions.JobRequestNoteId left, JobTrack.Abstractions.JobRequestNoteId right) -> bool
+static JobTrack.Abstractions.JobRequestNoteId.operator ==(JobTrack.Abstractions.JobRequestNoteId left, JobTrack.Abstractions.JobRequestNoteId right) -> bool
 static JobTrack.Abstractions.Money.operator !=(JobTrack.Abstractions.Money left, JobTrack.Abstractions.Money right) -> bool
+static JobTrack.Abstractions.Money.operator <(JobTrack.Abstractions.Money left, JobTrack.Abstractions.Money right) -> bool
+static JobTrack.Abstractions.Money.operator <=(JobTrack.Abstractions.Money left, JobTrack.Abstractions.Money right) -> bool
 static JobTrack.Abstractions.Money.operator ==(JobTrack.Abstractions.Money left, JobTrack.Abstractions.Money right) -> bool
+static JobTrack.Abstractions.Money.operator >(JobTrack.Abstractions.Money left, JobTrack.Abstractions.Money right) -> bool
+static JobTrack.Abstractions.Money.operator >=(JobTrack.Abstractions.Money left, JobTrack.Abstractions.Money right) -> bool
 static JobTrack.Abstractions.NodeRateOverrideId.operator !=(JobTrack.Abstractions.NodeRateOverrideId left, JobTrack.Abstractions.NodeRateOverrideId right) -> bool
 static JobTrack.Abstractions.NodeRateOverrideId.operator ==(JobTrack.Abstractions.NodeRateOverrideId left, JobTrack.Abstractions.NodeRateOverrideId right) -> bool
+static JobTrack.Abstractions.PasswordPolicy.IsSatisfiedBy(string? password) -> bool
+static JobTrack.Abstractions.PersonalAccessTokenId.operator !=(JobTrack.Abstractions.PersonalAccessTokenId left, JobTrack.Abstractions.PersonalAccessTokenId right) -> bool
+static JobTrack.Abstractions.PersonalAccessTokenId.operator ==(JobTrack.Abstractions.PersonalAccessTokenId left, JobTrack.Abstractions.PersonalAccessTokenId right) -> bool
+static JobTrack.Abstractions.RequestHoldingAreaId.operator !=(JobTrack.Abstractions.RequestHoldingAreaId left, JobTrack.Abstractions.RequestHoldingAreaId right) -> bool
+static JobTrack.Abstractions.RequestHoldingAreaId.operator ==(JobTrack.Abstractions.RequestHoldingAreaId left, JobTrack.Abstractions.RequestHoldingAreaId right) -> bool
 static JobTrack.Abstractions.ScheduleExceptionId.operator !=(JobTrack.Abstractions.ScheduleExceptionId left, JobTrack.Abstractions.ScheduleExceptionId right) -> bool
 static JobTrack.Abstractions.ScheduleExceptionId.operator ==(JobTrack.Abstractions.ScheduleExceptionId left, JobTrack.Abstractions.ScheduleExceptionId right) -> bool
 static JobTrack.Abstractions.ScheduleVersionId.operator !=(JobTrack.Abstractions.ScheduleVersionId left, JobTrack.Abstractions.ScheduleVersionId right) -> bool
@@ -219,20 +274,24 @@ static JobTrack.Abstractions.UserCostRateId.operator !=(JobTrack.Abstractions.Us
 static JobTrack.Abstractions.UserCostRateId.operator ==(JobTrack.Abstractions.UserCostRateId left, JobTrack.Abstractions.UserCostRateId right) -> bool
 static JobTrack.Abstractions.WorkSessionId.operator !=(JobTrack.Abstractions.WorkSessionId left, JobTrack.Abstractions.WorkSessionId right) -> bool
 static JobTrack.Abstractions.WorkSessionId.operator ==(JobTrack.Abstractions.WorkSessionId left, JobTrack.Abstractions.WorkSessionId right) -> bool
-static JobTrack.Abstractions.PersonalAccessTokenId.operator !=(JobTrack.Abstractions.PersonalAccessTokenId left, JobTrack.Abstractions.PersonalAccessTokenId right) -> bool
-static JobTrack.Abstractions.PersonalAccessTokenId.operator ==(JobTrack.Abstractions.PersonalAccessTokenId left, JobTrack.Abstractions.PersonalAccessTokenId right) -> bool
 ~override JobTrack.Abstractions.AppUserId.Equals(object obj) -> bool
 ~override JobTrack.Abstractions.AppUserId.ToString() -> string
 ~override JobTrack.Abstractions.AuditEventId.Equals(object obj) -> bool
 ~override JobTrack.Abstractions.AuditEventId.ToString() -> string
+~override JobTrack.Abstractions.DepartmentId.Equals(object obj) -> bool
+~override JobTrack.Abstractions.DepartmentId.ToString() -> string
 ~override JobTrack.Abstractions.HourlyRate.Equals(object obj) -> bool
-~override JobTrack.Abstractions.HourlyRate.ToString() -> string
 ~override JobTrack.Abstractions.JobNodeId.Equals(object obj) -> bool
 ~override JobTrack.Abstractions.JobNodeId.ToString() -> string
+~override JobTrack.Abstractions.JobRequestNoteId.Equals(object obj) -> bool
+~override JobTrack.Abstractions.JobRequestNoteId.ToString() -> string
 ~override JobTrack.Abstractions.Money.Equals(object obj) -> bool
-~override JobTrack.Abstractions.Money.ToString() -> string
 ~override JobTrack.Abstractions.NodeRateOverrideId.Equals(object obj) -> bool
 ~override JobTrack.Abstractions.NodeRateOverrideId.ToString() -> string
+~override JobTrack.Abstractions.PersonalAccessTokenId.Equals(object obj) -> bool
+~override JobTrack.Abstractions.PersonalAccessTokenId.ToString() -> string
+~override JobTrack.Abstractions.RequestHoldingAreaId.Equals(object obj) -> bool
+~override JobTrack.Abstractions.RequestHoldingAreaId.ToString() -> string
 ~override JobTrack.Abstractions.ScheduleExceptionId.Equals(object obj) -> bool
 ~override JobTrack.Abstractions.ScheduleExceptionId.ToString() -> string
 ~override JobTrack.Abstractions.ScheduleVersionId.Equals(object obj) -> bool
@@ -241,50 +300,3 @@ static JobTrack.Abstractions.PersonalAccessTokenId.operator ==(JobTrack.Abstract
 ~override JobTrack.Abstractions.UserCostRateId.ToString() -> string
 ~override JobTrack.Abstractions.WorkSessionId.Equals(object obj) -> bool
 ~override JobTrack.Abstractions.WorkSessionId.ToString() -> string
-~override JobTrack.Abstractions.PersonalAccessTokenId.Equals(object obj) -> bool
-~override JobTrack.Abstractions.PersonalAccessTokenId.ToString() -> string
-JobTrack.Abstractions.DepartmentId
-JobTrack.Abstractions.DepartmentId.Deconstruct(out long Value) -> void
-JobTrack.Abstractions.DepartmentId.Equals(JobTrack.Abstractions.DepartmentId other) -> bool
-JobTrack.Abstractions.DepartmentId.IsUnspecified.get -> bool
-JobTrack.Abstractions.DepartmentId.Value.get -> long
-JobTrack.Abstractions.DepartmentId.Value.init -> void
-JobTrack.Abstractions.DepartmentId.DepartmentId() -> void
-JobTrack.Abstractions.DepartmentId.DepartmentId(long Value) -> void
-override JobTrack.Abstractions.DepartmentId.GetHashCode() -> int
-static JobTrack.Abstractions.DepartmentId.operator !=(JobTrack.Abstractions.DepartmentId left, JobTrack.Abstractions.DepartmentId right) -> bool
-static JobTrack.Abstractions.DepartmentId.operator ==(JobTrack.Abstractions.DepartmentId left, JobTrack.Abstractions.DepartmentId right) -> bool
-~override JobTrack.Abstractions.DepartmentId.Equals(object obj) -> bool
-~override JobTrack.Abstractions.DepartmentId.ToString() -> string
-JobTrack.Abstractions.RequestHoldingAreaId
-JobTrack.Abstractions.RequestHoldingAreaId.Deconstruct(out long Value) -> void
-JobTrack.Abstractions.RequestHoldingAreaId.Equals(JobTrack.Abstractions.RequestHoldingAreaId other) -> bool
-JobTrack.Abstractions.RequestHoldingAreaId.IsUnspecified.get -> bool
-JobTrack.Abstractions.RequestHoldingAreaId.Value.get -> long
-JobTrack.Abstractions.RequestHoldingAreaId.Value.init -> void
-JobTrack.Abstractions.RequestHoldingAreaId.RequestHoldingAreaId() -> void
-JobTrack.Abstractions.RequestHoldingAreaId.RequestHoldingAreaId(long Value) -> void
-override JobTrack.Abstractions.RequestHoldingAreaId.GetHashCode() -> int
-static JobTrack.Abstractions.RequestHoldingAreaId.operator !=(JobTrack.Abstractions.RequestHoldingAreaId left, JobTrack.Abstractions.RequestHoldingAreaId right) -> bool
-static JobTrack.Abstractions.RequestHoldingAreaId.operator ==(JobTrack.Abstractions.RequestHoldingAreaId left, JobTrack.Abstractions.RequestHoldingAreaId right) -> bool
-~override JobTrack.Abstractions.RequestHoldingAreaId.Equals(object obj) -> bool
-~override JobTrack.Abstractions.RequestHoldingAreaId.ToString() -> string
-JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.RequesterStatus.None = 0 -> JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.RequesterStatus.Accepted = 2 -> JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.RequesterStatus.Cancelled = 6 -> JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.RequesterStatus.Completed = 5 -> JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.RequesterStatus.InProgress = 3 -> JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.RequesterStatus.Submitted = 1 -> JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.RequesterStatus.Waiting = 4 -> JobTrack.Abstractions.RequesterStatus
-JobTrack.Abstractions.PasswordPolicy
-const JobTrack.Abstractions.PasswordPolicy.MinimumLength = 6 -> int
-static JobTrack.Abstractions.PasswordPolicy.IsSatisfiedBy(string? password) -> bool
-override JobTrack.Abstractions.JobRequestNoteId.GetHashCode() -> int
-static JobTrack.Abstractions.JobRequestNoteId.operator !=(JobTrack.Abstractions.JobRequestNoteId left, JobTrack.Abstractions.JobRequestNoteId right) -> bool
-static JobTrack.Abstractions.JobRequestNoteId.operator ==(JobTrack.Abstractions.JobRequestNoteId left, JobTrack.Abstractions.JobRequestNoteId right) -> bool
-~override JobTrack.Abstractions.JobRequestNoteId.Equals(object obj) -> bool
-~override JobTrack.Abstractions.JobRequestNoteId.ToString() -> string
-JobTrack.Abstractions.BranchAchievement
-JobTrack.Abstractions.BranchAchievement.Unfinished = 0 -> JobTrack.Abstractions.BranchAchievement
-JobTrack.Abstractions.BranchAchievement.Success = 1 -> JobTrack.Abstractions.BranchAchievement

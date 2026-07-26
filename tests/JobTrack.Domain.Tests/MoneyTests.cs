@@ -47,4 +47,33 @@ public sealed class MoneyTests
 	[InlineData(0.025, 0.02)]
 	public void Rounding_to_pennies_breaks_a_midpoint_to_the_nearest_even_penny(double amount, double expected) =>
 		new Money((decimal)amount).RoundToPennies().Should().Be(new Money((decimal)expected));
+
+	[Fact]
+	public void Formatting_renders_sterling_with_two_decimal_places() => new Money(1234.5m).ToString().Should().Be("£1,234.50");
+
+	[Fact]
+	public void Formatting_honours_an_explicit_numeric_format() =>
+		new Money(1234.5m).ToString("N4", null).Should().Be("£1,234.5000");
+
+	[Fact]
+	public void A_smaller_amount_compares_below_a_larger_one() => new Money(5m).CompareTo(new Money(7m)).Should().BeNegative();
+
+	[Fact]
+	public void Equal_amounts_compare_equal() => new Money(5m).CompareTo(new Money(5m)).Should().Be(0);
+
+	[Fact]
+	public void The_comparison_operators_order_amounts()
+	{
+		(new Money(5m) < new Money(7m)).Should().BeTrue();
+		(new Money(7m) > new Money(5m)).Should().BeTrue();
+		(new Money(5m) <= new Money(5m)).Should().BeTrue();
+		(new Money(5m) >= new Money(5m)).Should().BeTrue();
+	}
+
+	[Fact]
+	public void Amounts_sort_by_value() =>
+		new[] { new Money(3m), new Money(1m), new Money(2m) }
+			.Order()
+			.Should()
+			.Equal(new Money(1m), new Money(2m), new Money(3m));
 }

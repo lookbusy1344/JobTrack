@@ -33,7 +33,7 @@ internal sealed class FakeCostQueries : ICostQueries
 	public Task<HierarchyTotalsResult> GetHierarchyTotalsAsync(
 		GetHierarchyTotalsRequest request, CancellationToken cancellationToken = default)
 	{
-		GetHierarchyTotalsCallCount++;
+		++GetHierarchyTotalsCallCount;
 		if (_deniedActors.Contains(request.Context.Actor)) {
 			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view costs for node {request.NodeId}.");
 		}
@@ -51,7 +51,7 @@ internal sealed class FakeCostQueries : ICostQueries
 
 	public Task<BulkNodeCostResult> GetBulkNodeCostsAsync(GetBulkNodeCostsRequest request, CancellationToken cancellationToken = default)
 	{
-		GetBulkNodeCostsCallCount++;
+		++GetBulkNodeCostsCallCount;
 		LastBulkRequest = request;
 		_bulkBatchSizes.Add(request.NodeIds.Count);
 		// Mirror the real CostQueries backstop: a batch wider than the cap is a caller contract

@@ -30,4 +30,12 @@ public readonly record struct AllocatedShare
 
 	/// <summary>The number of active sessions sharing the segment, <c>N</c>.</summary>
 	public int ConcurrencyDivisor { get; }
+
+	/// <summary>
+	///     Whether this is the all-zero <see langword="default" /> value, which bypassed the validating
+	///     constructor and so carries a zero <see cref="ConcurrencyDivisor" />. The share
+	///     <c>SegmentTicks / ConcurrencyDivisor</c> is undefined in that state, so a consumer computing
+	///     it must reject such a value rather than divide.
+	/// </summary>
+	public bool IsUninitialized => ConcurrencyDivisor == 0;
 }

@@ -253,7 +253,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 			["__RequestVerificationToken"] = token,
 		};
 
-		for (var i = 0; i < NewChildSlotCount; i++) {
+		for (var i = 0; i < NewChildSlotCount; ++i) {
 			form[$"Input.NewChildren[{i}].Description"] = i == 0 ? firstNewChildDescription : string.Empty;
 			form[$"Input.NewChildren[{i}].OwnerUserId"] = newChildOwnerId?.Value.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
 			form[$"Input.NewChildren[{i}].Priority"] = nameof(Priority.Medium);

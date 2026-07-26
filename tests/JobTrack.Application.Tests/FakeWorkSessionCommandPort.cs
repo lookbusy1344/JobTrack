@@ -290,6 +290,68 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		};
 	}
 
+	public Task<PauseLeafResult> PauseLeafAsync(PauseLeafRequest request, CancellationToken cancellationToken = default)
+	{
+		_ = nodePort.FindLeafWork(request.JobNodeId)
+			?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
+
+		var actualActive = _sessions.Values
+			.Where(session => session.LeafWorkId == request.JobNodeId && session.FinishedAt is null)
+			.OrderBy(session => session.Id.Value)
+			.ToList();
+		var expected = request.ExpectedActiveSessions
+			.OrderBy(expectedSession => expectedSession.Id.Value)
+			.ToList();
+		var matchesExpected = actualActive.Count == expected.Count
+							  && actualActive.Zip(expected)
+								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.Version == pair.Second.Version);
+		if (!matchesExpected) {
+			throw new ConcurrencyConflictException(
+				"The leaf's current active-session set no longer matches the confirmed set.");
+		}
+
+		var ownsNodeOrAncestor = nodePort.OwnsNodeOrAncestor(request.Context.Actor, request.JobNodeId);
+		var roles = nodePort.RolesOf(request.Context.Actor);
+		foreach (var session in actualActive) {
+			if (!WorkSessionAccessPolicy.CanFinishSession(roles, ownsNodeOrAncestor, request.Context.Actor == session.WorkedByUserId)) {
+				throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not pause job node {request.JobNodeId}.");
+			}
+		}
+
+		var finishedAt = request.FinishedAt ?? NowToReturn;
+		if (request.FinishedAt is not null) {
+			if (actualActive.Exists(session => finishedAt <= session.StartedAt)) {
+				throw new InvariantViolationException(
+					"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+			}
+
+			if (finishedAt > NowToReturn) {
+				throw new InvariantViolationException(
+					"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+			}
+		}
+
+		var finished = new List<WorkSessionResult>();
+		foreach (var session in actualActive) {
+			var updated = session with { FinishedAt = finishedAt, ChangedAt = NowToReturn, Version = session.Version + 1 };
+			_sessions[updated.Id] = updated;
+			finished.Add(updated);
+		}
+
+		var writeUpChanged = false;
+		JobNodeResult? writtenUpNode = null;
+		if (request.WriteUpChange is WriteUpChange change) {
+			(writeUpChanged, writtenUpNode) = ApplyWriteUpChange(request.JobNodeId, change);
+		}
+
+		return Task.FromResult<PauseLeafResult>(new() {
+			JobNodeId = request.JobNodeId,
+			FinishedSessions = [.. finished],
+			WriteUpChanged = writeUpChanged,
+			Node = writtenUpNode,
+		});
+	}
+
 	public async Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(
 		ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default)
 	{

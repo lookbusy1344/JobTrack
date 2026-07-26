@@ -56,7 +56,7 @@ public sealed class OverlapDiscoveryPerformanceTests : IAsyncLifetime
 			await using var reader = await command.ExecuteReaderAsync();
 			var rowCount = 0;
 			while (await reader.ReadAsync()) {
-				rowCount++;
+				++rowCount;
 			}
 
 			rowCount.Should().Be(100);

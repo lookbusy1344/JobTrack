@@ -193,7 +193,7 @@ internal static class SubtreeImportPlanner
 		var achieved = new Dictionary<long, bool>(ordered.Count);
 		var latestFinish = new Dictionary<long, Instant?>(ordered.Count);
 
-		for (var i = ordered.Count - 1; i >= 0; i--) {
+		for (var i = ordered.Count - 1; i >= 0; --i) {
 			var node = ordered[i];
 
 			if (!childrenByParent.TryGetValue(node.LocalId, out var children)) {

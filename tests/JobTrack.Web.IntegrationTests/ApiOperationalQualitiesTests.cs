@@ -78,7 +78,7 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 		var authCookie = await SignInAsync("api-ops.limited");
 
 		HttpResponseMessage? rejected = null;
-		for (var i = 0; i < 10 && rejected is null; i++) {
+		for (var i = 0; i < 10 && rejected is null; ++i) {
 			var response = await GetAsync($"/api/jobs/{rootId.Value}", authCookie);
 			if (response.StatusCode == HttpStatusCode.TooManyRequests) {
 				rejected = response;
@@ -99,7 +99,7 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 
 		// Exhaust the first user's entire configured budget (3) -- if partitioning were broken
 		// and every caller shared one bucket, this would also exhaust the second user's budget.
-		for (var i = 0; i < 3; i++) {
+		for (var i = 0; i < 3; ++i) {
 			var firstUsersResponse = await GetAsync($"/api/jobs/{rootId.Value}", firstCookie);
 			firstUsersResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		}

@@ -26,35 +26,74 @@ public static class RateResolver
 		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
 		IReadOnlyCollection<NodeRateOverride> nodeOverrides,
 		IReadOnlyCollection<UserCostRate> userCostRates,
-		HourlyRate? userDefaultRate)
+		HourlyRate? userDefaultRate) =>
+		Resolve(nodeId, at, nodesById, exceptions, IndexOverridesByNode(nodeOverrides), userCostRates, userDefaultRate);
+
+	/// <summary>
+	///     Groups <paramref name="nodeOverrides" /> by node once. A caller resolving many instants
+	///     against one unchanging override set — the cost engine resolves a rate per segment allocation —
+	///     builds this once and passes it to the internal overload rather than regrouping per
+	///     resolution. Declaration order within a node is preserved, since resolution takes the first
+	///     effective override it finds.
+	/// </summary>
+	internal static Dictionary<JobNodeId, List<NodeRateOverride>> IndexOverridesByNode(IReadOnlyCollection<NodeRateOverride> nodeOverrides)
 	{
-		var overtimeException = exceptions.FirstOrDefault(exception => exception.Effect switch {
-			ScheduleExceptionEffect.None => false,
-			ScheduleExceptionEffect.AddWorkingTime =>
-				exception.RateOverride is not null && exception.Interval.Contains(at),
-			ScheduleExceptionEffect.RemoveWorkingTime => false,
-			_ => throw new ArgumentOutOfRangeException(nameof(exceptions), exception.Effect, "Unknown schedule exception effect."),
-		});
-		if (overtimeException is not null) {
-			return new(overtimeException.RateOverride!.Value, RateSource.OvertimeException);
+		var overridesByNode = new Dictionary<JobNodeId, List<NodeRateOverride>>();
+		foreach (var nodeOverride in nodeOverrides) {
+			if (!overridesByNode.TryGetValue(nodeOverride.NodeId, out var candidates)) {
+				candidates = [];
+				overridesByNode[nodeOverride.NodeId] = candidates;
+			}
+
+			candidates.Add(nodeOverride);
 		}
 
-		var overridesByNode = nodeOverrides.GroupBy(over => over.NodeId).ToDictionary(group => group.Key, group => group.ToList());
+		return overridesByNode;
+	}
+
+	/// <summary>
+	///     Resolves against an override index already built by <see cref="IndexOverridesByNode" />.
+	/// </summary>
+	/// <exception cref="MissingRateException">No rate source applies.</exception>
+	internal static ResolvedRate Resolve(
+		JobNodeId nodeId,
+		Instant at,
+		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
+		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
+		IReadOnlyDictionary<JobNodeId, List<NodeRateOverride>> overridesByNode,
+		IReadOnlyCollection<UserCostRate> userCostRates,
+		HourlyRate? userDefaultRate)
+	{
+		foreach (var exception in exceptions) {
+			var priced = exception.Effect switch {
+				ScheduleExceptionEffect.None => false,
+				ScheduleExceptionEffect.AddWorkingTime =>
+					exception.RateOverride is not null && exception.Interval.Contains(at),
+				ScheduleExceptionEffect.RemoveWorkingTime => false,
+				_ => throw new ArgumentOutOfRangeException(nameof(exceptions), exception.Effect, "Unknown schedule exception effect."),
+			};
+			if (priced) {
+				return new(exception.RateOverride!.Value, RateSource.OvertimeException);
+			}
+		}
+
 		JobNodeId? currentId = nodeId;
 		while (currentId is JobNodeId id) {
 			if (overridesByNode.TryGetValue(id, out var candidates)) {
-				var effective = candidates.FirstOrDefault(over => over.IsEffectiveAt(at));
-				if (effective is not null) {
-					return new(effective.Rate, RateSource.NodeOverride);
+				foreach (var candidate in candidates) {
+					if (candidate.IsEffectiveAt(at)) {
+						return new(candidate.Rate, RateSource.NodeOverride);
+					}
 				}
 			}
 
 			currentId = HierarchyNodeLookup.GetRequired(nodesById, id).ParentId;
 		}
 
-		var userRate = userCostRates.FirstOrDefault(rate => rate.IsEffectiveAt(at));
-		if (userRate is not null) {
-			return new(userRate.Rate, RateSource.UserCostRate);
+		foreach (var userRate in userCostRates) {
+			if (userRate.IsEffectiveAt(at)) {
+				return new(userRate.Rate, RateSource.UserCostRate);
+			}
 		}
 
 		if (userDefaultRate is HourlyRate defaultRate) {

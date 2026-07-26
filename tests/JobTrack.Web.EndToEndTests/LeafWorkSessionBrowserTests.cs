@@ -289,13 +289,20 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await page.GetByRole(AriaRole.Button, new() { Name = "Start session", Exact = true }).PressAsync("Enter");
 		await page.GetByText("Session started.", new() { Exact = true }).WaitForAsync();
 
+		// Pause and Complete both end the worker's turn on this leaf, so each returns to Browse rooted
+		// at it (ADR 0044) -- the workflow continues by coming back to /Jobs/Work, exactly as a user
+		// would through the node link there.
 		await page.Locator("#end-session")
 			.GetByRole(AriaRole.Button, new() { Name = "Pause job", Exact = true }).PressAsync("Enter");
 		await page.GetByText("Ends this session; the job stays In Progress.", new() { Exact = true }).WaitForAsync();
+		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
 
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 		await page.GetByRole(AriaRole.Button, new() { Name = "Complete job", Exact = true }).PressAsync("Enter");
 		await page.GetByText("Job completed.", new() { Exact = true }).WaitForAsync();
+		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
 
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 		var reason = page.Locator("#reopenReason");
 		await reason.FocusAsync();
 		(await page.EvaluateAsync<string>("document.activeElement.id")).Should().Be("reopenReason");
@@ -328,8 +335,36 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await page.GetByText(
 			$"Job completed and {RequiredSimultaneousWorkerCount} sessions finished.",
 			new() { Exact = true }).WaitForAsync();
+		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 		(await page.GetByText("Closed", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
 		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker completion");
+	}
+
+	[Fact]
+	public async Task Pausing_a_multi_worker_leaf_stops_every_worker_s_clock()
+	{
+		var (leafId, _) = await fixture.SeedActiveSessionsAsync(
+			"Golden multi-worker pause", RequiredSimultaneousWorkerCount);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		await page.Locator("#end-session")
+			.GetByRole(AriaRole.Button, new() { Name = "Pause job", Exact = true }).PressAsync("Enter");
+		await page.GetByText(
+			$"Job paused and {RequiredSimultaneousWorkerCount} sessions finished.", new() { Exact = true }).WaitForAsync();
+		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+		(await page.GetByText("Paused", new() { Exact = true }).First.IsVisibleAsync()).Should()
+			.BeTrue("no worker is left clocked on, so the leaf reads as paused");
+		(await page.GetByText("Active since", new() { Exact = false }).CountAsync()).Should().Be(0);
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker pause");
 	}
 
 	[Fact]
@@ -360,7 +395,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 	private static async Task TabToButtonAsync(IPage page, string buttonText, int maxTabs)
 	{
-		for (var attempt = 0; attempt < maxTabs; attempt++) {
+		for (var attempt = 0; attempt < maxTabs; ++attempt) {
 			await page.Keyboard.PressAsync("Tab");
 			var isMatch = await page.EvaluateAsync<bool>(
 				"text => document.activeElement.tagName === 'BUTTON' && document.activeElement.textContent.trim() === text",

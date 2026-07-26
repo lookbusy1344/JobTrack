@@ -295,7 +295,7 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		await jobNodePort.AddPrerequisiteAsync(new() { Context = context, RequiredJobId = requiredLeaf.Id, DependentJobId = candidateLeaf.Id });
 
 		var decoyIds = new List<JobNodeId>();
-		for (var index = 0; index < 30; index++) {
+		for (var index = 0; index < 30; ++index) {
 			var decoy = await jobNodePort.AddChildAsync(new() {
 				Context = context,
 				ParentId = branchDecoy.Id,

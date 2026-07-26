@@ -21,7 +21,7 @@ internal sealed class FakePrerequisiteQueryPort : IPrerequisiteQueryPort
 	public Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesAsync(
 		JobNodeId nodeId, int offset = 0, int? limit = null, CancellationToken cancellationToken = default)
 	{
-		GetPrerequisitesCallCount++;
+		++GetPrerequisitesCallCount;
 
 		if (!_nodes.Contains(nodeId)) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
@@ -36,7 +36,7 @@ internal sealed class FakePrerequisiteQueryPort : IPrerequisiteQueryPort
 
 	public Task<int> CountDirectDependentsAsync(JobNodeId requiredJobId, CancellationToken cancellationToken = default)
 	{
-		CountDirectDependentsCallCount++;
+		++CountDirectDependentsCallCount;
 
 		if (!_nodes.Contains(requiredJobId)) {
 			throw new EntityNotFoundException($"Job node {requiredJobId} does not exist.");

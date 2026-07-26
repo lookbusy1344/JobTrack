@@ -93,7 +93,7 @@ public sealed class AchievementCalculatorTests
 		var leafId = new JobNodeId(depth);
 		nodes[leafId] = Leaf(leafId, new(depth - 1), Achievement.Success);
 
-		for (var level = depth - 1; level >= 0; level--) {
+		for (var level = depth - 1; level >= 0; --level) {
 			var id = new JobNodeId(level);
 			var parentId = level == 0 ? (JobNodeId?)null : new JobNodeId(level - 1);
 			nodes[id] = new(id, parentId, [new(level + 1)], null);

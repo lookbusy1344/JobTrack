@@ -5,6 +5,10 @@
 **Amends:** ADR 0001 (achievement states and reopening authority), ADR 0032 (owner-gated work-session
 authorization), ADR 0038 (auto-advance on session start), ADR 0044 (closed-leaf session creation and
 closure serialization).
+**Amended by:** ADR 0047 (`CompleteLeafAsync` records any terminal achievement, superseding §1/§3's
+Success-only restriction) and §7 below, added 2026-07-26, which makes pausing a leaf a third atomic
+composite that stops *every* worker's clock rather than the single `FinishSessionAsync` §3 and §5
+originally assumed.
 
 ## Context
 
@@ -24,6 +28,10 @@ and later stages cite them as settled.
 ## Decision
 
 ### 1. Two new atomic composites, additive to the existing primitives
+
+> **Amended by §7 (2026-07-26).** A third composite, `PauseLeafAsync`, was added on the same terms;
+> everything this section says about revalidation, atomicity, and not being a UI-level wrapper around
+> two separately committing calls applies to it identically.
 
 `StartWorkAsync`, `FinishSessionAsync`, `SetAchievementAsync`, and `CorrectSessionAsync` are
 unchanged in meaning and remain independently callable (ADR 0001, 0038, 0044 all stay in force for
@@ -93,8 +101,10 @@ distinct, manual `SetAchievementAsync` calls, unaffected by this ADR, and ADR 00
 that a terminal transition is rejected while any session is active still governs them directly — they
 gain no atomic "finish-all-and-close" composite here. Ordinary `FinishSessionAsync` also gains no
 implicit meaning: finishing a session never implies success, and the plan's UI routes every "end
-session" action through an explicit choice between pausing (finish only) and completing (the new
-composite) rather than overloading the existing finish action.
+session" action through an explicit choice between pausing (no achievement change) and completing
+(the new composite) rather than overloading the existing finish action. §7 amends what the pausing
+half of that choice invokes — a composite of its own rather than a bare `FinishSessionAsync` — but
+not the choice itself.
 
 `CompleteLeafAsync` accepts a caller-confirmed active-session set of zero, one, or many sessions:
 
@@ -131,7 +141,7 @@ node)`, with the Administrator/JobManager bypass unconditional. This ADR adds on
 still controls the node the session belongs to at finish time. Ownership can change after a session
 starts (reassignment, release to the pool, pickup by someone else); without this exception a worker
 who started a session while controlling the node could be left unable to stop their own clock purely
-because control moved elsewhere in the meantime. This exception governs "pause work" (finish, no
+because control moved elsewhere in the meantime. This exception governs ending a session (no
 achievement change) only — it grants no completion authority.
 
 Everything else about `CanManage` is unchanged:
@@ -142,8 +152,9 @@ Everything else about `CanManage` is unchanged:
   the terminal transition — controlling owner, Job Manager, or Administrator — because it ends every
   affected active session *and* changes achievement; the new self-finish exception does not extend to
   it;
-- a participant who no longer controls the node may pause only their own session; they may not finish
-  another worker's session and may not complete the leaf.
+- a participant who no longer controls the node may end only their own session; they may not finish
+  another worker's session and may not complete the leaf. Per §7 this also bounds which leaves they
+  may *pause*: a leaf they alone are clocked onto, never one a colleague is also working.
 
 `CanView` (ADR 0032's separate read predicate) is untouched.
 
@@ -155,6 +166,51 @@ This ADR adds no bypass: `ReopenAndStartWorkAsync` still requires the node to be
 archive half must already be clear before the composite runs). The application layer names both
 blockers when both are true and links to the existing Restore operation; a later, separate product
 decision may add an elevated "Restore, reopen, and start" composite, but this ADR does not create one.
+
+### 7. Pausing a leaf stops every worker on it (added 2026-07-26; amends §1, §3, §5)
+
+§3 framed pausing as "finish only" — the plain `FinishSessionAsync` primitive, one session — and §5
+scoped its self-finish exception to that single-session act. On a leaf with one worker the two
+readings coincide, so the gap only showed on a leaf several workers were clocked onto: pressing
+"Pause job" ended the actor's own session and left every colleague's clock running, so the leaf still
+read as `InProgress` with active sessions. That is not a pause. **A job is paused or it is not**;
+there is no coherent half-paused state in which the job is described as stopped while time is still
+being recorded against it.
+
+A third atomic composite therefore joins §1's two, on identical terms:
+
+- **`PauseLeafAsync`** — finishes an exact, caller-confirmed set of active sessions (zero, one, or
+  many) at one captured instant and leaves the leaf's achievement **untouched**, in one commit. It is
+  `CompleteLeafAsync` (§1, §3) minus the achievement transition and minus the prerequisite recheck
+  that only a closing transition needs. It accepts the same zero/one/several cases §3 enumerates, with
+  the same re-verification rule: the active-session ids and versions it is about to finish must be
+  exactly the set the caller confirmed, so a session that started or finished concurrently after the
+  caller's read produces a conflict rather than being silently swept in or silently left running.
+
+`FinishSessionAsync`/`FinishSessionAndUpdateWriteUpAsync` are unchanged and remain the single-session
+primitives for ending one named worker's session on its own — the per-row action in a leaf's Sessions
+panel is exactly that, and does not become a leaf-wide pause. What changes is which command the
+leaf-level "Pause job" decision invokes.
+
+**Authority.** Pausing requires the authority to finish each session in the confirmed set — §5's
+`CanFinishSession` predicate applied per session, not a single node-level test. Consequently:
+
+1. a worker with no node control may pause a leaf **only they** are clocked onto (their own session,
+   via §5's self-finish exception);
+2. pausing a leaf anyone else is also clocked onto requires direct/ancestor node control, Job Manager,
+   or Administrator — the same authority §5 already requires to finish another worker's session;
+3. pausing never requires *completion* authority, because it changes no achievement. A controlling
+   owner who may not close the leaf may still stop its clocks.
+
+This is strictly the union of the per-session rules §5 already states; it introduces no new predicate
+and no new bypass. It is deliberately looser than `CompleteLeafAsync`'s node-level completion test
+(§5 bullet 2) and deliberately tighter than "anyone with a session here", so pausing can never be used
+to stop a colleague's clock on a leaf the actor has no standing on.
+
+An optional write-up change may ride in the same commit, on the same terms
+`FinishSessionAndUpdateWriteUpAsync` already established — and, as there, the write-up half
+additionally requires the node-control authority an edit would, distinct from the per-session finish
+authority above.
 
 ## Framework Design Guidelines review note (Stage 1 public surface)
 
@@ -175,6 +231,14 @@ policy in `JobTrack.Domain.Authorization` already uses, so no new calling conven
 are updated to declare every new public member; M6 has passed, so ADR 0013's compatibility policy
 treats this addition as a compatibility commitment going forward.
 
+§7's `PauseLeafAsync` was reviewed on the same basis: `PauseLeafRequest`/`PauseLeafResult` are new
+sealed immutable records following the same `{Verb}{Noun}Request`/`Result` naming, reusing the
+existing `ExpectedActiveSession` and `WriteUpChange` types rather than introducing parallel ones, and
+the member is purely additive on `IWorkCommands`/`IWorkSessionCommandPort`. It introduces no new
+domain policy — authority is `WorkSessionAccessPolicy.CanFinishSession` applied per session. Unlike
+`CompleteLeafRequest`, it carries no leaf `Version`: it never writes `leaf_work`, so a leaf-level
+optimistic-concurrency token would be a field the command could only ignore.
+
 ## Consequences
 
 - `IWorkCommands` and the relevant persistence port gain `CompleteLeafAsync` and
@@ -184,6 +248,15 @@ treats this addition as a compatibility commitment going forward.
 - `WorkSessionAccessPolicy.CanManage` gains the narrow self-finish exception in §5; its unit tests and
   XML documentation must state the exception explicitly rather than leave it as an unstated special
   case inside `controls`.
+- Per §7, `IWorkCommands` and the persistence port also gain `PauseLeafAsync`, and both providers
+  share the confirmed-active-set load and finish-instant validation between it and `CompleteLeafAsync`
+  rather than duplicating either rule per command. The web ending form posts **one** confirmed
+  active-session set for both buttons, so Pause and Complete can never disagree about which sessions
+  they are ending.
+- §7's "every worker" rule needs a per-provider concurrency test of its own (pause vs. pause of the
+  same multi-worker leaf: exactly one wins, and the winner stops every clock at a single instant),
+  alongside the shared contract tests for the achievement staying `InProgress` and for a stale
+  confirmed set conflicting instead of pausing part of the leaf.
 - `AchievementTransitions`/`SetAchievementAsync` gain no new edges; `CompleteLeafAsync` reuses the
   existing `InProgress -> Success` edge, `ReopenAndStartWorkAsync` reuses the existing
   `terminal -> Waiting` edge plus ADR 0038's `Waiting -> InProgress` edge — no new transition graph

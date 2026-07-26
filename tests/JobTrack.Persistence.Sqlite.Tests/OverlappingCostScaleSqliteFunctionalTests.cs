@@ -96,7 +96,7 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 				Rate = new(new(20m), BaseInstant, null),
 			});
 
-			for (var k = 1; k <= LeavesPerWorker; k++) {
+			for (var k = 1; k <= LeavesPerWorker; ++k) {
 				var leaf = await jobNodePort.AddChildAsync(new() {
 					Context = administratorContext,
 					ParentId = branch.Id,

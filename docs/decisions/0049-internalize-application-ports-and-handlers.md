@@ -88,3 +88,19 @@ grants `InternalsVisibleTo` to the two provider test projects that override them
   their request/result records) plus the two provider assemblies' own public `JobTrackPostgreSql`/
   `JobTrackSqlite` factory types — regressing this internalization (e.g. a future PR making a handler
   public again) fails that test.
+
+### Extended 2026-07-26 to `JobTrack.Persistence.Shared`
+
+This ADR's reasoning applies unchanged to `JobTrack.Persistence.Shared`, which it did not cover.
+`docs/plans/2026-07-26-framework-design-guidelines-compliance-plan.md` §2.1 found four static classes
+(`JobNodeWriteExceptionTranslation`, `JobNodeHierarchyQueries`, `JobTrackModelConfiguration`,
+`AuditEventWriter`) and four row records public there, despite that project's own csproj Description
+asserting every type is internal — and the assembly is packaged, so the surface shipped. It was also
+the one library project with no `PublicAPI` baseline.
+
+All eight are now `internal`, matching the sibling types in the same folder. It compiled unchanged,
+confirming the existing `InternalsVisibleTo` list already covered every real consumer. Two
+enforcement layers were added, because the gap existed precisely where neither was watching:
+`EnablePublicApiAnalyzers` with empty `PublicAPI` files (RS0016 on any new public member), and a
+`The_shared_persistence_assembly_exports_nothing` case in `PersistencePublicSurfaceTests` — whose
+existing theory covered the two providers but not this assembly.

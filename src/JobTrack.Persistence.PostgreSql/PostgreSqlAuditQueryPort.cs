@@ -1,5 +1,6 @@
 namespace JobTrack.Persistence.PostgreSql;
 
+using System.Collections.Frozen;
 using System.Text.Json;
 using Abstractions;
 using Application;
@@ -87,7 +88,11 @@ internal sealed class PostgreSqlAuditQueryPort : IAuditQueryPort
 /// </summary>
 internal static class AuditQueryAssembly
 {
-	private static readonly string[] SensitiveEntityTypes = ["user_cost_rate", "node_rate_override"];
+	// FrozenSet rather than string[]: readonly protects the reference, not the elements, and this
+	// is an in-memory membership test over already-materialised rows, so a set is also the better
+	// lookup.
+	private static readonly FrozenSet<string> SensitiveEntityTypes =
+		FrozenSet.ToFrozenSet(["user_cost_rate", "node_rate_override"], StringComparer.Ordinal);
 
 	public static async Task<List<AuditEventRecord>> SearchAsync(
 		DbContext context, AuditEventSearchFilter filter, AuditEventSearchCursor? before, int limit, CancellationToken cancellationToken)

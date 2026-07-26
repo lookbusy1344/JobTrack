@@ -55,7 +55,7 @@ public sealed class AccountCredentialCommandsTests
 		public Task<ChangeOwnPasswordResult> ChangeOwnPasswordAsync(
 			ChangeOwnPasswordRequest request, CancellationToken cancellationToken = default)
 		{
-			ChangeOwnPasswordCallCount++;
+			++ChangeOwnPasswordCallCount;
 			return Task.FromResult(new ChangeOwnPasswordResult { SecurityStamp = "security-stamp", ConcurrencyStamp = "concurrency-stamp" });
 		}
 	}

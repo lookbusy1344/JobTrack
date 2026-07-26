@@ -266,7 +266,12 @@ internal sealed class CostQueries : ICostQueries
 										 OwnsNodeOrAncestor(nodeId, request.Context.Actor, inputs.NodesById, inputs.OwnerUserIdsById)))
 					.ToArray();
 
-				var exactCosts = new Dictionary<JobNodeId, Money>();
+				// Every worker's leaf costs accumulate into one combined map first, so the hierarchy is
+				// walked once for the whole page rather than once per (worker, candidate) pair. Summing
+				// leaf costs before aggregating is exact: a root's total is a plain sum over the costed
+				// leaves beneath it, so summing per worker and then per root, or per root over the
+				// already-combined leaves, adds the same set of decimal amounts either way.
+				var combinedLeafCosts = new Dictionary<JobNodeId, decimal>();
 				foreach (var worker in inputs.Workers) {
 					var allocations = CostSegmentPartitioner.Partition(
 						worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
@@ -274,12 +279,15 @@ internal sealed class CostQueries : ICostQueries
 					var leafCosts = CostEngine.ComputeLeafCosts(
 						allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, worker.UserDefaultRate);
 
-					foreach (var nodeId in authorizedNodeIds) {
-						var contribution = HierarchicalCostAggregator.Aggregate(nodeId, inputs.NodesById, leafCosts)
-							.GetValueOrDefault(nodeId, new(0m));
-						exactCosts[nodeId] = new(exactCosts.GetValueOrDefault(nodeId, new(0m)).Amount + contribution.Amount);
+					foreach (var (leafId, amount) in leafCosts) {
+						combinedLeafCosts[leafId] = combinedLeafCosts.GetValueOrDefault(leafId) + amount.Amount;
 					}
 				}
+
+				var exactCosts = HierarchicalCostAggregator.SumSubtreeTotals(
+					authorizedNodeIds,
+					inputs.NodesById,
+					combinedLeafCosts.ToDictionary(entry => entry.Key, entry => new Money(entry.Value)));
 
 				var displayedCosts = authorizedNodeIds.ToDictionary(
 					nodeId => nodeId, nodeId => exactCosts.GetValueOrDefault(nodeId, new(0m)).RoundToPennies());

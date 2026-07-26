@@ -53,16 +53,21 @@ public static class CostEngine
 		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
 		IReadOnlyCollection<NodeRateOverride> nodeOverrides,
 		IReadOnlyCollection<UserCostRate> userCostRates,
-		HourlyRate? userDefaultRate) =>
-		allocations
-			.Select(allocation => (
-				allocation.NodeId,
-				Contribution: SegmentCostCalculator.Calculate(
-					allocation.Share,
-					RateResolver.Resolve(
-						allocation.NodeId, allocation.Segment.Start, nodesById, exceptions, nodeOverrides, userCostRates, userDefaultRate).Rate)))
-			.GroupBy(entry => entry.NodeId)
-			.ToDictionary(group => group.Key, group => new Money(group.Sum(entry => entry.Contribution.Amount)));
+		HourlyRate? userDefaultRate)
+	{
+		// One override index for the whole allocation set: the rate resolution below runs once per
+		// allocation, and regrouping the same unchanging overrides per call dominated its cost.
+		var overridesByNode = RateResolver.IndexOverridesByNode(nodeOverrides);
+		var leafCosts = new Dictionary<JobNodeId, decimal>();
+		foreach (var allocation in allocations) {
+			var rate = RateResolver.Resolve(
+				allocation.NodeId, allocation.Segment.Start, nodesById, exceptions, overridesByNode, userCostRates, userDefaultRate).Rate;
+			leafCosts[allocation.NodeId] =
+				leafCosts.GetValueOrDefault(allocation.NodeId) + SegmentCostCalculator.Calculate(allocation.Share, rate).Amount;
+		}
+
+		return leafCosts.ToDictionary(entry => entry.Key, entry => new Money(entry.Value));
+	}
 
 	/// <summary>Computes exact hierarchy costs together with their canonical segment trace.</summary>
 	public static CostCalculation Calculate(
@@ -75,21 +80,29 @@ public static class CostEngine
 		IReadOnlyCollection<UserCostRate> userCostRates,
 		HourlyRate? userDefaultRate)
 	{
-		var sessionNodeIds = allocations
-			.GroupBy(allocation => allocation.SessionId)
-			.ToDictionary(group => group.Key, group => group.First().NodeId);
+		var sessionNodeIds = new Dictionary<WorkSessionId, JobNodeId>();
+		foreach (var allocation in allocations) {
+			_ = sessionNodeIds.TryAdd(allocation.SessionId, allocation.NodeId);
+		}
+
 		var activeSessionsBySegment = allocations
 			.GroupBy(allocation => allocation.Segment)
 			.ToDictionary(
 				group => group.Key,
 				group => EquatableArray.CopyOf(group.Select(allocation => allocation.SessionId).OrderBy(id => id.Value)));
+
+		// One override index for every resolution below — see ComputeLeafCosts.
+		var overridesByNode = RateResolver.IndexOverridesByNode(nodeOverrides);
+		// One searchable index for every scheduled-working-time stamp below: the set never changes
+		// across the trace, and its length grows with the costed window rather than with the answer.
+		var scheduledIndex = IntervalIndex.Build(scheduledWorkingIntervals);
 		var trace = allocations
 			.Select(allocation => {
 				var resolved = RateResolver.Resolve(
-					allocation.NodeId, allocation.Segment.Start, nodesById, exceptions, nodeOverrides, userCostRates, userDefaultRate);
+					allocation.NodeId, allocation.Segment.Start, nodesById, exceptions, overridesByNode, userCostRates, userDefaultRate);
 				return new CostSegmentTrace(
 					allocation.Segment,
-					WorkingTimeEligibility.IsScheduledWorkingTime(allocation.Segment, scheduledWorkingIntervals),
+					WorkingTimeEligibility.IsScheduledWorkingTime(allocation.Segment, scheduledIndex),
 					activeSessionsBySegment[allocation.Segment],
 					allocation.SessionId,
 					allocation.NodeId,
@@ -100,19 +113,45 @@ public static class CostEngine
 			.OrderBy(entry => entry.Segment.Start)
 			.ThenBy(entry => entry.SessionId.Value)
 			.ToArray();
-		var leafCosts = trace
-			.GroupBy(entry => entry.NodeId)
-			.ToDictionary(group => group.Key, group => new Money(group.Sum(entry => entry.UnroundedContribution.Amount)));
+		var leafCostAmounts = new Dictionary<JobNodeId, decimal>();
+		foreach (var entry in trace) {
+			leafCostAmounts[entry.NodeId] = leafCostAmounts.GetValueOrDefault(entry.NodeId) + entry.UnroundedContribution.Amount;
+		}
+
+		var leafCosts = leafCostAmounts.ToDictionary(entry => entry.Key, entry => new Money(entry.Value));
 		var exactCosts = HierarchicalCostAggregator.Aggregate(nodeId, nodesById, leafCosts);
+
+		// The narrowed session list depends only on the segment, and trace entries sharing a segment
+		// share one ActiveSessionIds instance — so narrow once per segment rather than once per entry.
+		var exposedSessionsBySegment = new Dictionary<WorkInterval, EquatableArray<WorkSessionId>>(activeSessionsBySegment.Count);
+		foreach (var (segment, sessionIds) in activeSessionsBySegment) {
+			exposedSessionsBySegment[segment] = NarrowToExposed(sessionIds, sessionNodeIds, exactCosts);
+		}
 
 		var exposedTrace = trace
 			.Where(entry => exactCosts.ContainsKey(entry.NodeId))
-			.Select(entry => entry with {
-				ActiveSessionIds = EquatableArray.CopyOf(
-					entry.ActiveSessionIds.Where(sessionId => exactCosts.ContainsKey(sessionNodeIds[sessionId]))),
-			})
+			.Select(entry => entry with { ActiveSessionIds = exposedSessionsBySegment[entry.Segment] })
 			.ToArray();
 
 		return new(EquatableDictionaryFactory.CopyOf(exactCosts), EquatableArray.CopyOf(exposedTrace));
+	}
+
+	/// <summary>
+	///     Drops the session identifiers whose own node falls outside the costed subtree (ADR 0017),
+	///     returning <paramref name="sessionIds" /> itself when none do — the overwhelmingly common case
+	///     for a calculation scoped to a root, where re-copying every segment's list would be pure waste.
+	/// </summary>
+	private static EquatableArray<WorkSessionId> NarrowToExposed(
+		EquatableArray<WorkSessionId> sessionIds,
+		Dictionary<WorkSessionId, JobNodeId> sessionNodeIds,
+		IReadOnlyDictionary<JobNodeId, Money> exactCosts)
+	{
+		foreach (var sessionId in sessionIds) {
+			if (!exactCosts.ContainsKey(sessionNodeIds[sessionId])) {
+				return EquatableArray.CopyOf(sessionIds.Where(id => exactCosts.ContainsKey(sessionNodeIds[id])));
+			}
+		}
+
+		return sessionIds;
 	}
 }

@@ -156,6 +156,35 @@ starts) unless marked cold; none of this section's rows carry a separate cold-st
   against the existing `job_node_parent_id_idx` (17,211 index probes), not a sequential-scan
   bottleneck. No partial index is evidence-backed at this scale. Regression-guarded at 500 ms
   (`FullTableHierarchyLoadPerformanceTests.Awaiting_progress_with_a_realistic_default_page_at_combined_production_tree_scale_stays_within_ceiling`).
+
+  **Re-measured 2026-07-25** (fresh-eyes efficiency review) to check two things the original entry
+  left open — whether the ordering itself needs an index now that §2.1 moved sorting and paging into
+  SQL, and whether the partial index §2.2's target design hypothesised would in fact be used. Same
+  fixture, 193,570 `job_node` rows, 3,529 unfinished candidates. Both answers are negative, and the
+  original conclusion stands:
+
+  - **The sort is not the bottleneck.** The plan sorts 17,211 rows (`quicksort`, ~1.1 MB per worker)
+    before `LIMIT 51`, because the childless anti-join is applied *after* the sort as the outer side
+    of a `Nested Loop Anti Join`. The sort adds roughly 2 ms on top of its own input scan. A
+    composite `(priority_id DESC, …)` index could not serve it regardless: two of the four sort keys
+    are `COALESCE(needed_finish, needed_start)` expressions, and the candidate predicate needs the
+    `leaf_work` join resolved before any ordering can be read off an index.
+  - **A partial `leaf_work (job_node_id) WHERE achievement_id IN (1,2)` index is provably ignored.**
+    Created it, re-`ANALYZE`d, re-planned: byte-identical plan, same 51,582 buffer hits, still a
+    `Parallel Seq Scan on leaf_work`. It cannot be used, because the candidate predicate's
+    `lw.achievement_id IS NULL OR lw.achievement_id IN (1,2)` needs every `leaf_work` row to resolve
+    the `IS NULL` branch — a partial index over the non-terminal rows alone cannot answer it. Dropped
+    again; no schema change.
+
+  **The one real sensitivity is the visibility map, not an index.** On the freshly-seeded fixture the
+  anti-join's `Index Only Scan using job_node_parent_id_idx` reported `Heap Fetches: 17160` and the
+  query ran at ~64 ms. After `VACUUM (ANALYZE) job_node, leaf_work` the same plan reported
+  `Heap Fetches: 0` and ~34.6 ms — reproducing the ~34 ms figure recorded above, which confirms that
+  measurement was taken against vacuumed tables. So the recorded budget carries an operational
+  dependency worth stating explicitly: this query is index-only-scan-bound, and its ~34 ms figure
+  assumes autovacuum keeps `job_node`'s visibility map current. An installation where autovacuum is
+  starved or disabled should expect roughly the 64 ms shape instead — an operations concern, not a
+  schema or query defect.
 - **§2.3 (search-index decision).** A zero-match `LOWER(description) LIKE '%term%'` search (the
   worst case — PostgreSQL cannot stop early the way a selective match would let it) against the
   plain combined-production-tree fixture (~193,500 rows, no narrowing filter applies to a whole-tree

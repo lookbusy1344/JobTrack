@@ -19,8 +19,8 @@ public static class ScheduleExceptionValidator
 	{
 		var priced = exceptions.Where(IsPricedAdditiveException).ToList();
 
-		for (var i = 0; i < priced.Count; i++) {
-			for (var j = i + 1; j < priced.Count; j++) {
+		for (var i = 0; i < priced.Count; ++i) {
+			for (var j = i + 1; j < priced.Count; ++j) {
 				if (IntervalAlgebra.Overlaps(priced[i].Interval, priced[j].Interval)) {
 					throw new InvariantViolationException(
 						"schedule-exception.priced-additive-overlap",

@@ -318,6 +318,9 @@ public sealed class JobTrackClientUsageExampleTests
 		public Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 
+		public Task<PauseLeafResult> PauseLeafAsync(PauseLeafRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
 		public Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(
 			ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");

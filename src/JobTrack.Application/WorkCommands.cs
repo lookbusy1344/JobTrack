@@ -95,6 +95,16 @@ internal sealed class WorkCommands : IWorkCommands
 	}
 
 	/// <inheritdoc />
+	public Task<PauseLeafResult> PauseLeafAsync(PauseLeafRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return JobTrackOperation.TraceAsync(
+			"work.pause-leaf", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
+			() => _sessionPort.PauseLeafAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
 	public Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(
 		ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default)
 	{

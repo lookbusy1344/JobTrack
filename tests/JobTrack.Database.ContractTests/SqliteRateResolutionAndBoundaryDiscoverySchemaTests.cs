@@ -120,7 +120,7 @@ public sealed class SqliteRateResolutionAndBoundaryDiscoverySchemaTests()
 			AddParameter(command, "@userId", userId);
 			AddParameter(command, "@from", fromEncoded);
 			AddParameter(command, "@to", toEncoded);
-			for (var index = 0; index < ancestry.Count; index++) {
+			for (var index = 0; index < ancestry.Count; ++index) {
 				AddParameter(command, $"@node{index}", ancestry[index]);
 			}
 

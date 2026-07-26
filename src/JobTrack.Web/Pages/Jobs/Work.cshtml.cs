@@ -262,6 +262,14 @@ public sealed class WorkModel(
 	///     write-up of its own -- site.js's shared submit listener instead fires a separate SaveWriteUp
 	///     request first when a write-up textarea exists elsewhere on the page, so the edit is still saved,
 	///     just via a distinct request rather than these two fields on this one.
+	///     <para>
+	///         Like <see cref="OnPostSaveWriteUpAsync" />, a successful pause returns to <c>/Jobs/Browse</c>
+	///         rooted at this leaf (ADR 0044: a specialist page returns to the workflow centre once its own
+	///         decision is made) -- the work on this leaf has stopped, so its Sessions page is no longer
+	///         where the worker is going next. Only the success path leaves; every failure redirects back
+	///         here so the error is shown against the page that raised it. Start (<see cref="OnPostStartAsync" />/
+	///         <see cref="OnPostStartForAsync" />) deliberately stays put -- it begins a stay on this page.
+	///     </para>
 	/// </summary>
 	public async Task<IActionResult> OnPostFinishAsync(
 		long sessionId, long version, string? finishedAt, long? nodeVersion = null, string? writeUp = null,
@@ -289,6 +297,8 @@ public sealed class WorkModel(
 					: null,
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote("Ends this session; the job stays In Progress.", result.WriteUpChanged);
+
+			return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -317,9 +327,14 @@ public sealed class WorkModel(
 	///     set before finishing any of them. They carry a <c>complete</c> prefix (and the backdate is
 	///     <paramref name="completionFinishedAt" />) because the unified ending form also carries the
 	///     Pause button's single <c>sessionId</c>/<c>version</c> pair, which must stay distinct.
+	///     <para>
+	///         Returns to <c>/Jobs/Browse</c> rooted at this leaf on success, and back here on any failure --
+	///         see <see cref="OnPostFinishAsync" /> for why. The plural "Finish N sessions and complete job"
+	///         label is this same handler, so it lands in the same place.
+	///     </para>
 	/// </summary>
 	public async Task<IActionResult> OnPostCompleteAsync(
-		long leafWorkVersion, long[]? completeSessionId, long[]? completeSessionVersion, string? completionFinishedAt,
+		long leafWorkVersion, long[]? endSessionId, long[]? endSessionVersion, string? completionFinishedAt,
 		string? completionNote, Achievement finalAchievement = Achievement.Success, long? nodeVersion = null,
 		string? writeUp = null, CancellationToken cancellationToken = default)
 	{
@@ -328,9 +343,7 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
-		completeSessionId ??= [];
-		completeSessionVersion ??= [];
-		if (completeSessionId.Length != completeSessionVersion.Length) {
+		if (ConfirmedActiveSessions(endSessionId, endSessionVersion) is not EquatableArray<ExpectedActiveSession> confirmed) {
 			ErrorMessage = "The active-session list on this page is out of date. Reloading.";
 			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
 		}
@@ -346,10 +359,7 @@ public sealed class WorkModel(
 				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 				JobNodeId = new(LeafNodeId),
 				Version = leafWorkVersion,
-				ExpectedActiveSessions = [
-					.. completeSessionId.Zip(
-						completeSessionVersion, (id, ver) => new ExpectedActiveSession { Id = new(id), Version = ver }),
-				],
+				ExpectedActiveSessions = confirmed,
 				FinishedAt = finishedAtInstant,
 				CompletionNote = string.IsNullOrWhiteSpace(completionNote) ? null : completionNote,
 				FinalAchievement = finalAchievement,
@@ -359,6 +369,8 @@ public sealed class WorkModel(
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote(
 				DescribeCompletionOutcome(result.Achievement, result.FinishedSessions.Count), result.WriteUpChanged);
+
+			return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -375,6 +387,73 @@ public sealed class WorkModel(
 		}
 		catch (PrerequisiteBlockedException) {
 			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
+		}
+
+		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+	}
+
+	/// <summary>
+	///     "Pause job": atomically finishes the exact confirmed active-session set shown on the page --
+	///     <em>every</em> worker clocked onto the leaf, not just the actor's own session -- and leaves the
+	///     achievement at <see cref="Achievement.InProgress" /> (<see cref="IWorkCommands.PauseLeafAsync" />).
+	///     A job is paused or it is not: stopping one worker's clock while a colleague's keeps running is
+	///     not a pause, and the leaf would still read as active. Shares
+	///     <paramref name="endSessionId" />/<paramref name="endSessionVersion" /> with
+	///     <see cref="OnPostCompleteAsync" /> -- one confirmed set, whichever button ends the work -- so a
+	///     session that started or finished since the page rendered conflicts rather than being silently
+	///     swept in or left running. <paramref name="nodeVersion" />/<paramref name="writeUp" /> ride along
+	///     from the shared ending form exactly as they do for Complete.
+	///     <para>
+	///         Returns to <c>/Jobs/Browse</c> rooted at this leaf on success, and back here on any failure
+	///         -- see <see cref="OnPostFinishAsync" /> for why.
+	///     </para>
+	/// </summary>
+	public async Task<IActionResult> OnPostPauseAsync(
+		long[]? endSessionId, long[]? endSessionVersion, string? finishedAt, long? nodeVersion = null, string? writeUp = null,
+		CancellationToken cancellationToken = default)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		if (ConfirmedActiveSessions(endSessionId, endSessionVersion) is not EquatableArray<ExpectedActiveSession> confirmed) {
+			ErrorMessage = "The active-session list on this page is out of date. Reloading.";
+			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		}
+
+		try {
+			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
+			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
+				ErrorMessage = "Enter a valid date and time.";
+				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			}
+
+			var result = await jobTrackClient.Work.PauseLeafAsync(new() {
+				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				JobNodeId = new(LeafNodeId),
+				ExpectedActiveSessions = confirmed,
+				FinishedAt = finishedAtInstant,
+				WriteUpChange = nodeVersion is long expectedNodeVersion
+					? new() { NodeVersion = expectedNodeVersion, WriteUp = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp }
+					: null,
+			}, cancellationToken);
+			SuccessMessage = WithWriteUpNote(DescribePauseOutcome(result.FinishedSessions.Count), result.WriteUpChanged);
+
+			return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "This leaf has no work attached.";
+		}
+		catch (ConcurrencyConflictException) {
+			ErrorMessage =
+				"Someone else changed one of this leaf's active sessions, or this job's details, since the page was loaded. The latest state is shown below.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 
 		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
@@ -572,6 +651,28 @@ public sealed class WorkModel(
 
 		return (false, RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId }));
 	}
+
+	/// <summary>
+	///     The ending form's parallel <c>endSessionId</c>/<c>endSessionVersion</c> arrays as the confirmed
+	///     active-session set both Pause and Complete send, or <see langword="null" /> when the two arrays
+	///     do not pair up (a malformed or truncated post) and the caller must reload instead of guessing.
+	/// </summary>
+	private static EquatableArray<ExpectedActiveSession>? ConfirmedActiveSessions(long[]? sessionIds, long[]? sessionVersions)
+	{
+		sessionIds ??= [];
+		sessionVersions ??= [];
+
+		return sessionIds.Length == sessionVersions.Length
+			? [.. sessionIds.Zip(sessionVersions, (id, version) => new ExpectedActiveSession { Id = new(id), Version = version })]
+			: null;
+	}
+
+	/// <summary>Describes a <see cref="IWorkCommands.PauseLeafAsync" /> outcome for <see cref="SuccessMessage" />.</summary>
+	private static string DescribePauseOutcome(int finishedSessionCount) => finishedSessionCount switch {
+		0 => "Job paused.",
+		1 => "Ends this session; the job stays In Progress.",
+		var n => $"Job paused and {n} sessions finished.",
+	};
 
 	/// <summary>Appends the write-up's own confirmation to a command's success message, but only when it actually changed.</summary>
 	private static string WithWriteUpNote(string message, bool writeUpSaved) => writeUpSaved ? $"{message} Write-up saved." : message;

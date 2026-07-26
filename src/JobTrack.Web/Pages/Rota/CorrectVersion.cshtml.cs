@@ -116,7 +116,7 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 
 	private void PadWeeklyIntervals()
 	{
-		for (var i = Input.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; i++) {
+		for (var i = Input.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; ++i) {
 			Input.WeeklyIntervals.Add(new());
 		}
 	}

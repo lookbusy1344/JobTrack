@@ -671,7 +671,7 @@ public sealed class JobQueriesTests
 			Version = 1,
 		});
 
-		for (var index = 0; index < leafCount; index++) {
+		for (var index = 0; index < leafCount; ++index) {
 			var leafId = new JobNodeId(index + 2);
 			port.SeedNode(new() {
 				Id = leafId,
@@ -830,7 +830,7 @@ public sealed class JobQueriesTests
 		var port = new FakeJobNodeCommandPort();
 		port.SeedRoles(owner, EmployeeRole.Administrator);
 		var leafIds = new List<JobNodeId>();
-		for (var index = 0; index < leafCount; index++) {
+		for (var index = 0; index < leafCount; ++index) {
 			var leafId = new JobNodeId(100 + index);
 			leafIds.Add(leafId);
 			port.SeedNode(new() {
@@ -873,7 +873,7 @@ public sealed class JobQueriesTests
 		var port = new FakeJobNodeCommandPort();
 		port.SeedRoles(owner, EmployeeRole.Administrator);
 		var leafIds = new List<JobNodeId>();
-		for (var index = 0; index < overCap; index++) {
+		for (var index = 0; index < overCap; ++index) {
 			var leafId = new JobNodeId(1000 + index);
 			leafIds.Add(leafId);
 			port.SeedNode(new() {
@@ -1115,7 +1115,7 @@ public sealed class JobQueriesTests
 	{
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, new(11), out var rootId, out var branchId, out _);
-		for (var i = 0; i < 30; i++) {
+		for (var i = 0; i < 30; ++i) {
 			port.SeedNode(new() {
 				Id = new(100 + i),
 				ParentId = branchId,
@@ -1379,7 +1379,7 @@ public sealed class JobQueriesTests
 			Version = 1,
 		});
 		var leafIds = new List<JobNodeId>();
-		for (var index = 0; index < leafCount; index++) {
+		for (var index = 0; index < leafCount; ++index) {
 			var leafId = new JobNodeId(200 + index);
 			leafIds.Add(leafId);
 			port.SeedNode(new() {

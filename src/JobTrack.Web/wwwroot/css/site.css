@@ -1753,8 +1753,8 @@ nav[aria-label="breadcrumb"] li + li::before {
     max-width: none;
 }
 
-/* Wrapping/alignment/gap come from Bootstrap's d-flex flex-wrap align-items-center
-   justify-content-between gap-3 on each <li>. */
+/* Alignment/gap come from Bootstrap's align-items-center gap-3 on each <li>; layout itself is
+   per-list (flex, grid, …). */
 .jt-list > li {
     padding: 0.75rem 1rem;
     background: var(--jt-surface);
@@ -1762,6 +1762,13 @@ nav[aria-label="breadcrumb"] li + li::before {
     border-radius: var(--bs-border-radius-sm);
     box-shadow: var(--jt-shadow-sm);
     margin-bottom: var(--jt-space-2);
+}
+
+/* Inherited-blockers rows: icon hugs the required-node title (left-aligned), then "declared on"
+   and the declaring-node title each get their own column so every row lines up like a table,
+   without Bootstrap's justify-content-between spreading the middle content out. */
+.jt-blocker-row {
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 /* A single-purpose, one-action page (create/edit/move/decompose a node, change a password,
@@ -1842,7 +1849,23 @@ nav[aria-label="breadcrumb"] li + li::before {
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--jt-faint);
-    margin: 0 0 var(--jt-space-2);
+    margin: 0;
+}
+
+/* Sits beside the label at the same quiet weight — an occasional housekeeping action, not a
+   destination competing with the breadcrumbs it clears. */
+.jt-history-clear {
+    padding: 0;
+    border: 0;
+    font-size: var(--jt-font-size-sm);
+    line-height: 1.4;
+    color: var(--jt-faint);
+    text-decoration: underline;
+}
+
+.jt-history-clear:hover,
+.jt-history-clear:focus-visible {
+    color: var(--jt-ink);
 }
 
 .jt-history-list {

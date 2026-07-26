@@ -30,6 +30,9 @@ internal interface IWorkSessionCommandPort
 	/// <inheritdoc cref="IWorkCommands.CompleteLeafAsync" />
 	Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default);
 
+	/// <inheritdoc cref="IWorkCommands.PauseLeafAsync" />
+	Task<PauseLeafResult> PauseLeafAsync(PauseLeafRequest request, CancellationToken cancellationToken = default);
+
 	/// <inheritdoc cref="IWorkCommands.ReopenAndStartWorkAsync" />
 	Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default);
 }

@@ -180,6 +180,39 @@ public interface IWorkCommands
 	Task<CompleteLeafResult> CompleteLeafAsync(CompleteLeafRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	///     Atomic composite: finishes the exact, caller-confirmed active-session set named by
+	///     <see cref="PauseLeafRequest.ExpectedActiveSessions" /> (zero, one, or many) at one captured
+	///     instant, leaving the leaf's achievement untouched, in one commit -- the pause counterpart of
+	///     <see cref="CompleteLeafAsync" />. Pausing a leaf stops *every* worker clocked onto it: a leaf
+	///     is paused or it is not, and finishing one worker's session while another's clock keeps running
+	///     is not a pause. <see cref="FinishSessionAsync" />/<see cref="FinishSessionAndUpdateWriteUpAsync" />
+	///     remain the single-session primitives for ending one named worker's session on their own.
+	///     <see cref="PauseLeafRequest.WriteUpChange" /> optionally applies a write-up change to the
+	///     leaf's node in the same commit.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor may not finish one of the confirmed sessions -- the same per-session authority
+	///     <see cref="FinishSessionAsync" /> requires (see
+	///     <see cref="Domain.Authorization.WorkSessionAccessPolicy.CanFinishSession" />), so pausing a leaf
+	///     someone else is clocked onto needs node control, while a worker with no control may still
+	///     pause a leaf only they are working. A supplied
+	///     <see cref="PauseLeafRequest.WriteUpChange" /> additionally requires the node-control authority
+	///     <see cref="IJobCommands.EditAsync" /> would.
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The leaf has no <c>LeafWork</c> attached.</exception>
+	/// <exception cref="ConcurrencyConflictException">
+	///     The leaf's current active-session set no longer matches
+	///     <see cref="PauseLeafRequest.ExpectedActiveSessions" /> exactly, by id and version, or a supplied
+	///     <see cref="PauseLeafRequest.WriteUpChange" />'s <c>NodeVersion</c> is stale.
+	/// </exception>
+	/// <exception cref="InvariantViolationException">
+	///     A supplied <see cref="PauseLeafRequest.FinishedAt" /> is not after every affected session's
+	///     start instant (<c>ConstraintId</c> <c>"work-session-invalid-interval"</c>) or is in the future
+	///     (<c>ConstraintId</c> <c>"work-session-finish-in-future"</c>, ADR 0028).
+	/// </exception>
+	Task<PauseLeafResult> PauseLeafAsync(PauseLeafRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	///     Atomic composite (ADR 0045 §1/§2): transitions a terminal leaf back to
 	///     <see cref="Achievement.Waiting" /> with <see cref="ReopenAndStartWorkRequest.Reason" />,
 	///     applies ADR 0038's existing <see cref="Achievement.Waiting" /> -&gt;

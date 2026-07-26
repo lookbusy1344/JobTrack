@@ -14,7 +14,7 @@ using NodaTime;
 ///     connection, transaction, or context itself, matching every other shared helper under this
 ///     project's <c>Abstractions</c>-only scope (impl plan §7.4 project layout).
 /// </summary>
-public static class AuditEventWriter
+internal static class AuditEventWriter
 {
 	/// <summary>
 	///     Queues an audit event for <paramref name="entityType" />/<paramref name="entityId" />.

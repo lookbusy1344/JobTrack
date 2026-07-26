@@ -14,6 +14,18 @@ public static class SegmentCostCalculator
 	private static readonly long TicksPerHour = Duration.FromHours(1).BclCompatibleTicks;
 
 	/// <summary>Computes the monetary contribution of <paramref name="share" /> at <paramref name="rate" />.</summary>
-	public static Money Calculate(AllocatedShare share, HourlyRate rate) =>
-		new(rate.AmountPerHour * share.SegmentTicks / (share.ConcurrencyDivisor * TicksPerHour));
+	/// <exception cref="ArgumentException">
+	///     <paramref name="share" /> is the <see langword="default" /> value, whose zero divisor makes the
+	///     allocation undefined.
+	/// </exception>
+	public static Money Calculate(AllocatedShare share, HourlyRate rate)
+	{
+		if (share.IsUninitialized) {
+			throw new ArgumentException(
+				"An allocated share must come from its validating constructor; the default value has a zero concurrency divisor.",
+				nameof(share));
+		}
+
+		return new(rate.AmountPerHour * share.SegmentTicks / (share.ConcurrencyDivisor * TicksPerHour));
+	}
 }

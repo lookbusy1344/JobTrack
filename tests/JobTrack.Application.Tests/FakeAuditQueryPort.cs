@@ -24,7 +24,7 @@ internal sealed class FakeAuditQueryPort : IAuditQueryPort
 	public Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		AppUserId actorId, CancellationToken cancellationToken = default)
 	{
-		GetActorRolesCallCount++;
+		++GetActorRolesCallCount;
 		if (!_roles.TryGetValue(actorId, out var actorRoles)) {
 			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		}
@@ -35,7 +35,7 @@ internal sealed class FakeAuditQueryPort : IAuditQueryPort
 	public Task<AuditSearchQueryResult> SearchAuditEventsAsync(
 		AuditEventSearchFilter filter, AuditEventSearchCursor? before, int limit, CancellationToken cancellationToken = default)
 	{
-		SearchAuditEventsCallCount++;
+		++SearchAuditEventsCallCount;
 		ObservedLimits = [.. ObservedLimits, limit];
 
 		var matches = _events.Where(record =>

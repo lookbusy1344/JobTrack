@@ -68,7 +68,7 @@ public sealed class JobTrackUserStore :
 
 	public Task<int> IncrementAccessFailedCountAsync(JobTrackIdentityUser user, CancellationToken cancellationToken)
 	{
-		user.AccessFailedCount++;
+		++user.AccessFailedCount;
 		return Task.FromResult(user.AccessFailedCount);
 	}
 

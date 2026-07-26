@@ -190,6 +190,278 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task The_start_for_disclosure_survives_an_active_session_on_the_leaf()
+	{
+		// Same rule as Browse's leaf toolbar: only the viewer's *own* primary action toggles when they
+		// clock on. A leaf can have several simultaneous workers, so an open session must never remove
+		// the authorized "Start for..." control -- otherwise a second worker cannot be started at all.
+		var ownerId = await SeedEmployeeAsync("work.startfor.active-owner", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("work.startfor.active-target", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Concurrent start-for leaf");
+		var authCookie = await SignInAsync("work.startfor.active-owner");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, ownerId);
+		var startResponse = await PostAsync("Start", authCookie, cookie, token, leaf.Id, ownerId);
+		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var body = await reloaded.Content.ReadAsStringAsync();
+		body.Should().Contain("Pause job");
+		body.Should().Contain("Start for…");
+		body.Should().Contain("name=\"StartForUserId\"");
+	}
+
+	[Fact]
+	public async Task A_viewer_with_no_session_of_their_own_can_still_start_one_while_another_worker_is_active()
+	{
+		var ownerId = await SeedEmployeeAsync("work.startfor.second-owner", EmployeeRole.Worker);
+		var otherWorkerId = await SeedEmployeeAsync("work.startfor.second-worker", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Second worker leaf");
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = otherWorkerId,
+		});
+		var authCookie = await SignInAsync("work.startfor.second-owner");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// The viewer's own one-click Start, not the "Start session for worker" button inside the
+		// Start-for disclosure -- hence matching the button's whole text, not a substring of the page.
+		OwnStartButtonPattern().IsMatch(body).Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task Pausing_a_job_returns_to_Browse_rooted_at_the_leaf()
+	{
+		var workerId = await SeedEmployeeAsync("work.pause-redirect", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Pause redirect leaf");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.pause-redirect");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostPauseAsync(authCookie, cookie, token, leaf.Id, [(session.Id.Value, session.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Be($"/Jobs/Browse?nodeId={leaf.Id.Value}");
+		var body = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		body.Should().Contain("Ends this session; the job stays In Progress.");
+	}
+
+	[Fact]
+	public async Task Pausing_a_job_ends_every_worker_s_session_not_just_the_actor_s()
+	{
+		// The whole point of Pause: a leaf two people are clocked onto is paused for both of them. Ending
+		// only the actor's own session leaves the job reading as active with a colleague's clock running.
+		var ownerId = await SeedEmployeeAsync("work.pause-all-owner", EmployeeRole.Worker);
+		var mateId = await SeedEmployeeAsync("work.pause-all-mate", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Two-worker pause leaf");
+		var ownSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = ownerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = ownerId,
+		});
+		var mateSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = ownerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = mateId,
+		});
+		var authCookie = await SignInAsync("work.pause-all-owner");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, ownerId);
+		var response = await PostPauseAsync(
+			authCookie, cookie, token, leaf.Id,
+			[(ownSession.Id.Value, ownSession.Version), (mateSession.Id.Value, mateSession.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Be($"/Jobs/Browse?nodeId={leaf.Id.Value}");
+		var sessions = await GetSessionsAsync(leaf.Id);
+		sessions.Should().HaveCount(2).And.OnlyContain(s => s.FinishedAt != null, "pausing a job stops every clock on it");
+		sessions.Select(s => s.FinishedAt).Distinct().Should().ContainSingle("all of them stop at the one instant");
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id },
+			CancellationToken.None);
+		leafWork.Achievement.Should().Be(Achievement.InProgress, "a pause never closes the job");
+	}
+
+	[Fact]
+	public async Task The_pause_button_confirms_every_active_session_on_the_page()
+	{
+		// The rendered form is what proves Pause can end both -- posting a hand-built set would test the
+		// handler while leaving the page free to keep submitting only the viewer's own session.
+		var ownerId = await SeedEmployeeAsync("work.pause-form-owner", EmployeeRole.Worker);
+		var mateId = await SeedEmployeeAsync("work.pause-form-mate", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Pause form leaf");
+		var ownSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = ownerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = ownerId,
+		});
+		var mateSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = ownerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = mateId,
+		});
+		var authCookie = await SignInAsync("work.pause-form-owner");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("handler=Pause").And.Contain("Pause job");
+		body.Should().Contain($"name=\"endSessionId\" value=\"{ownSession.Id.Value}\"");
+		body.Should().Contain($"name=\"endSessionId\" value=\"{mateSession.Id.Value}\"");
+		body.Should().Contain("Ends all 2 active sessions; the job stays In Progress.");
+	}
+
+	[Fact]
+	public async Task Pausing_with_a_session_set_that_moved_underneath_the_page_conflicts_rather_than_pausing_part_of_the_leaf()
+	{
+		var ownerId = await SeedEmployeeAsync("work.pause-stale-owner", EmployeeRole.Worker);
+		var mateId = await SeedEmployeeAsync("work.pause-stale-mate", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Stale pause leaf");
+		var ownSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = ownerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = ownerId,
+		});
+		var authCookie = await SignInAsync("work.pause-stale-owner");
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, ownerId);
+		// The mate clocks on between the page render and the post.
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = ownerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = mateId,
+		});
+
+		var response = await PostPauseAsync(authCookie, cookie, token, leaf.Id, [(ownSession.Id.Value, ownSession.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().StartWith("/Jobs/Work");
+		var body = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		body.Should().Contain("Someone else changed one of this leaf");
+		(await GetSessionsAsync(leaf.Id)).Should().OnlyContain(
+			s => s.FinishedAt == null, "a conflicted pause must leave every clock exactly as it was");
+	}
+
+	[Fact]
+	public async Task Completing_a_job_returns_to_Browse_rooted_at_the_leaf()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-redirect", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Complete redirect leaf");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.complete-redirect");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(authCookie, cookie, token, leaf.Id, 2, [(session.Id.Value, session.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Be($"/Jobs/Browse?nodeId={leaf.Id.Value}");
+		var body = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		body.Should().Contain("Job completed and session finished.");
+	}
+
+	[Fact]
+	public async Task Completing_several_sessions_at_once_returns_to_Browse_rooted_at_the_leaf()
+	{
+		// "Finish N sessions and complete job" is the same Complete button under a plural label, so it
+		// lands in the same place -- proved with the plural set rather than assumed from the singular.
+		var workerId = await SeedEmployeeAsync("work.complete-many-redirect", EmployeeRole.Worker);
+		var mateId = await SeedEmployeeAsync("work.complete-many-mate", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Two-worker redirect leaf");
+		var ownSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var mateSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = mateId,
+		});
+		var authCookie = await SignInAsync("work.complete-many-redirect");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(
+			authCookie, cookie, token, leaf.Id, 2,
+			[(ownSession.Id.Value, ownSession.Version), (mateSession.Id.Value, mateSession.Version)]);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Be($"/Jobs/Browse?nodeId={leaf.Id.Value}");
+		var body = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		body.Should().Contain("Job completed and 2 sessions finished.");
+	}
+
+	[Fact]
+	public async Task A_failed_pause_stays_on_the_work_page_rather_than_returning_to_Browse()
+	{
+		// Only the success path leaves; a rejected post has to redisplay its own page with the error.
+		var workerId = await SeedEmployeeAsync("work.pause-failure-redirect", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Failed pause leaf");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.pause-failure-redirect");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostPauseAsync(
+			authCookie, cookie, token, leaf.Id, [(session.Id.Value, session.Version)], "not-a-local-date-time");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().StartWith("/Jobs/Work");
+		var body = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		body.Should().Contain("Enter a valid date and time.");
+	}
+
+	[Fact]
+	public async Task A_failed_completion_stays_on_the_work_page_rather_than_returning_to_Browse()
+	{
+		var workerId = await SeedEmployeeAsync("work.complete-failure-redirect", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Failed completion leaf");
+		var session = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		var authCookie = await SignInAsync("work.complete-failure-redirect");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostCompleteAsync(
+			authCookie, cookie, token, leaf.Id, 2, [(session.Id.Value, session.Version)], "not-a-local-date-time");
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().StartWith("/Jobs/Work");
+		var body = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		body.Should().Contain("Enter a valid completion date and time.");
+	}
+
+	[Fact]
+	public async Task Starting_a_session_stays_on_the_work_page()
+	{
+		// Deliberately unlike Pause/Complete: starting work is the beginning of a stay on this page, so
+		// it redisplays the leaf's own Sessions rather than bouncing to Browse.
+		var workerId = await SeedEmployeeAsync("work.start-stays", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Start stays leaf");
+		var authCookie = await SignInAsync("work.start-stays");
+
+		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
+		var response = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().StartWith("/Jobs/Work");
+	}
+
+	[Fact]
 	public async Task A_worker_can_start_a_session_with_a_backdated_time_from_the_leaf_toolbar()
 	{
 		var workerId = await SeedEmployeeAsync("work.backdate-starter", EmployeeRole.Worker);
@@ -1090,8 +1362,8 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 			new("__RequestVerificationToken", token),
 		};
 		foreach (var (sessionId, version) in sessions) {
-			pairs.Add(new("completeSessionId", sessionId.ToString(CultureInfo.InvariantCulture)));
-			pairs.Add(new("completeSessionVersion", version.ToString(CultureInfo.InvariantCulture)));
+			pairs.Add(new("endSessionId", sessionId.ToString(CultureInfo.InvariantCulture)));
+			pairs.Add(new("endSessionVersion", version.ToString(CultureInfo.InvariantCulture)));
 		}
 
 		if (finishedAt is not null) {
@@ -1132,6 +1404,31 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 			["reopenWorkedByUserId"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
 			["__RequestVerificationToken"] = token,
 		});
+
+		return await client.SendAsync(request);
+	}
+
+	/// <summary>Posts the leaf-level "Pause job" button with the confirmed active-session set the page rendered.</summary>
+	private async Task<HttpResponseMessage> PostPauseAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId,
+		IReadOnlyList<(long SessionId, long Version)> sessions, string? finishedAt = null)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Pause");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		var pairs = new List<KeyValuePair<string, string>> {
+			new("LeafNodeId", leafNodeId.Value.ToString(CultureInfo.InvariantCulture)),
+			new("__RequestVerificationToken", token),
+		};
+		foreach (var (sessionId, version) in sessions) {
+			pairs.Add(new("endSessionId", sessionId.ToString(CultureInfo.InvariantCulture)));
+			pairs.Add(new("endSessionVersion", version.ToString(CultureInfo.InvariantCulture)));
+		}
+
+		if (finishedAt is not null) {
+			pairs.Add(new("finishedAt", finishedAt));
+		}
+
+		request.Content = new FormUrlEncodedContent(pairs);
 
 		return await client.SendAsync(request);
 	}
@@ -1414,6 +1711,10 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"version\" value=\"(?<version>[0-9]+)\"")]
 	private static partial Regex VersionPattern();
+
+	/// <summary>The leaf toolbar's own one-click Start button, as distinct from "Start session for worker".</summary>
+	[GeneratedRegex(@">\s*Start session\s*</button>")]
+	private static partial Regex OwnStartButtonPattern();
 
 	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
 	{

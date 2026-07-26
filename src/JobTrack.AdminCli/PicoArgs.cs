@@ -289,7 +289,7 @@ public class PicoArgs(IEnumerable<string> args, bool recogniseEquals = true)
 				yield return KeyValue.Build(arg, recogniseEquals);
 			} else {
 				// combined switches, eg -abc or -abc=code
-				for (var i = 1; i < switchEnd; i++) {
+				for (var i = 1; i < switchEnd; ++i) {
 					if (equalsPos > -1 && i == switchEnd - 1) {
 						// last item in the combined switches, and there is a value eg -abc=code -> -c=code
 						yield return KeyValue.Build($"-{arg[i..switchEnd]}={arg[(equalsPos + 1)..]}", recogniseEquals);
@@ -388,10 +388,10 @@ public readonly record struct KeyValue(string Key, string? Value)
 
 		// Find matching end quote (ignoring escaped quotes)
 		var endQuotePos = -1;
-		for (var i = 1; i < valueSpan.Length; i++) {
+		for (var i = 1; i < valueSpan.Length; ++i) {
 			// Skip escaped quotes
 			if (valueSpan[i] == '\\' && i + 1 < valueSpan.Length && valueSpan[i + 1] == quoteChar) {
-				i++;
+				++i;
 				continue;
 			}
 

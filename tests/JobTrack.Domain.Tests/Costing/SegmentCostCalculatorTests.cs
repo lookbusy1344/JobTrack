@@ -42,4 +42,15 @@ public sealed class SegmentCostCalculatorTests
 
 		SegmentCostCalculator.Calculate(share, new(60m)).Should().Be(new Money(30m));
 	}
+
+	[Fact]
+	public void A_defaulted_share_is_rejected_as_an_argument_rather_than_dividing_by_zero()
+	{
+		// default(AllocatedShare) bypasses the validating constructor and carries a zero divisor.
+		// Without the guard this is a bare DivideByZeroException from the decimal division, which
+		// names neither the offending argument nor this call site.
+		var act = () => SegmentCostCalculator.Calculate(default, new(60m));
+
+		act.Should().Throw<ArgumentException>().And.ParamName.Should().Be("share");
+	}
 }

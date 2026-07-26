@@ -14,7 +14,11 @@ using Shared.Entities;
 /// </summary>
 internal sealed class SqliteEmployeeQueryPort : IEmployeeQueryPort
 {
-	private static readonly short[] WorkflowRoleIds = [
+	// IReadOnlyList rather than short[]: readonly freezes the reference, not the elements, so an
+	// array field reads as a constant table while any member could rewrite it. A ReadOnlySpan
+	// property is not available here -- this is captured by an EF expression tree, which cannot
+	// hold a ref struct.
+	private static readonly IReadOnlyList<short> WorkflowRoleIds = [
 		(short)EmployeeRole.Administrator, (short)EmployeeRole.JobManager, (short)EmployeeRole.Worker,
 	];
 

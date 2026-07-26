@@ -132,7 +132,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		var appUserId = await SeedUserAsync("katherine", KnownPassword, false);
 
-		for (var attempt = 0; attempt < MaxFailedAccessAttempts; attempt++) {
+		for (var attempt = 0; attempt < MaxFailedAccessAttempts; ++attempt) {
 			_ = await PostLoginAsync("katherine", "wrong-password");
 		}
 

@@ -22,6 +22,19 @@ using Domain.Hierarchy;
 /// </summary>
 internal static class JobNodeDisplay
 {
+	/// <summary>
+	///     Keeps a node title readable in a table row or list item — the node's own page (one tap away
+	///     via the same link) is where the full text lives. Declared here rather than per page so every
+	///     list in the staff and requester UIs clips at the same width; a page heading naming its own
+	///     subject is the deliberate exception and renders untruncated.
+	/// </summary>
+	internal const int RowTitleMaxDescriptionLength = 100;
+
+	/// <summary>
+	///     The tighter budget for a breadcrumb trail, where several titles share one line.
+	/// </summary>
+	internal const int BreadcrumbMaxDescriptionLength = 50;
+
 	private const string RootTitle = "Root";
 
 	private const string TruncationSuffix = "…";
@@ -29,26 +42,47 @@ internal static class JobNodeDisplay
 	internal static string Title(JobNodeResult node) => Title(node.Description, node.Id.Value, node.Kind);
 
 	internal static string Title(JobNodeResult node, int maxDescriptionLength) =>
-		Title(Truncate(node.Description, maxDescriptionLength), node.Id.Value, node.Kind);
+		Title(node.Description, node.Id.Value, maxDescriptionLength, node.Kind);
 
 	internal static string Title(JobNodeSummaryResult node) => Title(node.Description, node.Id.Value, node.Kind);
+
+	internal static string Title(JobNodeSummaryResult node, int maxDescriptionLength) =>
+		Title(node.Description, node.Id.Value, maxDescriptionLength, node.Kind);
 
 	internal static string Title(JobNodeAncestorResult node) => Title(node.Description, node.Id.Value, node.Kind);
 
 	internal static string Title(JobNodeAncestorResult node, int maxDescriptionLength) =>
-		Title(Truncate(node.Description, maxDescriptionLength), node.Id.Value, node.Kind);
+		Title(node.Description, node.Id.Value, maxDescriptionLength, node.Kind);
 
 	internal static string Title(AwaitingProgressEntry entry) => Title(entry.Description, entry.Id.Value);
 
 	internal static string Title(AwaitingProgressEntry entry, int maxDescriptionLength) =>
-		Title(Truncate(entry.Description, maxDescriptionLength), entry.Id.Value);
+		Title(entry.Description, entry.Id.Value, maxDescriptionLength);
 
 	internal static string Title(string description, long id) =>
-		$"{description} (ID {id.ToString(CultureInfo.InvariantCulture)})";
+		string.Create(CultureInfo.InvariantCulture, $"{description} (ID {id})");
+
+	internal static string Title(string description, long id, int maxDescriptionLength) =>
+		description.Length <= maxDescriptionLength
+			? Title(description, id)
+			: string.Create(
+				CultureInfo.InvariantCulture,
+				$"{Clip(description, maxDescriptionLength)}{TruncationSuffix} (ID {id})");
 
 	internal static string Truncate(string value, int maxLength) =>
-		value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength), TruncationSuffix);
+		value.Length <= maxLength ? value : string.Concat(Clip(value, maxLength), TruncationSuffix);
+
+	/// <summary>
+	///     Slices <paramref name="value" /> to at most <paramref name="maxLength" /> characters and drops
+	///     any whitespace the cut exposes, so a break landing on a word gap does not leave a dead space
+	///     stranded before the ellipsis. Returns a view over the caller's string — no allocation — leaving
+	///     the single allocation to whichever caller builds the finished title.
+	/// </summary>
+	private static ReadOnlySpan<char> Clip(string value, int maxLength) => value.AsSpan(0, maxLength).TrimEnd();
 
 	private static string Title(string description, long id, NodeKind kind) =>
 		kind == NodeKind.Root ? RootTitle : Title(description, id);
+
+	private static string Title(string description, long id, int maxDescriptionLength, NodeKind kind) =>
+		kind == NodeKind.Root ? RootTitle : Title(description, id, maxDescriptionLength);
 }

@@ -172,7 +172,11 @@ for speculatively.
    are set in the runbook per ADR 0014, not hardcoded here. Encrypt backups at rest.
 6. **Routine maintenance** — autovacuum is on by default; monitor `pg_stat_user_tables` for
    bloat/dead-tuple counts on the highest-write tables (work sessions, audit events) rather than
-   disabling or hand-tuning autovacuum preemptively.
+   disabling or hand-tuning autovacuum preemptively. Include `job_node` in that monitoring even
+   though it is not among the highest-write tables: the Awaiting Progress candidate query is
+   index-only-scan-bound on `job_node_parent_id_idx`, so a stale visibility map turns thousands of
+   index-only probes into heap fetches. Measured on a 193,570-node fixture, that is the difference
+   between ~34 ms and ~64 ms for one page load — see `docs/traceability/performance-budgets.md` §2.2.
 
 ## Windows Server
 

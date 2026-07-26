@@ -15,7 +15,7 @@ public sealed class CommandCountInterceptor : DbCommandInterceptor
 	public override InterceptionResult<DbDataReader> ReaderExecuting(
 		DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
 	{
-		Count++;
+		++Count;
 		return base.ReaderExecuting(command, eventData, result);
 	}
 
@@ -23,7 +23,7 @@ public sealed class CommandCountInterceptor : DbCommandInterceptor
 		DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
 		CancellationToken cancellationToken = default)
 	{
-		Count++;
+		++Count;
 		return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
 	}
 }

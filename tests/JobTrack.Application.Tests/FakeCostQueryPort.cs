@@ -28,7 +28,7 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 	public Task<CostAccessInputs> GetCostAccessInputsAsync(
 		AppUserId actorId, JobNodeId nodeId, CancellationToken cancellationToken = default)
 	{
-		GetCostAccessInputsCallCount++;
+		++GetCostAccessInputsCallCount;
 		if (!_roles.TryGetValue(actorId, out var actorRoles)) {
 			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		}
@@ -49,7 +49,7 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 	public Task<CostQueryResult> GetCostInputsAsync(
 		JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default)
 	{
-		GetCostInputsCallCount++;
+		++GetCostInputsCallCount;
 
 		var result = new CostQueryResult {
 			NodesById = EquatableDictionaryFactory.CopyOf(_nodesById),
@@ -63,7 +63,7 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 	public Task<BulkCostQueryResult> GetBulkCostInputsAsync(
 		AppUserId actorId, EquatableArray<JobNodeId> nodeIds, Instant asOf, int maxHierarchyNodes, CancellationToken cancellationToken = default)
 	{
-		GetBulkCostInputsCallCount++;
+		++GetBulkCostInputsCallCount;
 		var roles = _roles.TryGetValue(actorId, out var actorRoles) ? actorRoles : [];
 		if (_bulkSnapshotRoles.TryGetValue(actorId, out var snapshotRoles)) {
 			roles = snapshotRoles;

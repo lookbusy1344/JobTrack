@@ -8,6 +8,12 @@ using NodaTime;
 public static class JobTrackSqlite
 {
 	/// <summary>Creates a provider-neutral client over the configured SQLite database.</summary>
+	/// <remarks>
+	///     Marked not CLS-compliant because its parameter types come from dependencies that do not
+	///     declare compliance themselves (ASP.NET Core Identity's <c>IPasswordHasher{T}</c>). The
+	///     assembly's own surface is compliant; this is the one member that cannot be.
+	/// </remarks>
+	[System.CLSCompliant(false)]
 	public static IJobTrackClient Create(
 		string connectionString,
 		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,

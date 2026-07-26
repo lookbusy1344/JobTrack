@@ -11,7 +11,7 @@ public sealed class AdjustableClock(Instant current) : IClock
 
 	public Instant GetCurrentInstant()
 	{
-		ReadCount++;
+		++ReadCount;
 		return Current;
 	}
 

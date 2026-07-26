@@ -3,10 +3,6 @@
 @model AwaitingProgressModel
 @{
 	ViewData["Title"] = "Jobs awaiting progress";
-
-	// Keeps a job title readable in a table row -- the node's own page (one tap away via the same
-	// link) is where the full text lives.
-	const int RowTitleMaxDescriptionLength = 100;
 }
 
 <div class="jt-page-head">
@@ -74,7 +70,7 @@
 										href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocked</span></span>
 						}
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-						   asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry, RowTitleMaxDescriptionLength)</a>
+						   asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 					</td>
 					<td class="jt-col-secondary jt-col-owner">@Model.DescribeOwner(entry.OwnerUserId)</td>
 					<td class="jt-col-active">

@@ -56,7 +56,7 @@ public sealed class DecomposeModel(
 			}
 		}
 
-		for (var i = Input.NewChildren.Count; i < MaxNewChildSlots; i++) {
+		for (var i = Input.NewChildren.Count; i < MaxNewChildSlots; ++i) {
 			Input.NewChildren.Add(new());
 		}
 

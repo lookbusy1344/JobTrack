@@ -58,6 +58,52 @@ public sealed class CostSegmentPartitionerPropertyTests
 		}
 	}
 
+	/// <summary>
+	///     Eligible-piece discovery must not depend on the order the working intervals arrive in. The
+	///     production ports always pass a sorted, disjoint normalized set, but
+	///     <see cref="CostSegmentPartitioner.Partition" /> is public API and cannot assume it — this
+	///     pins that guarantee across the sorted-scan optimisation.
+	/// </summary>
+	[Property(MaxTest = 200)]
+	public void Partition_is_independent_of_working_interval_order(int[] starts, int[] lengths)
+	{
+		var (sessions, nodes) = Scenario(starts, lengths);
+		var working = DisjointWorkingIntervals();
+
+		var inOrder = CostSegmentPartitioner.Partition(sessions, working, nodes, [], [], Bounds);
+		var reversed = CostSegmentPartitioner.Partition(sessions, working.Reverse().ToArray(), nodes, [], [], Bounds);
+
+		Canonical(inOrder).Should().Equal(Canonical(reversed));
+	}
+
+	/// <summary>
+	///     Overlapping (never-normalized) working intervals legitimately produce one eligible piece per
+	///     overlapping interval, so the sorted-scan path must reproduce that exactly rather than
+	///     silently de-duplicating it.
+	/// </summary>
+	[Property(MaxTest = 200)]
+	public void Partition_preserves_overlapping_working_interval_pieces_in_any_order(int[] starts, int[] lengths)
+	{
+		var (sessions, nodes) = Scenario(starts, lengths);
+		WorkInterval[] overlapping = [
+			new(Epoch, Epoch.PlusTicks(20)),
+			new(Epoch.PlusTicks(10), Epoch.PlusTicks(30)),
+			new(Epoch.PlusTicks(5), Epoch.PlusTicks(SampleTickCount)),
+		];
+
+		var inOrder = CostSegmentPartitioner.Partition(sessions, overlapping, nodes, [], [], Bounds);
+		var reversed = CostSegmentPartitioner.Partition(sessions, overlapping.Reverse().ToArray(), nodes, [], [], Bounds);
+
+		Canonical(inOrder).Should().Equal(Canonical(reversed));
+	}
+
+	private static WorkInterval[] DisjointWorkingIntervals() => [
+		new(Epoch.PlusTicks(1), Epoch.PlusTicks(6)),
+		new(Epoch.PlusTicks(9), Epoch.PlusTicks(14)),
+		new(Epoch.PlusTicks(18), Epoch.PlusTicks(25)),
+		new(Epoch.PlusTicks(27), Epoch.PlusTicks(SampleTickCount)),
+	];
+
 	private static (CostableSession[] Sessions, Dictionary<JobNodeId, HierarchyNode> Nodes) Scenario(int[] starts, int[] lengths)
 	{
 		var count = Math.Min(Math.Min(starts.Length, lengths.Length), MaximumSessionCount);
@@ -82,7 +128,7 @@ public sealed class CostSegmentPartitionerPropertyTests
 	private static Dictionary<WorkSessionId, Rational> SampleWithOracle(IReadOnlyCollection<CostableSession> sessions)
 	{
 		var totals = sessions.ToDictionary(session => session.SessionId, _ => Rational.Zero);
-		for (var tick = 0; tick < SampleTickCount; tick++) {
+		for (var tick = 0; tick < SampleTickCount; ++tick) {
 			var at = Epoch.PlusTicks(tick);
 			var active = sessions.Where(session => session.Interval.Contains(at)).ToArray();
 			foreach (var session in active) {

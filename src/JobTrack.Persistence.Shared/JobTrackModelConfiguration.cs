@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 ///     mapping and <c>numeric(19,6)</c> on PostgreSQL; UTC-tick and fixed-point-string conversions on
 ///     SQLite, per ADR 0007/ADR 0009).
 /// </summary>
-public static class JobTrackModelConfiguration
+internal static class JobTrackModelConfiguration
 {
 	/// <summary>Applies every provider-agnostic mapping described in the type summary above.</summary>
 	public static void Configure(ModelBuilder modelBuilder)

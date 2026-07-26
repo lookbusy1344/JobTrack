@@ -932,6 +932,146 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task Pausing_a_leaf_finishes_every_worker_s_session_not_just_the_actor_s()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.multipause", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+		var first = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var second = await port.StartSessionAsync(new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = otherWorkerId });
+
+		var result = await port.PauseLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			ExpectedActiveSessions = [
+				new() { Id = first.Id, Version = first.Version }, new() { Id = second.Id, Version = second.Version },
+			],
+		});
+
+		result.FinishedSessions.Should().HaveCount(2);
+		result.FinishedSessions.Should().OnlyContain(s => s.FinishedAt != null);
+		var stored = await ReadLeafSessionStateAsync(leafId);
+		stored.Should().HaveCount(2).And.OnlyContain(row => !row.IsActive, "a pause leaves nobody clocked on");
+	}
+
+	[Fact]
+	public async Task Pausing_a_leaf_leaves_its_achievement_untouched()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		_ = await port.PauseLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+		});
+
+		var achievementId = await ReadLeafAchievementAsync(leafId);
+		achievementId.Should().Be(
+			(short)Achievement.InProgress, "pausing stops the clocks, it does not close the job");
+	}
+
+	[Fact]
+	public async Task Pausing_a_leaf_with_a_stale_expected_active_session_set_throws_a_concurrency_conflict()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.stalepause", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+		var first = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		// The second worker clocked on after the caller read the page, so the confirmed set is short one
+		// session -- silently pausing only the session the caller knew about is exactly the bug here.
+		_ = await port.StartSessionAsync(new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = otherWorkerId });
+
+		var act = () => port.PauseLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			ExpectedActiveSessions = [new() { Id = first.Id, Version = first.Version }],
+		});
+
+		await act.Should().ThrowAsync<ConcurrencyConflictException>();
+	}
+
+	[Fact]
+	public async Task A_worker_with_no_node_control_cannot_pause_a_leaf_another_worker_is_also_clocked_onto()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var bystanderId = await SeedEmployeeAsync("Bystander", "bystander.pause", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+		var owned = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var bystanderSession = await port.StartSessionAsync(
+			new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = bystanderId });
+
+		var act = () => port.PauseLeafAsync(new() {
+			Context = ContextFor(bystanderId),
+			JobNodeId = leafId,
+			ExpectedActiveSessions = [
+				new() { Id = owned.Id, Version = owned.Version },
+				new() { Id = bystanderSession.Id, Version = bystanderSession.Version },
+			],
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task Pausing_a_leaf_with_a_write_up_change_applies_it_in_the_same_commit()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var result = await port.PauseLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Stopped for the day" },
+		});
+
+		result.WriteUpChanged.Should().BeTrue();
+		result.Node!.WriteUp.Should().Be("Stopped for the day");
+	}
+
+	[Fact]
+	public async Task Pausing_a_leaf_with_a_stale_node_version_in_its_write_up_change_rolls_back_the_session_finishes()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var act = () => port.PauseLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			WriteUpChange = new() { NodeVersion = 99, WriteUp = "Stopped for the day" },
+		});
+
+		await act.Should().ThrowAsync<ConcurrencyConflictException>();
+
+		var stored = await ReadLeafSessionStateAsync(leafId);
+		stored.Should().ContainSingle().Which.IsActive.Should()
+			.BeTrue("the rejected write-up change must roll the whole pause back");
+	}
+
+	[Fact]
+	public async Task Pausing_a_leaf_with_a_finish_instant_in_the_future_throws_an_invariant_violation()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+
+		var act = () => port.PauseLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leafId,
+			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			FinishedAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromHours(1),
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-finish-in-future");
+	}
+
+	[Fact]
 	public async Task Completing_a_leaf_with_a_write_up_change_applies_it_in_the_same_commit()
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
@@ -1446,6 +1586,49 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			: new FinishAndWriteUpState(null, 1, true, 2));
 	}
 
+	/// <summary>
+	///     The pause composite's own race: two callers pause the same two-worker leaf from the same read
+	///     of its active set. Exactly one must win -- the loser's confirmed set is stale by version, so it
+	///     must conflict rather than re-finishing an already-finished session at a second instant.
+	/// </summary>
+	protected async Task AssertConcurrentPauseVersusPauseAsync()
+	{
+		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
+		var mateId = await SeedEmployeeAsync("Pause Race Mate", "pause.race.mate", EmployeeRole.Worker);
+		var port = CreateSessionPort(database.ConnectionString);
+		var first = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var second = await port.StartSessionAsync(new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = mateId });
+		ExpectedActiveSession[] confirmed = [
+			new() { Id = first.Id, Version = first.Version }, new() { Id = second.Id, Version = second.Version },
+		];
+
+		var results = await Task.WhenAll(
+			TryPauseAsync(CreateSessionPort(database.ConnectionString), jobManagerId, leafId, confirmed),
+			TryPauseAsync(CreateSessionPort(database.ConnectionString), jobManagerId, leafId, confirmed));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+		var stored = await ReadLeafSessionStateAsync(leafId);
+		stored.Should().HaveCount(2).And.OnlyContain(row => !row.IsActive);
+		stored.Select(row => row.FinishedAt).Distinct().Should()
+			.ContainSingle("the winning pause stops every clock at one instant");
+	}
+
+	private static async Task<bool> TryPauseAsync(
+		IWorkSessionCommandPort port, AppUserId actorId, JobNodeId leafId, IReadOnlyList<ExpectedActiveSession> confirmed)
+	{
+		try {
+			_ = await port.PauseLeafAsync(new() {
+				Context = ContextFor(actorId),
+				JobNodeId = leafId,
+				ExpectedActiveSessions = [.. confirmed],
+			});
+			return true;
+		}
+		catch (ConcurrencyConflictException) {
+			return false;
+		}
+	}
+
 	private static async Task<bool> TryFinishWithWriteUpAsync(
 		IWorkSessionCommandPort port,
 		AppUserId actorId,
@@ -1612,6 +1795,48 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		await connection.OpenAsync();
 		await PrepareConnectionAsync(connection);
 		return connection;
+	}
+
+	/// <summary>
+	///     Every session on <paramref name="leafId" />, as (id, whether it is still active, its one
+	///     finish instant as text) ordered by id -- what a pause has to leave behind: nobody clocked on,
+	///     every clock stopped at the same instant.
+	/// </summary>
+	private async Task<List<(long SessionId, bool IsActive, string? FinishedAt)>> ReadLeafSessionStateAsync(JobNodeId leafId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  SELECT ws.id,
+							         CASE WHEN ws.finished_at IS NULL THEN 1 ELSE 0 END,
+							         CAST(ws.finished_at AS TEXT)
+							  FROM work_session ws
+							  WHERE ws.leaf_work_id = @leafId
+							  ORDER BY ws.id;
+							  """;
+		AddParameter(command, "@leafId", leafId.Value);
+		await using var reader = await command.ExecuteReaderAsync();
+
+		var rows = new List<(long, bool, string?)>();
+		while (await reader.ReadAsync()) {
+			rows.Add((
+				Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+				Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture),
+				reader.IsDBNull(2) ? null : reader.GetString(2)));
+		}
+
+		return rows;
+	}
+
+	/// <summary>The leaf's current achievement id, for proving a pause left it alone.</summary>
+	private async Task<short> ReadLeafAchievementAsync(JobNodeId leafId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT lw.achievement_id FROM leaf_work lw WHERE lw.job_node_id = @leafId;";
+		AddParameter(command, "@leafId", leafId.Value);
+
+		return Convert.ToInt16(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	private async Task<FinishAndWriteUpState> ReadFinishAndWriteUpStateAsync(

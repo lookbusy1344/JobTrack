@@ -13,11 +13,16 @@ using System.Collections;
 public readonly struct EquatableDictionary<TKey, TValue> : IReadOnlyDictionary<TKey, TValue>, IEquatable<EquatableDictionary<TKey, TValue>>
 	where TKey : notnull
 {
+	// A shared instance for the `default` case: `entries ?? []` would otherwise allocate a throwaway
+	// dictionary on every single member access of a default-valued instance. Never handed out, and
+	// never mutated, so sharing it is safe.
+	private static readonly Dictionary<TKey, TValue> Empty = [];
+
 	private readonly Dictionary<TKey, TValue>? entries;
 
 	internal EquatableDictionary(Dictionary<TKey, TValue> entries) => this.entries = entries;
 
-	private Dictionary<TKey, TValue> Entries => entries ?? [];
+	private Dictionary<TKey, TValue> Entries => entries ?? Empty;
 
 	/// <summary>The number of entries.</summary>
 	public int Count => Entries.Count;
@@ -69,10 +74,16 @@ public readonly struct EquatableDictionary<TKey, TValue> : IReadOnlyDictionary<T
 		return hash;
 	}
 
-	/// <summary>Enumerates the key/value entries.</summary>
-	public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => Entries.GetEnumerator();
+	/// <summary>
+	///     Enumerates the key/value entries. Returns <see cref="Dictionary{TKey, TValue}" />'s own struct
+	///     enumerator, which <c>foreach</c> binds to by pattern — see the matching note on
+	///     <see cref="EquatableArray{T}.GetEnumerator" />.
+	/// </summary>
+	public Dictionary<TKey, TValue>.Enumerator GetEnumerator() => Entries.GetEnumerator();
 
-	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+	IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator() => Entries.GetEnumerator();
+
+	IEnumerator IEnumerable.GetEnumerator() => Entries.GetEnumerator();
 
 	/// <inheritdoc cref="Equals(EquatableDictionary{TKey, TValue})" />
 	public static bool operator ==(EquatableDictionary<TKey, TValue> left, EquatableDictionary<TKey, TValue> right) => left.Equals(right);

@@ -1,5 +1,6 @@
 namespace JobTrack.Web;
 
+using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -11,11 +12,17 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 /// </summary>
 internal static class EnumDisplay
 {
-	internal static string Label(Enum value)
+	// Enums are closed sets of a few members each, and Label runs per table row via the shared
+	// status/kind/priority partials — so each label is spaced out once and reused thereafter rather
+	// than rebuilt through a StringBuilder on every render.
+	private static readonly ConcurrentDictionary<Enum, string> Labels = new();
+
+	internal static string Label(Enum value) => Labels.GetOrAdd(value, static boxed => SpaceOutPascalCase(boxed.ToString()));
+
+	private static string SpaceOutPascalCase(string name)
 	{
-		var name = value.ToString();
 		var builder = new StringBuilder(name.Length + 4);
-		for (var i = 0; i < name.Length; i++) {
+		for (var i = 0; i < name.Length; ++i) {
 			if (i > 0 && char.IsUpper(name[i]) && !char.IsUpper(name[i - 1])) {
 				_ = builder.Append(' ');
 			}

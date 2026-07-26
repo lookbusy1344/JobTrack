@@ -17,6 +17,7 @@
 
     var dataContainer = document.querySelector("[data-jt-node-id]");
     var listElement = document.getElementById("jt-history-list");
+    var clearElement = document.getElementById("jt-history-clear");
     if (!dataContainer || !listElement) {
         return;
     }
@@ -45,12 +46,29 @@
         }
     }
 
+    // Removes the key rather than storing "[]", matching what sign-out does in site.js: an emptied
+    // history and a never-used one must be indistinguishable in storage.
+    function clearHistory() {
+        try {
+            window.localStorage.removeItem(STORAGE_KEY);
+        } catch (error) {
+            // Storage unavailable -- there was nothing persisted to clear.
+        }
+    }
+
     function renderHistory(entries) {
         listElement.replaceChildren();
 
         var visibleEntries = entries.filter(function (entry) {
             return entry.id !== currentNode.id;
         });
+
+        // Clear tracks what is actually on screen, not what is in storage: the node being looked at
+        // is always in storage but never in the list, so offering Clear for it alone would be a
+        // control whose only visible effect is nothing.
+        if (clearElement) {
+            clearElement.hidden = visibleEntries.length === 0;
+        }
 
         if (visibleEntries.length === 0) {
             var emptyItem = document.createElement("li");
@@ -79,4 +97,13 @@
     });
     var updated = [currentNode].concat(withoutCurrent).slice(0, HISTORY_CAP);
     saveHistory(updated);
+
+    // Clearing drops the current node's own breadcrumb too -- "clear" that quietly kept one entry
+    // back would be a lie. It is re-recorded on the next visit, so the list rebuilds from here.
+    if (clearElement) {
+        clearElement.addEventListener("click", function () {
+            clearHistory();
+            renderHistory([]);
+        });
+    }
 })();

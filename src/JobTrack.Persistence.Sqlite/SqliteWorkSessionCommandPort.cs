@@ -452,28 +452,11 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {request.FinalAchievement}.");
 		}
 
-		var activeSessions = await context.Set<WorkSessionEntity>()
-			.Where(s => s.LeafWorkId == request.JobNodeId && s.FinishedAt == null)
-			.OrderBy(s => s.Id)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
-		var expected = request.ExpectedActiveSessions.OrderBy(e => e.Id.Value).ToList();
-		var matchesExpected = activeSessions.Count == expected.Count
-							  && activeSessions.Zip(expected)
-								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.RowVersion == pair.Second.Version);
-		if (!matchesExpected) {
-			throw new ConcurrencyConflictException("The leaf's current active-session set no longer matches the confirmed set.");
-		}
+		var activeSessions = await LoadConfirmedActiveSessionsAsync(
+			context, request.JobNodeId, request.ExpectedActiveSessions, cancellationToken).ConfigureAwait(false);
 
 		var finishedAt = request.FinishedAt ?? now;
-		if (activeSessions.Any(s => finishedAt <= s.StartedAt)) {
-			throw new InvariantViolationException(
-				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
-		}
-
-		if (finishedAt > now) {
-			throw new InvariantViolationException(
-				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
-		}
+		EnsureFinishInstantValid(activeSessions, finishedAt, now);
 
 		if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
@@ -540,6 +523,71 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			Achievement = leafWork.Achievement,
 			ChangedAt = leafWork.ChangedAt,
 			Version = leafWork.RowVersion,
+			FinishedSessions = [.. activeSessions.Select(ToResult)],
+			WriteUpChanged = writeUpChanged,
+			Node = writtenUpNode is null
+				? null
+				: await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
+					.ConfigureAwait(false),
+		};
+	}
+
+	/// <inheritdoc />
+	public async Task<PauseLeafResult> PauseLeafAsync(PauseLeafRequest request, CancellationToken cancellationToken = default)
+	{
+		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await context.Database
+			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+
+		if (!await context.Set<LeafWorkEntity>().AsNoTracking()
+				.AnyAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+			throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
+		}
+
+		var now = clock.GetCurrentInstant();
+		var activeSessions = await LoadConfirmedActiveSessionsAsync(
+			context, request.JobNodeId, request.ExpectedActiveSessions, cancellationToken).ConfigureAwait(false);
+		await AuthorizePauseOrThrowAsync(context, request.Context.Actor, request.JobNodeId, activeSessions, now, cancellationToken)
+			.ConfigureAwait(false);
+
+		var finishedAt = request.FinishedAt ?? now;
+		EnsureFinishInstantValid(activeSessions, finishedAt, now);
+
+		foreach (var session in activeSessions) {
+			session.FinishedAt = finishedAt;
+			session.ChangedAt = now;
+			session.RowVersion += 1;
+
+			AuditEventWriter.Add(
+				context, request.Context.Actor, now, "finish-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
+				null,
+				new Dictionary<string, string?> { ["finished_at"] = null },
+				new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
+		}
+
+		var writeUpChanged = false;
+		JobNodeEntity? writtenUpNode = null;
+		if (request.WriteUpChange is WriteUpChange writeUpChange) {
+			// Same node-control authority EditAsync's own JobNodeAccessPolicy.CanManage would require --
+			// distinct from the per-session finish authority above, which governs ending the sessions
+			// themselves, not editing the node's write-up.
+			await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
+			(writeUpChanged, writtenUpNode) = await WriteUpChangeApplier.ApplyAsync(
+				context, request.JobNodeId, writeUpChange.NodeVersion, writeUpChange.WriteUp, request.Context.Actor,
+				request.Context.CorrelationId, now, cancellationToken).ConfigureAwait(false);
+		}
+
+		try {
+			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (DbUpdateConcurrencyException ex) {
+			throw new ConcurrencyConflictException(
+				$"Expected version for one of job node {request.JobNodeId}'s active sessions did not match its current version.", ex);
+		}
+
+		return new() {
+			JobNodeId = request.JobNodeId,
 			FinishedSessions = [.. activeSessions.Select(ToResult)],
 			WriteUpChanged = writeUpChanged,
 			Node = writtenUpNode is null
@@ -835,6 +883,67 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 	///     (impl plan's risk note: the two ports must compute the same control set, not duplicate the
 	///     walk divergently) -- or hold Administrator/JobManager.
 	/// </summary>
+	/// <summary>
+	///     The leaf's current active sessions, tracked and ordered by id, after verifying they are
+	///     exactly <paramref name="expectedActiveSessions" /> by id and version (ADR 0045 §3). Shared by
+	///     <see cref="CompleteLeafAsync" /> and <see cref="PauseLeafAsync" />, which differ only in what
+	///     they do once the confirmed set is in hand.
+	/// </summary>
+	private static async Task<List<WorkSessionEntity>> LoadConfirmedActiveSessionsAsync(
+		SqliteJobTrackDbContext context, JobNodeId leafId, EquatableArray<ExpectedActiveSession> expectedActiveSessions,
+		CancellationToken cancellationToken)
+	{
+		var activeSessions = await context.Set<WorkSessionEntity>()
+			.Where(s => s.LeafWorkId == leafId && s.FinishedAt == null)
+			.OrderBy(s => s.Id)
+			.ToListAsync(cancellationToken).ConfigureAwait(false);
+		var expected = expectedActiveSessions.OrderBy(e => e.Id.Value).ToList();
+		var matchesExpected = activeSessions.Count == expected.Count
+							  && activeSessions.Zip(expected)
+								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.RowVersion == pair.Second.Version);
+		if (!matchesExpected) {
+			throw new ConcurrencyConflictException("The leaf's current active-session set no longer matches the confirmed set.");
+		}
+
+		return activeSessions;
+	}
+
+	/// <summary>The one finish instant applied to a confirmed set must be after every start in it, and never in the future (ADR 0028).</summary>
+	private static void EnsureFinishInstantValid(List<WorkSessionEntity> activeSessions, Instant finishedAt, Instant now)
+	{
+		if (activeSessions.Exists(s => finishedAt <= s.StartedAt)) {
+			throw new InvariantViolationException(
+				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+		}
+
+		if (finishedAt > now) {
+			throw new InvariantViolationException(
+				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+		}
+	}
+
+	/// <summary>
+	///     Pausing a leaf ends every worker's session on it, so it needs the finish authority for each
+	///     one -- <see cref="AuthorizeFinishOrThrowAsync" />'s rule applied per session, with the actor's
+	///     roles and the node's ancestor owners read once. A worker with no node control may therefore
+	///     pause a leaf only they are clocked onto, but not one someone else is also working.
+	/// </summary>
+	private static async Task AuthorizePauseOrThrowAsync(
+		SqliteJobTrackDbContext context, AppUserId actorId, JobNodeId leafId, List<WorkSessionEntity> activeSessions, Instant now,
+		CancellationToken cancellationToken)
+	{
+		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
+			.ConfigureAwait(false);
+		var controlsNode = ancestorOwnerIds.Contains(actorId.Value);
+
+		foreach (var session in activeSessions) {
+			if (!WorkSessionAccessPolicy.CanFinishSession(actorRoles, controlsNode, actorId == session.WorkedByUserId)) {
+				throw new AuthorizationDeniedException($"Actor {actorId} may not pause job node {leafId}.");
+			}
+		}
+	}
+
 	private static async Task AuthorizeOrThrowAsync(
 		SqliteJobTrackDbContext context, AppUserId actorId, JobNodeId leafId, Instant now, CancellationToken cancellationToken)
 	{

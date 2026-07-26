@@ -189,7 +189,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			}
 
 			var children = _nodes.Values.Where(n => n.ParentId == currentId).OrderBy(n => n.Id.Value).ToList();
-			for (var rank = 0; rank < children.Count; rank++) {
+			for (var rank = 0; rank < children.Count; ++rank) {
 				var child = children[rank];
 				depthById[child.Id] = currentDepth + 1;
 

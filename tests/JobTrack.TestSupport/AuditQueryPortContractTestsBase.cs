@@ -294,7 +294,7 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		var actorId = await SeedEmployeeAsync("Margaret Hamilton", "margaret.hamilton.audit", EmployeeRole.Worker);
 
 		var entityIds = new List<long>(count);
-		for (var index = 0; index < count; index++) {
+		for (var index = 0; index < count; ++index) {
 			var entityId = entityIdAt(index);
 			entityIds.Add(entityId);
 			await InsertAuditEventAsync(

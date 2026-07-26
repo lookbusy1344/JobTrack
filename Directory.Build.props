@@ -14,6 +14,7 @@
         <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
         <Version>0.1.0</Version>
         <Authors>lookbusy1344</Authors>
+        <Copyright>Copyright (c) lookbusy1344</Copyright>
         <RepositoryUrl>https://github.com/lookbusy1344/VSStuff.git</RepositoryUrl>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>

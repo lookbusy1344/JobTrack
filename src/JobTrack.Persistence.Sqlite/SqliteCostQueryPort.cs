@@ -333,7 +333,7 @@ internal static class CostQueryAssembly
 				.ToListAsync(cancellationToken).ConfigureAwait(false);
 			var overridesByWorker = nodeOverrides.ToLookup(overrideEntry => overrideEntry.UserId);
 
-			for (var index = 0; index < workers.Count; index++) {
+			for (var index = 0; index < workers.Count; ++index) {
 				var workerNodeOverrides = overridesByWorker[workerIds[index]]
 					.Select(o => new NodeRateOverride(o.NodeId, o.Rate, o.EffectiveStart, o.EffectiveEnd))
 					.ToArray();

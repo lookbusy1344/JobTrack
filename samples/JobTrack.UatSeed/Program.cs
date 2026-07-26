@@ -77,7 +77,7 @@ internal static class Program
 		string? provider = null;
 		string? connectionString = null;
 
-		for (var i = 0; i < arguments.Length - 1; i++) {
+		for (var i = 0; i < arguments.Length - 1; ++i) {
 			switch (arguments[i]) {
 				case "--provider":
 					provider = arguments[++i];

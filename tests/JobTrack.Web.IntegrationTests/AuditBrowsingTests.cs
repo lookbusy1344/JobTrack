@@ -163,7 +163,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
 
-		for (var index = 0; index < count; index++) {
+		for (var index = 0; index < count; ++index) {
 			await using var command = connection.CreateCommand();
 			command.CommandText = """
 								  INSERT INTO audit_event

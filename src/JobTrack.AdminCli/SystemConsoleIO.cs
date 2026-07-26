@@ -29,7 +29,7 @@ public sealed class SystemConsoleIO : IConsoleIO
 
 			if (key.Key == ConsoleKey.Backspace) {
 				if (builder.Length > 0) {
-					builder.Length--;
+					--builder.Length;
 				}
 
 				continue;

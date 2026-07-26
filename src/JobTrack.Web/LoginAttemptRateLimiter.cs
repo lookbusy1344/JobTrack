@@ -69,8 +69,8 @@ public sealed class LoginAttemptRateLimiter
 					return false;
 				}
 
-				firstState.PermitsUsed++;
-				secondState.PermitsUsed++;
+				++firstState.PermitsUsed;
+				++secondState.PermitsUsed;
 				return true;
 			}
 		}

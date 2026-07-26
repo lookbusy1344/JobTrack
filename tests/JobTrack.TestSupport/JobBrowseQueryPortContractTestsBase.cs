@@ -376,7 +376,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		var commandPort = CreateCommandPort(database.ConnectionString);
 
 		var wideChildren = new List<JobNodeId>();
-		for (var i = 0; i < JobSubtreeLimits.BreadthCap + 5; i++) {
+		for (var i = 0; i < JobSubtreeLimits.BreadthCap + 5; ++i) {
 			var child = await commandPort.AddChildAsync(new() {
 				Context = ContextFor(tree.JobManagerId),
 				ParentId = rootId,
@@ -408,7 +408,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		});
 
 		var childIds = new List<JobNodeId>();
-		for (var i = 0; i < JobSubtreeLimits.BreadthCap + 5; i++) {
+		for (var i = 0; i < JobSubtreeLimits.BreadthCap + 5; ++i) {
 			var child = await commandPort.AddChildAsync(new() {
 				Context = ContextFor(tree.JobManagerId),
 				ParentId = parent.Id,
@@ -721,7 +721,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 	{
 		var (rootId, _, tree) = await SeedTreeAsync();
 		var commandPort = CreateCommandPort(database.ConnectionString);
-		for (var i = 0; i < JobSubtreeLimits.BreadthCap + 10; i++) {
+		for (var i = 0; i < JobSubtreeLimits.BreadthCap + 10; ++i) {
 			_ = await commandPort.AddChildAsync(new() {
 				Context = ContextFor(tree.JobManagerId),
 				ParentId = rootId,
@@ -795,6 +795,47 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		rows.Single(r => r.Id == tree.CabinetsLeafId).Achievement.Should().Be(Achievement.Waiting);
 		rows.Single(r => r.Id == tree.OldWiringLeafId).Achievement.Should().BeNull();
 		rows.Single(r => r.Id == branchId).Achievement.Should().BeNull();
+	}
+
+	/// <summary>
+	///     <c>leaf_work.achievement_id</c> is <c>NOT NULL</c> and <c>job_node_id</c> is its primary key,
+	///     so a projected <see cref="JobNodeSummaryResult.Achievement" /> is non-null on exactly the nodes
+	///     that hold a <c>LeafWork</c> row. Pins that equivalence across all three projections, so each
+	///     can derive <c>HasLeafWork</c> from the achievement it already selects instead of probing
+	///     <c>leaf_work</c> a second time per row.
+	/// </summary>
+	[Fact]
+	public async Task Every_projection_reports_HasLeafWork_exactly_when_it_reports_an_achievement()
+	{
+		var (rootId, branchId, tree) = await SeedTreeAsync();
+		var browsePort = CreateBrowsePort(database.ConnectionString);
+
+		await AdvancePlumbingToInProgressAsync(tree);
+
+		var children = await browsePort.GetChildrenAsync(branchId, OwnershipFilter.All, JobArchiveFilter.All);
+		var search = await browsePort.SearchJobNodesAsync("Install", OwnershipFilter.All, JobArchiveFilter.All);
+		var byIds = await browsePort.GetSummariesByIdsAsync(
+			[branchId, tree.PlumbingLeafId, tree.CabinetsLeafId, tree.OldWiringLeafId]);
+		var subtree = await browsePort.GetSubtreeAsync(
+			rootId, JobSubtreeLimits.HardMaxDepth, OwnershipFilter.All, JobArchiveFilter.All);
+
+		foreach (var summary in children.Concat(search).Concat(byIds)) {
+			summary.HasLeafWork.Should().Be(
+				summary.Achievement is not null,
+				$"node {summary.Id.Value} must report HasLeafWork exactly when it projects an achievement");
+		}
+
+		foreach (var row in subtree.Rows) {
+			row.HasLeafWork.Should().Be(
+				row.Achievement is not null,
+				$"subtree row {row.Id.Value} must report HasLeafWork exactly when it projects an achievement");
+		}
+
+		// The seeded shapes the equivalence has to hold across: a leaf with LeafWork, a childless node
+		// without it, and a branch -- otherwise this would pass vacuously on an all-null tree.
+		byIds.Single(r => r.Id == tree.CabinetsLeafId).HasLeafWork.Should().BeTrue();
+		byIds.Single(r => r.Id == tree.OldWiringLeafId).HasLeafWork.Should().BeFalse();
+		byIds.Single(r => r.Id == branchId).HasLeafWork.Should().BeFalse();
 	}
 
 	/// <summary>

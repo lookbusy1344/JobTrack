@@ -107,7 +107,7 @@ public sealed class SqliteHierarchyAchievementReadinessQueriesSchemaTests()
 							   SELECT DISTINCT origin_leaf_id FROM ancestors WHERE owner_user_id = @actorId;
 							   """;
 		AddParameter(command, "@actorId", actorId);
-		for (var index = 0; index < leafIds.Count; index++) {
+		for (var index = 0; index < leafIds.Count; ++index) {
 			AddParameter(command, leafIdParameters[index], leafIds[index]);
 		}
 

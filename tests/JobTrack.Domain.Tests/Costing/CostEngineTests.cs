@@ -198,4 +198,34 @@ public sealed class CostEngineTests
 
 		result.Trace.Should().ContainSingle().Which.IsWorkingTime.Should().BeFalse();
 	}
+
+	/// <summary>
+	///     The trace's scheduled-working-time stamp is a pure "does this segment intersect any scheduled
+	///     interval" predicate, so it cannot depend on the order — or the overlap structure — of the
+	///     scheduled set. Pins that across the binary-search optimisation, since
+	///     <see cref="CostEngine.Calculate" /> is public API and cannot require a normalized set.
+	/// </summary>
+	[Fact]
+	public void Trace_scheduled_working_time_stamps_are_independent_of_scheduled_interval_order()
+	{
+		WorkInterval[] scheduled = [new(At(9), At(12)), new(At(13), At(17)), new(At(20), At(22))];
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(10), At(11))),
+			new CostableSession(Session2, OtherLeafId, new(At(18), At(19))),
+		};
+		var nodes = TwoLeavesUnderRoot();
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], [], FullDay);
+
+		var inOrder = CostEngine.Calculate(RootId, allocations, nodes, scheduled, [], [], [], new HourlyRate(60m));
+		var reversed = CostEngine.Calculate(
+			RootId, allocations, nodes, scheduled.Reverse().ToArray(), [], [], [], new HourlyRate(60m));
+		var overlapping = CostEngine.Calculate(
+			RootId, allocations, nodes, [new(At(9), At(14)), new(At(11), At(17)), new(At(20), At(22))], [], [], [],
+			new HourlyRate(60m));
+
+		var expected = inOrder.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).ToArray();
+		expected.Should().BeEquivalentTo([(Session1.Value, true), (Session2.Value, false)]);
+		reversed.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).Should().Equal(expected);
+		overlapping.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).Should().Equal(expected);
+	}
 }

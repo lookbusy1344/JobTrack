@@ -170,6 +170,99 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
+	public async Task Clearing_the_recently_visited_history_empties_the_list_and_local_storage()
+	{
+		var firstLeafId = await fixture.SeedLeafAsync("First clearable job");
+		var secondLeafId = await fixture.SeedLeafAsync("Second clearable job");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
+		(await page.Locator($"#jt-history-list a[href='/Jobs/Browse?nodeId={firstLeafId.Value}']").CountAsync()).Should()
+			.Be(1, "the first job is now a breadcrumb");
+
+		await page.Locator("#jt-history-clear").ClickAsync();
+
+		(await page.Locator("#jt-history-list a").CountAsync()).Should().Be(0);
+		(await page.Locator(".jt-history-empty").InnerTextAsync()).Should().Be("None yet.");
+		var stored = await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')");
+		stored.Should().BeNullOrEmpty("clearing means clearing -- the current node's own breadcrumb goes too");
+	}
+
+	[Fact]
+	public async Task A_cleared_history_stays_cleared_and_starts_recording_again_from_the_next_visit()
+	{
+		var firstLeafId = await fixture.SeedLeafAsync("Forgotten job");
+		var secondLeafId = await fixture.SeedLeafAsync("Job open when cleared");
+		var thirdLeafId = await fixture.SeedLeafAsync("First job after the clear");
+		var fourthLeafId = await fixture.SeedLeafAsync("Second job after the clear");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
+		await page.Locator("#jt-history-clear").ClickAsync();
+
+		// The node open when Clear was pressed is cleared along with everything else -- it is only
+		// re-recorded if it is visited again, so it must not reappear as a breadcrumb here.
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={thirdLeafId.Value}");
+		(await page.Locator("#jt-history-list a").CountAsync()).Should().Be(0);
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={fourthLeafId.Value}");
+		var links = page.Locator("#jt-history-list a");
+		(await links.CountAsync()).Should().Be(1, "recording restarts from the first visit after the clear");
+		(await links.First.InnerTextAsync()).Should().Be($"First job after the clear (ID {thirdLeafId.Value})");
+	}
+
+	[Fact]
+	public async Task The_clear_link_is_hidden_while_there_is_nothing_to_clear()
+	{
+		var leafId = await fixture.SeedLeafAsync("Only job visited");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		// Sign-in itself lands on Browse and records that node, so start from a genuinely empty
+		// history rather than from whatever the sign-in redirect happened to leave behind.
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+		await page.EvaluateAsync("window.localStorage.removeItem('jobtrack.history.v1')");
+		await page.ReloadAsync();
+
+		// The only breadcrumb is now the node being looked at, which the list never shows -- so there
+		// is visibly nothing to clear, and an enabled Clear link would be a control with no effect.
+		(await page.Locator("#jt-history-clear").IsVisibleAsync()).Should().BeFalse();
+		(await page.Locator(".jt-history-empty").IsVisibleAsync()).Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task The_clear_link_is_operable_by_keyboard_and_leaves_the_page_accessible()
+	{
+		var firstLeafId = await fixture.SeedLeafAsync("First keyboard-cleared job");
+		var secondLeafId = await fixture.SeedLeafAsync("Second keyboard-cleared job");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
+
+		var clear = page.GetByRole(AriaRole.Button, new() { Name = "Clear recently visited", Exact = true });
+		await clear.FocusAsync();
+		(await page.EvaluateAsync<string>("document.activeElement.id")).Should().Be("jt-history-clear");
+		await clear.PressAsync("Enter");
+
+		(await page.Locator("#jt-history-list a").CountAsync()).Should().Be(0);
+		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Browse after clearing the history");
+	}
+
+	[Fact]
 	public async Task Signing_out_clears_the_recently_visited_history_from_local_storage()
 	{
 		var leafId = await fixture.SeedLeafAsync("Job visited before sign-out");
@@ -532,7 +625,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 	private static async Task TabToAsync(IPage page, string targetElementId, int maxTabs)
 	{
-		for (var attempt = 0; attempt < maxTabs; attempt++) {
+		for (var attempt = 0; attempt < maxTabs; ++attempt) {
 			await page.Keyboard.PressAsync("Tab");
 			var focusedId = await page.EvaluateAsync<string>("document.activeElement.id");
 			if (focusedId == targetElementId) {

@@ -272,7 +272,7 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		var jobCommandPort = CreateJobCommandPort(database.ConnectionString);
 		var rootId = await FindRootAsync();
 		var leafIds = new List<JobNodeId> { firstLeafId };
-		for (var i = 0; i < 10; i++) {
+		for (var i = 0; i < 10; ++i) {
 			var node = await jobCommandPort.AddChildAsync(new() {
 				Context = ContextFor(administratorId),
 				ParentId = rootId,

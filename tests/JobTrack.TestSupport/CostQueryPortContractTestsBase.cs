@@ -207,7 +207,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		var leafIds = new List<JobNodeId>();
-		for (var index = 0; index < candidateCount; index++) {
+		for (var index = 0; index < candidateCount; ++index) {
 			var leaf = await jobNodePort.AddChildAsync(new() {
 				Context = ContextFor(administratorId),
 				ParentId = branchId,
@@ -243,7 +243,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		var leafIds = new List<JobNodeId>();
-		for (var index = 0; index < candidateCount; index++) {
+		for (var index = 0; index < candidateCount; ++index) {
 			var leaf = await jobNodePort.AddChildAsync(new() {
 				Context = ContextFor(administratorId),
 				ParentId = branchId,
@@ -408,7 +408,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		var decoyIds = new List<JobNodeId>();
-		for (var index = 0; index < 30; index++) {
+		for (var index = 0; index < 30; ++index) {
 			var decoy = await jobNodePort.AddChildAsync(new() {
 				Context = ContextFor(administratorId),
 				ParentId = rootId,
@@ -448,7 +448,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
-		for (var index = 0; index < 20; index++) {
+		for (var index = 0; index < 20; ++index) {
 			var decoy = await jobNodePort.AddChildAsync(new() {
 				Context = ContextFor(administratorId),
 				ParentId = rootId,
@@ -481,7 +481,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
 		var schedulePort = CreateSchedulePort(database.ConnectionString);
-		for (var year = 2016; year < 2026; year++) {
+		for (var year = 2016; year < 2026; ++year) {
 			_ = await schedulePort.AddScheduleVersionAsync(new() {
 				Context = ContextFor(administratorId),
 				UserId = workerId,

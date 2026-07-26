@@ -18,7 +18,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 ///     are all provider-agnostic types, so this translation is identical for both providers and lives
 ///     here rather than being duplicated.
 /// </summary>
-public static class JobNodeWriteExceptionTranslation
+internal static class JobNodeWriteExceptionTranslation
 {
 	/// <summary>
 	///     Saves changes and commits for an edit/archive/create write, translating a concurrency-token

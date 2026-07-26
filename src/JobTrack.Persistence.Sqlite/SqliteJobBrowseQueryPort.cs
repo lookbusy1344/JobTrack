@@ -222,7 +222,8 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 			n.Priority,
 			n.ArchivedAt,
 			HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
-			HasLeafWork = context.Set<LeafWorkEntity>().Any(lw => lw.JobNodeId == n.Id),
+			// No separate leaf_work existence probe: achievement_id is NOT NULL and job_node_id is the
+			// primary key, so a non-null projected Achievement already means "this node holds LeafWork".
 			Achievement = context.Set<LeafWorkEntity>()
 				.Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
 		});
@@ -240,7 +241,7 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 			Priority = r.Priority,
 			ArchivedAt = r.ArchivedAt,
 			HasChildren = r.HasChildren,
-			HasLeafWork = r.HasLeafWork,
+			HasLeafWork = r.Achievement is not null,
 			Achievement = r.Achievement,
 		}).ToList();
 	}
@@ -266,7 +267,7 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 				n.NeededFinish,
 				n.ArchivedAt,
 				HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
-				HasLeafWork = context.Set<LeafWorkEntity>().Any(lw => lw.JobNodeId == n.Id),
+				// Derived from Achievement below, not probed separately -- see LoadSummariesAsync.
 				Achievement = context.Set<LeafWorkEntity>()
 					.Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
 			})
@@ -302,7 +303,7 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 				NeededFinish = r.NeededFinish,
 				ArchivedAt = r.ArchivedAt,
 				HasChildren = r.HasChildren,
-				HasLeafWork = r.HasLeafWork,
+				HasLeafWork = r.Achievement is not null,
 				Achievement = r.Achievement,
 				HasUnexpandedChildren = r.HasChildren && !expandedById[r.Id],
 				MatchesFilter = matchesById[r.Id],

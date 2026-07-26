@@ -6,12 +6,6 @@
 @{
 	ViewData["Title"] = "Browse job";
 
-	const int BreadcrumbMaxDescriptionLength = 50;
-
-	// Keeps a child-node title readable in a table row -- the node's own page (one tap away via the
-	// same link) is where the full text lives.
-	const int RowTitleMaxDescriptionLength = 100;
-
 	// Sprite symbol id and the spoken noun for a node's kind — the two halves of the tree row's
 	// leading glyph: the drawn icon (aria-hidden) and the screen-reader label that replaces it.
 	static string KindIconId(NodeKind kind) => kind switch {
@@ -49,14 +43,14 @@
 					@foreach (var ancestor in Model.CurrentNode.Ancestors) {
 						<li>
 							@if (ancestor.Kind == NodeKind.Root) {
-								<a asp-page="/Jobs/Browse">@JobNodeDisplay.Title(ancestor, BreadcrumbMaxDescriptionLength)</a>
+								<a asp-page="/Jobs/Browse">@JobNodeDisplay.Title(ancestor, JobNodeDisplay.BreadcrumbMaxDescriptionLength)</a>
 							} else {
 								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-								   asp-route-nodeId="@ancestor.Id.Value">@JobNodeDisplay.Title(ancestor, BreadcrumbMaxDescriptionLength)</a>
+								   asp-route-nodeId="@ancestor.Id.Value">@JobNodeDisplay.Title(ancestor, JobNodeDisplay.BreadcrumbMaxDescriptionLength)</a>
 							}
 						</li>
 					}
-					<li class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node, BreadcrumbMaxDescriptionLength)</li>
+					<li class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node, JobNodeDisplay.BreadcrumbMaxDescriptionLength)</li>
 				</ol>
 			</nav>
 		}
@@ -324,7 +318,7 @@
 													href="#jt-icon-go"></use></svg><span class="visually-hidden">Satisfied</span></span>
 									}
 									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 									<span class="d-flex align-items-center gap-2 ms-auto">
 										<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
 										@if (node.ArchivedAt is not null) {
@@ -348,7 +342,7 @@
 							@foreach (var node in Model.RequiredBy) {
 								<li class="d-flex flex-wrap align-items-center gap-3">
 									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 									<span class="d-flex align-items-center gap-2 ms-auto">
 										<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
 										@if (node.ArchivedAt is not null) {
@@ -369,16 +363,16 @@
 			<summary class="jt-disclosure-summary">Inherited blockers (from ancestor prerequisites)</summary>
 			<ul class="jt-list jt-list--wide mb-0">
 				@foreach (var blocker in Model.AncestorBlockers) {
-					<li class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+					<li class="d-grid align-items-center gap-3 jt-blocker-row">
 						<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
 						                                                                                   viewBox="0 0 16 16" aria-hidden="true"
 						                                                                                   focusable="false"><use
 									href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-						   asp-route-nodeId="@blocker.RequiredJobId">@JobNodeDisplay.Title(blocker.RequiredDescription, blocker.RequiredJobId)</a>
+						   asp-route-nodeId="@blocker.RequiredJobId">@JobNodeDisplay.Title(blocker.RequiredDescription, blocker.RequiredJobId, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 						<span class="jt-muted">declared on</span>
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-						   asp-route-nodeId="@blocker.DeclaredOnJobId">@JobNodeDisplay.Title(blocker.DeclaredOnDescription, blocker.DeclaredOnJobId)</a>
+						   asp-route-nodeId="@blocker.DeclaredOnJobId">@JobNodeDisplay.Title(blocker.DeclaredOnDescription, blocker.DeclaredOnJobId, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 					</li>
 				}
 			</ul>
@@ -412,7 +406,7 @@
 					<tr>
 						<td>
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-							   asp-route-nodeId="@child.Id.Value">@JobNodeDisplay.Title(child)</a>
+							   asp-route-nodeId="@child.Id.Value">@JobNodeDisplay.Title(child, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 							<partial name="_AchievementIcon"
 							         model="@(new AchievementIconModel { Achievement = child.Achievement, ShowLabel = false })"/>
 							@if (child.HasChildren) {
@@ -499,7 +493,7 @@
 					<tr>
 						<td class="jt-tree-cell" data-jt-depth="@node.Depth">
 							<span class="jt-tree-guide" aria-hidden="true">
-								@for (var railLevel = 1; railLevel < node.Depth; railLevel++) {
+								@for (var railLevel = 1; railLevel < node.Depth; ++railLevel) {
 									<span class="jt-tree-rail"></span>
 								}
 								<span class="jt-tree-elbow"></span>
@@ -523,7 +517,7 @@
 								<span class="jt-tree-text">
 									<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
 									<a class="jt-tree-name-link jt-preserve-whitespace" asp-page="/Jobs/Browse"
-									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Truncate(node.Description, RowTitleMaxDescriptionLength)</a>
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Truncate(node.Description, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 									@* Trails the name rather than leading it: unlike the blocked palm, an achievement
 									   is present on most leaves in a healthy tree, so it belongs where the eye lands
 									   after reading the row, not competing with the kind glyph for the leading slot. *@
@@ -610,8 +604,16 @@
 }
 
 @if (Model.CurrentNode is not null && !Model.IsSearch) {
+	@* Clear is a button, not a link: it acts on this page's own local storage and navigates nowhere.
+	   job-history.js unhides it only while there is something to clear, so it is never a control with
+	   no effect -- which also means it stays hidden entirely without JavaScript, where the history
+	   list is empty anyway. *@
 	<aside class="jt-history" id="jt-history" aria-label="Recently visited">
-		<p class="jt-history-label">Recently visited</p>
+		<div class="d-flex align-items-baseline gap-3 mb-2">
+			<p class="jt-history-label">Recently visited</p>
+			<button type="button" id="jt-history-clear" class="btn btn-link btn-sm jt-history-clear"
+			        aria-label="Clear recently visited" hidden>Clear</button>
+		</div>
 		<ul id="jt-history-list" class="jt-history-list"></ul>
 	</aside>
 	<div hidden

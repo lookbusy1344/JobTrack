@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 ///     ANSI <c>WITH RECURSIVE</c> SQL, identical for both providers, so it lives here rather than
 ///     being duplicated per provider.
 /// </summary>
-public static class JobNodeHierarchyQueries
+internal static class JobNodeHierarchyQueries
 {
 	/// <summary>
 	///     Returns whether every childless node in <paramref name="rootId" />'s subtree has canonical
@@ -220,13 +220,13 @@ public static class JobNodeHierarchyQueries
 }
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetAncestorChainAsync" />.</summary>
-public sealed record AncestorChainRow(long Id, long? ParentId);
+internal sealed record AncestorChainRow(long Id, long? ParentId);
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetSubtreeAchievementsAsync" />.</summary>
-public sealed record SubtreeAchievementRow(long Id, long? ParentId, short? AchievementId);
+internal sealed record SubtreeAchievementRow(long Id, long? ParentId, short? AchievementId);
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetRequesterSubtreeAsync" />.</summary>
-public sealed record RequesterSubtreeRow(long Id, long? ParentId, string Description, short? AchievementId, bool IsChildless);
+internal sealed record RequesterSubtreeRow(long Id, long? ParentId, string Description, short? AchievementId, bool IsChildless);
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetBoundedSubtreeAsync" />.</summary>
-public sealed record BoundedSubtreeRow(long Id, long? ParentId, int Depth, bool WasExpanded);
+internal sealed record BoundedSubtreeRow(long Id, long? ParentId, int Depth, bool WasExpanded);

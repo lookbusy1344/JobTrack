@@ -207,7 +207,7 @@ public static class PerformanceScaleGenerator
 		// single-child branch levels) for the max-depth outlier; this
 		// contributes a negligible row count.
 		var deepChainParent = branchIdForLeaves;
-		for (var level = 0; level < 9; level++) {
+		for (var level = 0; level < 9; ++level) {
 			await using var chainCommand = connection.CreateCommand();
 			chainCommand.CommandText = """
 									   INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)

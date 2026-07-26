@@ -29,7 +29,7 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	public Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		AppUserId actorId, CancellationToken cancellationToken = default)
 	{
-		GetActorRolesCallCount++;
+		++GetActorRolesCallCount;
 		if (!_roles.TryGetValue(actorId, out var actorRoles)) {
 			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		}
@@ -40,7 +40,7 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	public Task<EmployeeProfileQueryResult> GetEmployeeProfileAsync(
 		AppUserId actorId, AppUserId targetUserId, CancellationToken cancellationToken = default)
 	{
-		GetEmployeeProfileCallCount++;
+		++GetEmployeeProfileCallCount;
 		if (!_roles.TryGetValue(actorId, out var actorRoles)) {
 			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		}
@@ -55,7 +55,7 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	public Task<AccountStateQueryResult> GetAccountStateAsync(
 		AppUserId actorId, AppUserId targetUserId, CancellationToken cancellationToken = default)
 	{
-		GetAccountStateCallCount++;
+		++GetAccountStateCallCount;
 		if (!_roles.TryGetValue(actorId, out var actorRoles)) {
 			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		}
@@ -69,13 +69,13 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 
 	public Task<EquatableArray<EmployeeDirectoryEntry>> GetEmployeeDirectoryAsync(CancellationToken cancellationToken = default)
 	{
-		GetEmployeeDirectoryCallCount++;
+		++GetEmployeeDirectoryCallCount;
 		return Task.FromResult(_directory);
 	}
 
 	public Task<EquatableArray<EmployeeDirectoryEntry>> GetAllEmployeesAsync(CancellationToken cancellationToken = default)
 	{
-		GetAllEmployeesCallCount++;
+		++GetAllEmployeesCallCount;
 		return Task.FromResult(_allEmployees);
 	}
 

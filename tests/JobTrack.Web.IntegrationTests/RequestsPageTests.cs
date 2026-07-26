@@ -2,6 +2,7 @@ namespace JobTrack.Web.IntegrationTests;
 
 using System.Globalization;
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
@@ -27,6 +28,37 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	private const string AppliedBy = "test-runner";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
 	private const short PriorityMedium = 2;
+
+	/// <summary>
+	///     The row-title truncation budget, restated here rather than read from <c>JobNodeDisplay</c>
+	///     (internal to <c>JobTrack.Web</c>): a test that read the production constant would assert the
+	///     behaviour against itself and pass at any value.
+	/// </summary>
+	private const int RowTitleMaxDescriptionLength = 100;
+
+	private const string LongDescription =
+		"The third-floor colour printer jams on every duplex job and the front panel shows a paper-path "
+		+ "error that clears itself before anyone can read the code";
+
+	/// <summary>
+	///     The truncated row title as it appears in the response body — Razor's encoder emits the
+	///     non-ASCII ellipsis as a numeric character reference, so the raw HTML never contains a
+	///     literal "…" to match against.
+	/// </summary>
+	private static readonly string TruncatedDescription =
+		HtmlEncoder.Default.Encode(LongDescription[..RowTitleMaxDescriptionLength] + "…");
+
+	/// <summary>
+	///     A description built so the cut lands exactly on a word gap: the first
+	///     <see cref="RowTitleMaxDescriptionLength" /> - 1 characters are non-space, and the character at
+	///     that index is the space, so a naive slice would leave a dead space before the ellipsis.
+	/// </summary>
+	private static readonly string BoundarySpaceDescription =
+		"Scanner fault".PadRight(RowTitleMaxDescriptionLength - 1, '.') + " trailing words beyond the cut";
+
+	/// <summary>The expected row title for <see cref="BoundarySpaceDescription" />: the boundary space dropped.</summary>
+	private static readonly string BoundarySpaceTruncated =
+		HtmlEncoder.Default.Encode(BoundarySpaceDescription[..(RowTitleMaxDescriptionLength - 1)] + "…");
 
 	private readonly SqliteDatabaseFixture database = new();
 	private HttpClient client = null!;
@@ -260,6 +292,39 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().NotContain("Requester request");
+	}
+
+	[Fact]
+	public async Task A_long_request_description_is_truncated_in_the_list_row_but_shown_in_full_on_the_detail_heading()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.verbose", EmployeeRole.Requester);
+		// Seeded through the client rather than the HTTP form deliberately: a form submit leaves the
+		// untruncated description in the page's success banner, which would mask the row truncation.
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, LongDescription);
+		var authCookie = await SignInAsync("rita.verbose");
+
+		var listBody = await (await GetPageAsync(authCookie)).Content.ReadAsStringAsync();
+		listBody.Should().Contain(TruncatedDescription);
+		listBody.Should().NotContain(LongDescription);
+
+		var detailBody = await (await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie)).Content.ReadAsStringAsync();
+		detailBody.Should().Contain(LongDescription, "the detail page heading is where the full text lives");
+		detailBody.Should().Contain(TruncatedDescription, "the subtree table row still truncates");
+	}
+
+	[Fact]
+	public async Task A_row_title_cut_on_a_word_gap_drops_the_trailing_space_before_the_ellipsis()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.boundary", EmployeeRole.Requester);
+		_ = await SubmitAsync(requesterId, holdingAreaId, BoundarySpaceDescription);
+		var authCookie = await SignInAsync("rita.boundary");
+
+		var listBody = await (await GetPageAsync(authCookie)).Content.ReadAsStringAsync();
+
+		listBody.Should().Contain(BoundarySpaceTruncated);
+		listBody.Should().NotContain(HtmlEncoder.Default.Encode(" …"), "a dead space before the ellipsis reads as a rendering fault");
 	}
 
 	private async Task<JobRequestResult> SubmitAsync(AppUserId requesterId, RequestHoldingAreaId holdingAreaId, string description) =>
