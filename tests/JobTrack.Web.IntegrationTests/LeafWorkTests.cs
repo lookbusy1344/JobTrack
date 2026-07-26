@@ -1416,8 +1416,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Pause");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		var pairs = new List<KeyValuePair<string, string>> {
-			new("LeafNodeId", leafNodeId.Value.ToString(CultureInfo.InvariantCulture)),
-			new("__RequestVerificationToken", token),
+			new("LeafNodeId", leafNodeId.Value.ToString(CultureInfo.InvariantCulture)), new("__RequestVerificationToken", token),
 		};
 		foreach (var (sessionId, version) in sessions) {
 			pairs.Add(new("endSessionId", sessionId.ToString(CultureInfo.InvariantCulture)));

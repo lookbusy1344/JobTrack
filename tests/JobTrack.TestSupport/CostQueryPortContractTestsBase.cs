@@ -57,8 +57,8 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
 
 		result.NodeId.Should().Be(leafId);
-		result.ExactCost.Should().Be(new Money(120m));
-		result.DisplayedCost.Should().Be(new Money(120m));
+		result.ExactCost.Should().Be(new(120m));
+		result.DisplayedCost.Should().Be(new(120m));
 		result.Trace.Should().OnlyContain(entry => entry.NodeId == leafId);
 	}
 
@@ -82,7 +82,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
 
-		result.ExactCost.Should().Be(new Money(120m));
+		result.ExactCost.Should().Be(new(120m));
 	}
 
 	/// <summary>
@@ -120,7 +120,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(workerId), NodeId = leafId, AsOf = At(24) });
 
-		result.ExactCost.Should().Be(new Money(120m));
+		result.ExactCost.Should().Be(new(120m));
 	}
 
 	[Fact]
@@ -138,10 +138,10 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		// [09:00,10:00) session1 alone: 1h @ 60 = 60. [10:00,11:00) both sessions share: 0.5h @ 60 = 30. Total 90.
 		result.ExactCosts.Should().ContainKeys(branchId, leafId);
 		result.ExactCosts.Should().NotContainKey(otherLeafId);
-		result.ExactCosts[leafId].Should().Be(new Money(90m));
-		result.ExactCosts[branchId].Should().Be(new Money(90m));
-		result.DisplayedCosts[branchId].Should().Be(new Money(90m));
-		result.DisplayedCosts[leafId].Should().Be(new Money(90m));
+		result.ExactCosts[leafId].Should().Be(new(90m));
+		result.ExactCosts[branchId].Should().Be(new(90m));
+		result.DisplayedCosts[branchId].Should().Be(new(90m));
+		result.DisplayedCosts[leafId].Should().Be(new(90m));
 	}
 
 	[Fact]
@@ -168,7 +168,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		// branch/leaf see 90 (the shared [10:00,11:00) segment costed once each side), otherLeaf sees its
 		// own contribution only.
 		bulk.DisplayedCosts[branchId].Should().Be(individualBranch.DisplayedCosts[branchId]);
-		bulk.DisplayedCosts[leafId].Should().Be(new Money(90m));
+		bulk.DisplayedCosts[leafId].Should().Be(new(90m));
 		bulk.DisplayedCosts[otherLeafId].Should().Be(individualOtherLeaf.DisplayedCosts[otherLeafId]);
 	}
 
@@ -186,7 +186,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(workerId), NodeIds = [branchId, leafId], AsOf = At(24) });
 
 		bulk.DisplayedCosts.Should().NotContainKey(branchId);
-		bulk.DisplayedCosts[leafId].Should().Be(new Money(120m));
+		bulk.DisplayedCosts[leafId].Should().Be(new(120m));
 	}
 
 	/// <summary>
@@ -429,7 +429,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		// override above leafId's own requested subtree was still found.
 		var sut = new CostQueries(port);
 		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
-		result.ExactCost.Should().Be(new Money(200m));
+		result.ExactCost.Should().Be(new(200m));
 	}
 
 	/// <summary>
@@ -466,7 +466,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var sut = new CostQueries(port);
 		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
-		result.ExactCost.Should().Be(new Money(120m));
+		result.ExactCost.Should().Be(new(120m));
 	}
 
 	/// <summary>
@@ -508,7 +508,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
 
-		result.ExactCost.Should().Be(new Money(120m));
+		result.ExactCost.Should().Be(new(120m));
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);

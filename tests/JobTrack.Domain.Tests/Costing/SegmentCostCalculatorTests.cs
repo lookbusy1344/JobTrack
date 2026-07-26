@@ -1,6 +1,5 @@
 namespace JobTrack.Domain.Tests.Costing;
 
-using Abstractions;
 using AwesomeAssertions;
 using Domain.Costing;
 using NodaTime;
@@ -14,7 +13,7 @@ public sealed class SegmentCostCalculatorTests
 	{
 		var share = new AllocatedShare(OneHourTicks, 1);
 
-		SegmentCostCalculator.Calculate(share, new(60m)).Should().Be(new Money(60m));
+		SegmentCostCalculator.Calculate(share, new(60m)).Should().Be(new(60m));
 	}
 
 	[Fact]
@@ -22,7 +21,7 @@ public sealed class SegmentCostCalculatorTests
 	{
 		var share = new AllocatedShare(OneHourTicks, 2);
 
-		SegmentCostCalculator.Calculate(share, new(60m)).Should().Be(new Money(30m));
+		SegmentCostCalculator.Calculate(share, new(60m)).Should().Be(new(30m));
 	}
 
 	[Fact]
@@ -32,7 +31,7 @@ public sealed class SegmentCostCalculatorTests
 		// multiplying by the rate (which would give a different, incorrect result).
 		var share = new AllocatedShare(OneHourTicks, 3);
 
-		SegmentCostCalculator.Calculate(share, new(10m)).Should().Be(new Money(3.3333333333333333333333333333m));
+		SegmentCostCalculator.Calculate(share, new(10m)).Should().Be(new(3.3333333333333333333333333333m));
 	}
 
 	[Fact]
@@ -40,7 +39,7 @@ public sealed class SegmentCostCalculatorTests
 	{
 		var share = new AllocatedShare(OneHourTicks / 2, 1);
 
-		SegmentCostCalculator.Calculate(share, new(60m)).Should().Be(new Money(30m));
+		SegmentCostCalculator.Calculate(share, new(60m)).Should().Be(new(30m));
 	}
 
 	[Fact]

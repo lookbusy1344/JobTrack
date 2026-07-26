@@ -14,7 +14,7 @@ public static class JobTrackPostgreSql
 	///     declare compliance themselves (ASP.NET Core Identity's <c>IPasswordHasher{T}</c> and Npgsql). The
 	///     assembly's own surface is compliant; this is the one member that cannot be.
 	/// </remarks>
-	[System.CLSCompliant(false)]
+	[CLSCompliant(false)]
 	public static IJobTrackClient Create(
 		NpgsqlDataSource dataSource,
 		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,

@@ -8,6 +8,48 @@ external HTTP API → web site. Both the HTTP API and the web site are hosted by
 [`docs/jobtrack_spec_codex.md`](jobtrack_spec_codex.md) for the normative spec and
 [`docs/database-entities.md`](database-entities.md) for the entity/costing model.
 
+## 0. Dependency rules and how they're enforced
+
+The layering is ports and adapters (hexagonal), close to Clean Architecture but not a doctrinaire
+implementation of it. Dependencies point inwards only:
+
+| Assembly | May reference | Role |
+|---|---|---|
+| `JobTrack.Abstractions` | nothing (`JobTrack.*` or framework) | IDs, value types, exception hierarchy. |
+| `JobTrack.Domain` | `Abstractions` | Pure domain logic; Noda Time is its only package dependency. |
+| `JobTrack.Application` | `Abstractions`, `Domain` | Use cases, the `IJobTrackClient` facade, and the `Ports/I*Port.cs` interfaces. **No EF Core, no ADO.NET, no ASP.NET Core.** |
+| `JobTrack.Persistence.Shared` | `Abstractions` | EF model configuration shared by both providers. |
+| `JobTrack.Persistence.{PostgreSql,Sqlite}` | `Abstractions`, `Domain`, `Application`, `Persistence.Shared` | Adapters implementing the Application ports. |
+| `JobTrack.Web`, `JobTrack.AdminCli` | the library | Composition roots; call `IJobTrackClient` only. |
+
+Persistence is inverted: `JobTrack.Application` declares the ports and each provider implements
+them, so the adapters depend on the application layer rather than the reverse. Choosing a provider
+is a composition-root decision (`Database:Provider`) that no domain or use-case type can observe,
+which is what makes the shared contract-test suite meaningful — the same tests run against both.
+
+Two deliberate departures from orthodox Clean Architecture:
+
+- **The database is a layer, not a detail.** Constraints, triggers, and role grants enforce
+  invariants regardless of which caller misbehaves, instead of trusting a repository abstraction to
+  be the only door. This is also why the build order is bottom-up (`CLAUDE.md`'s mandatory
+  implementation order) and why a defect is fixed in the layer that owns it, not patched above.
+- **One coarse facade, not a use-case-per-interactor graph.** `IJobTrackClient` exposes
+  command/query groups; failure travels a single channel — exceptions, never a `Result`/`Either`
+  return — so no boundary translates error unions.
+
+None of this rests on convention. [`tests/JobTrack.ArchitectureTests/`](../tests/JobTrack.ArchitectureTests/)
+asserts it as code:
+
+| Test | What it pins |
+|---|---|
+| `ReusableLibraryDependencyTests` | Each reusable assembly's permitted `JobTrack.*` project references, and that none references `Microsoft.AspNetCore.*`. |
+| `WebHostCompositionBoundaryTests` | No file outside the composition root names a persistence-provider namespace or contains direct SQL. |
+| `ApplicationPublicSurfaceTests`, `PersistencePublicSurfaceTests` | Application exports only the approved facade contract graph; each provider exports only its client factory, and `Persistence.Shared` exports nothing. |
+| `ApplicationCommandAuthorizationBoundaryTests` | Application command handlers don't invoke access policies directly. |
+| `OneHandlerOneMutationArchitectureTests` | Every Razor Page POST handler and API endpoint delegate invokes at most one mutation. |
+| `InlineDmlArchitectureTests` | Every raw-SQL read/write is one of the exact reviewed provider mechanisms. |
+| `ClockCompositionArchitectureTests`, `WebHostCivilTimeArchitectureTests` | No source file reads the wall clock outside the composition roots; no page binds an instant through `DateTimeOffset` or renders one without `InstantDisplay`. |
+
 ## 1. Database
 
 Numbered, forward-only SQL DDL, one script per schema version, applied by `JobTrack.Database`.

@@ -192,6 +192,20 @@ public sealed class AwaitingProgressCalculatorTests
 	}
 
 	[Fact]
+	public void Compatibility_overload_excludes_a_node_whose_description_does_not_contain_the_search_text()
+	{
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[BranchId] = Node(BranchId, null, [LeafAId], null),
+			[LeafAId] = Node(LeafAId, BranchId, [], Achievement.Waiting),
+		};
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId, "Fit cabinets") };
+
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null, "doors");
+
+		result.Should().BeEmpty();
+	}
+
+	[Fact]
 	public void Results_are_ordered_by_descending_priority_then_ascending_deadline_with_nulls_last()
 	{
 		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting), Leaf(LeafCId, Achievement.Waiting));
@@ -217,6 +231,36 @@ public sealed class AwaitingProgressCalculatorTests
 		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
 			[LeafAId] = Facts(LeafAId, neededStart: later),
 			[LeafBId] = Facts(LeafBId, neededStart: soon),
+		};
+
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
+
+		result.Select(e => e.Id).Should().ContainInOrder(LeafBId, LeafAId);
+	}
+
+	[Fact]
+	public void Among_equal_priority_a_leaf_with_a_deadline_sorts_before_one_without()
+	{
+		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId, neededFinish: null),
+			[LeafBId] = Facts(LeafBId, neededFinish: Instant.FromUtc(2026, 1, 1, 0, 0)),
+		};
+
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
+
+		result.Select(e => e.Id).Should().ContainInOrder(LeafBId, LeafAId);
+	}
+
+	[Fact]
+	public void NeededFinish_takes_precedence_over_NeededStart_when_both_are_present()
+	{
+		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
+		var soon = Instant.FromUtc(2026, 1, 1, 0, 0);
+		var later = Instant.FromUtc(2026, 6, 1, 0, 0);
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId, neededStart: soon, neededFinish: later),
+			[LeafBId] = Facts(LeafBId, neededStart: later, neededFinish: soon),
 		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);

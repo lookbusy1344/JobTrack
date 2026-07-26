@@ -110,10 +110,12 @@
 		</div>
 		<div class="col d-flex gap-2">
 			<dt class="w-25 text-nowrap">Priority</dt>
-			<dd class="w-75 mb-0">@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }<partial
-					name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority })"/>@(priorityDeadline is Instant priorityDeadlineInstant
-				                    	? $" (deadline {InstantDisplay.FormatDate(priorityDeadlineInstant, Model.ViewerZone)})"
-				                    	: null)</dd>
+			<dd class="w-75 mb-0">@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }
+				<partial
+					name="_PriorityLabel"
+					model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority })"/>@(priorityDeadline is Instant priorityDeadlineInstant
+							                                                                                  ? $" (deadline {InstantDisplay.FormatDate(priorityDeadlineInstant, Model.ViewerZone)})"
+							                                                                                  : null)</dd>
 		</div>
 		@if (showActive) {
 			<div class="col d-flex gap-2">
@@ -605,7 +607,8 @@
 		<div class="d-flex align-items-baseline gap-3 mb-2">
 			<p class="jt-history-label">Recently visited</p>
 			<button type="button" id="jt-history-clear" class="btn btn-link btn-sm jt-history-clear"
-			        aria-label="Clear recently visited" hidden>Clear</button>
+			        aria-label="Clear recently visited" hidden>Clear
+			</button>
 		</div>
 		<ul id="jt-history-list" class="jt-history-list"></ul>
 	</aside>

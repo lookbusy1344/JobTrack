@@ -48,7 +48,8 @@ public sealed class WorkModel(
 	///     <c>/Jobs/Browse</c> rooted at this leaf when absent or not a local URL, matching how
 	///     <c>Login</c>'s own <c>returnUrl</c> is handled -- a redirect must never leave the app.
 	/// </summary>
-	[BindProperty(SupportsGet = true)] public string? ReturnUrl { get; init; }
+	[BindProperty(SupportsGet = true)]
+	public string? ReturnUrl { get; init; }
 
 	/// <summary>The unified bounded projection this page renders (<see cref="IJobQueries.GetLeafWorkPageAsync" />).</summary>
 	public LeafWorkPageResult? WorkPage { get; private set; }

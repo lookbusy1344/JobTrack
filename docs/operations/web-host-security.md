@@ -7,7 +7,7 @@ plus the required host-level configuration and filesystem permissions for a real
 ## Required configuration outside Development
 
 `src/JobTrack.Web/Program.cs` fails startup closed (throws `InvalidOperationException` before the
-host is built) when either of these is left unconfigured and `ASPNETCORE_ENVIRONMENT` is not
+host is built) when any of these is left unconfigured and `ASPNETCORE_ENVIRONMENT` is not
 `Development`:
 
 - `ForwardedHeaders:KnownProxies` (a JSON array of IP addresses) and/or
@@ -18,12 +18,22 @@ host is built) when either of these is left unconfigured and `ASPNETCORE_ENVIRON
 - `DataProtection:KeyPath` — an absolute filesystem path outside the application's deployment
   directory (so a redeploy that replaces the app directory doesn't discard the key ring, and so an
   application-level path-traversal bug can't reach it through a relative path).
+- `AllowedHosts` — a `;`-separated list of the host names this deployment answers to, e.g.
+  `jobtrack.example.com` or `jobtrack.example.com;www.jobtrack.example.com`. ASP.NET Core's own
+  default (unset, or `*`) disables host filtering entirely, which lets a request forge the absolute
+  URLs the application generates from the `Host` header and defeats virtual-host isolation on a
+  shared front end, so both are rejected here. A subdomain wildcard (`*.example.com`) is still
+  accepted — only the bare catch-all is not. `appsettings.json` ships this empty deliberately; there
+  is no correct default for someone else's hostname.
 
-`ProductionSecurityConfigurationTests.Startup_fails_closed_outside_development_without_forwarded_header_configuration`
-(`tests/JobTrack.Web.IntegrationTests/`) proves the forwarded-headers half of this;
-`Startup_fails_closed_outside_development_without_a_data_protection_key_path` (same file) proves
-the data-protection half, isolated from the forwarded-headers check by configuring a trusted proxy
-so only the `DataProtection:KeyPath` guard is exercised.
+`ProductionSecurityConfigurationTests` (`tests/JobTrack.Web.IntegrationTests/`) proves each guard:
+`Startup_fails_closed_outside_development_without_forwarded_header_configuration` covers the
+forwarded-headers one; `..._without_a_data_protection_key_path` covers data protection, isolated by
+configuring a trusted proxy so only that guard is exercised;
+`Startup_fails_closed_outside_development_with_wildcard_allowed_hosts` covers host filtering, with
+both earlier guards satisfied. `Startup_succeeds_outside_development_when_allowed_hosts_names_a_real_host`
+is the positive control — a fully configured Production host starts, so the three failure tests are
+known to trip on the setting under test rather than on the environment being Production at all.
 
 ## Required filesystem permissions for the data-protection key path
 

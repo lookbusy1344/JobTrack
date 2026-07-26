@@ -189,6 +189,11 @@ ENV DataProtection__KeyPath=/app/data/keys
 # with forwarded headers to trust — it exists only to satisfy the fail-closed check, not to name a
 # real trusted proxy.
 ENV ForwardedHeaders__KnownProxies__0=127.0.0.1
+# Also required outside Development: Program.cs rejects an unset or '*' AllowedHosts so a deployment
+# cannot silently accept any Host header. This image is documented as reachable at
+# https://localhost:8443 (header comment), so that is its only valid host. A deployment that fronts
+# the image with a real hostname overrides this — scripts/deploy-cloudrun.sh sets '*.run.app'.
+ENV AllowedHosts=localhost
 
 EXPOSE 8443
 VOLUME /app/data

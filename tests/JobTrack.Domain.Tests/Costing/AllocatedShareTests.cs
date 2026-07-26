@@ -31,14 +31,9 @@ public sealed class AllocatedShareTests
 	}
 
 	[Fact]
-	public void The_default_value_bypasses_the_constructor_and_reports_itself_uninitialized()
-	{
+	public void The_default_value_bypasses_the_constructor_and_reports_itself_uninitialized() =>
 		default(AllocatedShare).IsUninitialized.Should().BeTrue();
-	}
 
 	[Fact]
-	public void A_constructed_value_is_not_uninitialized()
-	{
-		new AllocatedShare(100, 3).IsUninitialized.Should().BeFalse();
-	}
+	public void A_constructed_value_is_not_uninitialized() => new AllocatedShare(100, 3).IsUninitialized.Should().BeFalse();
 }

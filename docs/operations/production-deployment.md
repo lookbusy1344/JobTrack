@@ -6,7 +6,8 @@ placement, and PostgreSQL provisioning for the single-server topology fixed by
 [ADR 0014](../decisions/0014-single-server-deployment.md). It complements, and does not repeat:
 
 - [`web-host-security.md`](web-host-security.md) — the application's own fail-closed configuration
-  (`ForwardedHeaders:*`, `DataProtection:KeyPath`) and the Kestrel-level request limits it enforces.
+  (`ForwardedHeaders:*`, `DataProtection:KeyPath`, `AllowedHosts`) and the Kestrel-level request
+  limits it enforces.
 - [`postgresql-backup-restore.md`](postgresql-backup-restore.md) — what the backup/restore smoke
   test proves and the restore procedure.
 - [`sqlite-limitations-and-configuration.md`](sqlite-limitations-and-configuration.md) — if SQLite
@@ -40,6 +41,8 @@ for speculatively.
   ahead of time, writable only by the service account (see `web-host-security.md`).
 - **`ForwardedHeaders:KnownProxies` / `KnownNetworks`** must list the reverse proxy's own address —
   the loopback address it connects from, not a public range.
+- **`AllowedHosts`** must list this deployment's own host names, `;`-separated. Startup rejects an
+  unset value and the `*` catch-all outside Development (see `web-host-security.md`).
 - **PostgreSQL login role.** The repository ships group roles only
   (`database/postgresql/roles/jobtrack-roles-and-grants.sql`: `jobtrack_owner`,
   `jobtrack_schema_deployer`, `jobtrack_application`, `jobtrack_readonly`,
@@ -94,6 +97,7 @@ for speculatively.
    Environment=ASPNETCORE_URLS=http://127.0.0.1:5000
    Environment=DataProtection__KeyPath=/var/lib/jobtrack/dataprotection-keys
    Environment=ForwardedHeaders__KnownProxies__0=127.0.0.1
+   Environment=AllowedHosts=jobtrack.example.com
    EnvironmentFile=/etc/jobtrack/secrets.env
    NoNewPrivileges=true
    ProtectSystem=strict
@@ -205,6 +209,8 @@ for speculatively.
    - Set `ForwardedHeaders:KnownProxies` to `127.0.0.1` (IIS forwards from the loopback interface to
      the out-of-process worker) via `appsettings.Production.json`, environment variables on the
      Application Pool, or `web.config`'s `<environmentVariables>`.
+   - Set `AllowedHosts` to the site's own host name(s) via the same mechanism — the IIS binding does
+     not substitute for it, since ANCM forwards the client's original `Host` header through.
    - Set `DataProtection:KeyPath` to the restricted directory from step 3, and
      `ConnectionStrings:JobTrackIdentity` via a protected mechanism (see "secrets" below) rather than
      a plaintext `appsettings.Production.json` committed anywhere.

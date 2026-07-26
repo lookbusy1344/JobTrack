@@ -36,17 +36,17 @@ public sealed class MoneyTests
 	}
 
 	[Fact]
-	public void Two_instances_with_the_same_amount_are_equal() => new Money(5m).Should().Be(new Money(5m));
+	public void Two_instances_with_the_same_amount_are_equal() => new Money(5m).Should().Be(new(5m));
 
 	[Fact]
-	public void Rounding_to_pennies_rounds_a_non_midpoint_value_normally() => new Money(1.006m).RoundToPennies().Should().Be(new Money(1.01m));
+	public void Rounding_to_pennies_rounds_a_non_midpoint_value_normally() => new Money(1.006m).RoundToPennies().Should().Be(new(1.01m));
 
 	[Theory]
 	[InlineData(0.005, 0.00)]
 	[InlineData(0.015, 0.02)]
 	[InlineData(0.025, 0.02)]
 	public void Rounding_to_pennies_breaks_a_midpoint_to_the_nearest_even_penny(double amount, double expected) =>
-		new Money((decimal)amount).RoundToPennies().Should().Be(new Money((decimal)expected));
+		new Money((decimal)amount).RoundToPennies().Should().Be(new((decimal)expected));
 
 	[Fact]
 	public void Formatting_renders_sterling_with_two_decimal_places() => new Money(1234.5m).ToString().Should().Be("£1,234.50");
@@ -56,10 +56,10 @@ public sealed class MoneyTests
 		new Money(1234.5m).ToString("N4", null).Should().Be("£1,234.5000");
 
 	[Fact]
-	public void A_smaller_amount_compares_below_a_larger_one() => new Money(5m).CompareTo(new Money(7m)).Should().BeNegative();
+	public void A_smaller_amount_compares_below_a_larger_one() => new Money(5m).CompareTo(new(7m)).Should().BeNegative();
 
 	[Fact]
-	public void Equal_amounts_compare_equal() => new Money(5m).CompareTo(new Money(5m)).Should().Be(0);
+	public void Equal_amounts_compare_equal() => new Money(5m).CompareTo(new(5m)).Should().Be(0);
 
 	[Fact]
 	public void The_comparison_operators_order_amounts()

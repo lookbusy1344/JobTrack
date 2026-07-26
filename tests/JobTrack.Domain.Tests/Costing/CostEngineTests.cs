@@ -44,8 +44,8 @@ public sealed class CostEngineTests
 
 		var costs = CostEngine.AggregateExactCosts(RootId, allocations, SingleLeafUnderRoot(), [FullDay], [], [], [], new HourlyRate(60m));
 
-		costs[LeafId].Should().Be(new Money(120m));
-		costs[RootId].Should().Be(new Money(120m));
+		costs[LeafId].Should().Be(new(120m));
+		costs[RootId].Should().Be(new(120m));
 	}
 
 	[Fact]
@@ -63,9 +63,9 @@ public sealed class CostEngineTests
 
 		var costs = CostEngine.AggregateExactCosts(RootId, allocations, nodes, [FullDay], [], [], [], new HourlyRate(60m));
 
-		costs[LeafId].Should().Be(new Money(150m));
-		costs[OtherLeafId].Should().Be(new Money(90m));
-		costs[RootId].Should().Be(new Money(240m));
+		costs[LeafId].Should().Be(new(150m));
+		costs[OtherLeafId].Should().Be(new(90m));
+		costs[RootId].Should().Be(new(240m));
 	}
 
 	[Fact]
@@ -108,7 +108,7 @@ public sealed class CostEngineTests
 
 		// [00:00,12:00): no override yet, default rate 60 -> 12h * 60 = 720.
 		// [12:00,24:00): root override applies, rate 100 -> 12h * 100 = 1200.
-		costs[LeafId].Should().Be(new Money(1920m));
+		costs[LeafId].Should().Be(new(1920m));
 	}
 
 	[Fact]
@@ -120,7 +120,7 @@ public sealed class CostEngineTests
 
 		var result = CostEngine.Calculate(RootId, allocations, nodes, [FullDay], [], [], [], new HourlyRate(60m));
 
-		result.ExactCosts[RootId].Should().Be(new Money(120m));
+		result.ExactCosts[RootId].Should().Be(new(120m));
 		result.Trace.Should().ContainSingle();
 		result.Trace[0].Should().Be(new CostSegmentTrace(
 			new(At(9), At(11)),
@@ -162,7 +162,7 @@ public sealed class CostEngineTests
 		// [10:00,11:00) both sessions share: session1 gets 0.5h @ 60 = 30.
 		result.ExactCosts.Should().ContainKeys(branchId, LeafId);
 		result.ExactCosts.Should().NotContainKey(OtherLeafId);
-		result.ExactCosts[branchId].Should().Be(new Money(90m));
+		result.ExactCosts[branchId].Should().Be(new(90m));
 
 		result.Trace.Should().OnlyContain(entry => entry.NodeId == LeafId);
 		result.Trace.SelectMany(entry => entry.ActiveSessionIds).Should().NotContain(Session2);
@@ -179,7 +179,7 @@ public sealed class CostEngineTests
 
 		var result = CostEngine.Calculate(RootId, allocations, nodes, [FullDay], [overtime], [], [], new HourlyRate(60m));
 
-		result.ExactCosts[RootId].Should().Be(new Money(220m));
+		result.ExactCosts[RootId].Should().Be(new(220m));
 		result.Trace.Select(entry => entry.ResolvedRate.Rate).Should().Equal(new HourlyRate(60m), new HourlyRate(100m), new HourlyRate(60m));
 	}
 
@@ -210,8 +210,7 @@ public sealed class CostEngineTests
 	{
 		WorkInterval[] scheduled = [new(At(9), At(12)), new(At(13), At(17)), new(At(20), At(22))];
 		var sessions = new[] {
-			new CostableSession(Session1, LeafId, new(At(10), At(11))),
-			new CostableSession(Session2, OtherLeafId, new(At(18), At(19))),
+			new CostableSession(Session1, LeafId, new(At(10), At(11))), new CostableSession(Session2, OtherLeafId, new(At(18), At(19))),
 		};
 		var nodes = TwoLeavesUnderRoot();
 		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], [], FullDay);

@@ -1,5 +1,6 @@
 namespace JobTrack.Web;
 
+using System.Collections.Frozen;
 using System.Net;
 using System.Threading.RateLimiting;
 using Application;
@@ -85,6 +86,16 @@ public sealed class Program
 	private const string ForwardedHeadersKnownProxiesConfigKey = "ForwardedHeaders:KnownProxies";
 	private const string ForwardedHeadersKnownNetworksConfigKey = "ForwardedHeaders:KnownNetworks";
 
+	// Host filtering. ASP.NET Core's default when AllowedHosts is unset or "*" is to accept any Host
+	// header at all, which lets a request forge the absolute URLs the app generates from it (password
+	// reset/redirect links, cache keys) and defeats virtual-host isolation on a shared front end.
+	// Outside Development this must name the deployment's own hosts, so both the wildcard and an
+	// absent value fail startup closed -- the same posture as the two checks below. Subdomain
+	// wildcards ("*.run.app") stay usable; only the bare catch-all is rejected.
+	private const string AllowedHostsConfigKey = "AllowedHosts";
+	private const string AllowedHostsCatchAll = "*";
+	private const char AllowedHostsSeparator = ';';
+
 	// Plan §8.2: data-protection keys persisted outside the application directory. Outside
 	// Development, an unconfigured path fails startup closed rather than falling back to the
 	// framework's ephemeral/registry-based default key ring.
@@ -114,6 +125,27 @@ public sealed class Program
 	// absence of configuration that happens to have the same effect.
 	private const string CorsPolicyName = "NoCrossOrigin";
 
+	/// <summary>
+	///     The only pages exempt from <c>AuthorizeFolder("/")</c> above: the sign-in sequence itself,
+	///     the sign-out endpoint, the access-denied page, the error page, and the landing page (which
+	///     holds no content of its own and redirects an anonymous visitor to sign-in). Kept in step with
+	///     <c>WebHostSecurityArchitectureTests.AnonymousPageAllowlist</c>, which asserts the same set
+	///     declares no <c>[Authorize]</c> attribute.
+	/// </summary>
+	// FrozenSet, not `static readonly string[]` (FDG §9.12): a span-typed property cannot hold a
+	// reference-type collection expression, and `readonly` on an array would freeze the reference
+	// while leaving the elements writable.
+	private static readonly FrozenSet<string> AnonymousPages = FrozenSet.ToFrozenSet(
+		[
+			"/Index",
+			"/Error",
+			"/Account/Login",
+			"/Account/LoginTwoFactor",
+			"/Account/Logout",
+			"/Account/AccessDenied",
+		],
+		StringComparer.Ordinal);
+
 	private Program()
 	{
 	}
@@ -123,9 +155,22 @@ public sealed class Program
 		var builder = WebApplication.CreateBuilder(args);
 
 		// Add services to the container.
-		_ = builder.Services.AddRazorPages(options =>
-			options.Conventions.AddFolderApplicationModelConvention("/", model =>
-				model.Filters.Add(new RequiresPasswordChangePageFilter())));
+		_ = builder.Services.AddRazorPages(options => {
+			_ = options.Conventions.AddFolderApplicationModelConvention("/", model =>
+				model.Filters.Add(new RequiresPasswordChangePageFilter()));
+
+			// Closed by default. Every page already declares its own `[Authorize(Policy = ...)]`
+			// (WebHostSecurityArchitectureTests enforces that), but an attribute is opt-in: a page
+			// added without one would ship publicly readable and only a test would object. This
+			// folder convention makes the framework itself the backstop -- an authenticated user is
+			// required for every page under `/` unless it is named below -- so a forgotten attribute
+			// degrades to "any signed-in employee" rather than "the whole internet". The per-page
+			// role policies still apply on top: RequireAuthorization ANDs, it does not replace.
+			_ = options.Conventions.AuthorizeFolder("/");
+			foreach (var page in AnonymousPages) {
+				_ = options.Conventions.AllowAnonymousToPage(page);
+			}
+		});
 
 		_ = builder.Services.AddScoped<IViewerTimeZoneResolver, ViewerTimeZoneResolver>();
 		_ = builder.Services.AddSingleton<IClock>(SystemClock.Instance);
@@ -358,6 +403,14 @@ public sealed class Program
 
 		if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath)) {
 			_ = builder.Services.AddDataProtection().PersistKeysToFileSystem(new(dataProtectionKeyPath));
+		}
+
+		var allowedHostEntries = (builder.Configuration[AllowedHostsConfigKey] ?? string.Empty)
+			.Split(AllowedHostsSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		if (!builder.Environment.IsDevelopment()
+			&& (allowedHostEntries.Length == 0 || Array.Exists(allowedHostEntries, host => host == AllowedHostsCatchAll))) {
+			throw new InvalidOperationException(
+				$"{AllowedHostsConfigKey} must list this deployment's own host names outside Development; '{AllowedHostsCatchAll}' disables host filtering entirely.");
 		}
 
 		_ = builder.Services.AddCors(options => options.AddPolicy(CorsPolicyName, policy => policy.WithOrigins()));

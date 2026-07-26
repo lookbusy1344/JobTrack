@@ -23,12 +23,12 @@ public readonly record struct HourlyRate : IComparable<HourlyRate>, IFormattable
 	/// <inheritdoc />
 	public int CompareTo(HourlyRate other) => AmountPerHour.CompareTo(other.AmountPerHour);
 
-	/// <summary>Renders the rate as Sterling per hour, e.g. <c>£18.50/hr</c>.</summary>
-	public override string ToString() => ToString(null, null);
-
 	/// <inheritdoc />
 	public string ToString(string? format, IFormatProvider? formatProvider) =>
 		SterlingFormat.Format(AmountPerHour, format, formatProvider) + PerHourSuffix;
+
+	/// <summary>Renders the rate as Sterling per hour, e.g. <c>£18.50/hr</c>.</summary>
+	public override string ToString() => ToString(null, null);
 
 	/// <summary>Whether <paramref name="left" /> is less than <paramref name="right" />.</summary>
 	public static bool operator <(HourlyRate left, HourlyRate right) => left.CompareTo(right) < 0;

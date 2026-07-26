@@ -52,7 +52,8 @@
 			@foreach (var request in Model.MyRequests) {
 				<tr>
 					<td><a class="jt-preserve-whitespace" asp-page="Details"
-					       asp-route-id="@request.JobNodeId.Value">@JobNodeDisplay.Title(request.Description, request.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</a></td>
+					       asp-route-id="@request.JobNodeId.Value">@JobNodeDisplay.Title(request.Description, request.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+					</td>
 					<td>@InstantDisplay.Format(request.SubmittedAt, Model.ViewerZone)</td>
 				</tr>
 			}

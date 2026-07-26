@@ -67,7 +67,11 @@ echo "==> deploying to Cloud Run ($service, $region)"
 # requires a trusted-proxy entry outside Development to accept
 # X-Forwarded-Proto; trusting any source here is reasonable specifically
 # because Cloud Run does not allow direct public access to the container --
-# only Google's own front end can ever set that header.
+# only Google's own front end can ever set that header. AllowedHosts likewise
+# has to be set (Program.cs rejects an unset or '*' value): the service's own
+# URL is not known until after this deploy returns, so it is scoped to the
+# *.run.app suffix Cloud Run allocates from rather than the exact hostname --
+# narrower than the catch-all, wider than a single host.
 gcloud run deploy "$service" \
   --project="$project" \
   --region="$region" \
@@ -76,7 +80,7 @@ gcloud run deploy "$service" \
   --allow-unauthenticated \
   --min-instances=0 \
   --max-instances=1 \
-  --set-env-vars="Kestrel__Endpoints__Http__Url=http://+:8080,ForwardedHeaders__KnownNetworks__0=0.0.0.0/0" \
+  --set-env-vars="Kestrel__Endpoints__Http__Url=http://+:8080,ForwardedHeaders__KnownNetworks__0=0.0.0.0/0,AllowedHosts=*.run.app" \
   --quiet
 
 url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"

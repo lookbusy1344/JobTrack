@@ -95,6 +95,22 @@ public sealed class ScheduleExpanderTests
 	}
 
 	[Fact]
+	public void An_occurrence_spanning_exactly_a_spring_forward_gap_produces_no_occurrence()
+	{
+		// 2024-03-10 is a Sunday; America/New_York's 02:00-03:00 gap forward-shifts 02:00 to 03:00,
+		// which coincides with the unshifted end of 03:00, collapsing the occurrence to zero length.
+		EquatableArray<WeeklyInterval> weeklyIntervals = [
+			new(IsoDayOfWeek.Sunday, new(2, 0), new(3, 0)),
+		];
+		var schedule = new ScheduleVersion(NewYork, new(2024, 1, 1), null, weeklyIntervals);
+		var bounds = Bounds(new(2024, 3, 9), new(2024, 3, 11), NewYork);
+
+		var expanded = ScheduleExpander.Expand(schedule, bounds);
+
+		expanded.Should().BeEmpty();
+	}
+
+	[Fact]
 	public void An_autumn_fold_lengthens_the_occurrence_by_using_the_earlier_start()
 	{
 		// 2024-11-03 is a Sunday; America/New_York falls back at 02:00 local to 01:00 local, so

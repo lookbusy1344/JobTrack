@@ -22,7 +22,7 @@ public sealed class HierarchicalCostAggregatorTests
 
 		var costs = HierarchicalCostAggregator.Aggregate(LeftId, nodes, leafCosts);
 
-		costs[LeftId].Should().Be(new Money(42m));
+		costs[LeftId].Should().Be(new(42m));
 	}
 
 	[Fact]
@@ -33,7 +33,7 @@ public sealed class HierarchicalCostAggregatorTests
 
 		var costs = HierarchicalCostAggregator.Aggregate(LeftId, nodes, new Dictionary<JobNodeId, Money>());
 
-		costs[LeftId].Should().Be(new Money(0m));
+		costs[LeftId].Should().Be(new(0m));
 	}
 
 	[Fact]
@@ -47,7 +47,7 @@ public sealed class HierarchicalCostAggregatorTests
 
 		var costs = HierarchicalCostAggregator.Aggregate(RootId, nodes, leafCosts);
 
-		costs[RootId].Should().Be(new Money(25m));
+		costs[RootId].Should().Be(new(25m));
 	}
 
 	[Fact]
@@ -68,8 +68,8 @@ public sealed class HierarchicalCostAggregatorTests
 
 		var costs = HierarchicalCostAggregator.Aggregate(RootId, nodes, leafCosts);
 
-		costs[RootId].Should().Be(new Money(12m));
-		costs[LeftId].Should().Be(new Money(5m));
+		costs[RootId].Should().Be(new(12m));
+		costs[LeftId].Should().Be(new(5m));
 	}
 
 	[Fact]
@@ -108,9 +108,9 @@ public sealed class HierarchicalCostAggregatorTests
 
 		var totals = HierarchicalCostAggregator.SumSubtreeTotals([RootId, LeftId, RightId], nodes, leafCosts);
 
-		totals[RightId].Should().Be(new Money(0m));
-		totals[LeftId].Should().Be(new Money(10m));
-		totals[RootId].Should().Be(new Money(10m));
+		totals[RightId].Should().Be(new(0m));
+		totals[LeftId].Should().Be(new(10m));
+		totals[RootId].Should().Be(new(10m));
 	}
 
 	[Fact]
@@ -134,7 +134,7 @@ public sealed class HierarchicalCostAggregatorTests
 		var totals = HierarchicalCostAggregator.SumSubtreeTotals([RootId], nodes, leafCosts);
 
 		totals.Should().ContainSingle();
-		totals[RootId].Should().Be(new Money(10m));
+		totals[RootId].Should().Be(new(10m));
 	}
 
 	[Fact]
@@ -156,7 +156,7 @@ public sealed class HierarchicalCostAggregatorTests
 
 		var totals = HierarchicalCostAggregator.SumSubtreeTotals([new(0)], nodes, leafCosts);
 
-		totals[new(0)].Should().Be(new Money(1m));
+		totals[new(0)].Should().Be(new(1m));
 	}
 
 	[Fact]
@@ -178,6 +178,6 @@ public sealed class HierarchicalCostAggregatorTests
 
 		var costs = HierarchicalCostAggregator.Aggregate(new(0), nodes, leafCosts);
 
-		costs[new(0)].Should().Be(new Money(1m));
+		costs[new(0)].Should().Be(new(1m));
 	}
 }

@@ -114,6 +114,11 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = certPath;
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = CertificatePassword;
 		startInfo.EnvironmentVariables["DataProtection__KeyPath"] = keyPath;
+		// Required outside Development (Program.cs rejects an unset or '*' AllowedHosts). The loopback
+		// entries cover this fixture's own base addresses; jobtrack.internal.test is the non-loopback
+		// Host header the HSTS smoke test sends deliberately, since HstsMiddleware's default
+		// ExcludedHosts skips localhost/127.0.0.1 and would otherwise emit no header to assert on.
+		startInfo.EnvironmentVariables["AllowedHosts"] = "localhost;127.0.0.1;jobtrack.internal.test";
 
 		for (var i = 0; i < knownProxies.Length; ++i) {
 			startInfo.EnvironmentVariables[$"ForwardedHeaders__KnownProxies__{i}"] = knownProxies[i];

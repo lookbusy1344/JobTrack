@@ -10,13 +10,17 @@ using TestSupport;
 /// </summary>
 public sealed class WebHostSecurityArchitectureTests
 {
-	private static readonly string[] AnonymousPageModelAllowlist = [
-		"Index",
-		"Login",
-		"LoginTwoFactor",
-		"Logout",
-		"AccessDenied",
-		"Error",
+	// Whole repository-relative paths under Pages/, not bare file names: a bare-name allowlist
+	// silently exempts any same-named page added elsewhere in the tree later (a new
+	// Pages/Admin/Index.cshtml.cs would inherit the landing page's "Index" exemption and ship
+	// unauthenticated), which is precisely the regression this guardrail exists to catch.
+	private static readonly string[] AnonymousPageAllowlist = [
+		"Index.cshtml.cs",
+		"Error.cshtml.cs",
+		"Account/Login.cshtml.cs",
+		"Account/LoginTwoFactor.cshtml.cs",
+		"Account/Logout.cshtml.cs",
+		"Account/AccessDenied.cshtml.cs",
 	];
 
 	private static readonly string[] JobTrackIdentityDbContextAllowlist = [
@@ -43,16 +47,53 @@ public sealed class WebHostSecurityArchitectureTests
 	[Fact]
 	public void Every_Razor_PageModel_is_authorized_except_the_public_allowlist()
 	{
-		var pagesDirectory = Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web", "Pages");
-		var violations = Directory.EnumerateFiles(pagesDirectory, "*.cshtml.cs", SearchOption.AllDirectories)
-			.Select(path => (Content: File.ReadAllText(path),
-				ModelName: Path.GetFileName(path).Replace(".cshtml.cs", string.Empty, StringComparison.Ordinal)))
-			.Where(entry => !AnonymousPageModelAllowlist.Contains(entry.ModelName, StringComparer.Ordinal))
+		var violations = EnumeratePageModels()
+			.Where(entry => !IsAllowedAnonymous(entry.RelativePath))
 			.Where(entry => !entry.Content.Contains("[Authorize", StringComparison.Ordinal))
-			.Select(entry => entry.ModelName)
+			.Select(entry => entry.RelativePath)
 			.ToList();
 
 		violations.Should().BeEmpty("workflow pages must declare an authorization policy");
+	}
+
+	/// <summary>
+	///     The allowlist above is matched against a page's whole path under <c>Pages/</c>. A same-named
+	///     page in another folder is a different page and must not inherit the exemption.
+	/// </summary>
+	[Fact]
+	public void The_anonymous_page_allowlist_matches_whole_paths_not_bare_file_names()
+	{
+		IsAllowedAnonymous("Index.cshtml.cs").Should().BeTrue();
+		IsAllowedAnonymous("Account/Login.cshtml.cs").Should().BeTrue();
+
+		IsAllowedAnonymous("Admin/Index.cshtml.cs").Should().BeFalse();
+		IsAllowedAnonymous("Jobs/Login.cshtml.cs").Should().BeFalse();
+		IsAllowedAnonymous("Account/Nested/Logout.cshtml.cs").Should().BeFalse();
+	}
+
+	/// <summary>
+	///     A stale allowlist entry is a silent hole: it exempts nothing today, but pre-authorizes a
+	///     future page created at that exact path. Every entry must name a page that actually exists.
+	/// </summary>
+	[Fact]
+	public void Every_anonymous_allowlist_entry_names_an_existing_page()
+	{
+		var actualPaths = EnumeratePageModels().Select(entry => entry.RelativePath).ToList();
+
+		AnonymousPageAllowlist.Should().BeSubsetOf(actualPaths);
+	}
+
+	private static bool IsAllowedAnonymous(string relativePath) =>
+		AnonymousPageAllowlist.Contains(relativePath, StringComparer.Ordinal);
+
+	private static IEnumerable<(string RelativePath, string Content)> EnumeratePageModels()
+	{
+		var pagesDirectory = Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web", "Pages");
+
+		return Directory.EnumerateFiles(pagesDirectory, "*.cshtml.cs", SearchOption.AllDirectories)
+			.Select(path => (
+				RelativePath: Path.GetRelativePath(pagesDirectory, path).Replace(Path.DirectorySeparatorChar, '/'),
+				Content: File.ReadAllText(path)));
 	}
 
 	[Fact]

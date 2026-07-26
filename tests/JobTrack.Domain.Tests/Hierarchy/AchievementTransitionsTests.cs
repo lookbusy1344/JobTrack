@@ -47,6 +47,8 @@ public sealed class AchievementTransitionsTests
 	[InlineData(Achievement.Unsuccessful, Achievement.Waiting, true)]
 	[InlineData(Achievement.Waiting, Achievement.InProgress, false)]
 	[InlineData(Achievement.InProgress, Achievement.Success, false)]
+	[InlineData(Achievement.Waiting, Achievement.Waiting, false)]
+	[InlineData(Achievement.InProgress, Achievement.Waiting, false)]
 	public void IsReopening_identifies_only_terminal_to_waiting_transitions(Achievement from, Achievement to, bool expected) =>
 		AchievementTransitions.IsReopening(from, to).Should().Be(expected);
 }

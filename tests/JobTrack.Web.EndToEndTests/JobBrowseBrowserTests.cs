@@ -441,8 +441,10 @@ public abstract class JobBrowseBrowserTestsBase
 		(await phoneRow.GetByTitle("Pause job").IsVisibleAsync()).Should().BeTrue("Pause is the one row action that must stay reachable on a phone");
 		(await phoneRow.Locator(".jt-session-started").IsVisibleAsync()).Should().BeFalse("Started is one tap away via the row's own session");
 		(await phoneRow.GetByTitle("Correct").IsVisibleAsync()).Should().BeFalse("an active row keeps Pause, not Correct, as its one phone action");
-		(await phoneRow.GetByTitle("Backdate finish").IsVisibleAsync()).Should().BeFalse("the backdate trigger is one tap away via the row's own session");
-		(await phoneRow.GetByText("Active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue("Finished keeps the Active status pill on a phone");
+		(await phoneRow.GetByTitle("Backdate finish").IsVisibleAsync()).Should()
+			.BeFalse("the backdate trigger is one tap away via the row's own session");
+		(await phoneRow.GetByText("Active", new() { Exact = true }).IsVisibleAsync()).Should()
+			.BeTrue("Finished keeps the Active status pill on a phone");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
@@ -469,7 +471,8 @@ public abstract class JobBrowseBrowserTestsBase
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var phoneRow = phone.Locator("tbody tr").First;
-		(await phoneRow.GetByTitle("Correct").IsVisibleAsync()).Should().BeTrue("a finished row has no Pause, so Correct must be its one phone action");
+		(await phoneRow.GetByTitle("Correct").IsVisibleAsync()).Should()
+			.BeTrue("a finished row has no Pause, so Correct must be its one phone action");
 		(await phoneRow.GetByTitle("Pause job").IsVisibleAsync()).Should().BeFalse("a finished session has nothing to pause");
 	}
 

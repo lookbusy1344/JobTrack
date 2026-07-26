@@ -54,6 +54,20 @@ Supporting projects, not part of that chain:
 - **`JobTrack.AdminCli`** — a narrowly scoped CLI for one-time administrator bootstrap and
   emergency password reset, consuming the library in-process (layer 2), not over HTTP.
 
+### Architectural philosophy
+
+The shape is ports and adapters (hexagonal) — close to Clean Architecture, but not a doctrinaire
+implementation of it. Dependencies point inwards only, towards a pure, framework-free core: the
+domain and use-case layers know nothing about EF Core, SQL, or ASP.NET Core, and reach storage only
+through port interfaces they define themselves and the two persistence providers implement. Which
+provider is in play is a composition-root choice no domain type can observe, and the hosts sit
+outside everything, calling `IJobTrackClient` and never a database. That separation is asserted by
+`tests/JobTrack.ArchitectureTests`, not left to good intentions. It departs from orthodox Clean in
+two deliberate ways: the database is a real layer enforcing its own invariants rather than a
+swappable detail, and failure travels one channel only — exceptions, never a `Result`-style return.
+[`docs/architecture-overview.md`](docs/architecture-overview.md) has the dependency rules,
+enforcement, and a file-by-file map.
+
 Stack: .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity, xUnit + AwesomeAssertions.
 
 See [`docs/jobtrack_spec_codex.md`](docs/jobtrack_spec_codex.md) (normative specification),

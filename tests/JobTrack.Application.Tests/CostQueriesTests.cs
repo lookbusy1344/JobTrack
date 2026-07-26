@@ -54,8 +54,8 @@ public sealed class CostQueriesTests
 		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(CostViewerId), NodeId = LeafId, AsOf = At(24) });
 
 		result.NodeId.Should().Be(LeafId);
-		result.ExactCost.Should().Be(new Money(120m));
-		result.DisplayedCost.Should().Be(new Money(120m));
+		result.ExactCost.Should().Be(new(120m));
+		result.DisplayedCost.Should().Be(new(120m));
 		result.Trace.Should().OnlyContain(entry => entry.NodeId == LeafId);
 		result.TzdbVersion.Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
 	}
@@ -109,10 +109,10 @@ public sealed class CostQueriesTests
 		// [09:00,10:00) session1 alone: 1h @ 60 = 60. [10:00,11:00) both sessions share: 0.5h @ 60 = 30. Total 90.
 		result.ExactCosts.Should().ContainKeys(BranchId, LeafId);
 		result.ExactCosts.Should().NotContainKey(OtherLeafId);
-		result.ExactCosts[LeafId].Should().Be(new Money(90m));
-		result.ExactCosts[BranchId].Should().Be(new Money(90m));
-		result.DisplayedCosts[BranchId].Should().Be(new Money(90m));
-		result.DisplayedCosts[LeafId].Should().Be(new Money(90m));
+		result.ExactCosts[LeafId].Should().Be(new(90m));
+		result.ExactCosts[BranchId].Should().Be(new(90m));
+		result.DisplayedCosts[BranchId].Should().Be(new(90m));
+		result.DisplayedCosts[LeafId].Should().Be(new(90m));
 		result.TzdbVersion.Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
 	}
 
@@ -254,7 +254,7 @@ public sealed class CostQueriesTests
 
 		bulk.DisplayedCosts[BranchId].Should().Be(individualBranch.DisplayedCosts[BranchId]);
 		bulk.DisplayedCosts[LeafId].Should().Be(individualLeaf.DisplayedCosts[LeafId]);
-		bulk.DisplayedCosts[OtherLeafId].Should().Be(new Money(0m));
+		bulk.DisplayedCosts[OtherLeafId].Should().Be(new(0m));
 	}
 
 	[Fact]

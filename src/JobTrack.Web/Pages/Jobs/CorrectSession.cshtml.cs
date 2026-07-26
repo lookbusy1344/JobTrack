@@ -31,7 +31,8 @@ public sealed class CorrectSessionModel(
 	[BindProperty(SupportsGet = true)] public long SessionId { get; init; }
 
 	/// <summary>Threaded through to <c>/Jobs/Work</c> so returning there after a correction still lands where the worker came from.</summary>
-	[BindProperty(SupportsGet = true)] public string? ReturnUrl { get; init; }
+	[BindProperty(SupportsGet = true)]
+	public string? ReturnUrl { get; init; }
 
 	[BindProperty] public CorrectInput Input { get; set; } = new();
 

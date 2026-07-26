@@ -222,8 +222,8 @@
 						@if (canPause) {
 							<button type="submit" asp-page-handler="Pause" class="btn btn-secondary"
 							        title="@(presentation.Count == 1
-								                ? "Ends this session; the job stays In Progress."
-								                : $"Ends all {presentation.Count} active sessions; the job stays In Progress.")">
+								               ? "Ends this session; the job stays In Progress."
+								               : $"Ends all {presentation.Count} active sessions; the job stays In Progress.")">
 								<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 									<use href="#jt-icon-finish"></use>
 								</svg>

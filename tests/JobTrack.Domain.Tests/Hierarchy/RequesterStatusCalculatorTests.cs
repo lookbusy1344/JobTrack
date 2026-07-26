@@ -82,4 +82,18 @@ public sealed class RequesterStatusCalculatorTests
 		RequesterStatusCalculator.Derive(true, [Leaf(Achievement.Success), Leaf(Achievement.Success)])
 			.Should().Be(RequesterStatus.Completed);
 	}
+
+	[Fact]
+	public void A_terminal_negative_leaf_alongside_an_in_progress_leaf_is_in_progress_not_cancelled()
+	{
+		RequesterStatusCalculator.Derive(true, [Leaf(Achievement.Cancelled), Leaf(Achievement.InProgress)])
+			.Should().Be(RequesterStatus.InProgress);
+	}
+
+	[Fact]
+	public void A_terminal_negative_leaf_alongside_a_succeeded_leaf_is_not_cancelled()
+	{
+		RequesterStatusCalculator.Derive(true, [Leaf(Achievement.Cancelled), Leaf(Achievement.Success)])
+			.Should().Be(RequesterStatus.Accepted);
+	}
 }

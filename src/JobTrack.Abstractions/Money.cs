@@ -20,21 +20,21 @@ public readonly record struct Money : IComparable<Money>, IFormattable
 	/// <summary>The amount, in GBP.</summary>
 	public decimal Amount { get; }
 
+	/// <inheritdoc />
+	public int CompareTo(Money other) => Amount.CompareTo(other.Amount);
+
+	/// <inheritdoc />
+	public string ToString(string? format, IFormatProvider? formatProvider) =>
+		SterlingFormat.Format(Amount, format, formatProvider);
+
 	/// <summary>
 	///     Rounds to the nearest penny using midpoint-to-even (banker's) rounding — the reporting
 	///     boundary of §10.4/ADR 0002/ADR 0009. Never applied to an intermediate cost-engine value.
 	/// </summary>
 	public Money RoundToPennies() => new(Math.Round(Amount, GbpMinorUnitDecimalPlaces, MidpointRounding.ToEven));
 
-	/// <inheritdoc />
-	public int CompareTo(Money other) => Amount.CompareTo(other.Amount);
-
 	/// <summary>Renders the amount as Sterling, e.g. <c>£1,234.50</c>.</summary>
 	public override string ToString() => ToString(null, null);
-
-	/// <inheritdoc />
-	public string ToString(string? format, IFormatProvider? formatProvider) =>
-		SterlingFormat.Format(Amount, format, formatProvider);
 
 	/// <summary>Whether <paramref name="left" /> is less than <paramref name="right" />.</summary>
 	public static bool operator <(Money left, Money right) => left.CompareTo(right) < 0;

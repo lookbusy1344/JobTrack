@@ -1617,11 +1617,7 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		IWorkSessionCommandPort port, AppUserId actorId, JobNodeId leafId, IReadOnlyList<ExpectedActiveSession> confirmed)
 	{
 		try {
-			_ = await port.PauseLeafAsync(new() {
-				Context = ContextFor(actorId),
-				JobNodeId = leafId,
-				ExpectedActiveSessions = [.. confirmed],
-			});
+			_ = await port.PauseLeafAsync(new() { Context = ContextFor(actorId), JobNodeId = leafId, ExpectedActiveSessions = [.. confirmed] });
 			return true;
 		}
 		catch (ConcurrencyConflictException) {

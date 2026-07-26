@@ -3,15 +3,28 @@
   "stryker-config": {
     "mutate": [
       "Intervals/IntervalAlgebra.cs",
+      "Intervals/IntervalIndex.cs",
       "Intervals/WorkInterval.cs",
       "Schedules/WeeklyInterval.cs",
+      "Schedules/CivilTimeResolver.cs",
+      "Schedules/ScheduleExceptionResolver.cs",
+      "Schedules/ScheduleExceptionValidator.cs",
+      "Schedules/ScheduleExpander.cs",
+      "Schedules/ScheduleZoneId.cs",
       "Authorization/*.cs",
       "Hierarchy/PrerequisiteEdge.cs",
       "Hierarchy/UnsatisfiedPrerequisite.cs",
       "Hierarchy/ReadinessResult.cs",
       "Hierarchy/ReadinessCalculator.cs",
+      "Hierarchy/AchievementCalculator.cs",
+      "Hierarchy/AchievementTransitions.cs",
+      "Hierarchy/AwaitingProgressCalculator.cs",
+      "Hierarchy/NodeClassifier.cs",
+      "Hierarchy/OwnershipFilter.cs",
+      "Hierarchy/RequesterStatusCalculator.cs",
       "Costing/*.cs",
-      "Rates/UserCostRate.cs"
+      "Rates/UserCostRate.cs",
+      "Rates/RateResolver.cs"
     ],
     "test-projects": [
       "../../tests/JobTrack.Domain.Tests/JobTrack.Domain.Tests.csproj"
