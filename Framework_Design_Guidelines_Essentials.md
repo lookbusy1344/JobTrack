@@ -1,5 +1,7 @@
 # Framework Design Guidelines — Essentials
 
+*Last revised: 2026-07-26 — added "Read-only arrays and collections" (§9.12) to chapter 9.*
+
 A distilled reference to Cwalina & Abrams, *Framework Design Guidelines* (4th ed.).
 Rule strength and direction: **DO** and **DO NOT** are strong positive and negative rules; **CONSIDER** and **AVOID** are weaker positive and negative defaults. These are strong defaults, not substitutes for understanding the trade-off. When a compressed bullet combines rules of different strengths, each rule repeats its own marker; unmarked sentences explain rationale, scope, or consequences rather than introduce another rule.
 Each chapter merges the core rules with the finer points. API design (ch. 2, 5) and error handling (ch. 7) carry extra depth.
@@ -207,7 +209,7 @@ This is where most of the day-to-day API surface lives. The members are what the
 - **DO** raise each event from a `protected virtual On<Event>(<Args> e)` method taking exactly one parameter, so subclasses can intercept. (Applies to non-static events on unsealed classes.)
 - **DO NOT** pass a null sender for a non-static event. **DO** pass null for a static event. **DO NOT** pass null event data. **CONSIDER** cancellable pre-events.
 
-**Fields** — **DO NOT** expose public/protected *instance* fields. **DO** surface state through properties. **DO** use `const` for true constants. **CONSIDER** `public static readonly` fields for predefined instances. **DO NOT** assign a mutable instance to a public or protected `readonly` field; the reference is read-only, but the object is not.
+**Fields** — **DO NOT** expose public/protected *instance* fields. **DO** surface state through properties. **DO** use `const` for true constants. **CONSIDER** `public static readonly` fields for predefined instances. **DO NOT** assign a mutable instance to a public or protected `readonly` field; the reference is read-only, but the object is not. Arrays are the common trap — see [Read-only arrays and collections](#9-common-design-patterns) in ch. 9 for the `ReadOnlySpan<T>` property form that replaces `static readonly T[]`.
 
 **Extension methods** — **AVOID** defining them frivolously, especially on types you don't own.
 - **CONSIDER** them for helpers across every implementation of an interface, or to avoid an unwanted dependency on the type.
@@ -382,6 +384,15 @@ One of the biggest misconceptions about exceptions is that they are for “excep
 - **DO** prefer `source` for the input buffer and `destination` for the output buffer. **DO** position the source first and the destination immediately after all sources. **DO** report written counts via `out`; **CONSIDER** names such as `bytesWritten`, `charsWritten`, or `valuesWritten`.
 - **Try-Write pattern**: **DO** use a `Try` prefix and Boolean return. **DO** return `false` if and only if the destination is too small and throw for every other error. **DO** report the written count via `out`. **DO** provide a way to compute a sufficient size for potentially large results. **CONSIDER** a size-computation API and a throwing alternative for smaller results.
 - **OperationStatus pattern**: **CONSIDER** it for partial or streaming results. **DO** report consumed and written counts via `out` parameters. **DO** include an optional `isFinalBlock` Boolean, defaulting to true, when the last block needs special handling.
+
+**Read-only arrays and collections** *(source: §9.12)*
+
+`readonly` on an array field freezes the *reference*, not the contents. A `static readonly int[] X = [1, 2, 3, 4];` still permits `X[0] = 0;` from anywhere that can see the field, so the declaration reads as a constant table while behaving as shared mutable state. This is the field-declaration counterpart of the API-signature rule in [§8.1](#8-usage-guidelines-using-common-types-in-apis) and of the public-field rule in [ch. 5](#5-member-design--api-design--core-chapter).
+
+- **DO NOT** declare a constant table as `static readonly T[]`. The `readonly` modifier gives no protection to the elements.
+- **DO** prefer a `static ReadOnlySpan<T> X => [...];` *property*. It is the most efficient form: the compiler emits the data as a metadata blob and the span is a `ref struct` over it, so there is no heap allocation and no per-call copy.
+- **CONSIDER** `static IReadOnlyList<T> X = [...];` when the members must cross an `await`, live on the heap, or be exposed through an interface a span cannot satisfy. It is correct but less efficient — the interface reference is a second heap allocation on top of the backing array.
+- The `ReadOnlySpan<T>` property form is the default; fall back to `IReadOnlyList<T>` only when a span's `ref struct` lifetime restrictions genuinely rule it out.
 
 **Misc patterns** — **DO** represent timeouts with a `TimeSpan` parameter and throw `TimeoutException`; **DO NOT** return timeout error codes. For XAML, **CONSIDER** a parameterless constructor and **DO** provide a markup extension for immutable types. **AVOID** new type converters unless the conversion is natural and intuitive. **CONSIDER** `ContentPropertyAttribute` for the primary property. For optional capabilities, **CONSIDER** the Optional Feature Pattern; **DO** expose a Boolean `IsXSupported` property and base virtual members that throw `NotSupportedException`.
 
