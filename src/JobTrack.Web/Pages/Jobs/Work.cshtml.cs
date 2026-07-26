@@ -40,6 +40,16 @@ public sealed class WorkModel(
 
 	[BindProperty(SupportsGet = true)] public long? WorkedByUserId { get; init; }
 
+	/// <summary>
+	///     Where to return once an ending action (Pause/Complete job, Save write-up) succeeds — the
+	///     hosting page's own current view (Browse rooted at some node, or the awaiting-progress
+	///     dashboard's current filter/page), threaded in via <see cref="WorkRowActionsModel.ReturnUrl" />
+	///     from wherever this page was reached. <see cref="RedirectToReturnUrlOrBrowse" /> falls back to
+	///     <c>/Jobs/Browse</c> rooted at this leaf when absent or not a local URL, matching how
+	///     <c>Login</c>'s own <c>returnUrl</c> is handled -- a redirect must never leave the app.
+	/// </summary>
+	[BindProperty(SupportsGet = true)] public string? ReturnUrl { get; init; }
+
 	/// <summary>The unified bounded projection this page renders (<see cref="IJobQueries.GetLeafWorkPageAsync" />).</summary>
 	public LeafWorkPageResult? WorkPage { get; private set; }
 
@@ -109,6 +119,17 @@ public sealed class WorkModel(
 	/// <summary>Every enabled workflow employee, with the viewer selected by default for reopen-and-start.</summary>
 	public IReadOnlyList<SelectListItem> ReopenWorkerOptions { get; private set; } = [];
 
+	/// <summary>
+	///     Where the job title links back to -- <see cref="ReturnUrl" /> when it is a valid local URL
+	///     (wherever this page was actually reached from), otherwise <c>/Jobs/Browse</c> rooted at this
+	///     leaf, matching <see cref="RedirectToReturnUrlOrBrowse" />'s own fallback. The toolbar's
+	///     "Browse" button stays a literal link to Browse -- its label promises that destination
+	///     specifically, unlike the title, which is this page's general-purpose "back" affordance.
+	/// </summary>
+	public string BrowseHref => ReturnUrl is not null && Url.IsLocalUrl(ReturnUrl)
+		? ReturnUrl
+		: Url.Page("/Jobs/Browse", new { nodeId = LeafNodeId })!;
+
 	/// <summary>The one leaf this page is for, as a <see cref="WorkRowActionsModel" /> so the toolbar shares Browse's exact start/finish/start-for logic.</summary>
 	public WorkRowActionsModel ToolbarActions => new() {
 		LeafNodeId = LeafNodeId,
@@ -139,6 +160,7 @@ public sealed class WorkModel(
 	public IReadOnlyDictionary<string, string?> ToolbarStateFields => new Dictionary<string, string?> {
 		["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture),
 		["WorkedByUserId"] = Panel?.DisplayedWorkedByUserId?.ToString(CultureInfo.InvariantCulture),
+		["ReturnUrl"] = ReturnUrl,
 	};
 
 	/// <summary>Formats a worker id for display (<see cref="EmployeeDirectoryDisplay.Describe" />), for the plural Active-column summary.</summary>
@@ -180,7 +202,7 @@ public sealed class WorkModel(
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
 				ErrorMessage = "Enter a valid date and time.";
-				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+				return RedirectToWork();
 			}
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
@@ -205,7 +227,7 @@ public sealed class WorkModel(
 			ErrorMessage = "This leaf's prerequisites are not satisfied.";
 		}
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToWork();
 	}
 
 	/// <summary>Starts a session for <paramref name="startForUserId" /> rather than the signed-in actor -- mirrors <c>Browse</c>'s <c>StartFor</c> handler.</summary>
@@ -218,14 +240,14 @@ public sealed class WorkModel(
 
 		if (startForUserId is not long targetUserId) {
 			ErrorMessage = "Choose a worker to start for.";
-			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			return RedirectToWork();
 		}
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
 				ErrorMessage = "Enter a valid date and time.";
-				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+				return RedirectToWork();
 			}
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
@@ -250,7 +272,7 @@ public sealed class WorkModel(
 			ErrorMessage = "This leaf's prerequisites are not satisfied.";
 		}
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToWork();
 	}
 
 	/// <summary>
@@ -284,7 +306,7 @@ public sealed class WorkModel(
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
 				ErrorMessage = "Enter a valid date and time.";
-				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+				return RedirectToWork();
 			}
 
 			var result = await jobTrackClient.Work.FinishSessionAndUpdateWriteUpAsync(new() {
@@ -298,7 +320,7 @@ public sealed class WorkModel(
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote("Ends this session; the job stays In Progress.", result.WriteUpChanged);
 
-			return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
+			return RedirectToReturnUrlOrBrowse();
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -314,7 +336,7 @@ public sealed class WorkModel(
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToWork();
 	}
 
 	/// <summary>
@@ -345,14 +367,14 @@ public sealed class WorkModel(
 
 		if (ConfirmedActiveSessions(endSessionId, endSessionVersion) is not EquatableArray<ExpectedActiveSession> confirmed) {
 			ErrorMessage = "The active-session list on this page is out of date. Reloading.";
-			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			return RedirectToWork();
 		}
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(completionFinishedAt, zone, out var finishedAtInstant)) {
 				ErrorMessage = "Enter a valid completion date and time.";
-				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+				return RedirectToWork();
 			}
 
 			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
@@ -370,7 +392,7 @@ public sealed class WorkModel(
 			SuccessMessage = WithWriteUpNote(
 				DescribeCompletionOutcome(result.Achievement, result.FinishedSessions.Count), result.WriteUpChanged);
 
-			return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
+			return RedirectToReturnUrlOrBrowse();
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -389,7 +411,7 @@ public sealed class WorkModel(
 			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
 		}
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToWork();
 	}
 
 	/// <summary>
@@ -419,14 +441,14 @@ public sealed class WorkModel(
 
 		if (ConfirmedActiveSessions(endSessionId, endSessionVersion) is not EquatableArray<ExpectedActiveSession> confirmed) {
 			ErrorMessage = "The active-session list on this page is out of date. Reloading.";
-			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			return RedirectToWork();
 		}
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
 				ErrorMessage = "Enter a valid date and time.";
-				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+				return RedirectToWork();
 			}
 
 			var result = await jobTrackClient.Work.PauseLeafAsync(new() {
@@ -440,7 +462,7 @@ public sealed class WorkModel(
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote(DescribePauseOutcome(result.FinishedSessions.Count), result.WriteUpChanged);
 
-			return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
+			return RedirectToReturnUrlOrBrowse();
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -456,7 +478,7 @@ public sealed class WorkModel(
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToWork();
 	}
 
 	/// <summary>
@@ -475,14 +497,14 @@ public sealed class WorkModel(
 
 		if (string.IsNullOrWhiteSpace(reason)) {
 			ErrorMessage = "Enter a reason for reopening this job.";
-			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			return RedirectToWork();
 		}
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
 				ErrorMessage = "Enter a valid date and time.";
-				return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+				return RedirectToWork();
 			}
 
 			_ = await jobTrackClient.Work.ReopenAndStartWorkAsync(new() {
@@ -508,7 +530,7 @@ public sealed class WorkModel(
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToWork();
 	}
 
 	/// <summary>
@@ -529,7 +551,7 @@ public sealed class WorkModel(
 
 		if (string.IsNullOrWhiteSpace(reason)) {
 			ErrorMessage = "Enter a reason for this change.";
-			return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+			return RedirectToWork();
 		}
 
 		try {
@@ -561,7 +583,7 @@ public sealed class WorkModel(
 			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
 		}
 
-		return RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId });
+		return RedirectToWork();
 	}
 
 	/// <summary>
@@ -592,7 +614,7 @@ public sealed class WorkModel(
 
 		SuccessMessage = "Write-up saved.";
 
-		return RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
+		return RedirectToReturnUrlOrBrowse();
 	}
 
 	/// <summary>
@@ -649,7 +671,7 @@ public sealed class WorkModel(
 			ErrorMessage = "Someone else changed this job's details since you loaded this page. Reload and try again.";
 		}
 
-		return (false, RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId }));
+		return (false, RedirectToWork());
 	}
 
 	/// <summary>
@@ -740,7 +762,11 @@ public sealed class WorkModel(
 				EmployeeDirectoryById = _employeeDirectoryById,
 				WorkedByOptions = BuildWorkerFilterOptions(workedByUserId),
 				ShowWorkerFilter = true,
-				ExtraHiddenFields = new Dictionary<string, string?> { ["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture) },
+				ExtraHiddenFields = new Dictionary<string, string?> {
+					["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture),
+					["ReturnUrl"] = ReturnUrl,
+				},
+				ReturnUrl = ReturnUrl,
 			};
 		}
 		catch (AuthorizationDeniedException) {
@@ -788,4 +814,18 @@ public sealed class WorkModel(
 		var actor = await userManager.GetUserAsync(User);
 		return actor?.AppUserId;
 	}
+
+	/// <summary>Redirects back to this page itself, preserving <see cref="ReturnUrl" /> across the round trip.</summary>
+	private RedirectToPageResult RedirectToWork() =>
+		RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId, returnUrl = ReturnUrl });
+
+	/// <summary>
+	///     Redirects to wherever this page was reached from once an ending action succeeds, or
+	///     <c>/Jobs/Browse</c> rooted at this leaf when <see cref="ReturnUrl" /> is absent or not a local
+	///     URL.
+	/// </summary>
+	private IActionResult RedirectToReturnUrlOrBrowse() =>
+		ReturnUrl is not null && Url.IsLocalUrl(ReturnUrl)
+			? LocalRedirect(ReturnUrl)
+			: RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
 }

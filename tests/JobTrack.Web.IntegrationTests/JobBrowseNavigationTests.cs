@@ -437,12 +437,12 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 
 		var leafResponse = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
 		var leafBody = await ReadNormalizedBodyAsync(leafResponse);
-		leafBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}\"");
+		leafBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}&amp;returnUrl=");
 		leafBody.Should().Contain("#jt-icon-sessions");
 
 		var rootResponse = await GetAsync("/Jobs/Browse", authCookie);
 		var rootBody = await ReadNormalizedBodyAsync(rootResponse);
-		rootBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}\"");
+		rootBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}&amp;returnUrl=");
 	}
 
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, string description)

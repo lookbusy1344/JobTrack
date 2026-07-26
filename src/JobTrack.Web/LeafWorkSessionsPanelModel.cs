@@ -51,6 +51,14 @@ public sealed class LeafWorkSessionsPanelModel
 	public required IReadOnlyDictionary<string, string?> ExtraHiddenFields { get; init; }
 
 	/// <summary>
+	///     Where <c>/Jobs/Work</c> should return once an ending action succeeds -- threaded through to
+	///     each row's Correct link so a correction still finds its way back to the same place
+	///     (<see cref="Pages.Jobs.WorkModel.ReturnUrl" />). <see langword="null" /> on Browse's leaf
+	///     detail view, which has no such concept.
+	/// </summary>
+	public string? ReturnUrl { get; init; }
+
+	/// <summary>
 	///     Resolves each row's own <c>worked_by</c> to a display name — the list can span
 	///     several workers, so the row, not the panel header, carries whose session it is.
 	/// </summary>

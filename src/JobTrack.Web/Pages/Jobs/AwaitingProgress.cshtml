@@ -102,10 +102,6 @@
 						<partial name="_WorkRowActions" model="entryActions"/>
 					</td>
 				</tr>
-				@if (entryActions.ViewerSession is null && !entryActions.IsStartClosed) {
-					<partial name="_BackdateRow"
-					         model="@(new BackdateRowModel { Disclosure = entryActions.StartBackdate, ColumnCount = 8 })"/>
-				}
 			}
 			</tbody>
 		</table>

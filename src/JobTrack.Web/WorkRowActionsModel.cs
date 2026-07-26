@@ -76,6 +76,13 @@ public sealed class WorkRowActionsModel
 	/// </summary>
 	public bool StartForLabelled { get; init; }
 
+	/// <summary>
+	///     The hosting page's own current view -- Browse rooted at some node, or the awaiting-progress
+	///     dashboard's current filter/page -- so a decision made on <c>/Jobs/Work</c>'s Sessions link
+	///     returns here rather than defaulting to Browse rooted at this leaf (<see cref="Pages.Jobs.WorkModel.ReturnUrl" />).
+	/// </summary>
+	public string? ReturnUrl { get; init; }
+
 	private ActiveSessionPresentation Presentation => ActiveSessionPresentation.Derive(ActiveSessions, ViewerId);
 
 	/// <summary>

@@ -158,6 +158,11 @@
     --jt-space-5: 1.75rem;
     --jt-space-6: 2.5rem;
 
+    /* Every floating disclosure (backdate/Start-for panels): above `.app-header`'s sticky 1030 so a
+       panel opened near the top of the page is never tucked behind it, below Bootstrap's own modal
+       (1055) in case a future dialog needs to sit above one of these. */
+    --jt-z-popover: 1040;
+
     /* One layer of tree nesting, in the Browse subtree's description column. Sized so a rail and
        its elbow read as a distinct step at a glance without pushing a depth-5 row (the hard depth
        cap, JobSubtreeLimits.HardMaxDepth) off the right of a narrow viewport. */
@@ -1363,29 +1368,50 @@ fieldset legend {
     fill: currentcolor;
 }
 
-/* ---- Backdate row/panel --------------------------------------------------------------------- */
+/* ---- Backdate/Start-for popovers -------------------------------------------------------------- */
 
-/* The expansion a _BackdateTrigger reveals (site.js toggles `hidden`): a table row's own cell for
-   _BackdateRow, a block under the toolbar for _BackdatePanel. A tinted surface and top rule mark it
-   as a transient correction pane rather than ordinary row/toolbar content. */
-.jt-backdate-row td {
-    background: var(--jt-orange-50);
-    border-top: 1px solid var(--jt-line);
-    padding: var(--jt-space-3) var(--jt-space-4);
-}
-
-/* Overrides `.table tbody tr:hover`'s orange wash — the row is already tinted to mark it as the open
-   correction pane, so a second, competing hover tint would read as two different things. */
-.jt-backdate-row:hover td {
-    background: var(--jt-orange-50);
-}
-
+/* The expansion a _BackdateTrigger or Start-for's <summary> reveals: a shared surface treatment for
+   every popover, wherever it floats from (toolbar, table row, session row). A tinted surface and
+   shadow mark it as a transient correction pane sitting over the page, not ordinary content. */
 .jt-backdate-panel {
     background: var(--jt-orange-50);
     border: 1px solid var(--jt-line);
     border-radius: 0.625rem;
     padding: var(--jt-space-3) var(--jt-space-4);
-    margin-bottom: var(--jt-space-4);
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.15);
+    min-width: 16rem;
+    max-width: min(24rem, calc(100vw - 2rem));
+}
+
+/* _StartForTrigger's panel: positioned against its own <details> (below, via .jt-start-for-disclosure's
+   own `position: relative`) rather than moved to <body> -- see that partial's own comment for why. */
+.jt-backdate-panel--anchored {
+    position: absolute;
+    top: calc(100% + var(--jt-space-2));
+    left: 0;
+    z-index: var(--jt-z-popover);
+}
+
+/* The icon-only per-row Start-for trigger sits in a table's rightmost column, so its panel grows
+   leftward from that edge instead of risking an overflow past the viewport or into
+   `.jt-table-scroll`'s clipped horizontal overflow. */
+.jt-backdate-panel--anchor-end {
+    left: auto;
+    right: 0;
+}
+
+/* Every _BackdatePanel: site.js moves it to the end of <body> and sets its own top/left inline the
+   first time its trigger opens it (see site.js's disclosure-toggle handler), so it floats over the
+   page from wherever its trigger actually is, immune to any ancestor's overflow clipping. No default
+   position here beyond `fixed` itself -- the inline top/left always arrive before it is unhidden. */
+.jt-backdate-panel--floating {
+    position: fixed;
+    z-index: var(--jt-z-popover);
+}
+
+/* The positioned ancestor _StartForTrigger's --anchored panel measures itself against. */
+.jt-start-for-disclosure {
+    position: relative;
 }
 
 .jt-backdate-form {

@@ -257,6 +257,21 @@ public sealed class BrowseModel(
 	};
 
 	/// <summary>
+	///     This exact Browse view (rooted node, owner/archive/search filters) as a URL, so
+	///     <c>/Jobs/Work</c>'s Sessions link can return here on a successful ending action rather than
+	///     defaulting to Browse rooted at the leaf (<see cref="WorkModel.ReturnUrl" />).
+	/// </summary>
+	public string? BrowseReturnUrl => Url.Page("/Jobs/Browse", new
+	{
+		nodeId = NodeId,
+		ownerUserId = OwnerUserId,
+		unassignedOnly = UnassignedOnly,
+		archiveFilter = ArchiveFilter,
+		searchText = SearchText,
+		showArchived = ShowArchived,
+	});
+
+	/// <summary>
 	///     Builds a <see cref="WorkRowActionsModel" /> for <paramref name="leafId" />, sourcing its active-session collection and manage capability
 	///     from the batched loads above.
 	/// </summary>
@@ -275,6 +290,7 @@ public sealed class BrowseModel(
 			PageStateFields = RowStateFields,
 			StartForWorkerOptions = StartForWorkerOptions,
 			StartForLabelled = startForLabelled,
+			ReturnUrl = BrowseReturnUrl,
 		};
 
 	/// <summary>

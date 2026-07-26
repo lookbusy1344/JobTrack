@@ -18,8 +18,7 @@
 <div class="jt-page-head">
 	<h1>Work sessions</h1>
 	@if (workPage is not null && Model.CurrentNode is not null) {
-		<h2 class="jt-preserve-whitespace"><a asp-page="/Jobs/Browse"
-		                                      asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></h2>
+		<h2 class="jt-preserve-whitespace"><a href="@Model.BrowseHref">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></h2>
 	}
 </div>
 
@@ -86,6 +85,7 @@
 				<form method="post" asp-page-handler="ReopenAndStart" class="jt-form-card" id="end-session">
 					<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
 					<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+					<input type="hidden" name="returnUrl" value="@Model.ReturnUrl"/>
 					<h2 class="h5">Reopen and start session</h2>
 					<div class="form-group">
 						<label for="reopenReason">Reason</label>
@@ -189,6 +189,7 @@
 				<form method="post" asp-page-handler="Complete" id="end-session">
 					<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
 					<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+					<input type="hidden" name="returnUrl" value="@Model.ReturnUrl"/>
 					@foreach (var session in presentation.StableOrder) {
 						<input type="hidden" name="endSessionId" value="@session.Id.Value"/>
 						<input type="hidden" name="endSessionVersion" value="@session.Version"/>
@@ -258,6 +259,7 @@
 		@if (Model.CurrentNode is not null && !hasEndingSection) {
 			<form method="post" asp-page-handler="SaveWriteUp" class="mt-3" id="writeup">
 				<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
+				<input type="hidden" name="returnUrl" value="@Model.ReturnUrl"/>
 				<partial name="_WriteUpField"
 				         model="@(new WriteUpFieldModel { NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp })"/>
 				<button type="submit" class="btn btn-secondary">Save write-up</button>
@@ -271,6 +273,7 @@
 			<form method="post" asp-page-handler="SetAchievement" class="jt-form-card mt-3">
 				<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
 				<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
+				<input type="hidden" name="returnUrl" value="@Model.ReturnUrl"/>
 				<div class="form-group">
 					<label for="changeOutcomeAchievement">New status</label>
 					<select id="changeOutcomeAchievement" name="newAchievement" class="form-control"

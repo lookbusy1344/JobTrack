@@ -133,6 +133,21 @@ public sealed class AwaitingProgressModel(
 	};
 
 	/// <summary>
+	///     This exact dashboard view (owner/pool/subtree filters, page offset) as a URL, so
+	///     <c>/Jobs/Work</c>'s Sessions link can return here on a successful ending action rather than
+	///     defaulting to Browse rooted at the leaf (<see cref="WorkModel.ReturnUrl" />).
+	/// </summary>
+	public string? AwaitingProgressReturnUrl => Url.Page("/Jobs/AwaitingProgress", new
+	{
+		ownerUserId = OwnerUserId,
+		unassignedOnly = UnassignedOnly,
+		subtreeRootId = SubtreeRootId,
+		showWholeTree = ShowWholeTree,
+		searchText = SearchText,
+		offset = Offset,
+	});
+
+	/// <summary>
 	///     Builds a <see cref="WorkRowActionsModel" /> for <paramref name="leafId" />, sourcing its active-session collection and manage capability
 	///     from the batched loads above.
 	/// </summary>
@@ -148,6 +163,7 @@ public sealed class AwaitingProgressModel(
 		StartNodeFieldName = "jobNodeId",
 		PageStateFields = RowStateFields,
 		StartForWorkerOptions = StartForWorkerOptions,
+		ReturnUrl = AwaitingProgressReturnUrl,
 	};
 
 	/// <summary>

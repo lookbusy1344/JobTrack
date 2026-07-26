@@ -78,6 +78,7 @@
 								</form>
 								<div class="jt-row-action-extra">
 									<partial name="_BackdateTrigger" model="sessionBackdate"/>
+									<partial name="_BackdatePanel" model="sessionBackdate"/>
 								</div>
 							}
 							@* The list can span several workers, so each row corrects its own worker's
@@ -86,7 +87,8 @@
 								<a class="jt-icon-button" asp-page="/Jobs/CorrectSession"
 								   asp-route-leafNodeId="@Model.LeafNodeId"
 								   asp-route-workedByUserId="@session.WorkedByUserId.Value"
-								   asp-route-sessionId="@session.Id.Value" title="Correct">
+								   asp-route-sessionId="@session.Id.Value"
+								   asp-route-returnUrl="@Model.ReturnUrl" title="Correct">
 									<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 										<use href="#jt-icon-edit"></use>
 									</svg>
@@ -96,9 +98,6 @@
 						</div>
 					</td>
 				</tr>
-				@if (sessionBackdate is not null) {
-					<partial name="_BackdateRow" model="@(new BackdateRowModel { Disclosure = sessionBackdate, ColumnCount = 4 })"/>
-				}
 			}
 			</tbody>
 		</table>

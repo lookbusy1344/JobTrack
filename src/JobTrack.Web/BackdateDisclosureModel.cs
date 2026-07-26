@@ -1,10 +1,10 @@
 namespace JobTrack.Web;
 
 /// <summary>
-///     Shared model for <c>_BackdateTrigger</c>, <c>_BackdateRow</c>, and <c>_BackdatePanel</c>:
-///     everything that differs between the pages offering a backdated start or finish. The trigger
-///     button and the <c>datetime-local</c> form it reveals are identical everywhere, so only the
-///     handler it posts to, the field it posts under, and the page's own round-trip state vary.
+///     Shared model for <c>_BackdateTrigger</c> and <c>_BackdatePanel</c>: everything that differs
+///     between the pages offering a backdated start or finish. The trigger button and the
+///     <c>datetime-local</c> form it reveals are identical everywhere, so only the handler it posts
+///     to, the field it posts under, and the page's own round-trip state vary.
 /// </summary>
 public sealed class BackdateDisclosureModel
 {

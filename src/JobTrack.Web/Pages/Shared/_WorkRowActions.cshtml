@@ -31,6 +31,7 @@
 				</button>
 			</form>
 			<partial name="_BackdateTrigger" model="Model.StartBackdate"/>
+			<partial name="_BackdatePanel" model="Model.StartBackdate"/>
 		</div>
 	}
 	@if (Model.CanManage && !Model.IsStartClosed) {
@@ -38,7 +39,7 @@
 			<partial name="_StartForTrigger" model="Model.StartFor"/>
 		</div>
 	}
-	<a class="jt-icon-button" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId" title="Sessions">
+	<a class="jt-icon-button" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId" asp-route-returnUrl="@Model.ReturnUrl" title="Sessions">
 		<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 			<use href="#jt-icon-sessions"></use>
 		</svg>

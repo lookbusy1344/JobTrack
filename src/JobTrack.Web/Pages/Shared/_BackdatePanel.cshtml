@@ -1,6 +1,10 @@
 @model BackdateDisclosureModel
-@* The toolbar (non-table) counterpart to _BackdateRow: a full-width panel below the toolbar's own
-   buttons rather than a table row, since there is no table to add a row to. *@
-<div id="@Model.RowId" class="jt-backdate-panel" hidden>
+@* Every backdate trigger's revealed form, wherever it sits (toolbar, table row, session row) --
+   site.js moves this to the end of <body> on first open and positions it with `position: fixed`
+   from the trigger's own rect (`.jt-backdate-panel--floating`), so it floats over the page instead
+   of pushing whatever follows it down, and no ancestor's scroll clipping (e.g. `.jt-table-scroll`'s
+   horizontal scroll) can cut it off. `aria-controls`/`aria-expanded` on the trigger associate the
+   two by id, which keeps working regardless of where this ends up in the DOM. *@
+<div id="@Model.RowId" class="jt-backdate-panel jt-backdate-panel--floating" hidden>
 	<partial name="_BackdateForm" model="Model"/>
 </div>

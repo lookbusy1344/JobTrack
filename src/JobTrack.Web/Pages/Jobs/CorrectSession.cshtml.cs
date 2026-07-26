@@ -30,6 +30,9 @@ public sealed class CorrectSessionModel(
 
 	[BindProperty(SupportsGet = true)] public long SessionId { get; init; }
 
+	/// <summary>Threaded through to <c>/Jobs/Work</c> so returning there after a correction still lands where the worker came from.</summary>
+	[BindProperty(SupportsGet = true)] public string? ReturnUrl { get; init; }
+
 	[BindProperty] public CorrectInput Input { get; set; } = new();
 
 	public WorkSessionResult? Session { get; private set; }
@@ -105,7 +108,7 @@ public sealed class CorrectSessionModel(
 			_ = await jobTrackClient.Work.CorrectSessionAsync(request, cancellationToken);
 			// No workedByUserId: returning to Work restores the viewer's remembered filter (or its
 			// permission-aware default), rather than snapping the Sessions view to the corrected worker.
-			return RedirectToPage("/Jobs/Work", new { leafNodeId = LeafNodeId });
+			return RedirectToPage("/Jobs/Work", new { leafNodeId = LeafNodeId, returnUrl = ReturnUrl });
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();

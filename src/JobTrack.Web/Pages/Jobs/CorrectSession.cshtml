@@ -16,6 +16,7 @@
 			<input type="hidden" asp-for="LeafNodeId"/>
 			<input type="hidden" asp-for="WorkedByUserId"/>
 			<input type="hidden" asp-for="SessionId"/>
+			<input type="hidden" asp-for="ReturnUrl"/>
 			<div class="form-group">
 				<label asp-for="Input.StartedAt"></label>
 				<input asp-for="Input.StartedAt" type="datetime-local" step="60" class="form-control"/>
@@ -36,7 +37,7 @@
 				@if (Model.Session.FinishedAt.HasValue) {
 					<button type="submit" asp-page-handler="ClearFinish" class="btn btn-secondary">Clear finished time</button>
 				}
-				<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId">Cancel</a>
+				<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId" asp-route-returnUrl="@Model.ReturnUrl">Cancel</a>
 			</div>
 		</form>
 	}

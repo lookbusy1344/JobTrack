@@ -220,7 +220,8 @@
 				<partial name="_StartForTrigger" model="toolbarActions.StartFor"/>
 			}
 
-			<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.CurrentNode.Node.Id.Value">
+			<a class="btn btn-secondary" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.CurrentNode.Node.Id.Value"
+			   asp-route-returnUrl="@Model.BrowseReturnUrl">
 				<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 					<use href="#jt-icon-sessions"></use>
 				</svg>
@@ -451,10 +452,6 @@
 							}
 						</td>
 					</tr>
-					@if (childActions is { ViewerSession: null, IsStartClosed: false }) {
-						<partial name="_BackdateRow"
-						         model="@(new BackdateRowModel { Disclosure = childActions.StartBackdate, ColumnCount = 7 })"/>
-					}
 				}
 				</tbody>
 			</table>
@@ -581,10 +578,6 @@
 							}
 						</td>
 					</tr>
-					@if (nodeActions is { ViewerSession: null, IsStartClosed: false }) {
-						<partial name="_BackdateRow"
-						         model="@(new BackdateRowModel { Disclosure = nodeActions.StartBackdate, ColumnCount = 7 })"/>
-					}
 				}
 				</tbody>
 			</table>

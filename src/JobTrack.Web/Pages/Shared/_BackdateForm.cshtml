@@ -1,6 +1,6 @@
 @model BackdateDisclosureModel
-@* The backdate form itself, shared by both the table-row (_BackdateRow) and toolbar-panel
-   (_BackdatePanel) presentations, so the fields exist in exactly one place. *@
+@* The backdate form itself, inside every _BackdatePanel (toolbar, table row, session row alike),
+   so the fields exist in exactly one place. *@
 <form method="post" asp-page-handler="@Model.Handler" class="jt-backdate-form">
 	@foreach (var field in Model.HiddenFields) {
 		<input type="hidden" name="@field.Key" value="@field.Value"/>

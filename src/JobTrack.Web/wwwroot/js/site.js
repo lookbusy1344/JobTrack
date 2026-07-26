@@ -13,11 +13,41 @@ document.addEventListener('click', (event) => {
     event.preventDefault();
 });
 
-// Toggle a disclosure row/panel (data-jt-disclosure-toggle="<target id>") open/closed, in place of
-// the old <details> disclosure -- a <details> can't legally contain a <tr>, so the row/panel
-// presentation needs its own show/hide instead of relying on the element's native open state. Shared
-// by the backdate disclosure (_BackdateTrigger/_BackdateRow/_BackdatePanel). Start-for uses native
-// details/summary instead so its complete form remains usable without JavaScript.
+// Toggle a backdate popover (data-jt-disclosure-toggle="<target id>") open/closed. The panel floats
+// over the page from the trigger's own position (`.jt-backdate-panel--floating`, position: fixed)
+// rather than pushing surrounding content down, so on first open it is moved to the end of <body> --
+// this also escapes any ancestor's own overflow clipping (e.g. `.jt-table-scroll`'s horizontal
+// scroll), which a plain `position: absolute` panel nested inside the table could not. aria-controls/
+// aria-expanded associate trigger and panel by id, which keeps working regardless of where the panel
+// ends up in the DOM. Start-for uses native details/summary instead of this hook entirely, so its
+// complete form remains usable without JavaScript; its panel floats via plain CSS positioning
+// against its own <details> element (see _StartForTrigger.cshtml).
+function positionFloatingPopover(panel, trigger) {
+    const margin = 8;
+    const triggerRect = trigger.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+
+    let left = triggerRect.right - panelRect.width;
+    left = Math.max(margin, Math.min(left, window.innerWidth - panelRect.width - margin));
+
+    let top = triggerRect.bottom + margin;
+    if (top + panelRect.height > window.innerHeight - margin) {
+        top = Math.max(margin, triggerRect.top - panelRect.height - margin);
+    }
+
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+}
+
+function closeFloatingPopover(panel, trigger) {
+    panel.setAttribute('hidden', '');
+    trigger.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', panel._jtOutsideClick, true);
+    document.removeEventListener('keydown', panel._jtEscape, true);
+    window.removeEventListener('scroll', panel._jtReposition, true);
+    window.removeEventListener('resize', panel._jtReposition);
+}
+
 document.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-jt-disclosure-toggle]');
     if (!trigger) {
@@ -29,13 +59,37 @@ document.addEventListener('click', (event) => {
         return;
     }
 
-    const wasHidden = target.hasAttribute('hidden');
-    target.toggleAttribute('hidden', !wasHidden);
-    trigger.setAttribute('aria-expanded', String(wasHidden));
-
-    if (wasHidden) {
-        target.querySelector('input[type="datetime-local"], select, input[type="text"]')?.focus();
+    if (!target.hasAttribute('hidden')) {
+        closeFloatingPopover(target, trigger);
+        return;
     }
+
+    if (target.parentElement !== document.body) {
+        document.body.appendChild(target);
+    }
+
+    target.removeAttribute('hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+    positionFloatingPopover(target, trigger);
+    target.querySelector('input[type="datetime-local"], select, input[type="text"]')?.focus();
+
+    target._jtReposition = () => positionFloatingPopover(target, trigger);
+    target._jtOutsideClick = (outsideEvent) => {
+        if (!target.contains(outsideEvent.target) && !trigger.contains(outsideEvent.target)) {
+            closeFloatingPopover(target, trigger);
+        }
+    };
+    target._jtEscape = (keyEvent) => {
+        if (keyEvent.key === 'Escape') {
+            closeFloatingPopover(target, trigger);
+            trigger.focus();
+        }
+    };
+
+    window.addEventListener('scroll', target._jtReposition, true);
+    window.addEventListener('resize', target._jtReposition);
+    document.addEventListener('click', target._jtOutsideClick, true);
+    document.addEventListener('keydown', target._jtEscape, true);
 });
 
 // Clear client-side "recently visited" job history on sign-out (data-jt-clear-history-on-submit),
