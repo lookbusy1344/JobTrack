@@ -32,6 +32,9 @@ public sealed class SqliteReadinessQueryPortTests()
 	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
+
 	internal override IReadinessQueryPort CreatePort(string connectionString) =>
 		new SqliteReadinessQueryPort(connectionString);
 

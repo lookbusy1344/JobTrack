@@ -9,6 +9,14 @@
 	// In Progress with nobody clocked on: paused, not broken (ADR 0045). Named here, and it still gets
 	// the ending decision -- completing from zero sessions is the supported path, not a special case.
 	var isPaused = LeafActivity.IsPaused(workPage?.Achievement, workPage?.ActiveSessions.Count ?? 0);
+	// ADR 0051: an unsatisfied prerequisite bars this leaf from reaching a terminal achievement, so
+	// "blocked" governs the whole ending section, not just the pill. A leaf that is already closed
+	// says "Closed"; a blocked pill beside it would only describe work nobody can do anyway.
+	var isBlocked = workPage is { HasLeafWork: true, IsReady: false } && !isTerminal && !isArchived;
+	// The same unsatisfied prerequisite also bars *starting* work (spec §6), which is a live question
+	// on a closed leaf too: reopen-and-start is a start. Reopening without starting is not gated --
+	// see the terminal branch below, which routes to it.
+	var startingIsBlocked = workPage is { HasLeafWork: true, IsReady: false } && !isArchived;
 	// The one section that carries the write-up inside its own form (with Pause job / Complete job);
 	// every other state renders it standalone below, so it never appears twice.
 	var hasEndingSection = workPage is not null && !isArchived && !isTerminal
@@ -30,18 +38,21 @@
 	<div class="jt-card mb-4" id="status">
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 			<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = workPage.Achievement })"/>
-			@if (workPage.HasLeafWork && workPage.Achievement == Achievement.Waiting && workPage.ActiveSessions.Count == 0) {
-				@if (workPage.IsReady) {
-					<span class="status-pill status-pill-ready" role="status">
-						<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-go"></use></svg>
-						No blocks
-					</span>
-				} else {
-					<span class="status-pill status-pill-blocked" role="status">
-						<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg>
-						Blocked
-					</span>
-				}
+			@* "No blocks" is reassurance for a job nobody has started, so it stays on the narrow
+			   Waiting-and-idle case -- but Blocked is a fact about what the job may do next, and under
+			   ADR 0051 an in-progress leaf becomes blocked the moment a prerequisite is reopened
+			   underneath it. So the stop pill shows for any live achievement, sessions or not. *@
+			@if (workPage.HasLeafWork && !isBlocked && workPage.Achievement == Achievement.Waiting && workPage.ActiveSessions.Count == 0) {
+				<span class="status-pill status-pill-ready" role="status">
+					<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-go"></use></svg>
+					No blocks
+				</span>
+			}
+			@if (isBlocked) {
+				<span class="status-pill status-pill-blocked" role="status">
+					<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><use href="#jt-icon-stop"></use></svg>
+					Blocked
+				</span>
 			}
 			@if (isTerminal && workPage.ActiveSessions.Count == 0) {
 				<span class="status-pill status-pill-closed">Closed</span>
@@ -78,10 +89,33 @@
 						on this leaf's success. Reopening it will
 						make @(workPage.DirectDependentCount == 1 ? "that dependent" : "those dependents") blocked again.
 					</p>
+					@* The sharper half of the same warning: a dependent session is running right now, so
+					   reopening pulls the gate out from under work already in flight. ADR 0051: this warns,
+					   it does not refuse -- the actor reopening knows why, and the dependent's worker keeps
+					   working. What the dependent loses is the ability to close until this job succeeds
+					   again, which is the part worth saying out loud. *@
+					@if (workPage.HasActiveDependentWork) {
+						<p class="mb-0">
+							<strong>A dependent job has work in progress right now.</strong>
+							That work carries on, but the job cannot be completed until this one succeeds again.
+						</p>
+					}
 				</div>
 			}
 
-			@if (workPage.CanReopenAndStartForSelf || workPage.CanReopenAndStartForOthers) {
+			@* A closed job whose own prerequisite has since been reopened (ADR 0051). Reopen-and-start
+			   would be refused because it starts a session, but the correction this job usually needs is
+			   still available: reopening without starting, through Change outcome below. *@
+			@if (startingIsBlocked) {
+				<div class="jt-notice">
+					<p class="mb-0">
+						<strong>Blocked by a prerequisite.</strong>
+						No session can start here until every job this one depends on succeeds. It can still be
+						reopened without starting work — use <em>Change outcome</em> below, which a Job Manager or
+						Administrator can do.
+					</p>
+				</div>
+			} else if (workPage.CanReopenAndStartForSelf || workPage.CanReopenAndStartForOthers) {
 				<form method="post" asp-page-handler="ReopenAndStart" class="jt-form-card" id="end-session">
 					<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
 					<input type="hidden" name="leafWorkVersion" value="@workPage.LeafWorkVersion"/>
@@ -124,6 +158,20 @@
 		} else {
 			var presentation = ActiveSessionPresentation.Derive(workPage.ActiveSessions, Model.CurrentActorId ?? new AppUserId(0));
 
+			@* ADR 0051: the block is a state, not an error -- work in flight carries on, and only the
+			   ending is withheld. Say which, rather than letting the worker press Complete and collect
+			   a rejection. Browse (linked from the heading) lists the blocking jobs by name. *@
+			@if (isBlocked) {
+				<div class="jt-notice">
+					<p class="mb-0">
+						<strong>Blocked by a prerequisite.</strong>
+						This job cannot be completed until every job it depends on succeeds
+						@(workPage.ActiveSessions.Count > 0 ? "-- recorded work carries on as normal in the meantime." : ".")
+						Browse this job to see what is blocking it.
+					</p>
+				</div>
+			}
+
 			@if (workPage.ActiveSessions.Count > 0) {
 				<div class="mb-3">
 					<partial name="_ActiveSincePill" model="@(new ActiveSessionSummaryModel {
@@ -142,7 +190,10 @@
 			   or anyone's -- never withdraws "Start for…", which would otherwise make starting a second
 			   worker impossible from the page that owns this decision. *@
 			var toolbarActions = Model.ToolbarActions;
-			var canStartForSelf = presentation.ViewerSession is null;
+			// Blocked withdraws every start affordance for the same reason it withdraws Complete: the
+			// command refuses it, so offering it only produces an error message (ADR 0051). "Browse" and
+			// the pause/ending controls below stay -- work already recorded is never withdrawn.
+			var canStartForSelf = presentation.ViewerSession is null && !startingIsBlocked;
 			@if (workPage.CanManageSessions) {
 				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-3">
 					@if (canStartForSelf) {
@@ -175,6 +226,11 @@
 			var canPause = presentation.Count > 0
 			               && (workPage.CanManageSessions || (presentation.ViewerSession is not null && presentation.Count == 1));
 
+			@* Authority and readiness are separate gates on the same button: CanComplete answers "may
+			   this actor close it", the block answers "may it be closed at all". Both are rendering
+			   hints -- CompleteLeafAsync re-checks readiness inside its own transaction. *@
+			var canCompleteNow = workPage.CanComplete && !isBlocked;
+
 			@* The same ending decision whether sessions are running or the leaf is merely paused --
 			   completing from zero sessions is the supported path (ADR 0045), so a paused leaf gets
 			   this card rather than a second, differently-worded "Mark complete" affordance.
@@ -198,7 +254,7 @@
 						<partial name="_WriteUpField"
 						         model="@(new WriteUpFieldModel { NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp })"/>
 					}
-					@if (workPage.CanComplete) {
+					@if (canCompleteNow) {
 						<div class="jt-completion-review mt-3">
 							<details>
 								<summary>Completion options</summary>
@@ -230,7 +286,7 @@
 								Pause job
 							</button>
 						}
-						@if (workPage.CanComplete) {
+						@if (canCompleteNow) {
 							<button type="submit" class="btn btn-primary">
 								<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 									<use href="#jt-icon-go"></use>
@@ -239,7 +295,7 @@
 									? "Complete job"
 									: $"Finish {workPage.ActiveSessions.Count} sessions and complete job")
 							</button>
-						} else if (!canPause) {
+						} else if (!canPause && !isBlocked) {
 							<p class="jt-muted">A controlling owner, Job Manager, or Administrator can end this job here.</p>
 						}
 						@if (Model.CurrentNode is not null) {

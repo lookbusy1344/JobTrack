@@ -202,9 +202,12 @@ public sealed class SqliteWorkSessionCommandPortTests()
 	}
 
 	/// <summary>
-	///     ADR 0045 plan §6 race matrix: reopening a successful prerequisite and starting its dependent
-	///     must serialize around the dependent's readiness decision. Whichever commits first invalidates
-	///     the other's premise; both must never commit from the same formerly-ready snapshot.
+	///     ADR 0045 plan §6 race matrix, as amended by ADR 0051: reopening a successful prerequisite and
+	///     starting its dependent still serialize around the dependent's readiness decision, but the two
+	///     are no longer symmetric. The reopen always wins its own outcome -- it is never rejected because
+	///     a dependent is live -- while the dependent's start survives only if it committed while the
+	///     prerequisite was still Success. Neither may commit from a snapshot the other has already
+	///     invalidated: a start that loses must leave no session behind.
 	/// </summary>
 	[Fact]
 	public async Task Concurrent_reopen_of_a_former_prerequisite_vs_dependent_start_leaves_a_consistent_final_state()
@@ -241,10 +244,8 @@ public sealed class SqliteWorkSessionCommandPortTests()
 			TryReopenAndStartAsync(CreateSessionPort(ConnectionString), jobManagerId, requiredLeafId),
 			TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, workerId, dependent.Id));
 
-		results.Count(succeeded => succeeded).Should().Be(1);
-		(await ReadLeafStateAsync(requiredLeafId)).Should().Be(results[0]
-			? new LeafState(Achievement.InProgress, false, 1)
-			: new LeafState(Achievement.Success, false, 0));
+		results[0].Should().BeTrue("ADR 0051: a reopen is never rejected on account of a dependent's work");
+		(await ReadLeafStateAsync(requiredLeafId)).Should().Be(new LeafState(Achievement.InProgress, false, 1));
 		(await ReadLeafStateAsync(dependent.Id)).Should().Be(results[1]
 			? new LeafState(Achievement.Waiting, false, 1)
 			: new LeafState(Achievement.Waiting, false, 0));

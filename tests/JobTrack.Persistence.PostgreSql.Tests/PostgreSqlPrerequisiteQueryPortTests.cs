@@ -28,4 +28,11 @@ public sealed class PostgreSqlPrerequisiteQueryPortTests()
 
 	internal override IPrerequisiteQueryPort CreateQueryPort(string connectionString) =>
 		new PostgreSqlPrerequisiteQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+
+	internal override IWorkSessionCommandPort CreateWorkSessionPort(string connectionString) =>
+		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+		new PostgreSqlAchievementCommandPort(
+			new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 }

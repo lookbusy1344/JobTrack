@@ -2315,6 +2315,49 @@ public sealed class JobQueriesTests
 	}
 
 	[Fact]
+	public async Task The_leaf_work_page_reports_a_dependent_holding_an_active_session_on_a_successful_leaf()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.Success,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		var dependentId = new JobNodeId(3);
+		prerequisitePort.SeedNode(dependentId);
+		prerequisitePort.SeedEdge(new(LeafIdForWorkPage, dependentId));
+		prerequisitePort.SeedActiveDependentWork(LeafIdForWorkPage);
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+
+		result.HasActiveDependentWork.Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task The_leaf_work_page_does_not_ask_about_dependent_work_for_a_leaf_that_cannot_be_reopened_from_success()
+	{
+		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
+		leafWorkPort.Seed(new() {
+			JobNodeId = LeafIdForWorkPage,
+			Achievement = Achievement.InProgress,
+			ChangedAt = nodePort.NowToReturn,
+			Version = 2,
+		});
+		var dependentId = new JobNodeId(3);
+		prerequisitePort.SeedNode(dependentId);
+		prerequisitePort.SeedEdge(new(LeafIdForWorkPage, dependentId));
+		prerequisitePort.SeedActiveDependentWork(LeafIdForWorkPage);
+		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
+
+		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+
+		result.HasActiveDependentWork.Should().BeFalse("only Success can be reopened into a readiness regression");
+		prerequisitePort.HasActiveDependentWorkCallCount.Should().Be(0, "the extra round trip is spent only where the warning could fire");
+	}
+
+	[Fact]
 	public async Task The_leaf_work_page_reports_no_leaf_work_for_a_bare_leaf_without_throwing()
 	{
 		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();

@@ -76,8 +76,14 @@ public sealed class MoveModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 			ErrorMessage = "The node or the destination no longer exists.";
 			return Page();
 		}
-		catch (InvariantViolationException) {
-			ErrorMessage = "This move would create a cycle in the job hierarchy — the destination cannot be this node's own descendant.";
+		catch (InvariantViolationException ex) {
+			// One sentence per rejected condition: a prerequisite edge left connecting an ancestor and
+			// a descendant is not a hierarchy cycle, and telling the mover to look at descendants sends
+			// them nowhere near the edge they actually have to remove.
+			ErrorMessage = ex.ConstraintId == "job-node-move-would-invalidate-prerequisite"
+				? "This move would leave a prerequisite edge connecting an ancestor and a descendant. " +
+				  "Remove that prerequisite first, then move the node."
+				: "This move would create a cycle in the job hierarchy — the destination cannot be this node's own descendant.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);
 			return Page();
 		}

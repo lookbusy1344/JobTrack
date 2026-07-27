@@ -1440,6 +1440,135 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		result.Achievement.Should().Be(Achievement.InProgress, "the rejected attempt must leave the terminal leaf version and state unchanged");
 	}
 
+	/// <summary>
+	///     ADR 0051: reopening a successful prerequisite is permitted even while a dependent's session is
+	///     running. The reopen is never rejected for that reason -- the consequence lands on the dependent,
+	///     which becomes blocked and stays that way until the prerequisite succeeds again.
+	/// </summary>
+	[Fact]
+	public async Task Reopening_a_successful_prerequisite_is_permitted_while_a_dependent_session_is_live()
+	{
+		var seeded = await SeedSuccessfulPrerequisiteWithLiveDependentAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+
+		var result = await sessionPort.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(seeded.JobManagerId),
+			JobNodeId = seeded.RequiredLeafId,
+			Version = 3,
+			Reason = "Closed by mistake",
+			WorkedByUserId = seeded.WorkerId,
+		});
+
+		result.Achievement.Should().Be(Achievement.InProgress);
+		(await ReadLeafAchievementAsync(seeded.DependentLeafId)).Should().Be((short)Achievement.InProgress,
+			"reopening a prerequisite never reaches into the dependent's own achievement");
+		(await ReadLeafSessionStateAsync(seeded.DependentLeafId)).Should().ContainSingle()
+			.Which.IsActive.Should().BeTrue("the dependent's running session is left alone, not ended behind the worker's back");
+	}
+
+	/// <summary>
+	///     ADR 0051's other half: the dependent's live session may continue, but the leaf cannot be closed
+	///     while the prerequisite it depends on is open again. This is the same
+	///     <see cref="PrerequisiteBlockedException" /> an unsatisfied prerequisite has always raised --
+	///     asserted here for the specific state a reopen creates, where the dependent was ready when its
+	///     session started.
+	/// </summary>
+	[Fact]
+	public async Task A_dependent_with_a_live_session_cannot_be_completed_while_its_prerequisite_is_reopened()
+	{
+		var seeded = await SeedSuccessfulPrerequisiteWithLiveDependentAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+		_ = await sessionPort.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(seeded.JobManagerId),
+			JobNodeId = seeded.RequiredLeafId,
+			Version = 3,
+			Reason = "Closed by mistake",
+			WorkedByUserId = seeded.WorkerId,
+		});
+
+		var act = () => sessionPort.CompleteLeafAsync(new() {
+			Context = ContextFor(seeded.JobManagerId),
+			JobNodeId = seeded.DependentLeafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = seeded.DependentSessionId, Version = seeded.DependentSessionVersion }],
+		});
+
+		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
+		(await ReadLeafAchievementAsync(seeded.DependentLeafId)).Should().Be((short)Achievement.InProgress);
+		(await ReadLeafSessionStateAsync(seeded.DependentLeafId)).Should().ContainSingle()
+			.Which.IsActive.Should().BeTrue("the rejected completion must not finish the session it would have closed");
+	}
+
+	/// <summary>
+	///     The block is a state, not a punishment: once the reopened prerequisite reaches
+	///     <see cref="Achievement.Success" /> again, the dependent completes normally with the same
+	///     session it has been holding open throughout.
+	/// </summary>
+	[Fact]
+	public async Task A_dependent_can_be_completed_once_its_reopened_prerequisite_succeeds_again()
+	{
+		var seeded = await SeedSuccessfulPrerequisiteWithLiveDependentAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+		var reopened = await sessionPort.ReopenAndStartWorkAsync(new() {
+			Context = ContextFor(seeded.JobManagerId),
+			JobNodeId = seeded.RequiredLeafId,
+			Version = 3,
+			Reason = "Closed by mistake",
+			WorkedByUserId = seeded.WorkerId,
+		});
+		_ = await sessionPort.CompleteLeafAsync(new() {
+			Context = ContextFor(seeded.JobManagerId),
+			JobNodeId = seeded.RequiredLeafId,
+			Version = reopened.Version,
+			ExpectedActiveSessions = [new() { Id = reopened.Session.Id, Version = reopened.Session.Version }],
+			FinalAchievement = Achievement.Success,
+		});
+
+		var result = await sessionPort.CompleteLeafAsync(new() {
+			Context = ContextFor(seeded.JobManagerId),
+			JobNodeId = seeded.DependentLeafId,
+			Version = 2,
+			ExpectedActiveSessions = [new() { Id = seeded.DependentSessionId, Version = seeded.DependentSessionVersion }],
+		});
+
+		result.Achievement.Should().Be(Achievement.Success);
+	}
+
+	/// <summary>
+	///     Seeds the ADR 0051 shape: a leaf closed as <see cref="Achievement.Success" /> (version 3, as
+	///     <see cref="SeedTerminalLeafAsync" />), a second leaf that requires it, and a session running on
+	///     that dependent right now -- the state in which reopening the prerequisite used to be rejected.
+	/// </summary>
+	private async Task<(AppUserId JobManagerId, AppUserId WorkerId, JobNodeId RequiredLeafId, JobNodeId DependentLeafId,
+		WorkSessionId DependentSessionId, long DependentSessionVersion)> SeedSuccessfulPrerequisiteWithLiveDependentAsync()
+	{
+		var (rootId, jobManagerId, workerId, requiredLeafId) = await SeedReadyLeafAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+		var requiredSession = await sessionPort.StartWorkAsync(
+			new() { Context = ContextFor(workerId), JobNodeId = requiredLeafId, WorkedByUserId = workerId });
+		_ = await sessionPort.FinishSessionAsync(
+			new() { Context = ContextFor(workerId), SessionId = requiredSession.Id, Version = requiredSession.Version });
+		_ = await CreateAchievementPort(database.ConnectionString).SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = requiredLeafId,
+			NewAchievement = Achievement.Success,
+			Reason = "Ready for dependent work",
+			Version = 2,
+		});
+
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var dependentLeafId = await CreateReadyLeafAsync(jobNodePort, rootId, jobManagerId, workerId);
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = requiredLeafId,
+			DependentJobId = dependentLeafId,
+		});
+		var dependentSession = await sessionPort.StartWorkAsync(
+			new() { Context = ContextFor(workerId), JobNodeId = dependentLeafId, WorkedByUserId = workerId });
+
+		return (jobManagerId, workerId, requiredLeafId, dependentLeafId, dependentSession.Id, dependentSession.Version);
+	}
+
 	[Fact]
 	public async Task Reopening_and_starting_with_a_blank_reason_is_rejected_without_changing_the_terminal_leaf()
 	{

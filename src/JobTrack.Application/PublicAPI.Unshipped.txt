@@ -2224,6 +2224,8 @@ JobTrack.Application.LeafWorkPageResult.Description.init -> void
 JobTrack.Application.LeafWorkPageResult.DirectDependentCount.get -> int
 JobTrack.Application.LeafWorkPageResult.DirectDependentCount.init -> void
 JobTrack.Application.LeafWorkPageResult.Equals(JobTrack.Application.LeafWorkPageResult? other) -> bool
+JobTrack.Application.LeafWorkPageResult.HasActiveDependentWork.get -> bool
+JobTrack.Application.LeafWorkPageResult.HasActiveDependentWork.init -> void
 JobTrack.Application.LeafWorkPageResult.HasLeafWork.get -> bool
 JobTrack.Application.LeafWorkPageResult.HasLeafWork.init -> void
 JobTrack.Application.LeafWorkPageResult.IsReady.get -> bool

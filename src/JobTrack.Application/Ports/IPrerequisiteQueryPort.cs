@@ -19,6 +19,16 @@ internal interface IPrerequisiteQueryPort
 	Task<int> CountDirectDependentsAsync(JobNodeId requiredJobId, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	///     Whether any job that directly requires <paramref name="requiredJobId" />, or any leaf beneath
+	///     such a job, currently holds an active <c>WorkSession</c>, so a page can warn before an actor
+	///     reopens a successful prerequisite out from under work that is running right now (ADR 0045 §2's
+	///     dependent-impact warning). Purely advisory: under ADR 0051 the reopen itself is permitted in
+	///     that state, and no command gates on this — the block lands on the dependent's own completion.
+	/// </summary>
+	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>
+	Task<bool> HasActiveDependentWorkAsync(JobNodeId requiredJobId, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	///     Loads every prerequisite edge touching the node, as either <see cref="PrerequisiteEdge.RequiredJobId" />
 	///     or <see cref="PrerequisiteEdge.DependentJobId" />, ordered by <c>RequiredJobId</c> then
 	///     <c>DependentJobId</c>, bounded by <paramref name="offset" />/<paramref name="limit" />

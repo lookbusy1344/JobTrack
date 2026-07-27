@@ -125,6 +125,57 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		current.Node.WriteUp.Should().Be("Foundation formwork is square and level.");
 	}
 
+	/// <summary>
+	///     Reopening a successful prerequisite is still permitted (ADR 0044 rule 6), so the page has to
+	///     say when a dependent's session is running right now — the composite reopen refuses outright
+	///     in that case, and this notice is the only warning the elevated session-free reopen gets.
+	/// </summary>
+	[Fact]
+	public async Task The_work_page_warns_when_a_dependent_is_working_right_now_on_a_successful_leaf()
+	{
+		var workerId = await SeedEmployeeAsync("work.dependent-warning", EmployeeRole.Worker);
+		var required = await AddWorkedLeafAsync(rootId, workerId, "Site survey");
+		var dependent = await AddChildAsync(rootId, workerId, "Excavate foundations");
+		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = context,
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
+		var inProgress = await seedClient.Work.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = required.Id,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Work has started",
+			Version = 1,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = required.Id,
+			NewAchievement = Achievement.Success,
+			Reason = "Surveyed",
+			Version = inProgress.Version,
+		});
+		var authCookie = await SignInAsync("work.dependent-warning");
+
+		var beforeDependentStarts = await (await GetAsync($"/Jobs/Work?leafNodeId={required.Id.Value}", authCookie))
+			.Content.ReadAsStringAsync();
+		// The count sentence is wrapped across source lines by Razor, so match its stable fragments.
+		beforeDependentStarts.Should().Contain("1 job", "the dependent-count warning is unconditional");
+		beforeDependentStarts.Should().Contain("blocked again");
+		beforeDependentStarts.Should().NotContain("work in progress right now");
+
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = context,
+			JobNodeId = dependent.Id,
+			WorkedByUserId = workerId,
+		});
+
+		var whileDependentWorks = await (await GetAsync($"/Jobs/Work?leafNodeId={required.Id.Value}", authCookie))
+			.Content.ReadAsStringAsync();
+		whileDependentWorks.Should().Contain("work in progress right now");
+	}
+
 	[Fact]
 	public async Task Starting_work_on_the_root_shows_a_helpful_error()
 	{
@@ -1037,6 +1088,174 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Job reopened. Session started.");
+	}
+
+	/// <summary>
+	///     ADR 0051 end to end, on the "build a house" shape that reported it: Excavate foundations is
+	///     closed as Success, Pour foundations requires it and has a session running, and reopening
+	///     Excavate used to fail with "Someone else changed this leaf since the page was loaded" -- a
+	///     concurrency message for a state nothing had concurrently changed, which no reload could clear.
+	///     The reopen now succeeds; Pour foundations keeps its running session but shows as blocked and
+	///     is refused if it tries to close.
+	/// </summary>
+	[Fact]
+	public async Task Reopening_a_prerequisite_with_a_live_dependent_succeeds_and_blocks_the_dependent_from_completing()
+	{
+		var (workerId, required, dependent) = await SeedSuccessfulPrerequisiteWithLiveDependentAsync("work.reopen-dependent");
+		var authCookie = await SignInAsync("work.reopen-dependent");
+
+		var (reopenCookie, reopenToken) = await GetWorkFormAsync(authCookie, required.Id, workerId);
+		var reopenResponse = await PostReopenAndStartAsync(
+			authCookie, reopenCookie, reopenToken, required.Id, 3, "Closed by mistake", workerId);
+
+		reopenResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reopenedBody = await (await FollowRedirectAsync(reopenResponse, authCookie)).Content.ReadAsStringAsync();
+		reopenedBody.Should().Contain("Job reopened. Session started.");
+		reopenedBody.Should().NotContain("Someone else changed this leaf");
+
+		var dependentBody = await (await GetAsync($"/Jobs/Work?leafNodeId={dependent.Id.Value}", authCookie)).Content.ReadAsStringAsync();
+		dependentBody.Should().Contain("status-pill-blocked", "a dependent whose prerequisite was reopened is blocked, whatever its achievement");
+		dependentBody.Should().NotContain(">Complete job</button>", "a blocked leaf cannot be closed, so the page must not offer it");
+
+		var dependentSessions = await GetSessionsAsync(dependent.Id);
+		var (completeCookie, completeToken) = await GetWorkFormAsync(authCookie, dependent.Id, workerId);
+		var completeResponse = await PostCompleteAsync(
+			authCookie, completeCookie, completeToken, dependent.Id, 2,
+			[.. dependentSessions.Select(s => (s.Id.Value, s.Version))]);
+
+		completeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var refusedBody = await (await FollowRedirectAsync(completeResponse, authCookie)).Content.ReadAsStringAsync();
+		refusedBody.Should().Contain("prerequisite");
+		var dependentWork = await seedClient.Query.GetLeafWorkPageAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = dependent.Id,
+		});
+		dependentWork.Achievement.Should().Be(Achievement.InProgress, "the refused completion must leave the dependent exactly as it was");
+		dependentWork.ActiveSessions.Should().ContainSingle("the worker's running session is never ended behind their back");
+	}
+
+	/// <summary>
+	///     The other route to the same ADR 0051 state, and the other half of the UI's honesty about it:
+	///     the prerequisite is reopened through the "Change outcome" dropdown (<c>SetAchievementAsync</c>,
+	///     which never carried the rejected dependent-work check), and the blocked dependent's own
+	///     dropdown then offers no terminal option at all rather than a Save the command would refuse.
+	/// </summary>
+	[Fact]
+	public async Task A_blocked_dependent_offers_no_terminal_outcome_option()
+	{
+		var (workerId, required, dependent) = await SeedSuccessfulPrerequisiteWithLiveDependentAsync("work.blocked-outcome");
+		var administratorContext = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = administratorContext,
+			JobNodeId = required.Id,
+			NewAchievement = Achievement.Waiting,
+			Reason = "Closed by mistake",
+			Version = 3,
+		});
+		var authCookie = await SignInAsync("work.blocked-outcome");
+
+		var body = await (await GetAsync($"/Jobs/Work?leafNodeId={dependent.Id.Value}", authCookie)).Content.ReadAsStringAsync();
+
+		body.Should().Contain("Blocked by a prerequisite.");
+		body.Should().NotContain("value=\"Success\"", "no route on the page may offer to close a blocked job");
+		body.Should().NotContain("value=\"Cancelled\"");
+		body.Should().NotContain("value=\"Unsuccessful\"");
+		_ = workerId;
+	}
+
+	/// <summary>
+	///     ADR 0051 for a dependent that had already finished: Pour foundations is closed as Success
+	///     when Excavate foundations is reopened underneath it, so it is now blocked. Reopening it too is
+	///     the usual next step of the same correction and stays available -- but only without starting a
+	///     session, since starting work on a blocked leaf is barred (spec §6). The page must offer the
+	///     route that works and withhold the one that cannot, and must never answer a posted
+	///     reopen-and-start with an unhandled exception.
+	/// </summary>
+	[Fact]
+	public async Task A_closed_dependent_can_still_be_reopened_after_its_prerequisite_is_reopened()
+	{
+		var (workerId, required, dependent) = await SeedSuccessfulPrerequisiteWithLiveDependentAsync("work.closed-dependent");
+		var dependentSessions = await GetSessionsAsync(dependent.Id);
+		_ = await seedClient.Work.CompleteLeafAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = dependent.Id,
+			Version = 2,
+			ExpectedActiveSessions = [.. dependentSessions.Select(s => new ExpectedActiveSession { Id = s.Id, Version = s.Version })],
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = required.Id,
+			NewAchievement = Achievement.Waiting,
+			Reason = "Closed by mistake",
+			Version = 3,
+		});
+		var authCookie = await SignInAsync("work.closed-dependent");
+
+		var body = await (await GetAsync($"/Jobs/Work?leafNodeId={dependent.Id.Value}", authCookie)).Content.ReadAsStringAsync();
+
+		body.Should().NotContain(">Reopen and start session</button>", "starting a session on a blocked leaf is barred");
+		body.Should().Contain("Blocked by a prerequisite.", "the page must say why the usual reopen route is unavailable");
+		body.Should().Contain("reopened without starting work", "and must point at the route that does work");
+
+		// Posting it anyway (a stale page, or a hand-rolled request) is refused with a message, not a 500.
+		var (cookie, token) = await GetWorkFormAsync(authCookie, dependent.Id, workerId);
+		var response = await PostReopenAndStartAsync(authCookie, cookie, token, dependent.Id, 3, "Trying anyway", workerId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var refusedBody = await (await FollowRedirectAsync(response, authCookie)).Content.ReadAsStringAsync();
+		refusedBody.Should().Contain("prerequisite");
+
+		// The route that does work: reopen without starting, via Change outcome.
+		var reopened = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = dependent.Id,
+			NewAchievement = Achievement.Waiting,
+			Reason = "Reopening the dependent too",
+			Version = 3,
+		});
+		reopened.Achievement.Should().Be(Achievement.Waiting);
+	}
+
+	/// <summary>
+	///     The "build a house" pair the bug report used: Excavate foundations closed as
+	///     <see cref="Achievement.Success" /> at leaf-work version 3, and Pour foundations requiring it
+	///     with a session running right now at leaf-work version 2.
+	/// </summary>
+	private async Task<(AppUserId WorkerId, JobNodeResult Required, JobNodeResult Dependent)>
+		SeedSuccessfulPrerequisiteWithLiveDependentAsync(string userName)
+	{
+		var workerId = await SeedEmployeeAsync(userName, EmployeeRole.Worker);
+		var required = await AddWorkedLeafAsync(rootId, workerId, "Excavate foundations");
+		var dependent = await AddWorkedLeafAsync(rootId, workerId, "Pour foundations");
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
+		var requiredSession = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = required.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.FinishSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			SessionId = requiredSession.Id,
+			Version = requiredSession.Version,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = required.Id,
+			NewAchievement = Achievement.Success,
+			Reason = "Foundations dug",
+			Version = 2,
+		});
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = dependent.Id,
+			WorkedByUserId = workerId,
+		});
+
+		return (workerId, required, dependent);
 	}
 
 	[Fact]

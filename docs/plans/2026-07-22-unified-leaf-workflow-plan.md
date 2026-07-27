@@ -9,7 +9,8 @@ achievement/archive/session state: complete vs start/finish/correction, reopen-a
 archive/another reopen, and reopen of a formerly successful prerequisite vs dependent work
 starting. The last case reuses ADR 0044's ordered per-leaf closure locks on PostgreSQL and SQLite's
 single-writer transaction, preventing both operations from committing from the same readiness
-snapshot. A genuine provider divergence remains deliberate: SQLite's immediate leaf-closure
+snapshot; ADR 0051 later made that race asymmetric — the reopen is never rejected on account of a
+dependent, so only the dependent's own action can lose. A genuine provider divergence remains deliberate: SQLite's immediate leaf-closure
 trigger requires `CompleteLeafAsync` to save finished sessions before the achievement update;
 PostgreSQL's deferred trigger permits one batch, while both still commit once atomically.
 
@@ -150,8 +151,13 @@ right to start for someone else.
 
 Disabled accounts, Requesters, and employees with no operational workflow role cannot acquire this
 authority merely from historical session data. Reopening `Success` may make dependent work blocked
-again, so the page presents the dependent impact before mutation and the command re-evaluates it in
-the transaction.
+again, so the page presents the dependent impact before mutation.
+
+> **Amended by ADR 0051.** The command does *not* re-evaluate dependent impact as a gate: reopening
+> is never refused because a dependent has live work. The dependent keeps its session and its
+> achievement but becomes blocked, and cannot reach a terminal achievement until this job succeeds
+> again. The reopen and a concurrent dependent completion still serialize (§6's race), but
+> asymmetrically — the reopen always wins its own outcome.
 
 ### 3.2 What happens when several sessions are active at completion?
 

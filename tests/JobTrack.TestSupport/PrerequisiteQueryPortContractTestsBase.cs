@@ -21,6 +21,9 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 
 	private readonly IDisposableTestDatabase database;
 
+	/// <summary>The administrator <see cref="SeedEdgeAsync" /> bootstrapped, for tests that act after seeding.</summary>
+	private AppUserId seededAdministratorId;
+
 	protected PrerequisiteQueryPortContractTestsBase(IDisposableTestDatabase database) => this.database = database;
 
 	protected abstract SchemaProvider Provider { get; }
@@ -42,6 +45,54 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 		requiredCount.Should().Be(1);
 		dependentCount.Should().Be(0);
 		unrelatedCount.Should().Be(0);
+	}
+
+	/// <summary>
+	///     The dependent-impact warning behind reopening a successful prerequisite: the page has to say
+	///     whether reopening would pull the rug out from under work that is running right now, so the
+	///     flag follows an <em>active</em> session on any dependent or a leaf beneath it, not merely the
+	///     existence of a dependent.
+	/// </summary>
+	[Fact]
+	public async Task HasActiveDependentWorkAsync_is_true_only_while_a_dependent_holds_an_active_session()
+	{
+		var (requiredId, dependentId, unrelatedId) = await SeedEdgeAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		(await port.HasActiveDependentWorkAsync(requiredId)).Should().BeFalse("no session has started yet");
+
+		// The dependent cannot start until its prerequisite succeeds -- which is exactly the state a
+		// reopen would undo, so the scenario has to be built in that order.
+		await SucceedAsync(requiredId);
+		var sessionPort = CreateWorkSessionPort(database.ConnectionString);
+		var session = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(seededAdministratorId),
+			JobNodeId = dependentId,
+			WorkedByUserId = seededAdministratorId,
+		});
+
+		(await port.HasActiveDependentWorkAsync(requiredId)).Should().BeTrue();
+		(await port.HasActiveDependentWorkAsync(dependentId)).Should().BeFalse("the dependent has no dependents of its own");
+		(await port.HasActiveDependentWorkAsync(unrelatedId)).Should().BeFalse("no edge reaches the running session");
+
+		_ = await sessionPort.FinishSessionAsync(new() {
+			Context = ContextFor(seededAdministratorId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+
+		(await port.HasActiveDependentWorkAsync(requiredId)).Should().BeFalse("the session has finished");
+	}
+
+	[Fact]
+	public async Task HasActiveDependentWorkAsync_throws_for_a_nonexistent_node()
+	{
+		var (requiredId, _, _) = await SeedEdgeAsync();
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var act = () => port.HasActiveDependentWorkAsync(new(requiredId.Value + 999));
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
 
 	[Fact]
@@ -127,7 +178,34 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IPrerequisiteQueryPort CreateQueryPort(string connectionString);
 
+	internal abstract IWorkSessionCommandPort CreateWorkSessionPort(string connectionString);
+
+	internal abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
+
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+
+	/// <summary>Attaches LeafWork to a seeded leaf and drives it Waiting -&gt; InProgress -&gt; Success.</summary>
+	private async Task SucceedAsync(JobNodeId nodeId)
+	{
+		var context = ContextFor(seededAdministratorId);
+		var attached = await CreateJobCommandPort(database.ConnectionString)
+			.AttachLeafWorkAsync(new() { Context = context, JobNodeId = nodeId });
+		var achievementPort = CreateAchievementPort(database.ConnectionString);
+		var inProgress = await achievementPort.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = nodeId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Work has started",
+			Version = attached.Version,
+		});
+		_ = await achievementPort.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = nodeId,
+			NewAchievement = Achievement.Success,
+			Reason = "Done",
+			Version = inProgress.Version,
+		});
+	}
 
 	/// <summary>Seeds two leaves with a prerequisite edge (required -&gt; dependent) and a third, unrelated leaf.</summary>
 	private async Task<(JobNodeId RequiredId, JobNodeId DependentId, JobNodeId UnrelatedId)> SeedEdgeAsync()
@@ -147,6 +225,7 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 		var administratorId = bootstrap.AdministratorId;
+		seededAdministratorId = administratorId;
 
 		var jobCommandPort = CreateJobCommandPort(database.ConnectionString);
 		var required = await jobCommandPort.AddChildAsync(new() {

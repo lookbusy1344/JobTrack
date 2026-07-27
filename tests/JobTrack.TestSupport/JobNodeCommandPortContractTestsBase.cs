@@ -339,6 +339,36 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			.Which.ConstraintId.Should().Be("job-node-move-would-cycle");
 	}
 
+	/// <summary>
+	///     Spec §6 rule 5's move side: an edge that was legal when declared must not survive a move that
+	///     turns its endpoints into an ancestor/descendant pair. Both providers enforce this in the
+	///     database (<c>job_prerequisite_edges_after_move</c> — deferred on PostgreSQL, immediate on
+	///     SQLite); this asserts the rejection reaches the caller as one stable identifier on both.
+	/// </summary>
+	[Fact]
+	public async Task Moving_a_node_so_an_existing_prerequisite_becomes_a_hierarchy_edge_is_rejected()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var required = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		var dependent = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
+
+		var act = () => port.MoveAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = dependent.Id,
+			NewParentId = required.Id,
+			Version = dependent.Version,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-move-would-invalidate-prerequisite");
+	}
+
 	[Fact]
 	public async Task A_worker_cannot_move_a_node_into_a_subtree_they_do_not_own()
 	{

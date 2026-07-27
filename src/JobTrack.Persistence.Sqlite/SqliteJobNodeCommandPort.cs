@@ -37,6 +37,14 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 	/// </summary>
 	private const string ActiveSessionsMessage = "leaf-closure-active-sessions";
 
+	/// <summary>
+	///     Spec §6 rule 5's move side: the literal message
+	///     <c>job_prerequisite_edges_after_move</c> (schema version 0008) raises via
+	///     <c>RAISE(ABORT, ...)</c>. Matched ahead of the generic constraint catch, which would
+	///     otherwise report this rejection as a hierarchy cycle.
+	/// </summary>
+	private const string PrerequisiteEdgeAfterMoveMessage = "job-node-move-would-invalidate-prerequisite";
+
 	private readonly IClock clock;
 
 	private readonly string connectionString;
@@ -114,6 +122,12 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 						.SetProperty(n => n.RowVersion, n => n.RowVersion + 1),
 					cancellationToken)
 				.ConfigureAwait(false);
+		}
+		catch (SqliteException ex) when (ex.Message.Contains(PrerequisiteEdgeAfterMoveMessage, StringComparison.Ordinal)) {
+			throw new InvariantViolationException(
+				"job-node-move-would-invalidate-prerequisite",
+				"Moving this node would leave a prerequisite edge connecting an ancestor and a descendant; remove the edge first.",
+				ex);
 		}
 		catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintErrorCode) {
 			throw new InvariantViolationException(

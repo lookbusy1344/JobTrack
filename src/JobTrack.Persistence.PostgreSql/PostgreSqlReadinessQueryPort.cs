@@ -89,7 +89,12 @@ internal sealed class PostgreSqlReadinessQueryPort : IReadinessQueryPort
 			row => new JobNodeId(row.Id),
 			row => new HierarchyNode(new(row.Id), row.ParentId is long parentId ? new JobNodeId(parentId) : null, [], null));
 
-		var requiredJobIds = edges.Select(edge => edge.RequiredJobId).Distinct().Where(id => !nodes.ContainsKey(id)).ToArray();
+		// Every distinct required job, including one already present as an ancestor-chain stub: those
+		// stubs deliberately carry no children and no leaf achievement, so treating an existing key as
+		// "already loaded" made AchievementCalculator read a satisfied prerequisite as unachieved and
+		// reported its dependents blocked. In the batch form the requested nodes are siblings/cousins
+		// of one another, so a required job is routinely one of them.
+		var requiredJobIds = edges.Select(edge => edge.RequiredJobId).Distinct().ToArray();
 		if (requiredJobIds.Length > 0) {
 			var requiredJobIdValues = requiredJobIds.Select(id => id.Value).ToArray();
 			var subtree = await context.Database.SqlQuery<ReadinessSubtreeRow>(

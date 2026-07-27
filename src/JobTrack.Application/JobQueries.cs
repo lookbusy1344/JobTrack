@@ -698,6 +698,7 @@ internal sealed class JobQueries : IJobQueries
 				var canReopenWithoutStarting = false;
 				var isReady = false;
 				var directDependentCount = 0;
+				var hasActiveDependentWork = false;
 
 				if (node.Node.HasLeafWork) {
 					var leafWork = await _leafWorkQueryPort.GetLeafWorkAsync(leafId, cancellationToken).ConfigureAwait(false);
@@ -726,6 +727,14 @@ internal sealed class JobQueries : IJobQueries
 
 					directDependentCount = await _prerequisiteQueryPort
 						.CountDirectDependentsAsync(leafId, cancellationToken).ConfigureAwait(false);
+
+					// Only Success can be reopened into a readiness regression, and only a dependent
+					// with a *running* session is at risk of losing its gate mid-flight -- so this
+					// second round trip is spent only where the warning could actually fire.
+					hasActiveDependentWork = achievement == Abstractions.Achievement.Success
+											 && directDependentCount > 0
+											 && await _prerequisiteQueryPort
+												 .HasActiveDependentWorkAsync(leafId, cancellationToken).ConfigureAwait(false);
 				}
 
 				return new LeafWorkPageResult {
@@ -746,6 +755,7 @@ internal sealed class JobQueries : IJobQueries
 					CanReopenAndStartForOthers = canReopenAndStartForOthers,
 					CanReopenWithoutStarting = canReopenWithoutStarting,
 					DirectDependentCount = directDependentCount,
+					HasActiveDependentWork = hasActiveDependentWork,
 				};
 			});
 

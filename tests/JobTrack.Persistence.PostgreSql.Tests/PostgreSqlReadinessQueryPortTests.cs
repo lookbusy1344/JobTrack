@@ -27,6 +27,10 @@ public sealed class PostgreSqlReadinessQueryPortTests()
 	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+		new PostgreSqlAchievementCommandPort(
+			new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+
 	internal override IReadinessQueryPort CreatePort(string connectionString) =>
 		new PostgreSqlReadinessQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
 

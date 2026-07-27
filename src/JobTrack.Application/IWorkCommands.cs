@@ -223,6 +223,15 @@ public interface IWorkCommands
 	///     participant on this leaf who controls nothing may start for themselves only (ADR 0045 §2).
 	///     <c>ReopenWithoutStartingAsync</c>-shaped elevated correction (no session following) is
 	///     unaffected and remains Job Manager/Administrator-only via <see cref="SetAchievementAsync" />.
+	///     <para>
+	///         ADR 0051: reopening a leaf closed as <see cref="Achievement.Success" /> is permitted even
+	///         while a job that requires it has a session running right now. The dependent keeps its
+	///         session and its achievement, but is blocked from then on -- it cannot reach a terminal
+	///         achievement (<see cref="CompleteLeafAsync" />/<see cref="SetAchievementAsync" /> raise
+	///         <see cref="PrerequisiteBlockedException" />) until this leaf succeeds again.
+	///         <c>IJobQueries.GetLeafWorkPageAsync</c>'s <c>HasActiveDependentWork</c> exists so a caller
+	///         can warn before doing it.
+	///     </para>
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor holds none of ADR 0045 §2's three reopen-and-start authority sources for this leaf
@@ -239,6 +248,11 @@ public interface IWorkCommands
 	///     and leaf (<c>ConstraintId</c> <c>"work-session-overlap"</c>); or
 	///     <see cref="ReopenAndStartWorkRequest.WorkedByUserId" /> names a worker who is disabled, locked,
 	///     or holds no eligible workflow role (<c>ConstraintId</c> <c>"work-session-target-not-eligible"</c>).
+	/// </exception>
+	/// <exception cref="PrerequisiteBlockedException">
+	///     This leaf's own prerequisites are not satisfied (spec §6) -- a leaf cannot be reopened into work
+	///     it is blocked from doing. Note the asymmetry with the paragraph above: this leaf's prerequisites
+	///     gate the reopen; the prerequisites this leaf *satisfies* for others never do.
 	/// </exception>
 	Task<ReopenAndStartWorkResult> ReopenAndStartWorkAsync(ReopenAndStartWorkRequest request, CancellationToken cancellationToken = default);
 }

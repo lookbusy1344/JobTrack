@@ -33,4 +33,10 @@ public sealed class SqlitePrerequisiteQueryPortTests()
 
 	internal override IPrerequisiteQueryPort CreateQueryPort(string connectionString) =>
 		new SqlitePrerequisiteQueryPort(connectionString);
+
+	internal override IWorkSessionCommandPort CreateWorkSessionPort(string connectionString) =>
+		new SqliteWorkSessionCommandPort(connectionString, SystemClock.Instance);
+
+	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
+		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
 }

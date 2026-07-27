@@ -22,6 +22,13 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 {
 	private const string CycleSqlState = "P0003";
 	private const string ConcurrencyConflictSqlState = "P0004";
+
+	/// <summary>
+	///     Spec §6 rule 5's move side: schema version 0008's
+	///     <c>check_job_prerequisite_edges_after_move</c> deferred constraint trigger's distinct SQLSTATE.
+	/// </summary>
+	private const string PrerequisiteEdgeAfterMoveSqlState = "P0009";
+
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
@@ -133,6 +140,12 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		catch (PostgresException ex) when (ex.SqlState == CycleSqlState || ex.SqlState == PostgresErrorCodes.CheckViolation) {
 			throw new InvariantViolationException(
 				"job-node-move-would-cycle", "Moving this node under the requested parent would create a cycle.", ex);
+		}
+		catch (PostgresException ex) when (ex.SqlState == PrerequisiteEdgeAfterMoveSqlState) {
+			throw new InvariantViolationException(
+				"job-node-move-would-invalidate-prerequisite",
+				"Moving this node would leave a prerequisite edge connecting an ancestor and a descendant; remove the edge first.",
+				ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == ConcurrencyConflictSqlState) {
 			throw new ConcurrencyConflictException(

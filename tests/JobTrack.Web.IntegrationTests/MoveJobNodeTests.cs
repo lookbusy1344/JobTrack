@@ -138,6 +138,33 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 		saveBody.Should().Contain("cycle");
 	}
 
+	/// <summary>
+	///     A move rejected because it would leave a prerequisite edge connecting an ancestor and a
+	///     descendant is not a hierarchy cycle: telling the mover to look at descendants sends them
+	///     nowhere near the edge they actually have to remove.
+	/// </summary>
+	[Fact]
+	public async Task Moving_a_node_under_a_job_it_is_a_prerequisite_of_is_reported_as_a_prerequisite_problem()
+	{
+		var managerId = await SeedEmployeeAsync("move.prerequisite-manager", EmployeeRole.JobManager);
+		var required = await AddChildAsync(rootId, managerId, "Site survey");
+		var dependent = await AddChildAsync(rootId, managerId, "Excavate foundations");
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
+		var authCookie = await SignInAsync("move.prerequisite-manager");
+
+		var (antiforgeryCookie, token) = await GetMoveFormAsync(authCookie, required.Id);
+		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, required.Id, required.Version, dependent.Id);
+		var saveBody = await saveResponse.Content.ReadAsStringAsync();
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		saveBody.Should().Contain("prerequisite");
+		saveBody.Should().NotContain("would create a cycle");
+	}
+
 	[Fact]
 	public async Task A_stale_version_on_save_is_reported_as_a_conflict()
 	{

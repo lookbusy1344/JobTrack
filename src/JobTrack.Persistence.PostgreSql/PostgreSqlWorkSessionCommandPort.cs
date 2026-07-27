@@ -601,13 +601,12 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
 		}
 
-		if (leafWork.Achievement == Achievement.Success &&
-			await PrerequisiteReadinessSerialization.HasActiveDependentWorkAsync(context, request.JobNodeId, cancellationToken)
-				.ConfigureAwait(false)) {
-			throw new ConcurrencyConflictException(
-				$"Job node {request.JobNodeId} cannot be reopened because dependent work became active.");
-		}
-
+		// ADR 0051: live work on a dependent never blocks this reopen. The regression it creates is
+		// carried by the dependent -- which becomes blocked, and cannot reach a terminal achievement
+		// until this prerequisite succeeds again -- not by refusing the actor who knows the leaf was
+		// closed wrongly. The advisory lock this node's own id takes above (LeafReadiness's
+		// additionallyLockedRequiredJobId) still orders this reopen against a concurrent dependent
+		// completion, so exactly one of the two sees the other's state.
 		var startedAt = request.StartedAt ?? now;
 		if (startedAt > now) {
 			throw new InvariantViolationException(

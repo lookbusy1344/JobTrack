@@ -207,6 +207,114 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
 	}
 
+	/// <summary>
+	///     ADR 0051, both halves on the one port: reopening a prerequisite that has already been closed as
+	///     <see cref="Achievement.Success" /> is permitted even though a dependent is mid-flight, and the
+	///     dependent is then blocked from closing until that prerequisite succeeds again. Nothing here is
+	///     a fresh rule -- it is <see cref="Transitioning_to_success_while_a_prerequisite_is_unsatisfied_throws_prerequisite_blocked" />
+	///     reached by the route that actually occurs in service, where the dependent started out ready.
+	/// </summary>
+	[Fact]
+	public async Task Reopening_a_successful_prerequisite_is_permitted_and_blocks_its_in_progress_dependent_from_closing()
+	{
+		var (rootId, jobManagerId, workerId, requiredLeaf) = await SeedReadyLeafAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var dependentLeaf = await CreateReadyLeafAsync(jobNodePort, rootId, jobManagerId, workerId);
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = requiredLeaf,
+			DependentJobId = dependentLeaf,
+		});
+		var port = CreateAchievementPort(database.ConnectionString);
+		_ = await port.SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = requiredLeaf,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Starting the prerequisite",
+			Version = 1,
+		});
+		_ = await port.SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = requiredLeaf,
+			NewAchievement = Achievement.Success,
+			Reason = "Prerequisite done",
+			Version = 2,
+		});
+		_ = await port.SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = dependentLeaf,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Dependent under way on a satisfied prerequisite",
+			Version = 1,
+		});
+
+		var reopened = await port.SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = requiredLeaf,
+			NewAchievement = Achievement.Waiting,
+			Reason = "Closed by mistake",
+			Version = 3,
+		});
+
+		reopened.Achievement.Should().Be(Achievement.Waiting, "a live dependent never blocks the reopen itself");
+
+		var act = () => port.SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = dependentLeaf,
+			NewAchievement = Achievement.Success,
+			Reason = "Trying to close over a reopened prerequisite",
+			Version = 2,
+		});
+
+		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
+	}
+
+	/// <summary>
+	///     ADR 0051: readiness gates *closing* a job, never resuming one. A dependent that already
+	///     reached <see cref="Achievement.Success" /> before its prerequisite was reopened is now blocked
+	///     -- and reopening it is exactly what the correction usually needs next, so
+	///     <see cref="Achievement.Success" /> -&gt; <see cref="Achievement.Waiting" /> stays available
+	///     while it is blocked, even though the reverse move is not.
+	/// </summary>
+	[Fact]
+	public async Task A_dependent_already_closed_as_success_can_still_be_reopened_after_its_prerequisite_is_reopened()
+	{
+		var (rootId, jobManagerId, workerId, requiredLeaf) = await SeedReadyLeafAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		var dependentLeaf = await CreateReadyLeafAsync(jobNodePort, rootId, jobManagerId, workerId);
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = requiredLeaf,
+			DependentJobId = dependentLeaf,
+		});
+		var port = CreateAchievementPort(database.ConnectionString);
+		foreach (var (leafId, achievement, version) in new[] {
+					 (requiredLeaf, Achievement.InProgress, 1L),
+					 (requiredLeaf, Achievement.Success, 2L),
+					 (dependentLeaf, Achievement.InProgress, 1L),
+					 (dependentLeaf, Achievement.Success, 2L),
+					 (requiredLeaf, Achievement.Waiting, 3L),
+				 }) {
+			_ = await port.SetAchievementAsync(new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = leafId,
+				NewAchievement = achievement,
+				Reason = "Setting up the reopened-prerequisite state",
+				Version = version,
+			});
+		}
+
+		var result = await port.SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = dependentLeaf,
+			NewAchievement = Achievement.Waiting,
+			Reason = "Reopening the dependent too",
+			Version = 3,
+		});
+
+		result.Achievement.Should().Be(Achievement.Waiting);
+	}
+
 	[Fact]
 	public async Task A_worker_may_not_reopen_a_terminal_state_even_for_a_leaf_they_own()
 	{

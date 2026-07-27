@@ -66,4 +66,14 @@ public sealed record LeafWorkPageResult
 	///     readiness for at least one dependent (ADR 0045 §2's dependent-impact warning).
 	/// </summary>
 	public required int DirectDependentCount { get; init; }
+
+	/// <summary>
+	///     Whether a job that directly requires this leaf, or a leaf beneath one, currently holds an
+	///     active session — the sharper half of <see cref="DirectDependentCount" />'s dependent-impact
+	///     warning (ADR 0045 §2): reopening would regress readiness for work that is running right now,
+	///     not merely for work that could start later. Queried only while this leaf is
+	///     <see cref="Abstractions.Achievement.Success" /> — the only state a reopen can regress from —
+	///     and <see langword="false" /> otherwise.
+	/// </summary>
+	public required bool HasActiveDependentWork { get; init; }
 }

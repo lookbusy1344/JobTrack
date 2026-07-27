@@ -86,6 +86,30 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		entries.Single(e => e.Id == tree.BlockedLeafId).IsReady.Should().BeFalse();
 	}
 
+	/// <summary>
+	///     The counterpart to the test above, and the AwaitingProgress half of the Browse "red stop palm
+	///     against a satisfied prerequisite" regression: a leaf whose prerequisite is a successfully
+	///     closed sibling under the same branch — so the two share an ancestor chain — is ready, not
+	///     blocked. Declaring a prerequisite is not itself a block.
+	/// </summary>
+	[Fact]
+	public async Task Keeps_a_leaf_whose_prerequisite_succeeded_marked_ready()
+	{
+		var tree = await SeedScenarioAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			RequiredJobId = tree.SuccessLeafId,
+			DependentJobId = tree.WaitingLeafId,
+		});
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Single(e => e.Id == tree.WaitingLeafId).IsReady.Should().BeTrue();
+	}
+
 	[Fact]
 	public async Task Carries_owner_priority_and_deadline_facts_through()
 	{

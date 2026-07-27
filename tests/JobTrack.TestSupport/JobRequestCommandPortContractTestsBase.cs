@@ -267,6 +267,30 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		await act.Should().ThrowAsync<InvariantViolationException>();
 	}
 
+	/// <summary>
+	///     The requester-job move goes through its own port but the same <c>move_job_node</c>/trigger
+	///     machinery, so spec §6 rule 5's move side must reject it with the same stable identifier the
+	///     structural move reports — not the generic "would create a cycle" a bare constraint code
+	///     would suggest.
+	/// </summary>
+	[Fact]
+	public async Task Moving_a_requester_job_under_a_node_it_is_a_prerequisite_of_is_rejected()
+	{
+		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
+		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
+		var dependentId = await InsertNodeAsync(rootId.Value, jobManagerId, "Dependent branch");
+		var port = CreateCommandPort(database.ConnectionString);
+		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
+		await InsertPrerequisiteAsync(submitted.JobNodeId.Value, dependentId);
+
+		var act = () => port.MoveAsync(
+			MoveRequest(jobManagerId, submitted.JobNodeId, new(dependentId), submitted.Version));
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-move-would-invalidate-prerequisite");
+	}
+
 	[Fact]
 	public async Task Moving_a_requester_job_with_a_stale_version_is_rejected_as_a_conflict()
 	{
@@ -818,6 +842,20 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		AddParameter(command, "@priorityId", PriorityMedium);
 		AddParameter(command, "@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
+	/// <summary>
+	///     Inserts a <c>job_prerequisite</c> edge directly: this base seeds structure through raw SQL
+	///     rather than <c>IJobNodeCommandPort</c>, and the edge is only scenery for the move under test.
+	/// </summary>
+	private async Task InsertPrerequisiteAsync(long requiredJobId, long dependentJobId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "INSERT INTO job_prerequisite (from_id, to_id) VALUES (@fromId, @toId);";
+		AddParameter(command, "@fromId", requiredJobId);
+		AddParameter(command, "@toId", dependentJobId);
+		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task SetHoldingAreaNodeOwnerAsync(RequestHoldingAreaId holdingAreaId, AppUserId ownerUserId)

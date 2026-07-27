@@ -13,8 +13,11 @@ internal sealed class FakePrerequisiteQueryPort : IPrerequisiteQueryPort
 {
 	private readonly List<PrerequisiteEdge> _edges = [];
 	private readonly HashSet<JobNodeId> _nodes = [];
+	private readonly HashSet<JobNodeId> _nodesWithActiveDependentWork = [];
 
 	public int CountDirectDependentsCallCount { get; private set; }
+
+	public int HasActiveDependentWorkCallCount { get; private set; }
 
 	public int GetPrerequisitesCallCount { get; private set; }
 
@@ -45,7 +48,25 @@ internal sealed class FakePrerequisiteQueryPort : IPrerequisiteQueryPort
 		return Task.FromResult(_edges.Count(edge => edge.RequiredJobId == requiredJobId));
 	}
 
+	public Task<bool> HasActiveDependentWorkAsync(JobNodeId requiredJobId, CancellationToken cancellationToken = default)
+	{
+		++HasActiveDependentWorkCallCount;
+
+		if (!_nodes.Contains(requiredJobId)) {
+			throw new EntityNotFoundException($"Job node {requiredJobId} does not exist.");
+		}
+
+		return Task.FromResult(_nodesWithActiveDependentWork.Contains(requiredJobId));
+	}
+
 	public void SeedNode(JobNodeId nodeId) => _nodes.Add(nodeId);
+
+	/// <summary>Marks <paramref name="requiredJobId" /> as having a dependent whose work is currently active.</summary>
+	public void SeedActiveDependentWork(JobNodeId requiredJobId)
+	{
+		_nodes.Add(requiredJobId);
+		_nodesWithActiveDependentWork.Add(requiredJobId);
+	}
 
 	public void SeedEdge(PrerequisiteEdge edge)
 	{

@@ -99,6 +99,14 @@ public sealed class WorkModel(
 					continue;
 				}
 
+				// ADR 0051: a blocked leaf may not reach a terminal achievement by any route, so the
+				// dropdown withdraws those options rather than offering a Save that SetAchievementAsync
+				// will refuse with PrerequisiteBlockedException. Reopening and other non-terminal moves
+				// are unaffected -- readiness gates closing a job, never resuming one.
+				if (!workPage.IsReady && AchievementTransitions.IsCompletedState(candidate)) {
+					continue;
+				}
+
 				var authorized = AchievementTransitions.IsReopening(achievement, candidate)
 					? workPage.CanReopenWithoutStarting
 					: workPage.CanComplete;
@@ -409,7 +417,7 @@ public sealed class WorkModel(
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 		catch (PrerequisiteBlockedException) {
-			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
+			ErrorMessage = "This job is blocked: a prerequisite it depends on is not complete, so it cannot be closed yet.";
 		}
 
 		return RedirectToWork();
@@ -530,6 +538,12 @@ public sealed class WorkModel(
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
+		catch (PrerequisiteBlockedException) {
+			// Reopen-and-start starts a session, so this leaf's own unsatisfied prerequisite bars it
+			// (ADR 0051) -- reachable from a stale page, since the form withdraws while blocked.
+			ErrorMessage =
+				"This job is blocked: a prerequisite it depends on is not complete, so no session can start here. It can still be reopened without starting work.";
+		}
 
 		return RedirectToWork();
 	}
@@ -581,7 +595,7 @@ public sealed class WorkModel(
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
 		}
 		catch (PrerequisiteBlockedException) {
-			ErrorMessage = "This leaf's prerequisites are not satisfied, so it cannot be marked complete.";
+			ErrorMessage = "This job is blocked: a prerequisite it depends on is not complete, so it cannot be closed yet.";
 		}
 
 		return RedirectToWork();

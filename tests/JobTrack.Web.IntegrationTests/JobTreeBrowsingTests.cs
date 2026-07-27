@@ -234,6 +234,41 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	/// <summary>
+	/// The stop palm means BLOCKED, not "declares a prerequisite": the building-a-house sample's
+	/// Groundworks branch runs Site survey -> Excavate foundations -> Pour foundations, and with the
+	/// first two closed as Success nothing under it is blocked. Browse evaluates readiness for the
+	/// whole displayed subtree in one batch, where every required job is itself a displayed row --
+	/// the case that previously marked each dependent blocked against a satisfied prerequisite.
+	/// </summary>
+	public async Task A_row_whose_prerequisite_is_satisfied_is_not_marked_blocked()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.satisfied-prerequisite");
+		var rootId = bootstrappedRootId!.Value;
+		var groundworksId = await AddChildAsync(rootId, workerId, "Groundworks");
+		var siteSurveyId = await AddChildAsync(groundworksId, workerId, "Site survey");
+		var excavateId = await AddChildAsync(groundworksId, workerId, "Excavate foundations");
+		var pourId = await AddChildAsync(groundworksId, workerId, "Pour foundations");
+		await AddPrerequisiteAsync(siteSurveyId, excavateId, adminId);
+		await AddPrerequisiteAsync(excavateId, pourId, adminId);
+		await SetAchievementAsync(siteSurveyId, adminId, Achievement.Success);
+		await SetAchievementAsync(excavateId, adminId, Achievement.Success);
+		await SetAchievementAsync(pourId, adminId, Achievement.InProgress);
+		var authCookie = await SignInAsync("browse.satisfied-prerequisite");
+
+		var body = await (await GetAsync($"/Jobs/Browse?nodeId={groundworksId.Value}", authCookie)).Content.ReadAsStringAsync();
+
+		BlockedRowPattern().Count(body).Should().Be(0, "every declared prerequisite is satisfied");
+
+		// The same tree with one genuinely unsatisfied prerequisite: only that row is marked.
+		var lastId = await AddChildAsync(groundworksId, workerId, "Backfill");
+		await AddPrerequisiteAsync(pourId, lastId, adminId);
+		var blockedBody = await (await GetAsync($"/Jobs/Browse?nodeId={groundworksId.Value}", authCookie)).Content.ReadAsStringAsync();
+
+		BlockedRowPattern().Count(blockedBody).Should().Be(1, "only the row awaiting an in-progress prerequisite is blocked");
+	}
+
+	[Fact]
 	public async Task Browsing_a_branch_shows_its_children_and_a_breadcrumb_to_the_root()
 	{
 		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.branch");
