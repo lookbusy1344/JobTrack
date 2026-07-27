@@ -177,6 +177,13 @@ internal static class AwaitingProgressQueryAssembly
 			filteredNodes = filteredNodes.Where(node => SqliteTextSearchFunctions.ContainsOrdinalIgnoreCase(node.Description, filter.SearchText));
 		}
 
+		// Readiness is the first ordering key and, when asked, an exclusion -- both composed as the same
+		// EXISTS predicate so a dropped blocked leaf never consumes a page slot either.
+		var blockedNodes = LoadBlockedNodes(context);
+		if (filter.ExcludeBlocked) {
+			filteredNodes = filteredNodes.Where(node => !blockedNodes.Any(blocked => blocked.Id == node.Id));
+		}
+
 		// Ordering runs against the entity/join columns directly, before the final projection into
 		// AwaitingProgressCandidate -- SQLite's EF provider (unlike PostgreSQL's) cannot translate an
 		// OrderBy over a property of an already-constructed record.
@@ -198,10 +205,12 @@ internal static class AwaitingProgressQueryAssembly
 				node.NeededFinish,
 				node.ArchivedAt,
 				Achievement = achievement,
+				IsBlocked = blockedNodes.Any(blocked => blocked.Id == node.Id),
 			};
 
 		var ordered = query
-			.OrderByDescending(candidate => candidate.Priority)
+			.OrderBy(candidate => candidate.IsBlocked)
+			.ThenByDescending(candidate => candidate.Priority)
 			.ThenBy(candidate => (candidate.NeededFinish ?? candidate.NeededStart) == null)
 			.ThenBy(candidate => candidate.NeededFinish ?? candidate.NeededStart)
 			.ThenBy(candidate => candidate.Id)
@@ -234,6 +243,48 @@ internal static class AwaitingProgressQueryAssembly
 				JOIN job_node node ON node.id = subtree.id
 				""",
 				new SqliteParameter("@rootId", rootId.Value))
+			.AsNoTracking();
+
+	/// <summary>
+	///     A composable relation containing every node blocked by an unsatisfied prerequisite -- its own
+	///     or one inherited from an ancestor (spec §6) -- mirroring PostgreSQL's <c>job_node_blocked</c>
+	///     stored function, which SQLite has no equivalent of. Each distinct required job's recursive
+	///     achievement is resolved once (the same "no childless node within the subtree lacks Success
+	///     leaf_work" reduction <see cref="JobNodeHierarchyQueries.IsSubtreeAchievedSqliteAsync" /> uses),
+	///     then the block descends from every declaring node. The candidate query composes this as an
+	///     <c>EXISTS</c> predicate, so blocked ids are never materialized in the application process.
+	/// </summary>
+	private static IQueryable<JobNodeEntity> LoadBlockedNodes(DbContext context) =>
+		context.Set<JobNodeEntity>().FromSqlRaw(
+				"""
+				WITH RECURSIVE required(id) AS (
+				    SELECT DISTINCT from_id FROM job_prerequisite
+				), required_subtree(origin_id, id) AS (
+				    SELECT id, id FROM required
+				    UNION ALL
+				    SELECT required_subtree.origin_id, child.id
+				    FROM job_node child JOIN required_subtree ON child.parent_id = required_subtree.id
+				), unsatisfied(id) AS (
+				    SELECT required.id FROM required
+				    WHERE EXISTS (
+				        SELECT 1 FROM required_subtree
+				        WHERE required_subtree.origin_id = required.id
+				          AND NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = required_subtree.id)
+				          AND NOT EXISTS (
+				              SELECT 1 FROM leaf_work
+				              WHERE leaf_work.job_node_id = required_subtree.id AND leaf_work.achievement_id = @successAchievementId
+				          )
+				    )
+				), blocked(id) AS (
+				    SELECT jp.to_id FROM job_prerequisite jp JOIN unsatisfied ON unsatisfied.id = jp.from_id
+				    UNION
+				    SELECT child.id FROM job_node child JOIN blocked ON child.parent_id = blocked.id
+				)
+				SELECT node.*
+				FROM blocked
+				JOIN job_node node ON node.id = blocked.id
+				""",
+				new SqliteParameter("@successAchievementId", (short)Achievement.Success))
 			.AsNoTracking();
 
 	/// <summary>

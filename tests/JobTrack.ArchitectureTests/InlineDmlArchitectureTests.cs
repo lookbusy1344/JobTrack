@@ -144,8 +144,18 @@ public sealed class InlineDmlArchitectureTests
 			"FromSql",
 			"job_node_subtrees"),
 		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlAwaitingProgressQueryPort.cs"),
+			"LoadBlockedNodes",
+			"FromSql",
+			"job_node_blocked"),
+		new(
 			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteAwaitingProgressQueryPort.cs"),
 			"LoadSubtreeNodes",
+			"FromSqlRaw",
+			"WITH RECURSIVE"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteAwaitingProgressQueryPort.cs"),
+			"LoadBlockedNodes",
 			"FromSqlRaw",
 			"WITH RECURSIVE"),
 		new(

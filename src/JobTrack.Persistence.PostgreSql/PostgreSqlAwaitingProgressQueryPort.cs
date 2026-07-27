@@ -176,6 +176,13 @@ internal static class AwaitingProgressQueryAssembly
 #pragma warning restore CA1304, CA1311, CA1862
 		}
 
+		// Readiness is the first ordering key and, when asked, an exclusion -- both composed as the same
+		// EXISTS predicate so a dropped blocked leaf never consumes a page slot either.
+		var blockedNodes = LoadBlockedNodes(context);
+		if (filter.ExcludeBlocked) {
+			filteredNodes = filteredNodes.Where(node => !blockedNodes.Any(blocked => blocked.Id == node.Id));
+		}
+
 		// Ordering runs against the entity/join columns directly, before the final projection into
 		// AwaitingProgressCandidate -- matches SQLite's provider requirement below, and keeps both
 		// providers translating identically rather than relying on PostgreSQL's provider tolerating an
@@ -198,10 +205,12 @@ internal static class AwaitingProgressQueryAssembly
 				node.NeededFinish,
 				node.ArchivedAt,
 				Achievement = achievement,
+				IsBlocked = blockedNodes.Any(blocked => blocked.Id == node.Id),
 			};
 
 		var ordered = query
-			.OrderByDescending(candidate => candidate.Priority)
+			.OrderBy(candidate => candidate.IsBlocked)
+			.ThenByDescending(candidate => candidate.Priority)
 			.ThenBy(candidate => (candidate.NeededFinish ?? candidate.NeededStart) == null)
 			.ThenBy(candidate => candidate.NeededFinish ?? candidate.NeededStart)
 			.ThenBy(candidate => candidate.Id)
@@ -231,6 +240,21 @@ internal static class AwaitingProgressQueryAssembly
 			 JOIN job_node node ON node.id = subtree.id
 			 """).AsNoTracking();
 	}
+
+	/// <summary>
+	///     A composable relation containing every node blocked by an unsatisfied prerequisite -- its own
+	///     or one inherited from an ancestor (spec §6) -- through the <c>job_node_blocked</c> stored
+	///     function, the set-based counterpart to the single-node <c>job_node_ready</c>. The candidate
+	///     query composes this as an <c>EXISTS</c> predicate, so blocked ids are never materialized in
+	///     the application process.
+	/// </summary>
+	private static IQueryable<JobNodeEntity> LoadBlockedNodes(DbContext context) =>
+		context.Set<JobNodeEntity>().FromSql(
+			$"""
+			 SELECT node.*
+			 FROM job_node_blocked() blocked
+			 JOIN job_node node ON node.id = blocked.id
+			 """).AsNoTracking();
 
 	/// <summary>
 	///     Every candidate's own ancestor chain up to the true root (ADR 0017-shaped elevated scope,

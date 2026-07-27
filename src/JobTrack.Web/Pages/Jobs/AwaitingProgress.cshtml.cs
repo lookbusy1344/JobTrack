@@ -32,9 +32,17 @@ public sealed class AwaitingProgressModel(
 	// dashboard-appropriate fixed page size is enough -- no caller-supplied override.
 	public const int PageSize = AwaitingProgressPaging.DefaultPageSize;
 
-	// Browse-sessions filter memory: the owner selector's last "person or Everyone" choice is
-	// remembered per session under this key so returning to the dashboard restores it.
+	// Filter memory: every filter this dashboard offers -- owner, the unassigned pool, subtree scope,
+	// search text, and blocked-job exclusion -- is remembered per session under these keys, so
+	// returning to the dashboard (e.g. via the header link, carrying no parameters at all) restores
+	// the view the user last chose rather than resetting it. Offset is deliberately not remembered:
+	// it is a position within a result, not a filter.
 	private const string OwnerFilterSessionKey = "Jobs.AwaitingProgress.Owner";
+	private const string UnassignedOnlyFilterSessionKey = "Jobs.AwaitingProgress.UnassignedOnly";
+	private const string SubtreeRootFilterSessionKey = "Jobs.AwaitingProgress.SubtreeRoot";
+	private const string ShowWholeTreeFilterSessionKey = "Jobs.AwaitingProgress.ShowWholeTree";
+	private const string SearchTextFilterSessionKey = "Jobs.AwaitingProgress.SearchText";
+	private const string ExcludeBlockedFilterSessionKey = "Jobs.AwaitingProgress.ExcludeBlocked";
 
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
@@ -50,10 +58,19 @@ public sealed class AwaitingProgressModel(
 
 	/// <summary>
 	///     When set, overrides <see cref="OwnerUserId" /> to show only the unassigned pool
-	///     (ownership model §2.1) -- surfaces ready but unclaimed work.
+	///     (ownership model §2.1) -- surfaces ready but unclaimed work. Settable for the same
+	///     remembered-choice reason as <see cref="OwnerUserId" />.
 	/// </summary>
 	[BindProperty(SupportsGet = true)]
-	public bool UnassignedOnly { get; init; }
+	public bool UnassignedOnly { get; set; }
+
+	/// <summary>
+	///     When set, leaves blocked by an unsatisfied prerequisite are left out entirely rather than
+	///     listed below the ready ones -- nothing can be done about them (ADR 0051: blocked is a state,
+	///     not an error, but it is also not actionable work).
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public bool ExcludeBlocked { get; set; }
 
 	// Settable so LoadAsync can replace an omitted value with the actor's home node (see LoadAsync),
 	// which every replayed filter/route value then reflects.
@@ -67,7 +84,7 @@ public sealed class AwaitingProgressModel(
 	///     the home node, since <see cref="SubtreeRootId" /> is null either way.
 	/// </summary>
 	[BindProperty(SupportsGet = true)]
-	public bool ShowWholeTree { get; init; }
+	public bool ShowWholeTree { get; set; }
 
 	/// <summary>
 	///     When non-blank, restricts to leaves whose description contains this text (case insensitive) —
@@ -75,7 +92,7 @@ public sealed class AwaitingProgressModel(
 	///     unlike Browse's Search flow which queries the whole tree.
 	/// </summary>
 	[BindProperty(SupportsGet = true)]
-	public string? SearchText { get; init; }
+	public string? SearchText { get; set; }
 
 	[TempData] public string? ErrorMessage { get; set; }
 
@@ -129,6 +146,7 @@ public sealed class AwaitingProgressModel(
 		["SubtreeRootId"] = SubtreeRootId?.ToString(CultureInfo.InvariantCulture),
 		["ShowWholeTree"] = ShowWholeTree.ToString(),
 		["SearchText"] = SearchText,
+		["ExcludeBlocked"] = ExcludeBlocked.ToString(),
 		["Offset"] = Offset.ToString(CultureInfo.InvariantCulture),
 	};
 
@@ -144,6 +162,7 @@ public sealed class AwaitingProgressModel(
 		subtreeRootId = SubtreeRootId,
 		showWholeTree = ShowWholeTree,
 		searchText = SearchText,
+		excludeBlocked = ExcludeBlocked,
 		offset = Offset,
 	});
 
@@ -287,8 +306,36 @@ public sealed class AwaitingProgressModel(
 		["subtreeRootId"] = SubtreeRootId,
 		["showWholeTree"] = ShowWholeTree,
 		["searchText"] = SearchText,
+		["excludeBlocked"] = ExcludeBlocked,
 		["offset"] = Offset,
 	};
+
+	/// <summary>
+	///     Replaces each omitted filter with the choice this session last made, and remembers each one
+	///     the request did carry. The subtree scope and its "whole tree" escape hatch resolve together:
+	///     they are two halves of one choice, so a request naming either is explicit about both, and a
+	///     request naming neither recalls both (leaving the home-node default below to apply only when
+	///     nothing was ever remembered).
+	/// </summary>
+	private void RecallFilters()
+	{
+		var session = HttpContext.Session;
+
+		// The whole tree is browsable, so the owner default when nothing is remembered is "Everyone"
+		// (no permission-scoped fallback like Work's).
+		OwnerUserId = FilterMemory.Resolve(
+			session, OwnerFilterSessionKey, Request.Query.ContainsKey(nameof(OwnerUserId)), OwnerUserId, null);
+		UnassignedOnly = FilterMemory.ResolveFlag(
+			session, UnassignedOnlyFilterSessionKey, Request.Query.ContainsKey(nameof(UnassignedOnly)), UnassignedOnly);
+		SearchText = FilterMemory.ResolveText(
+			session, SearchTextFilterSessionKey, Request.Query.ContainsKey(nameof(SearchText)), SearchText);
+		ExcludeBlocked = FilterMemory.ResolveFlag(
+			session, ExcludeBlockedFilterSessionKey, Request.Query.ContainsKey(nameof(ExcludeBlocked)), ExcludeBlocked);
+
+		var scopeProvided = Request.Query.ContainsKey(nameof(SubtreeRootId)) || Request.Query.ContainsKey(nameof(ShowWholeTree));
+		SubtreeRootId = FilterMemory.Resolve(session, SubtreeRootFilterSessionKey, scopeProvided, SubtreeRootId, null);
+		ShowWholeTree = FilterMemory.ResolveFlag(session, ShowWholeTreeFilterSessionKey, scopeProvided, ShowWholeTree);
+	}
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
@@ -296,10 +343,7 @@ public sealed class AwaitingProgressModel(
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
 
-		// Owner filter is remembered across visits; the whole tree is browsable, so the default when
-		// nothing is remembered is "Everyone" (no permission-scoped fallback like Work's).
-		OwnerUserId = FilterMemory.Resolve(
-			HttpContext.Session, OwnerFilterSessionKey, Request.Query.ContainsKey(nameof(OwnerUserId)), OwnerUserId, null);
+		RecallFilters();
 
 		var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
 			new() { Context = context }, cancellationToken);
@@ -335,6 +379,7 @@ public sealed class AwaitingProgressModel(
 					Ownership = ownership,
 					SubtreeRootId = SubtreeRootId.HasValue ? new JobNodeId(SubtreeRootId.Value) : null,
 					SearchText = SearchText,
+					ExcludeBlocked = ExcludeBlocked,
 					Offset = Math.Max(0, Offset),
 					Limit = PageSize + 1,
 				},

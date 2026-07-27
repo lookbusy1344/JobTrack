@@ -35,6 +35,12 @@
 		</label>
 	</div>
 	<div class="form-group">
+		<label asp-for="ExcludeBlocked">
+			<input asp-for="ExcludeBlocked"/>
+			Hide blocked jobs (unsatisfied prerequisites)
+		</label>
+	</div>
+	<div class="form-group">
 		<label asp-for="SearchText"></label>
 		<input asp-for="SearchText" class="form-control"/>
 	</div>
@@ -114,6 +120,8 @@
 		   asp-route-UnassignedOnly="@Model.UnassignedOnly"
 		   asp-route-SubtreeRootId="@Model.SubtreeRootId"
 		   asp-route-ShowWholeTree="@Model.ShowWholeTree"
+		   asp-route-SearchText="@Model.SearchText"
+		   asp-route-ExcludeBlocked="@Model.ExcludeBlocked"
 		   asp-route-Offset="@(Model.Offset + AwaitingProgressModel.PageSize)">
 			Next page
 		</a>

@@ -478,6 +478,7 @@ internal sealed class JobQueries : IJobQueries
 					Ownership = request.Ownership,
 					SubtreeRootId = request.SubtreeRootId,
 					SearchText = request.SearchText,
+					ExcludeBlocked = request.ExcludeBlocked,
 					Offset = request.Offset,
 					Limit = limit,
 				};

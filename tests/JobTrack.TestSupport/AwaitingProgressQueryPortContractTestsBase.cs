@@ -110,6 +110,90 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		entries.Single(e => e.Id == tree.WaitingLeafId).IsReady.Should().BeTrue();
 	}
 
+	/// <summary>
+	///     Readiness is the port's own first ordering key: nothing can be done about a blocked leaf, so
+	///     it sinks below every ready one regardless of priority or deadline. The seeded blocked leaf is
+	///     Medium priority with a lower id than the "Outside the branch" leaf, so it would otherwise sort
+	///     above it.
+	/// </summary>
+	[Fact]
+	public async Task Blocked_leaves_sort_below_every_ready_leaf()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries[^1].Id.Should().Be(tree.BlockedLeafId);
+		entries.Take(entries.Count - 1).Should().OnlyContain(e => e.IsReady);
+	}
+
+	[Fact]
+	public async Task An_exclude_blocked_filter_drops_leaves_with_an_unsatisfied_prerequisite()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ExcludeBlocked = true });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([
+			tree.WaitingLeafId, tree.InProgressLeafId, tree.RequiredLeafId, tree.UnassignedLeafId, tree.NoLeafWorkLeafId,
+			tree.OutsideBranchLeafId,
+		]);
+	}
+
+	/// <summary>
+	///     A prerequisite declared on an ancestor gates the whole subtree beneath it (spec §6), so
+	///     exclusion must walk down from the declaring node, not only match leaves carrying their own
+	///     edge.
+	/// </summary>
+	[Fact]
+	public async Task An_exclude_blocked_filter_drops_leaves_blocked_by_a_prerequisite_inherited_from_an_ancestor()
+	{
+		var tree = await SeedScenarioAsync();
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			RequiredJobId = tree.OutsideBranchLeafId,
+			DependentJobId = tree.BranchId,
+		});
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ExcludeBlocked = true });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.OutsideBranchLeafId]);
+	}
+
+	/// <summary>
+	///     An excluded blocked leaf must not consume a page slot either -- paging runs after the
+	///     exclusion, in the port's own query.
+	/// </summary>
+	[Fact]
+	public async Task Exclude_blocked_pages_the_remaining_entries_without_gaps_or_overlap()
+	{
+		_ = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var unpaged = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ExcludeBlocked = true });
+		var unpagedEntries = AwaitingProgressCalculator.GetAwaitingProgress(unpaged.NodesById, unpaged.FactsById, unpaged.Prerequisites);
+
+		var firstPageResult = await port.GetAwaitingProgressInputsAsync(
+			DefaultFilter() with { ExcludeBlocked = true, Offset = 0, Limit = 3 });
+		var firstPage = AwaitingProgressCalculator.GetAwaitingProgress(
+			firstPageResult.NodesById, firstPageResult.FactsById, firstPageResult.Prerequisites);
+		var secondPageResult = await port.GetAwaitingProgressInputsAsync(
+			DefaultFilter() with { ExcludeBlocked = true, Offset = 3, Limit = 3 });
+		var secondPage = AwaitingProgressCalculator.GetAwaitingProgress(
+			secondPageResult.NodesById, secondPageResult.FactsById, secondPageResult.Prerequisites);
+
+		unpagedEntries.Should().HaveCount(6);
+		firstPage.Should().HaveCount(3);
+		firstPage.Select(e => e.Id).Concat(secondPage.Select(e => e.Id)).Should().BeEquivalentTo(unpagedEntries.Select(e => e.Id));
+	}
+
 	[Fact]
 	public async Task Carries_owner_priority_and_deadline_facts_through()
 	{

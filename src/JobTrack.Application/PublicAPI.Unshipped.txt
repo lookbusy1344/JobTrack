@@ -559,6 +559,8 @@ JobTrack.Application.GetAwaitingProgressRequest.<Clone>$() -> JobTrack.Applicati
 JobTrack.Application.GetAwaitingProgressRequest.Context.get -> JobTrack.Application.CommandContext!
 JobTrack.Application.GetAwaitingProgressRequest.Context.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Equals(JobTrack.Application.GetAwaitingProgressRequest? other) -> bool
+JobTrack.Application.GetAwaitingProgressRequest.ExcludeBlocked.get -> bool
+JobTrack.Application.GetAwaitingProgressRequest.ExcludeBlocked.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.GetAwaitingProgressRequest() -> void
 JobTrack.Application.GetAwaitingProgressRequest.Limit.get -> int?
 JobTrack.Application.GetAwaitingProgressRequest.Limit.init -> void

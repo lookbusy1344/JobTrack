@@ -13,9 +13,11 @@ using NodaTime;
 ///     invisible to the queue. A leaf blocked by an unsatisfied prerequisite (see
 ///     <see cref="ReadinessCalculator" />) stays on the list too, rather than disappearing — someone
 ///     still needs to be aware of it — but carries <see cref="AwaitingProgressEntry.IsReady" /> so the
-///     caller can surface it as blocked instead of actionable. Ordered by descending
-///     <see cref="Priority" /> then ascending deadline (<see cref="AwaitingProgressNodeFacts.NeededFinish" />,
-///     falling back to <see cref="AwaitingProgressNodeFacts.NeededStart" />), nulls last.
+///     caller can surface it as blocked instead of actionable. Ordered by readiness first (every ready
+///     leaf before every blocked one — nothing can be done about a blocked leaf, so it sinks below the
+///     actionable queue), then by descending <see cref="Priority" />, then ascending deadline
+///     (<see cref="AwaitingProgressNodeFacts.NeededFinish" />, falling back to
+///     <see cref="AwaitingProgressNodeFacts.NeededStart" />), nulls last.
 /// </summary>
 /// <remarks>
 ///     2026-07-25 scalability-follow-up plan §2.1: ownership, subtree-root, search-text, and
@@ -93,7 +95,8 @@ public static class AwaitingProgressCalculator
 				ReadinessCalculator.IsReady(candidate.Node.Id, nodesById, prerequisites).IsReady));
 
 		var ordered = entries
-			.OrderByDescending(entry => entry.Priority)
+			.OrderByDescending(entry => entry.IsReady)
+			.ThenByDescending(entry => entry.Priority)
 			.ThenBy(entry => Deadline(entry) is null)
 			.ThenBy(entry => Deadline(entry))
 			.ThenBy(entry => entry.Id.Value);

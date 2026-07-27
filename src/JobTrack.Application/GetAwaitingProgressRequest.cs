@@ -27,7 +27,15 @@ public sealed record GetAwaitingProgressRequest
 	public string? SearchText { get; init; }
 
 	/// <summary>
-	///     Zero-based number of matching leaves (in the calculator's own priority/deadline order) to skip
+	///     When <see langword="true" />, leaves blocked by an unsatisfied prerequisite — their own or one
+	///     inherited from an ancestor (spec §6) — are left out entirely rather than returned with
+	///     <see cref="AwaitingProgressEntry.IsReady" /> <see langword="false" />. Nothing can be done
+	///     about a blocked leaf, so a caller driving a work queue may not want to see it at all.
+	/// </summary>
+	public bool ExcludeBlocked { get; init; }
+
+	/// <summary>
+	///     Zero-based number of matching leaves (in the calculator's own readiness/priority/deadline order) to skip
 	///     before returning results. Must be non-negative.
 	/// </summary>
 	public int Offset { get; init; }

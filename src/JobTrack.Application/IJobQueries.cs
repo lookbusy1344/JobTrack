@@ -99,11 +99,14 @@ public interface IJobQueries
 
 	/// <summary>
 	///     Retrieves the flat "jobs awaiting progress" list: leaves only — never a branch or the root —
-	///     that are <see cref="Achievement.Waiting" /> or <see cref="Achievement.InProgress" />, not
-	///     archived, and ready per <see cref="GetReadinessAsync" />'s <see cref="ReadinessCalculator" />
-	///     (a blocked leaf is not actionable, so it does not belong on a work queue), optionally scoped
-	///     to one owner and/or one subtree, ordered by descending priority then ascending deadline.
-	///     Carries no ownership-based authorization gate (see <see cref="GetJobNodeAsync" />).
+	///     that are <see cref="Achievement.Waiting" /> or <see cref="Achievement.InProgress" /> (or have
+	///     no leaf work attached yet) and are not archived, optionally scoped to one owner and/or one
+	///     subtree, ordered by readiness first — every leaf blocked by an unsatisfied prerequisite (per
+	///     <see cref="GetReadinessAsync" />'s <see cref="ReadinessCalculator" />) sorts below every ready
+	///     one, since nothing can be done about it — then by descending priority and ascending deadline.
+	///     A blocked leaf still appears, carrying <see cref="AwaitingProgressEntry.IsReady" />
+	///     <see langword="false" />, unless <see cref="GetAwaitingProgressRequest.ExcludeBlocked" /> is
+	///     set. Carries no ownership-based authorization gate (see <see cref="GetJobNodeAsync" />).
 	/// </summary>
 	/// <exception cref="EntityNotFoundException">
 	///     <see cref="GetAwaitingProgressRequest.SubtreeRootId" /> is set and does not exist.

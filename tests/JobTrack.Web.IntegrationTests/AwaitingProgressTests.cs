@@ -258,6 +258,153 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task A_blocked_leaf_sorts_below_every_ready_leaf_whatever_its_priority()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.blockedorder");
+		var rootId = bootstrappedRootId!.Value;
+		var required = await AddLeafWithWorkAsync(rootId, workerId, "Required first", adminId);
+		var dependent = await AddLeafAtPriorityAsync(rootId, workerId, "Urgent but blocked", adminId, Priority.Urgent);
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			RequiredJobId = required.JobNodeId,
+			DependentJobId = dependent,
+		});
+		_ = await AddLeafAtPriorityAsync(rootId, workerId, "Low but ready", adminId, Priority.Low);
+		var authCookie = await SignInAsync("awaiting.blockedorder");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.IndexOf("Low but ready", StringComparison.Ordinal)
+			.Should().BeLessThan(body.IndexOf("Urgent but blocked", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task Excluding_blocked_jobs_hides_a_leaf_with_an_unsatisfied_prerequisite()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.excludeblocked");
+		var rootId = bootstrappedRootId!.Value;
+		var required = await AddLeafWithWorkAsync(rootId, workerId, "Required first", adminId);
+		var dependent = await AddLeafWithWorkAsync(rootId, workerId, "Blocked leaf", adminId);
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			RequiredJobId = required.JobNodeId,
+			DependentJobId = dependent.JobNodeId,
+		});
+		var authCookie = await SignInAsync("awaiting.excludeblocked");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress?excludeBlocked=true", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Required first");
+		body.Should().NotContain("Blocked leaf");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_exclude_blocked_filter_across_a_return_visit()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.blockedmem");
+		var rootId = bootstrappedRootId!.Value;
+		var required = await AddLeafWithWorkAsync(rootId, workerId, "Required first", adminId);
+		var dependent = await AddLeafWithWorkAsync(rootId, workerId, "Blocked leaf", adminId);
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			RequiredJobId = required.JobNodeId,
+			DependentJobId = dependent.JobNodeId,
+		});
+		var authCookie = await SignInAsync("awaiting.blockedmem");
+
+		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?excludeBlocked=true");
+		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
+
+		body.Should().Contain("Required first");
+		body.Should().NotContain("Blocked leaf");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_search_text_filter_across_a_return_visit()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.searchmem");
+		var rootId = bootstrappedRootId!.Value;
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Fit oak cabinets", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Paint the fence", adminId);
+		var authCookie = await SignInAsync("awaiting.searchmem");
+
+		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?searchText=oak");
+		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
+
+		body.Should().Contain("Fit oak cabinets");
+		body.Should().NotContain("Paint the fence");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_unassigned_only_filter_across_a_return_visit()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.poolmem");
+		var rootId = bootstrappedRootId!.Value;
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Owned job", adminId);
+		var unassigned = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Pool job",
+			OwnerUserId = null,
+			Priority = Priority.Medium,
+		});
+		await AttachLeafWorkAsync(unassigned.Id, adminId);
+		var authCookie = await SignInAsync("awaiting.poolmem");
+
+		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?unassignedOnly=true");
+		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
+
+		body.Should().Contain("Pool job");
+		body.Should().NotContain("Owned job");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_subtree_scope_across_a_return_visit()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.subtreemem");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
+		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
+		var authCookie = await SignInAsync("awaiting.subtreemem");
+
+		var sessionCookie = await ChooseFiltersAsync(authCookie, $"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}");
+		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
+
+		body.Should().Contain("Install cabinets");
+		body.Should().NotContain("Outside the branch");
+	}
+
+	/// <summary>
+	///     "Show the whole tree" is a filter choice like any other, so a return visit must not snap back
+	///     to the home-node default that the choice overrode.
+	/// </summary>
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_whole_tree_choice_over_the_home_node_default()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.wholetreemem");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
+		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
+		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			NodeId = branchId,
+		});
+		var authCookie = await SignInAsync("awaiting.wholetreemem");
+
+		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?showWholeTree=true");
+		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
+
+		body.Should().Contain("Install cabinets");
+		body.Should().Contain("Outside the branch");
+	}
+
+	[Fact]
 	public async Task Scoping_to_a_subtree_hides_a_leaf_outside_it()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.subtree");
@@ -655,6 +802,46 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		});
 
 		return result.Id;
+	}
+
+	private async Task<JobNodeId> AddLeafAtPriorityAsync(
+		JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId, Priority priority)
+	{
+		var leaf = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			ParentId = parentId,
+			Description = description,
+			OwnerUserId = ownerId,
+			Priority = priority,
+		});
+		await AttachLeafWorkAsync(leaf.Id, adminId);
+
+		return leaf.Id;
+	}
+
+	/// <summary>
+	///     Applies <paramref name="path" />'s filters explicitly and returns the session cookie that now
+	///     remembers them, for <see cref="ReturnWithRememberedFiltersAsync" /> to replay.
+	/// </summary>
+	private async Task<string> ChooseFiltersAsync(string authCookie, string path)
+	{
+		using var chooseRequest = new HttpRequestMessage(HttpMethod.Get, path);
+		chooseRequest.Headers.Add("Cookie", authCookie);
+		var chooseResponse = await client.SendAsync(chooseRequest);
+
+		return ExtractCookiePair(
+			FindSetCookie(chooseResponse, "JobTrack.Session") ?? throw new InvalidOperationException("No session cookie was set."));
+	}
+
+	/// <summary>A bare return visit carrying no filter parameters at all — every one must be recalled.</summary>
+	private async Task<string> ReturnWithRememberedFiltersAsync(string authCookie, string sessionCookie)
+	{
+		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/AwaitingProgress");
+		returnRequest.Headers.Add("Cookie", $"{authCookie}; {sessionCookie}");
+		var returnResponse = await client.SendAsync(returnRequest);
+		returnResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		return await returnResponse.Content.ReadAsStringAsync();
 	}
 
 	private async Task<LeafWorkResult> AddLeafWithWorkAsync(JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId)

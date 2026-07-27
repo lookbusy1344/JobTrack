@@ -223,6 +223,41 @@ public sealed class AwaitingProgressCalculatorTests
 	}
 
 	[Fact]
+	public void A_blocked_leaf_sorts_below_every_ready_leaf_regardless_of_priority()
+	{
+		var nodes = NodesWithParent(
+			Leaf(RequiredId, Achievement.InProgress), Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[RequiredId] = Facts(RequiredId, priority: Priority.Low),
+			[LeafAId] = Facts(LeafAId, priority: Priority.Urgent),
+			[LeafBId] = Facts(LeafBId, priority: Priority.Low),
+		};
+		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId) };
+
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
+
+		// LeafB and the required leaf are both ready, both Low, both deadline-less -- id breaks that tie.
+		result.Select(e => e.Id).Should().ContainInOrder(LeafBId, RequiredId, LeafAId);
+	}
+
+	[Fact]
+	public void Blocked_leaves_keep_the_priority_and_deadline_ordering_among_themselves()
+	{
+		var nodes = NodesWithParent(
+			Leaf(RequiredId, Achievement.InProgress), Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[RequiredId] = Facts(RequiredId),
+			[LeafAId] = Facts(LeafAId, priority: Priority.Low),
+			[LeafBId] = Facts(LeafBId, priority: Priority.Urgent),
+		};
+		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId), new PrerequisiteEdge(RequiredId, LeafBId) };
+
+		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
+
+		result.Select(e => e.Id).Should().ContainInOrder(RequiredId, LeafBId, LeafAId);
+	}
+
+	[Fact]
 	public void NeededStart_is_used_as_a_fallback_deadline_when_NeededFinish_is_absent()
 	{
 		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.Waiting));
