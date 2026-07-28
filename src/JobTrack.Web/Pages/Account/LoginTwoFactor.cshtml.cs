@@ -62,6 +62,10 @@ public sealed class LoginTwoFactorModel(
 
 		await AuthenticationAudit.RecordKnownAsync(jobTrackClient, twoFactorUser, AuthenticationAuditEventKind.LoginSuccess);
 
+		// §2.5 of the 2026-07-28 fresh-eyes review: this completes final authentication -- see
+		// LoginModel's identical reset for why it happens here rather than after the password step.
+		PrincipalBoundSessionState.Reset(HttpContext);
+
 		if (twoFactorUser.RequiresPasswordChange) {
 			return RedirectToPage("ChangePassword");
 		}

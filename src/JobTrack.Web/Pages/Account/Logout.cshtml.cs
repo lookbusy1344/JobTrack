@@ -19,6 +19,10 @@ public sealed class LogoutModel(
 	{
 		var user = await userManager.GetUserAsync(User);
 		await signInManager.SignOutAsync();
+		// §2.5 of the 2026-07-28 fresh-eyes review: clears remembered filter memory (and any future
+		// principal-bound session state) so it cannot survive into whichever employee signs in next on
+		// this browser.
+		PrincipalBoundSessionState.Reset(HttpContext);
 		if (user is not null) {
 			await AuthenticationAudit.RecordKnownAsync(jobTrackClient, user, AuthenticationAuditEventKind.Logout);
 		}

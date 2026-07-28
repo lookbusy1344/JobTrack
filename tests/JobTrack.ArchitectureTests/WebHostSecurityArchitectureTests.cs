@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using System.Text;
 using System.Xml.Linq;
 using AwesomeAssertions;
@@ -14,21 +15,21 @@ public sealed class WebHostSecurityArchitectureTests
 	// silently exempts any same-named page added elsewhere in the tree later (a new
 	// Pages/Admin/Index.cshtml.cs would inherit the landing page's "Index" exemption and ship
 	// unauthenticated), which is precisely the regression this guardrail exists to catch.
-	private static readonly string[] AnonymousPageAllowlist = [
+	private static readonly FrozenSet<string> AnonymousPageAllowlist = FrozenSet.ToFrozenSet([
 		"Index.cshtml.cs",
 		"Error.cshtml.cs",
 		"Account/Login.cshtml.cs",
 		"Account/LoginTwoFactor.cshtml.cs",
 		"Account/Logout.cshtml.cs",
 		"Account/AccessDenied.cshtml.cs",
-	];
+	], StringComparer.Ordinal);
 
-	private static readonly string[] JobTrackIdentityDbContextAllowlist = [
+	private static readonly FrozenSet<string> JobTrackIdentityDbContextAllowlist = FrozenSet.ToFrozenSet([
 		"ServiceCollectionExtensions.cs",
 		"JobTrackUserStore.cs",
 		"EmergencyPasswordReset.cs",
 		"Program.cs",
-	];
+	], StringComparer.Ordinal);
 
 	[Fact]
 	public void ExternalApiClient_sample_has_no_JobTrack_library_project_references()
@@ -83,8 +84,7 @@ public sealed class WebHostSecurityArchitectureTests
 		AnonymousPageAllowlist.Should().BeSubsetOf(actualPaths);
 	}
 
-	private static bool IsAllowedAnonymous(string relativePath) =>
-		AnonymousPageAllowlist.Contains(relativePath, StringComparer.Ordinal);
+	private static bool IsAllowedAnonymous(string relativePath) => AnonymousPageAllowlist.Contains(relativePath);
 
 	private static IEnumerable<(string RelativePath, string Content)> EnumeratePageModels()
 	{
@@ -155,7 +155,7 @@ public sealed class WebHostSecurityArchitectureTests
 			if (relativeDirectory.StartsWith("JobTrack.Identity", StringComparison.Ordinal)
 				|| relativeDirectory.StartsWith("JobTrack.AdminCli", StringComparison.Ordinal)
 				|| (relativeDirectory.StartsWith("JobTrack.Web", StringComparison.Ordinal)
-					&& JobTrackIdentityDbContextAllowlist.Contains(fileName, StringComparer.Ordinal))) {
+					&& JobTrackIdentityDbContextAllowlist.Contains(fileName))) {
 				continue;
 			}
 

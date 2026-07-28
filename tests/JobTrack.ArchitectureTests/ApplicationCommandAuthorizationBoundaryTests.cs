@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using Application;
 using AwesomeAssertions;
 using TestSupport;
@@ -10,7 +11,7 @@ using TestSupport;
 /// </summary>
 public sealed class ApplicationCommandAuthorizationBoundaryTests
 {
-	private static readonly string[] CommandTypeNames = [
+	private static readonly FrozenSet<string> CommandTypeNames = FrozenSet.ToFrozenSet([
 		nameof(InstallationCommands),
 		nameof(JobCommands),
 		nameof(WorkCommands),
@@ -19,13 +20,13 @@ public sealed class ApplicationCommandAuthorizationBoundaryTests
 		nameof(EmployeeCommands),
 		nameof(RequestCommands),
 		nameof(TokenCommands),
-	];
+	], StringComparer.Ordinal);
 
 	[Fact]
 	public void Application_command_handlers_do_not_invoke_access_policies_directly()
 	{
 		var violations = typeof(IJobTrackClient).Assembly.GetTypes()
-			.Where(type => CommandTypeNames.Contains(type.Name, StringComparer.Ordinal))
+			.Where(type => CommandTypeNames.Contains(type.Name))
 			.Select(type => (Type: type, Source: File.ReadAllText(FindSourcePath(type))))
 			.Where(entry => entry.Source.Contains("AccessPolicy", StringComparison.Ordinal))
 			.Select(entry => entry.Type.FullName)

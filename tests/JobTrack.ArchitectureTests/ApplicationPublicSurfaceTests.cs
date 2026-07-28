@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using System.Reflection;
 using Application;
 using AwesomeAssertions;
@@ -16,13 +17,13 @@ public sealed class ApplicationPublicSurfaceTests
 	///     member: consumer paging limits, diagnostics integration, and password-hasher marker types
 	///     used by the two providers' public factory signatures.
 	/// </summary>
-	private static readonly Type[] ApprovedSupportingTypes = [
+	private static readonly FrozenSet<Type> ApprovedSupportingTypes = FrozenSet.ToFrozenSet([
 		typeof(AuditSearchPaging),
 		typeof(AwaitingProgressPaging),
 		typeof(BootstrapCredentialSubject),
 		typeof(EmployeeCredentialSubject),
 		typeof(JobTrackDiagnostics),
-	];
+	]);
 
 	[Fact]
 	public void Application_exports_only_the_approved_facade_contract_graph()

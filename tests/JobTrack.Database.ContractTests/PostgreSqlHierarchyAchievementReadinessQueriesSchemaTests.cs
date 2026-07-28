@@ -76,6 +76,13 @@ public sealed class PostgreSqlHierarchyAchievementReadinessQueriesSchemaTests()
 		return results;
 	}
 
+	protected override async Task<IReadOnlyList<long>> BlockedNodeIdsAsync(DbConnection connection)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT id FROM job_node_blocked();";
+		return await ReadLongColumnAsync(command);
+	}
+
 	private static async Task<IReadOnlyList<long>> ReadLongColumnAsync(DbCommand command)
 	{
 		var results = new List<long>();

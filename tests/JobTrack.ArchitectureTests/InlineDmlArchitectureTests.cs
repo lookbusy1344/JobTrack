@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using AwesomeAssertions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -15,7 +16,7 @@ using TestSupport;
 /// </summary>
 public sealed class InlineDmlArchitectureTests
 {
-	private static readonly AllowedRawSqlCall[] AllowedRawSqlCalls = [
+	private static readonly IReadOnlyList<AllowedRawSqlCall> AllowedRawSqlCalls = [
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlInstallationBootstrapPort.cs"),
 			"BootstrapAsync",
@@ -58,9 +59,8 @@ public sealed class InlineDmlArchitectureTests
 			"ConfigureConnectionSql"),
 	];
 
-	private static readonly HashSet<string> RawSqlMethods = new(StringComparer.Ordinal) {
-		"ExecuteSqlInterpolatedAsync", "ExecuteSqlRaw", "ExecuteSqlRawAsync",
-	};
+	private static readonly FrozenSet<string> RawSqlMethods = FrozenSet.ToFrozenSet(
+		["ExecuteSqlInterpolatedAsync", "ExecuteSqlRaw", "ExecuteSqlRawAsync"], StringComparer.Ordinal);
 
 	/// <summary>
 	///     Every reviewed raw-SQL <em>read</em>: the recursive <c>WITH RECURSIVE</c> hierarchy walks EF
@@ -69,7 +69,7 @@ public sealed class InlineDmlArchitectureTests
 	///     recursive statement in a member-local variable, so its fragment anchors on that (<c>sql</c>)
 	///     rather than on SQL text the call site does not contain inline.
 	/// </summary>
-	private static readonly AllowedRawSqlCall[] AllowedRawSqlReadCalls = [
+	private static readonly IReadOnlyList<AllowedRawSqlCall> AllowedRawSqlReadCalls = [
 		new(HierarchyQueries, "GetAncestorOwnerIdsAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetAncestorIdsAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "PrerequisiteWouldCreateCycleAsync", "SqlQuery", "WITH RECURSIVE"),
@@ -190,13 +190,8 @@ public sealed class InlineDmlArchitectureTests
 			"sql"),
 	];
 
-	private static readonly HashSet<string> RawSqlReadMethods = new(StringComparer.Ordinal) {
-		"SqlQuery",
-		"SqlQueryRaw",
-		"FromSql",
-		"FromSqlRaw",
-		"FromSqlInterpolated",
-	};
+	private static readonly FrozenSet<string> RawSqlReadMethods = FrozenSet.ToFrozenSet(
+		["SqlQuery", "SqlQueryRaw", "FromSql", "FromSqlRaw", "FromSqlInterpolated"], StringComparer.Ordinal);
 
 	private static string HierarchyQueries =>
 		Path.Combine("src", "JobTrack.Persistence.Shared", "JobNodeHierarchyQueries.cs");
@@ -209,7 +204,7 @@ public sealed class InlineDmlArchitectureTests
 	public void Every_runtime_raw_sql_read_is_an_exact_reviewed_provider_mechanism() =>
 		AssertRawSqlCallsMatchInventory(RawSqlReadMethods, AllowedRawSqlReadCalls, "read");
 
-	private static void AssertRawSqlCallsMatchInventory(HashSet<string> methods, AllowedRawSqlCall[] inventory, string kind)
+	private static void AssertRawSqlCallsMatchInventory(FrozenSet<string> methods, IReadOnlyList<AllowedRawSqlCall> inventory, string kind)
 	{
 		var solutionRoot = RepositoryPaths.SolutionRoot();
 		string[] persistenceDirectories = [
@@ -239,14 +234,14 @@ public sealed class InlineDmlArchitectureTests
 			"stored-function, advisory-lock, connection-pragma, and recursive-hierarchy mechanisms");
 
 		actualCalls.Should().HaveCount(
-			inventory.Length,
+			inventory.Count,
 			$"removing or adding a raw-SQL {kind} mechanism requires updating the explicit reviewed-call inventory");
 	}
 
 	private static IEnumerable<(string Path, string ContainingMember, string Method, string Arguments)> FindRawSqlCalls(
 		string solutionRoot,
 		string path,
-		HashSet<string> methods)
+		FrozenSet<string> methods)
 	{
 		var root = CSharpSyntaxTree.ParseText(File.ReadAllText(path)).GetRoot();
 		var relativePath = Path.GetRelativePath(solutionRoot, path);

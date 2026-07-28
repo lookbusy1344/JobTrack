@@ -2,9 +2,11 @@ namespace JobTrack.Persistence.PostgreSql.Tests;
 
 using System.Data.Common;
 using Abstractions;
+using Application;
 using Application.Ports;
 using AwesomeAssertions;
 using Database;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
 using TestSupport;
@@ -12,6 +14,9 @@ using TestSupport;
 public sealed class PostgreSqlWorkSessionCommandPortTests()
 	: WorkSessionCommandPortContractTestsBase(new PostgreSqlDatabaseFixture())
 {
+	private static readonly TimeSpan AsyncCoordinationTimeout = TimeSpan.FromSeconds(10);
+	private static readonly TimeSpan ConcurrentWriterProbe = TimeSpan.FromMilliseconds(250);
+
 	protected override SchemaProvider Provider => SchemaProvider.PostgreSql;
 
 	protected override DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);
@@ -284,6 +289,127 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 		(await ReadLeafStateAsync(dependent.Id)).Should().Be(results[1]
 			? new LeafState(Achievement.Waiting, false, 1)
 			: new LeafState(Achievement.Waiting, false, 0));
+	}
+
+	/// <summary>
+	///     §2.1 of the 2026-07-28 fresh-eyes review: <c>SetAchievementAsync</c> is the other supported
+	///     reopen route (a plain "Change outcome" back to Waiting, not the composite reopen-and-start).
+	///     Deterministically forces the "reopen obtains the lock first" ordering by pausing the reopen's
+	///     own transaction after it has taken <c>PrerequisiteReadinessSerialization</c>'s advisory lock
+	///     (evidenced by having reached its own <c>leaf_work</c> update) but before it commits and releases
+	///     it. The dependent's start then genuinely blocks inside PostgreSQL waiting on that same lock key
+	///     -- not on a test-side interceptor -- so its readiness recheck after acquiring the lock is
+	///     guaranteed to observe the reopen's committed <c>Waiting</c> state.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_SetAchievementAsync_reopen_that_wins_the_lock_first_blocks_and_then_rejects_the_dependent_start()
+	{
+		var (rootId, jobManagerId, workerId, dependent, requiredLeafId) = await SeedReadyLeafWithDependentAsync();
+
+		var interceptor = new BlockingReaderCommandInterceptor(
+			sql => sql.Contains("UPDATE", StringComparison.Ordinal) && sql.Contains("leaf_work", StringComparison.Ordinal));
+		var achievementPort = CreateAchievementPortWithInterceptor(ConnectionString, interceptor);
+
+		var reopenTask = TrySetAchievementAsync(achievementPort, jobManagerId, requiredLeafId, Achievement.Waiting, 3);
+		await interceptor.CommandReached.WaitAsync(AsyncCoordinationTimeout);
+
+		var dependentStartTask = TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, workerId, dependent.Id);
+		_ = await Task.WhenAny(dependentStartTask, Task.Delay(ConcurrentWriterProbe));
+		dependentStartTask.IsCompleted.Should().BeFalse("the dependent's readiness recheck must block on the reopen's held advisory lock");
+
+		interceptor.Release();
+		var reopened = await reopenTask;
+		var dependentStarted = await dependentStartTask;
+
+		reopened.Should().BeTrue("leaving Success is never itself readiness-gated");
+		dependentStarted.Should().BeFalse("the dependent's recheck must see the reopen's committed Waiting state");
+		(await ReadLeafStateAsync(requiredLeafId)).Should().Be(new LeafState(Achievement.Waiting, false, 0));
+		(await ReadLeafStateAsync(dependent.Id)).Should().Be(new LeafState(Achievement.Waiting, false, 0));
+	}
+
+	/// <summary>
+	///     Mirrors <see cref="Concurrent_SetAchievementAsync_reopen_that_wins_the_lock_first_blocks_and_then_rejects_the_dependent_start" />
+	///     for the other ordering: the dependent's start fully commits (claiming the lock and releasing
+	///     it) before the reopen even attempts to acquire it, so the reopen still succeeds -- it is never
+	///     rejected on account of live dependent work (ADR 0051) -- but now sees a leaf with an active
+	///     session that started while it was genuinely still <c>Success</c>.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_SetAchievementAsync_reopen_that_loses_the_lock_first_still_succeeds_after_the_dependent_start_commits()
+	{
+		var (rootId, jobManagerId, workerId, dependent, requiredLeafId) = await SeedReadyLeafWithDependentAsync();
+
+		var interceptor = new BlockingReaderCommandInterceptor(
+			sql => sql.Contains("SELECT", StringComparison.Ordinal) && sql.Contains("leaf_work", StringComparison.Ordinal));
+		var achievementPort = CreateAchievementPortWithInterceptor(ConnectionString, interceptor);
+
+		var reopenTask = TrySetAchievementAsync(achievementPort, jobManagerId, requiredLeafId, Achievement.Waiting, 3);
+		await interceptor.CommandReached.WaitAsync(AsyncCoordinationTimeout);
+
+		var dependentStarted = await TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, workerId, dependent.Id);
+
+		interceptor.Release();
+		var reopened = await reopenTask;
+
+		dependentStarted.Should().BeTrue("the dependent claimed the lock and committed before the reopen ever attempted it");
+		reopened.Should().BeTrue("ADR 0051: a reopen is never rejected on account of a dependent's work");
+		(await ReadLeafStateAsync(requiredLeafId)).Should().Be(new LeafState(Achievement.Waiting, false, 0));
+		(await ReadLeafStateAsync(dependent.Id)).Should().Be(new LeafState(Achievement.Waiting, false, 1));
+	}
+
+	private async Task<(JobNodeId RootId, AppUserId JobManagerId, AppUserId WorkerId, JobNodeResult Dependent, JobNodeId RequiredLeafId)>
+		SeedReadyLeafWithDependentAsync()
+	{
+		var (rootId, jobManagerId, workerId, requiredLeafId) = await SeedReadyLeafAsync();
+		var sessionPort = CreateSessionPort(ConnectionString);
+		var requiredSession = await sessionPort.StartWorkAsync(
+			new() { Context = ContextFor(workerId), JobNodeId = requiredLeafId, WorkedByUserId = workerId });
+		_ = await sessionPort.FinishSessionAsync(
+			new() { Context = ContextFor(workerId), SessionId = requiredSession.Id, Version = requiredSession.Version });
+		_ = await CreateAchievementPort(ConnectionString).SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = requiredLeafId,
+			NewAchievement = Achievement.Success,
+			Reason = "Ready for dependent work",
+			Version = 2,
+		});
+		var jobNodePort = CreateJobNodePort(ConnectionString);
+		var dependent = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Dependent work",
+			OwnerUserId = workerId,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = dependent.Id });
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = requiredLeafId,
+			DependentJobId = dependent.Id,
+		});
+
+		return (rootId, jobManagerId, workerId, dependent, requiredLeafId);
+	}
+
+	private static PostgreSqlAchievementCommandPort CreateAchievementPortWithInterceptor(string connectionString, DbCommandInterceptor interceptor) =>
+		new(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance, [interceptor]);
+
+	private static async Task<bool> TrySetAchievementAsync(
+		PostgreSqlAchievementCommandPort port, AppUserId actorId, JobNodeId leafId, Achievement newAchievement, long version)
+	{
+		try {
+			_ = await port.SetAchievementAsync(new() {
+				Context = ContextFor(actorId),
+				JobNodeId = leafId,
+				NewAchievement = newAchievement,
+				Reason = "Racing reopen via SetAchievementAsync",
+				Version = version,
+			});
+			return true;
+		}
+		catch (Exception ex) when (ex is InvariantViolationException or ConcurrencyConflictException or PrerequisiteBlockedException) {
+			return false;
+		}
 	}
 
 	private static async Task<bool> TryCompleteLeafAsync(

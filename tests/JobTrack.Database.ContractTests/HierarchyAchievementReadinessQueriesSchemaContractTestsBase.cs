@@ -22,7 +22,7 @@ public abstract class HierarchyAchievementReadinessQueriesSchemaContractTestsBas
 	private const string AppliedBy = "test-runner";
 	private const short PriorityMedium = 2;
 	private const short AchievementWaiting = 1;
-	private const short AchievementSuccess = 3;
+	protected const short AchievementSuccess = 3;
 
 	private readonly IDisposableTestDatabase database;
 
@@ -214,6 +214,111 @@ public abstract class HierarchyAchievementReadinessQueriesSchemaContractTestsBas
 		(await NodeReadyAsync(connection, dependentId)).Should().BeTrue();
 		(await UnsatisfiedPrerequisitesAsync(connection, dependentId)).Should().BeEmpty();
 	}
+
+	/// <summary>
+	///     §2.2 of the 2026-07-28 fresh-eyes review: <c>job_node_blocked</c> must resolve each distinct
+	///     required job's recursive achievement once, not once per prerequisite edge into it, and must
+	///     still return exactly the same dependent set as before once every edge sharing a required job
+	///     collapses onto that single evaluation.
+	/// </summary>
+	[Fact]
+	public async Task Job_node_blocked_includes_the_dependent_of_an_unsatisfied_required_branch()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var rootId = await InsertNodeAsync(connection, userId, null);
+		var requiredBranchId = await InsertNodeAsync(connection, userId, rootId);
+		var requiredLeafId = await InsertNodeAsync(connection, userId, requiredBranchId);
+		await InsertLeafWorkAsync(connection, requiredLeafId, AchievementWaiting);
+		var dependentId = await InsertNodeAsync(connection, userId, rootId);
+		var unrelatedId = await InsertNodeAsync(connection, userId, rootId);
+		await AddPrerequisiteAsync(connection, requiredBranchId, dependentId);
+
+		var blocked = await BlockedNodeIdsAsync(connection);
+
+		blocked.Should().Contain(dependentId).And.NotContain(unrelatedId).And.NotContain(requiredBranchId);
+	}
+
+	[Fact]
+	public async Task Job_node_blocked_descends_to_every_child_of_a_blocked_dependent()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var rootId = await InsertNodeAsync(connection, userId, null);
+		var requiredId = await InsertNodeAsync(connection, userId, rootId);
+		await InsertLeafWorkAsync(connection, requiredId, AchievementWaiting);
+		var dependentBranchId = await InsertNodeAsync(connection, userId, rootId);
+		await AddPrerequisiteAsync(connection, requiredId, dependentBranchId);
+		var dependentLeafId = await InsertNodeAsync(connection, userId, dependentBranchId);
+
+		var blocked = await BlockedNodeIdsAsync(connection);
+
+		blocked.Should().Contain([dependentBranchId, dependentLeafId]);
+	}
+
+	[Fact]
+	public async Task Job_node_blocked_excludes_dependents_of_a_satisfied_required_job()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var rootId = await InsertNodeAsync(connection, userId, null);
+		var requiredId = await InsertNodeAsync(connection, userId, rootId);
+		await InsertLeafWorkAsync(connection, requiredId, AchievementSuccess);
+		var dependentId = await InsertNodeAsync(connection, userId, rootId);
+		await AddPrerequisiteAsync(connection, requiredId, dependentId);
+
+		(await BlockedNodeIdsAsync(connection)).Should().NotContain(dependentId);
+	}
+
+	/// <summary>
+	///     A dependent reachable both by its own direct, unsatisfied prerequisite and by descending from
+	///     its blocked parent must still appear exactly once -- the duplicate-path convergence the
+	///     original per-edge query's <c>UNION</c> already collapsed, and the distinct-required rewrite
+	///     must preserve.
+	/// </summary>
+	[Fact]
+	public async Task Job_node_blocked_returns_each_id_once_even_when_reachable_through_multiple_paths()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var rootId = await InsertNodeAsync(connection, userId, null);
+		var requiredBranchId = await InsertNodeAsync(connection, userId, rootId);
+		await InsertLeafWorkAsync(connection, await InsertNodeAsync(connection, userId, requiredBranchId), AchievementWaiting);
+		var requiredLeafId = await InsertNodeAsync(connection, userId, rootId);
+		await InsertLeafWorkAsync(connection, requiredLeafId, AchievementWaiting);
+		var dependentBranchId = await InsertNodeAsync(connection, userId, rootId);
+		await AddPrerequisiteAsync(connection, requiredBranchId, dependentBranchId);
+		var dependentLeafId = await InsertNodeAsync(connection, userId, dependentBranchId);
+		await AddPrerequisiteAsync(connection, requiredLeafId, dependentLeafId);
+
+		var blocked = await BlockedNodeIdsAsync(connection);
+
+		blocked.Count(id => id == dependentLeafId).Should().Be(1);
+	}
+
+	/// <summary>Functional counterpart to the fan-out performance fixture: many dependents sharing one required branch.</summary>
+	[Fact]
+	public async Task Job_node_blocked_resolves_many_dependents_sharing_one_required_branch()
+	{
+		const int DependentCount = 25;
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var rootId = await InsertNodeAsync(connection, userId, null);
+		var requiredBranchId = await InsertNodeAsync(connection, userId, rootId);
+		await InsertLeafWorkAsync(connection, await InsertNodeAsync(connection, userId, requiredBranchId), AchievementWaiting);
+
+		var dependentIds = new List<long>();
+		for (var i = 0; i < DependentCount; ++i) {
+			var dependentId = await InsertNodeAsync(connection, userId, rootId);
+			await AddPrerequisiteAsync(connection, requiredBranchId, dependentId);
+			dependentIds.Add(dependentId);
+		}
+
+		(await BlockedNodeIdsAsync(connection)).Should().Contain(dependentIds);
+	}
+
+	/// <summary>PostgreSQL invokes the <c>job_node_blocked</c> stored function; SQLite issues the equivalent raw recursive query.</summary>
+	protected abstract Task<IReadOnlyList<long>> BlockedNodeIdsAsync(DbConnection connection);
 
 	protected abstract DbConnection CreateConnection(string connectionString);
 

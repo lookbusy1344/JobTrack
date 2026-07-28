@@ -141,8 +141,13 @@ BEGIN
     LIMIT 1;
 
     IF FOUND THEN
+        -- 'P0009' (schema version 0017's convention: one SQLSTATE per condition).
+        -- Without it this raise defaults to the generic 'P0001', indistinguishable
+        -- from the hierarchy cycle check, and MoveAsync reported a prerequisite
+        -- rejection as "would create a cycle".
         RAISE EXCEPTION 'moving job_node % under % would leave prerequisite edge % -> % as an ancestor/descendant edge',
-            NEW.id, NEW.parent_id, violation.from_id, violation.to_id;
+            NEW.id, NEW.parent_id, violation.from_id, violation.to_id
+            USING ERRCODE = 'P0009';
     END IF;
 
     RETURN NULL;

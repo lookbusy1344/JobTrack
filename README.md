@@ -472,8 +472,11 @@ dotnet test JobTrack.slnx
 
 It runs every provider-conformance, domain, application, identity, architecture, and web test
 project, against real (disposable, per-test-class) PostgreSQL and SQLite databases — a local
-PostgreSQL instance must be reachable for the PostgreSQL-backed suites to pass. To run a single
-project instead of the whole solution:
+PostgreSQL instance must be reachable for the PostgreSQL-backed suites to pass. **It does not run
+`JobTrack.Database.PerformanceTests`** — that project deliberately opts out of any solution-wide
+`dotnet test` (see "Performance lane" below) so the full suite can always pass on its own,
+regardless of shared-PostgreSQL-instance contention; run `./scripts/perf-test.sh` separately to
+cover it. To run a single project instead of the whole solution:
 
 ```bash
 dotnet test tests/JobTrack.Domain.Tests/JobTrack.Domain.Tests.csproj
@@ -491,11 +494,18 @@ seconds), run only the projects with no external database or browser dependency:
 
 This runs `JobTrack.Domain.Tests`, `JobTrack.Application.Tests`, `JobTrack.ArchitectureTests`,
 `JobTrack.Identity.Tests`, `JobTrack.Persistence.Shared.Tests`, `JobTrack.Persistence.Sqlite.Tests`,
-and `JobTrack.PublicApi.Tests` with `--no-build` (pass `--build` to build first, e.g. on a clean
-checkout). It covers domain/application logic, architecture-fitness rules, public API surface, and
-SQLite (file-based, no server needed), and skips PostgreSQL-backed, web-integration, and browser
-end-to-end coverage entirely — which is why the commit gate pairs it with a targeted `--filter` run
-against whichever of those projects the commit actually touches.
+and `JobTrack.PublicApi.Tests` with `--no-build` (pass `--build` to build `JobTrack.FastCore.slnf` --
+this suite's own dependency closure, not the whole solution -- exactly once first, e.g. on a clean
+checkout; every project then runs `--no-build`, rather than each of the seven separately restoring
+and building the graph they all share). It covers domain/application logic, architecture-fitness
+rules, public API surface, and SQLite (file-based, no server needed), and skips PostgreSQL-backed,
+web-integration, and browser end-to-end coverage entirely — which is why the commit gate pairs it
+with a targeted `--filter` run against whichever of those projects the commit actually touches.
+
+The 20-second budget is informational by default: a warning if exceeded, but the script still exits
+0, since a commit gate must never fail just because the machine running it is briefly loaded. Pass
+`--strict` for a CI-style mode that exits non-zero on a real overrun; the interactive commit gate in
+`CLAUDE.md` uses the default informational mode.
 
 For a broader check before a commit (under 80 seconds), add `--longer` (or `-l`):
 
@@ -508,6 +518,40 @@ This runs the fast core suite above plus `JobTrack.Database.ContractTests`,
 PostgreSQL-backed, provider-specific concurrency, and web-host integration coverage — while still
 skipping `JobTrack.Database.PerformanceTests`, `JobTrack.AdminCli.Tests`, and the real-browser
 `JobTrack.Web.EndToEndTests` suite. `--longer` combines with `--build` (e.g. `--longer --build`).
+
+### Performance lane
+
+`JobTrack.Database.PerformanceTests`' latency ceilings (`docs/traceability/performance-budgets.md`)
+are measured and enforced against one deterministic, serialized lane, never against a
+`dotnet test JobTrack.slnx` run where other PostgreSQL-backed projects contend for the same local
+instance concurrently (that contention is real — roughly 2-3x isolated latency — but it is a runner
+scheduling concern, not a query regression, and widening a ceiling to absorb it defeats the ceiling's
+purpose):
+
+```bash
+./scripts/perf-test.sh
+```
+
+This cleans up any orphaned test databases, runs the performance project alone, then cleans up
+again. Pass any `dotnet test` arguments through, e.g. `./scripts/perf-test.sh --filter
+"FullyQualifiedName~FullTableHierarchyLoadPerformanceTests"`. A future ceiling increase needs a
+before/after query plan and an explicit product-regression rationale — "the shared test server was
+busy" is a reason to fix the runner, not to widen a query budget.
+
+### Running everything
+
+`dotnet test JobTrack.slnx` and `./scripts/perf-test.sh` cover different halves (the latter is
+deliberately excluded from the former, see above); to run both in one command:
+
+```bash
+./scripts/all-test.sh
+```
+
+This is the full solution suite plus the performance lane, back to back, with orphaned-database
+cleanup around each. Takes several minutes — occasional use only (end of a multi-stage plan, before
+a substantial closing commit), not the per-commit gate. Any arguments are passed through to
+`perf-test.sh` (and so on to its `dotnet test` invocation), e.g. `./scripts/all-test.sh --filter
+"FullyQualifiedName~FullTableHierarchyLoadPerformanceTests"`.
 
 ### Cleaning up orphaned test databases
 

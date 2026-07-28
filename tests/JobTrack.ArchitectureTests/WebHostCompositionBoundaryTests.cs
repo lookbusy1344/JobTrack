@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using AwesomeAssertions;
 using TestSupport;
 
@@ -17,14 +18,14 @@ public sealed class WebHostCompositionBoundaryTests
 {
 	private const string CompositionRootFileName = "Program.cs";
 
-	private static readonly string[] ForbiddenProviderNamespaces = [
+	private static readonly FrozenSet<string> ForbiddenProviderNamespaces = FrozenSet.ToFrozenSet([
 		"JobTrack.Persistence.PostgreSql",
 		"JobTrack.Persistence.Sqlite",
-	];
+	]);
 
-	private static readonly string[] SqlKeywordPatterns = [
+	private static readonly FrozenSet<string> SqlKeywordPatterns = FrozenSet.ToFrozenSet([
 		"SELECT ", "INSERT INTO", "UPDATE ", "DELETE FROM", "FromSqlRaw", "FromSql(", "ExecuteSqlRaw", "ExecuteSql(",
-	];
+	]);
 
 	[Fact]
 	public void No_file_outside_the_composition_root_references_a_persistence_provider_namespace()

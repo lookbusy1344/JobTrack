@@ -29,7 +29,7 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 	// every operation documents 429 (per-caller rate limiting, plan §4.4) via the route-group-level
 	// annotation. 403 is documented on every operation via the route-group filter for forced password
 	// change (§2.1); 404/409/400 remain per-operation because they are not universal.
-	private static readonly OperationContract[] ExpectedContract = [
+	private static readonly IReadOnlyList<OperationContract> ExpectedContract = [
 		new("GET", "/api/antiforgery-token", ["401", "403", "429"]),
 		new("GET", "/api/employees/{userId}/rates", ["400", "401", "403", "404", "429"]),
 		new("POST", "/api/employees/{userId}/rates/user-cost-rates", ["400", "401", "403", "404", "409", "413", "429"]),
@@ -75,7 +75,7 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 	// Representative out-of-scope routes (ADR 0030): structural job commands, audit browsing, and
 	// account administration. The exact-route-set test above already fails for any of these; these
 	// are named explicitly per the remediation plan's own wording ("assert ... are absent").
-	private static readonly string[] OutOfScopeRoutes = [
+	private static readonly IReadOnlyList<string> OutOfScopeRoutes = [
 		"/api/jobs",
 		"/api/jobs/{nodeId}/decompose",
 		"/api/jobs/{nodeId}/archive",
@@ -87,7 +87,7 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 		"/api/employees/{userId}/enabled",
 	];
 
-	private static readonly string[] BannedSchemaSubstrings = [
+	private static readonly IReadOnlyList<string> BannedSchemaSubstrings = [
 		"PasswordHash",
 		"SecurityStamp",
 		"ResetToken",

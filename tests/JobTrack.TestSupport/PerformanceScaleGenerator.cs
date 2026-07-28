@@ -279,6 +279,87 @@ public static class PerformanceScaleGenerator
 		return tree;
 	}
 
+	/// <summary>
+	///     §2.2 of the 2026-07-28 fresh-eyes review: one non-trivial required branch (a small subtree
+	///     with an unfinished leaf, so the branch itself never succeeds), plus <paramref name="dependentCount" />
+	///     separate leaves each declaring their own direct prerequisite on that branch -- the fan-out
+	///     shape <c>job_node_blocked</c>'s original per-edge query repeated the same recursive achievement
+	///     traversal for. A realistic mix of finished/unfinished candidates (every
+	///     <paramref name="finishedEveryNth" />th dependent is <c>Success</c>, the rest <c>Waiting</c>) so
+	///     the fixture exercises both branches of Awaiting Progress's blocked/unblocked candidate split.
+	///     Returns (root id, required branch id, dependent leaf ids).
+	/// </summary>
+	public static async Task<(long RootId, long RequiredBranchId, long[] DependentLeafIds)> SeedPrerequisiteFanOutAsync(
+		NpgsqlConnection connection, long ownerUserId, int dependentCount = 5_000, int finishedEveryNth = 3)
+	{
+		await using var rootCommand = connection.CreateCommand();
+		rootCommand.CommandText = """
+								  INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)
+								  VALUES (NULL, 'Fan-out root', @ownerUserId, @ownerUserId, @priorityId, now())
+								  RETURNING id;
+								  """;
+		rootCommand.Parameters.AddWithValue("ownerUserId", ownerUserId);
+		rootCommand.Parameters.AddWithValue("priorityId", PriorityMedium);
+		var rootId = (long)(await rootCommand.ExecuteScalarAsync())!;
+
+		await using var requiredBranchCommand = connection.CreateCommand();
+		requiredBranchCommand.CommandText = """
+											INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)
+											VALUES (@rootId, 'Fan-out required branch', @ownerUserId, @ownerUserId, @priorityId, now())
+											RETURNING id;
+											""";
+		requiredBranchCommand.Parameters.AddWithValue("rootId", rootId);
+		requiredBranchCommand.Parameters.AddWithValue("ownerUserId", ownerUserId);
+		requiredBranchCommand.Parameters.AddWithValue("priorityId", PriorityMedium);
+		var requiredBranchId = (long)(await requiredBranchCommand.ExecuteScalarAsync())!;
+
+		// A non-trivial required subtree (two child leaves, one of them never finishing), rather than
+		// the branch itself carrying LeafWork, so job_node_blocked's recursive node_succeeded genuinely
+		// has to descend the required subtree once per distinct required job, not just check one row.
+		var requiredLeafIds = await InsertLevelAsync(connection, [requiredBranchId], 2, ownerUserId);
+		await InsertLeafWorkInBatchesAsync(connection, requiredLeafIds);
+		await using (var finishOneCommand = connection.CreateCommand()) {
+			finishOneCommand.CommandText = "UPDATE leaf_work SET achievement_id = @successAchievementId WHERE job_node_id = @leafId;";
+			finishOneCommand.Parameters.AddWithValue("successAchievementId", (short)Achievement.Success);
+			finishOneCommand.Parameters.AddWithValue("leafId", requiredLeafIds[0]);
+			_ = await finishOneCommand.ExecuteNonQueryAsync();
+		}
+
+		var dependentLeafIds = await InsertLevelAsync(connection, [rootId], dependentCount, ownerUserId);
+		await InsertLeafWorkInBatchesAsync(connection, dependentLeafIds);
+
+		var finishableDependentIds = dependentLeafIds.Where((_, index) => (index + 1) % finishedEveryNth == 0).ToArray();
+		for (var offset = 0; offset < finishableDependentIds.Length; offset += LockSafeBatchSize) {
+			var batch = finishableDependentIds[offset..Math.Min(offset + LockSafeBatchSize, finishableDependentIds.Length)];
+
+			await using var finishCommand = connection.CreateCommand();
+			finishCommand.CommandText = "UPDATE leaf_work SET achievement_id = @successAchievementId WHERE job_node_id = ANY(@leafIds);";
+			finishCommand.Parameters.AddWithValue("successAchievementId", (short)Achievement.Success);
+			finishCommand.Parameters.AddWithValue("leafIds", batch);
+			_ = await finishCommand.ExecuteNonQueryAsync();
+		}
+
+		for (var offset = 0; offset < dependentLeafIds.Length; offset += LockSafeBatchSize) {
+			var batch = dependentLeafIds[offset..Math.Min(offset + LockSafeBatchSize, dependentLeafIds.Length)];
+
+			await using var prerequisiteCommand = connection.CreateCommand();
+			prerequisiteCommand.CommandText = """
+											  INSERT INTO job_prerequisite (from_id, to_id)
+											  SELECT @requiredBranchId, dependent_id FROM unnest(@dependentIds) AS dependent_id;
+											  """;
+			prerequisiteCommand.Parameters.AddWithValue("requiredBranchId", requiredBranchId);
+			prerequisiteCommand.Parameters.AddWithValue("dependentIds", batch);
+			_ = await prerequisiteCommand.ExecuteNonQueryAsync();
+		}
+
+		await using (var analyzeCommand = connection.CreateCommand()) {
+			analyzeCommand.CommandText = "ANALYZE job_node; ANALYZE leaf_work; ANALYZE job_prerequisite;";
+			_ = await analyzeCommand.ExecuteNonQueryAsync();
+		}
+
+		return (rootId, requiredBranchId, dependentLeafIds);
+	}
+
 	private static async Task<long[]> InsertLevelAsync(
 		NpgsqlConnection connection, long[] parentIds, int childrenPerParent, long ownerUserId)
 	{

@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using AwesomeAssertions;
 using TestSupport;
 
@@ -16,12 +17,13 @@ public sealed class WebHostCivilTimeArchitectureTests
 	///     not an <c>Instant</c> -- <c>EffectiveStart</c>/<c>EffectiveEnd</c> is a legitimately overloaded
 	///     name across the codebase; date-only schedule fields are explicitly out of scope for this rule.
 	/// </summary>
-	private static readonly string[] LocalDateEffectiveRangeAllowlist = [
+	private static readonly FrozenSet<string> LocalDateEffectiveRangeAllowlist = FrozenSet.ToFrozenSet([
 		Path.Combine("Rota", "Index.cshtml"),
 		Path.Combine("Rota", "CorrectVersion.cshtml"),
-	];
+	], StringComparer.Ordinal);
 
-	private static readonly string[] InstantPropertyNames = ["EffectiveStart", "EffectiveEnd", "Segment.Start", "Segment.End"];
+	private static readonly FrozenSet<string> InstantPropertyNames =
+		FrozenSet.ToFrozenSet(["EffectiveStart", "EffectiveEnd", "Segment.Start", "Segment.End"], StringComparer.Ordinal);
 
 	[Fact]
 	public void No_Razor_Page_code_behind_binds_an_instant_through_DateTimeOffset()
@@ -45,7 +47,7 @@ public sealed class WebHostCivilTimeArchitectureTests
 
 		foreach (var path in Directory.EnumerateFiles(pagesDirectory, "*.cshtml", SearchOption.AllDirectories)) {
 			var relativePath = Path.GetRelativePath(pagesDirectory, path);
-			if (LocalDateEffectiveRangeAllowlist.Contains(relativePath, StringComparer.Ordinal)) {
+			if (LocalDateEffectiveRangeAllowlist.Contains(relativePath)) {
 				continue;
 			}
 

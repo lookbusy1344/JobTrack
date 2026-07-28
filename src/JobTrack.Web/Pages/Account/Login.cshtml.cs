@@ -94,6 +94,11 @@ public sealed class LoginModel(
 			await AuthenticationAudit.RecordKnownAsync(jobTrackClient, user, AuthenticationAuditEventKind.LoginSuccess);
 		}
 
+		// §2.5 of the 2026-07-28 fresh-eyes review: this is final authentication (no two-factor step
+		// follows), so any filter memory left by a previous principal on this browser must not survive
+		// into this one -- reset before any further redirect, including the forced-password-change one.
+		PrincipalBoundSessionState.Reset(HttpContext);
+
 		if (user is { RequiresPasswordChange: true }) {
 			return RedirectToPage("ChangePassword");
 		}

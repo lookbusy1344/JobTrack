@@ -251,6 +251,74 @@ public sealed class SqliteWorkSessionCommandPortTests()
 			: new LeafState(Achievement.Waiting, false, 0));
 	}
 
+	/// <summary>
+	///     §2.1 of the 2026-07-28 fresh-eyes review: the same race as
+	///     <see cref="Concurrent_reopen_of_a_former_prerequisite_vs_dependent_start_leaves_a_consistent_final_state" />
+	///     for the other supported reopen route, a plain "Change outcome" back to Waiting via
+	///     <c>SetAchievementAsync</c> rather than the composite reopen-and-start. SQLite has no advisory
+	///     lock domain; its single-writer transaction serializes the two commands by itself, but this
+	///     proves that holds for the public outcome rather than assuming it.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_SetAchievementAsync_reopen_of_a_former_prerequisite_vs_dependent_start_leaves_a_consistent_final_state()
+	{
+		var (rootId, jobManagerId, workerId, requiredLeafId) = await SeedReadyLeafAsync();
+		var sessionPort = CreateSessionPort(ConnectionString);
+		var requiredSession = await sessionPort.StartWorkAsync(
+			new() { Context = ContextFor(workerId), JobNodeId = requiredLeafId, WorkedByUserId = workerId });
+		_ = await sessionPort.FinishSessionAsync(
+			new() { Context = ContextFor(workerId), SessionId = requiredSession.Id, Version = requiredSession.Version });
+		_ = await CreateAchievementPort(ConnectionString).SetAchievementAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = requiredLeafId,
+			NewAchievement = Achievement.Success,
+			Reason = "Ready for dependent work",
+			Version = 2,
+		});
+		var jobNodePort = CreateJobNodePort(ConnectionString);
+		var dependent = await jobNodePort.AddChildAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Description = "Dependent work",
+			OwnerUserId = workerId,
+			Priority = Priority.Medium,
+		});
+		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = dependent.Id });
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = requiredLeafId,
+			DependentJobId = dependent.Id,
+		});
+
+		var results = await Task.WhenAll(
+			TrySetAchievementAsync(CreateAchievementPort(ConnectionString), jobManagerId, requiredLeafId, Achievement.Waiting, 3),
+			TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, workerId, dependent.Id));
+
+		results[0].Should().BeTrue("leaving Success is never itself readiness-gated");
+		(await ReadLeafStateAsync(requiredLeafId)).Should().Be(new LeafState(Achievement.Waiting, false, 0));
+		(await ReadLeafStateAsync(dependent.Id)).Should().Be(results[1]
+			? new LeafState(Achievement.Waiting, false, 1)
+			: new LeafState(Achievement.Waiting, false, 0));
+	}
+
+	private static async Task<bool> TrySetAchievementAsync(
+		IAchievementCommandPort port, AppUserId actorId, JobNodeId leafId, Achievement newAchievement, long version)
+	{
+		try {
+			_ = await port.SetAchievementAsync(new() {
+				Context = ContextFor(actorId),
+				JobNodeId = leafId,
+				NewAchievement = newAchievement,
+				Reason = "Racing reopen via SetAchievementAsync",
+				Version = version,
+			});
+			return true;
+		}
+		catch (Exception ex) when (ex is InvariantViolationException or ConcurrencyConflictException or PrerequisiteBlockedException) {
+			return false;
+		}
+	}
+
 	private static async Task<bool> TryCompleteLeafAsync(
 		IWorkSessionCommandPort port, AppUserId actorId, JobNodeId leafId, WorkSessionId sessionId, long sessionVersion)
 	{

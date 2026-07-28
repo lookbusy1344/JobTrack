@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using System.Reflection;
 using Abstractions;
 using Application;
@@ -10,17 +11,17 @@ using Persistence.Sqlite;
 
 public sealed class ReusableLibraryDependencyTests
 {
-	private static readonly Dictionary<string, IReadOnlySet<string>> AllowedProjectReferences =
-		new(StringComparer.Ordinal) {
-			["JobTrack.Abstractions"] = new HashSet<string>(StringComparer.Ordinal),
-			["JobTrack.Domain"] = new HashSet<string>(["JobTrack.Abstractions"], StringComparer.Ordinal),
-			["JobTrack.Application"] = new HashSet<string>(["JobTrack.Abstractions", "JobTrack.Domain"], StringComparer.Ordinal),
-			["JobTrack.Persistence.Shared"] = new HashSet<string>(["JobTrack.Abstractions"], StringComparer.Ordinal),
-			["JobTrack.Persistence.PostgreSql"] = new HashSet<string>(
+	private static readonly FrozenDictionary<string, FrozenSet<string>> AllowedProjectReferences =
+		new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal) {
+			["JobTrack.Abstractions"] = FrozenSet<string>.Empty,
+			["JobTrack.Domain"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions"], StringComparer.Ordinal),
+			["JobTrack.Application"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions", "JobTrack.Domain"], StringComparer.Ordinal),
+			["JobTrack.Persistence.Shared"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions"], StringComparer.Ordinal),
+			["JobTrack.Persistence.PostgreSql"] = FrozenSet.ToFrozenSet(
 				["JobTrack.Abstractions", "JobTrack.Application", "JobTrack.Domain", "JobTrack.Persistence.Shared"], StringComparer.Ordinal),
-			["JobTrack.Persistence.Sqlite"] = new HashSet<string>(
+			["JobTrack.Persistence.Sqlite"] = FrozenSet.ToFrozenSet(
 				["JobTrack.Abstractions", "JobTrack.Application", "JobTrack.Domain", "JobTrack.Persistence.Shared"], StringComparer.Ordinal),
-		};
+		}.ToFrozenDictionary(StringComparer.Ordinal);
 
 	public static TheoryData<Type> ReusableAssemblyMarkers => new() {
 		typeof(AppUserId),

@@ -74,7 +74,11 @@ CREATE TRIGGER job_prerequisite_edges_after_move
     ON job_node
     WHEN NEW.parent_id IS NOT NULL
 BEGIN
-    SELECT RAISE(ABORT, 'moving job_node would leave a prerequisite edge as an ancestor/descendant edge')
+    -- Raised as the bare stable constraint id (schema version 0007's convention
+    -- for a trigger the command port must tell apart from its neighbours): a
+    -- SQLITE_CONSTRAINT code alone cannot distinguish this from the hierarchy
+    -- cycle trigger, and MoveAsync reported it as "would create a cycle".
+    SELECT RAISE(ABORT, 'job-node-move-would-invalidate-prerequisite')
     WHERE EXISTS (
         SELECT 1
         FROM job_prerequisite jp

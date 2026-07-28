@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using System.Collections.Frozen;
 using AwesomeAssertions;
 using Database;
 using Microsoft.AspNetCore.Authorization;
@@ -26,14 +27,14 @@ public sealed class PageAuthorizationConventionTests : IAsyncLifetime, IDisposab
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
 
-	private static readonly string[] ExpectedAnonymousPages = [
+	private static readonly FrozenSet<string> ExpectedAnonymousPages = FrozenSet.ToFrozenSet([
 		"/Index",
 		"/Error",
 		"/Account/Login",
 		"/Account/LoginTwoFactor",
 		"/Account/Logout",
 		"/Account/AccessDenied",
-	];
+	], StringComparer.Ordinal);
 
 	private readonly SqliteDatabaseFixture database = new();
 	private TestWebApplicationFactory factory = null!;

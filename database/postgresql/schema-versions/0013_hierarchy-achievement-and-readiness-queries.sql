@@ -167,3 +167,36 @@ $$
     WHERE jp.to_id IN (SELECT p_node_id UNION SELECT id FROM job_node_ancestors(p_node_id))
       AND NOT node_succeeded(jp.from_id);
 $$ LANGUAGE sql STABLE;
+
+-- The set-based counterpart to job_node_ready: every node blocked by an
+-- unsatisfied prerequisite, its own or one inherited from an ancestor.
+-- job_node_ready answers for a single node and calls node_succeeded once
+-- per ancestor edge, which a whole-list query would evaluate per candidate
+-- row; this resolves each distinct required job once (the `required`/
+-- `unsatisfied` CTEs below, mirroring SqliteAwaitingProgressQueryPort's own
+-- LoadBlockedNodes shape) and then descends from every blocking declaration
+-- point, so a caller ordering or filtering a page of candidates by readiness
+-- (Awaiting Progress) composes it as one EXISTS relation instead. §2.2 of the
+-- 2026-07-28 fresh-eyes review: the original shape called node_succeeded once
+-- per job_prerequisite edge into an unsatisfied required job, so one required
+-- branch shared by many dependents repeated the same recursive traversal once
+-- per edge; DISTINCT from_id below collapses that to one evaluation per
+-- required job regardless of how many dependents declare it. Both non-recursive CTEs are pinned
+-- MATERIALIZED: without it, PostgreSQL 12+'s planner is free to inline them and push
+-- `NOT node_succeeded(id)` back down to a per-job_prerequisite-row filter ahead of the DISTINCT --
+-- exactly the per-edge evaluation this rewrite exists to remove, confirmed by EXPLAIN (ANALYZE,
+-- BUFFERS) showing a `Seq Scan on job_prerequisite ... Filter: (NOT node_succeeded(from_id))`
+-- ahead of the `HashAggregate` before this was added.
+CREATE FUNCTION job_node_blocked() RETURNS TABLE(id bigint) AS
+$$
+    WITH RECURSIVE required(id) AS MATERIALIZED (
+        SELECT DISTINCT from_id FROM job_prerequisite
+    ), unsatisfied(id) AS MATERIALIZED (
+        SELECT id FROM required WHERE NOT node_succeeded(id)
+    ), blocked(id) AS (
+        SELECT jp.to_id FROM job_prerequisite jp JOIN unsatisfied ON unsatisfied.id = jp.from_id
+        UNION
+        SELECT child.id FROM job_node child JOIN blocked b ON child.parent_id = b.id
+    )
+    SELECT id FROM blocked;
+$$ LANGUAGE sql STABLE;

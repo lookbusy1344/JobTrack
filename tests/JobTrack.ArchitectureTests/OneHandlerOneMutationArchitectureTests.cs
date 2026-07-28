@@ -1,5 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
@@ -20,7 +21,7 @@ using TestSupport;
 /// </summary>
 public sealed partial class OneHandlerOneMutationArchitectureTests
 {
-	private static readonly HashSet<string> MutationInterfaceNames = new(StringComparer.Ordinal) {
+	private static readonly FrozenSet<string> MutationInterfaceNames = FrozenSet.ToFrozenSet([
 		"IInstallationCommands",
 		"IEmployeeCommands",
 		"IJobCommands",
@@ -30,7 +31,7 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 		"ITokenCommands",
 		"IRequestCommands",
 		"IAccountCredentialCommands",
-	};
+	], StringComparer.Ordinal);
 
 	/// <summary>
 	///     The two historical mixed command/query facades. New members on a command facade default to
@@ -38,13 +39,13 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	///     excluded. Authentication-attempt audit is the remediation plan's explicit host-composition
 	///     exception and its complete facade is therefore outside <see cref="MutationInterfaceNames" />.
 	/// </summary>
-	private static readonly HashSet<string> ReadOnlyCommandFacadeMethods = new(StringComparer.Ordinal) {
+	private static readonly FrozenSet<string> ReadOnlyCommandFacadeMethods = FrozenSet.ToFrozenSet([
 		"IRequestCommands.GetMyRequestsAsync",
 		"IRequestCommands.GetEligibleHoldingAreasAsync",
 		"IRequestCommands.GetDetailAsync",
 		"ITokenCommands.ListAsync",
 		"ITokenCommands.TryAuthenticateAsync",
-	};
+	], StringComparer.Ordinal);
 
 	/// <summary>
 	///     Empty by design. Its only former entry -- <c>AssignRole.OnPostAsync</c>'s
@@ -54,13 +55,13 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	///     plan §2.5 an entry may only ever cover authentication-attempt audit or composition mechanics,
 	///     never a business workflow.
 	/// </summary>
-	private static readonly string[] HandlerAllowlist = [];
+	private static readonly FrozenSet<string> HandlerAllowlist = FrozenSet<string>.Empty;
 
 	/// <summary>
 	///     The facade interfaces documenting composites, paired with their concrete handlers. This
 	///     complementary check keeps application handlers as one-port-call adapters.
 	/// </summary>
-	private static readonly (string InterfaceFile, string HandlerFile)[] CompositeCommandSources = [
+	private static readonly IReadOnlyList<(string InterfaceFile, string HandlerFile)> CompositeCommandSources = [
 		(Path.Combine("src", "JobTrack.Application", "IWorkCommands.cs"), Path.Combine("src", "JobTrack.Application", "WorkCommands.cs")),
 		(
 			Path.Combine("src", "JobTrack.Application", "IAccountCredentialCommands.cs"),
@@ -243,7 +244,7 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 			.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
 				.Where(method => method.Identifier.ValueText.StartsWith("OnPost", StringComparison.Ordinal))
 				.Select(method => AnalyzeHandler(compilation, tree, method, solutionRoot)))
-			.Where(result => !HandlerAllowlist.Contains($"{result.Path}:{result.Name}", StringComparer.Ordinal))
+			.Where(result => !HandlerAllowlist.Contains($"{result.Path}:{result.Name}"))
 			.Where(result => result.MutationCount > 1)
 			.Select(result => $"{result.Path}:{result.Name} ({result.MutationCount} mutations)")
 			.ToList();

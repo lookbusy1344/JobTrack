@@ -298,6 +298,80 @@ window: 0.31 ms → 0.009 ms, 89 → 4 block reads. Regression-tested (`Overlapp
 by querying a late leaf under that worker, which naturally produces a narrow window against its long
 prior history, asserting `work_session_user_range_gist_idx` is used.
 
+**Prerequisite fan-out (2026-07-28 fresh-eyes review §2.2):** `job_node_blocked()`'s original shape
+called `node_succeeded` once per `job_prerequisite` edge into an unsatisfied required job, rather than
+once per distinct required job — a required branch shared by many dependents repeated the same
+recursive traversal once per dependent. New fixture (`PerformanceScaleGenerator.SeedPrerequisiteFanOutAsync`):
+one required branch with a small unfinished subtree (never succeeds), 5,000 dependent leaves each
+declaring their own direct prerequisite on it, a realistic 1-in-3 finished/unfinished mix among the
+dependents themselves (`FullTableHierarchyLoadPerformanceTests
+.Job_node_blocked_at_prerequisite_fan_out_scale_resolves_the_required_branch_once` /
+`.Awaiting_progress_at_prerequisite_fan_out_scale_resolves_the_required_branch_once_per_distinct_job`).
+
+`EXPLAIN (ANALYZE, BUFFERS)` of `SELECT id FROM job_node_blocked();` alone against this fixture:
+
+- **Before** (original per-edge shape): `Seq Scan on job_prerequisite  Filter: (NOT node_succeeded(from_id))`
+  ahead of the `DISTINCT`'s `HashAggregate` — `node_succeeded` evaluated once per edge (5,000 times).
+  Execution time 46.7 ms.
+- **First rewrite attempt** (plain `WITH RECURSIVE required(id) AS (SELECT DISTINCT from_id ...),
+  unsatisfied(id) AS (SELECT id FROM required WHERE NOT node_succeeded(id))`, no `MATERIALIZED`):
+  identical plan and identical per-edge evaluation. PostgreSQL 12+'s planner is free to inline a
+  non-recursive CTE and push the filter back down ahead of the aggregate it was meant to run after —
+  the rewrite alone changed nothing measurable.
+- **After** (both `required` and `unsatisfied` pinned `MATERIALIZED`): `CTE Scan on required ...
+  Filter: (NOT node_succeeded(id))` runs once (`rows=1 loops=1`), then the recursive `blocked` term
+  joins every one of the 5,000 edges against that single cached result. Execution time 3.9 ms — a
+  ~12x improvement, and now genuinely independent of dependent fan-out rather than merely
+  coincidentally fast at this scale. `Awaiting_progress_...` shows the same effect one layer up:
+  `ExcludeBlocked=true` (which composes `job_node_blocked` as an `EXISTS`) dropped from 97.7 ms to
+  11.4 ms; `ExcludeBlocked=false` is unaffected (208.5 ms before and after — dominated by materializing
+  the 5,000 candidate dependents themselves, not by blocked-set computation). Re-measured after
+  serializing the performance project's own test collections: 4.6 ms for `job_node_blocked()`,
+  13.0 ms for `ExcludeBlocked=true`, and 199.9 ms for `ExcludeBlocked=false`. The guards are now
+  deliberately discriminating: 25 ms for the stored function, 50 ms for exclusion, and 500 ms for
+  the independently expensive include-blocked materialization. The stored-function test additionally
+  asserts that `node_succeeded(id)` is evaluated from `CTE Scan on required` and rejects the old
+  `Seq Scan on job_prerequisite ... node_succeeded(from_id)` plan, so a noisy machine cannot allow
+  the per-edge shape to pass merely because wall time stayed below a broad ceiling. SQLite's
+  `SqliteAwaitingProgressQueryPort.LoadBlockedNodes` was
+  already in this shape (a `required`/`required_subtree`/`unsatisfied`/`blocked` CTE chain evaluating
+  each required job once) before this finding — PostgreSQL's stored function now mirrors it, with the
+  `MATERIALIZED` hint standing in for SQLite's lack of a query planner that would otherwise inline a
+  CTE the same way.
+
+**Deterministic performance lane (2026-07-28 fresh-eyes review §2.3).** Two Awaiting Progress
+ceilings above were widened purely to absorb shared-PostgreSQL-instance contention from a full
+`dotnet test JobTrack.slnx` run (the default-page ceiling to 1.5 s against a ~34 ms isolated figure,
+the combined-tree ceiling to 2.5 s against a 744–1,285 ms isolated figure) — a runner-scheduling
+concern, not a query regression, but widening the *ceiling* rather than fixing the *runner* let a
+genuine 2×+ slowdown of either query pass undetected. `scripts/perf-test.sh` is now the one
+deterministic lane: it cleans orphaned test databases, runs `JobTrack.Database.PerformanceTests`
+alone (serialized, not concurrent with any other PostgreSQL-backed project), and cleans again
+afterward. Every ceiling in `FullTableHierarchyLoadPerformanceTests` is measured and enforced against
+that lane now, restored to isolated-evidence figures with headroom:
+
+- `RealisticCombinedProductionTreeDefaultPageCeiling`: 1.5 s → 200 ms (isolated ~34 ms originally,
+  77.8–111.7 ms re-measured via the serialized `scripts/perf-test.sh` lane on 2026-07-28). The
+  ceiling is below twice the highest recorded warm measurement, so the review's deliberate-2×
+  regression check fails as required.
+- `CombinedProductionTreeAwaitingProgressCeiling`: 2.5 s → 1.5 s (isolated 744–1,285 ms originally,
+  ~861–874 ms re-measured via `scripts/perf-test.sh` 2026-07-28).
+
+Contention was reproduced deliberately (not assumed): running this same test alongside
+`JobTrack.Persistence.PostgreSql.Tests`, `JobTrack.Database.ContractTests`, and
+`JobTrack.Web.IntegrationTests` concurrently measured the default-page query at 177–259 ms (vs.
+53–108 ms isolated) and the combined-tree query at 1,212.8 ms (vs. 861–874 ms isolated) — roughly
+2–3×, consistent with every prior contention note in this file, and confirming the two ceilings above
+were sized to the wrong lane. `JobTrack.Database.PerformanceTests` now sets `IsTestProject=false`, so
+a solution-wide `dotnet test JobTrack.slnx` (including the "full solution suite" run) still compiles
+it but silently skips its test execution entirely, rather than ever failing on contention — the full
+suite must always be able to pass on its own; `scripts/perf-test.sh` (which overrides the property
+back with `-p:IsTestProject=true`) is the only supported way to run this project's tests, and the
+only source of evidence for a ceiling here going forward. A future ceiling increase requires a
+before/after query plan and an explicit product-regression rationale (CLAUDE.md's commit-gate section
+already says this) — "the shared test server was busy" is a runner defect, not grounds for widening a
+query budget.
+
 **Note on the broad-branch child listing row (revised 2026-07-23):** isolated measurement of
 `Paginated_child_listing_of_a_10000_leaf_branch_meets_the_latency_and_plan_budget` is sub-millisecond
 (0.8 ms), well inside the original 30 ms budget. Run as part of the full `dotnet test JobTrack.slnx`

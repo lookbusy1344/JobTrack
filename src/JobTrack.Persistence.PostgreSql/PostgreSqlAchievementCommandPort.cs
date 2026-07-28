@@ -6,6 +6,7 @@ using Application.Ports;
 using Domain.Authorization;
 using Domain.Hierarchy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
 using Shared;
@@ -32,12 +33,19 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
+	private readonly IReadOnlyList<IInterceptor> interceptors;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock)
+	public PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock) : this(dataSource, clock, [])
+	{
+	}
+
+	/// <summary>Test-only seam (§2.1 fresh-eyes review races) for attaching a deterministic-interleaving interceptor.</summary>
+	internal PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock, IReadOnlyList<IInterceptor> interceptors)
 	{
 		this.dataSource = dataSource;
 		this.clock = clock;
+		this.interceptors = interceptors;
 	}
 
 	/// <inheritdoc />
@@ -59,6 +67,16 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 			throw new InvariantViolationException(
 				"achievement-transition-not-permitted",
 				$"Cannot transition from {leafWork.Achievement} to {request.NewAchievement}.");
+		}
+
+		// ADR 0051: reopening a formerly-successful prerequisite must not commit from the same
+		// readiness snapshot as a concurrent dependent start/completion. Take the same advisory lock
+		// LeafReadiness locks this node under when a dependent checks its own readiness, before this
+		// leaf's own leaf_work write, so exactly one of the two operations observes the other's
+		// commit. Reopening Cancelled/Unsuccessful never satisfied a prerequisite, so it cannot
+		// invalidate one and is left unlocked.
+		if (isReopening && leafWork.Achievement == Achievement.Success) {
+			await PrerequisiteReadinessSerialization.AcquireAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false);
 		}
 
 		if (AchievementTransitions.IsCompletedState(request.NewAchievement)) {
@@ -108,11 +126,14 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 
 	private PostgreSqlJobTrackDbContext CreateContext()
 	{
-		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, o => o.UseNodaTime())
-			.Options;
+		var optionsBuilder = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
+			.UseNpgsql(dataSource, o => o.UseNodaTime());
 
-		return new(options);
+		if (interceptors.Count > 0) {
+			optionsBuilder = optionsBuilder.AddInterceptors(interceptors);
+		}
+
+		return new(optionsBuilder.Options);
 	}
 
 	private static async Task AuthorizeOrThrowAsync(

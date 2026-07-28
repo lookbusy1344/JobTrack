@@ -94,6 +94,48 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Completing_two_factor_clears_previous_principal_state_but_the_password_step_does_not()
+	{
+		const string FirstSecret = "JBSWY3DPEHPK3PXP";
+		const string SecondSecret = "KRUGS4ZANFZSAYJA";
+		const string DistinctiveSearchTerm = "zzz-two-factor-principal-change";
+		await SeedUserWithTwoFactorAsync("jordan.2fa", FirstSecret);
+		await SeedUserWithTwoFactorAsync("morgan.2fa", SecondSecret);
+		var baseAddress = new Uri("https://localhost");
+		using var cookieHandler = new TestCookieContainerHandler(factory.Server.CreateHandler());
+		using var browserClient = new HttpClient(cookieHandler) { BaseAddress = baseAddress };
+
+		await PostLoginWithCookieClientAsync(browserClient, "jordan.2fa", KnownPassword);
+		await PostTwoFactorCodeWithCookieClientAsync(browserClient, GenerateTotpCode(FirstSecret, DateTimeOffset.UtcNow));
+		var rememberResponse = await browserClient.GetAsync($"/Jobs/AwaitingProgress?SearchText={DistinctiveSearchTerm}");
+		rememberResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var firstAuthenticationCookies = cookieHandler.SuspendCookiesContaining(baseAddress, "Identity.Application");
+		firstAuthenticationCookies.Should().NotBeEmpty();
+		await PostLoginWithCookieClientAsync(browserClient, "morgan.2fa", KnownPassword);
+		using var beforeFinalAuthenticationRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/AwaitingProgress");
+		beforeFinalAuthenticationRequest.Headers.Add(
+			"Cookie",
+			string.Join("; ", firstAuthenticationCookies.Select(static cookie => $"{cookie.Name}={cookie.Value}")));
+		var beforeFinalAuthentication = await browserClient.SendAsync(beforeFinalAuthenticationRequest);
+		beforeFinalAuthentication.StatusCode.Should().Be(
+			HttpStatusCode.OK,
+			$"the suspended first-principal cookie should authenticate the inspection request, not redirect to {beforeFinalAuthentication.Headers.Location}");
+		(await beforeFinalAuthentication.Content.ReadAsStringAsync()).Should().Contain(
+			DistinctiveSearchTerm,
+			"the password step must not clear state before two-factor authentication completes");
+
+		await PostTwoFactorCodeWithCookieClientAsync(browserClient, GenerateTotpCode(SecondSecret, DateTimeOffset.UtcNow));
+		var afterFinalAuthentication = await browserClient.GetAsync("/Jobs/AwaitingProgress");
+		var body = await afterFinalAuthentication.Content.ReadAsStringAsync();
+
+		afterFinalAuthentication.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain(
+			DistinctiveSearchTerm,
+			"final two-factor authentication changes the principal and must clear principal-bound state");
+	}
+
+	[Fact]
 	public async Task Submitting_an_incorrect_totp_code_does_not_complete_sign_in()
 	{
 		const string secret = "JBSWY3DPEHPK3PXP";
@@ -197,6 +239,43 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		});
 
 		return await client.SendAsync(request);
+	}
+
+	private static async Task PostLoginWithCookieClientAsync(HttpClient cookieClient, string userName, string password)
+	{
+		var token = await GetAntiforgeryTokenWithCookieClientAsync(cookieClient, "/Account/Login");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.UserName"] = userName,
+			["Input.Password"] = password,
+			["__RequestVerificationToken"] = token,
+		});
+
+		var response = await cookieClient.SendAsync(request);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Contain("/Account/LoginTwoFactor");
+	}
+
+	private static async Task PostTwoFactorCodeWithCookieClientAsync(HttpClient cookieClient, string code)
+	{
+		var token = await GetAntiforgeryTokenWithCookieClientAsync(cookieClient, "/Account/LoginTwoFactor");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/LoginTwoFactor");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.Code"] = code,
+			["__RequestVerificationToken"] = token,
+		});
+
+		var response = await cookieClient.SendAsync(request);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+	}
+
+	private static async Task<string> GetAntiforgeryTokenWithCookieClientAsync(HttpClient cookieClient, string path)
+	{
+		var response = await cookieClient.GetAsync(path);
+		var body = await response.Content.ReadAsStringAsync();
+		return AntiforgeryTokenPattern().Match(body) is { Success: true } match
+			? match.Groups["token"].Value
+			: throw new InvalidOperationException($"No antiforgery token in {path} body.");
 	}
 
 	private async Task<(string CookieHeader, string Token)> GetFormAsync(string path, string? extraCookie = null)
@@ -344,6 +423,13 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
 		_ = insertIdentityUser.Parameters.AddWithValue("$authenticatorKeyProtected", protectedKey);
 		_ = await insertIdentityUser.ExecuteNonQueryAsync();
+
+		await using var insertRole = connection.CreateCommand();
+		insertRole.CommandText =
+			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
+		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
+		_ = insertRole.Parameters.AddWithValue("$roleId", (short)EmployeeRole.Worker);
+		_ = await insertRole.ExecuteNonQueryAsync();
 
 		return new(appUserId);
 	}

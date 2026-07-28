@@ -292,6 +292,99 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		auditOperation.Should().Be("authentication.logout");
 	}
 
+	/// <summary>
+	///     §2.5 of the 2026-07-28 fresh-eyes review: Awaiting Progress's remembered filters live in
+	///     server-side session state keyed only by the session cookie, not by principal -- signing out
+	///     did not clear it, so a second employee signing in through the same browser (one cookie
+	///     container, exactly like a shared machine) inherited the first employee's search text and
+	///     other filter choices. Uses a cookie-container client (unlike this file's other tests, which
+	///     manage cookies by hand to inspect antiforgery/auth cookies directly) so the session cookie
+	///     persists across requests the same way a real browser would.
+	/// </summary>
+	[Fact]
+	public async Task Signing_out_and_a_different_employee_signing_in_never_inherits_the_previous_employees_remembered_filters()
+	{
+		const string DistinctiveSearchTerm = "zzz-employee-a-distinctive-search-term";
+		await SeedUserAsync("addie", KnownPassword, false);
+		await SeedUserAsync("blair", KnownPassword, false);
+
+		// Secure=Always cookies (the auth and session cookies alike) are only sent back by
+		// HttpClient's CookieContainer over https -- the test host's default http base address would
+		// silently withhold them on every request after the one that set them, which looks identical
+		// to "never authenticated" rather than the leak this test exists to catch.
+		using var browserClient = factory.CreateClient(
+			new() { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new("https://localhost") });
+
+		await PostLoginWithCookieClientAsync(browserClient, "addie", KnownPassword);
+		_ = await browserClient.GetAsync($"/Jobs/AwaitingProgress?SearchText={DistinctiveSearchTerm}");
+		await PostLogoutWithCookieClientAsync(browserClient);
+		await PostLoginWithCookieClientAsync(browserClient, "blair", KnownPassword);
+
+		var response = await browserClient.GetAsync("/Jobs/AwaitingProgress");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain(DistinctiveSearchTerm);
+	}
+
+	[Fact]
+	public async Task Signing_in_as_a_different_employee_without_logging_out_clears_the_previous_employees_remembered_filters()
+	{
+		const string DistinctiveSearchTerm = "zzz-ordinary-login-principal-change";
+		await SeedUserAsync("casey", KnownPassword, false);
+		await SeedUserAsync("devon", KnownPassword, false);
+		var baseAddress = new Uri("https://localhost");
+		using var cookieHandler = new TestCookieContainerHandler(factory.Server.CreateHandler());
+		using var browserClient = new HttpClient(cookieHandler) { BaseAddress = baseAddress };
+
+		await PostLoginWithCookieClientAsync(browserClient, "casey", KnownPassword);
+		var rememberResponse = await browserClient.GetAsync($"/Jobs/AwaitingProgress?SearchText={DistinctiveSearchTerm}");
+		rememberResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		var suspendedAuthenticationCookies = cookieHandler.SuspendCookiesContaining(baseAddress, "Identity.Application");
+		suspendedAuthenticationCookies.Should().NotBeEmpty();
+		await PostLoginWithCookieClientAsync(browserClient, "devon", KnownPassword);
+
+		var response = await browserClient.GetAsync("/Jobs/AwaitingProgress");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain(DistinctiveSearchTerm);
+	}
+
+	private static async Task PostLoginWithCookieClientAsync(HttpClient cookieClient, string userName, string password)
+	{
+		var loginPage = await cookieClient.GetAsync("/Account/Login");
+		var loginBody = await loginPage.Content.ReadAsStringAsync();
+		var token = AntiforgeryTokenPattern().Match(loginBody) is { Success: true } match
+			? match.Groups["token"].Value
+			: throw new InvalidOperationException("No antiforgery token in login page body.");
+
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.UserName"] = userName,
+			["Input.Password"] = password,
+			["__RequestVerificationToken"] = token,
+		});
+
+		var response = await cookieClient.SendAsync(request);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+	}
+
+	private static async Task PostLogoutWithCookieClientAsync(HttpClient cookieClient)
+	{
+		var logoutPage = await cookieClient.GetAsync("/Account/Logout");
+		var logoutBody = await logoutPage.Content.ReadAsStringAsync();
+		var token = AntiforgeryTokenPattern().Match(logoutBody) is { Success: true } match
+			? match.Groups["token"].Value
+			: throw new InvalidOperationException("No antiforgery token in logout page body.");
+
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Logout");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+		var response = await cookieClient.SendAsync(request);
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+	}
+
 	private async Task<HttpResponseMessage> PostLoginAsync(string userName, string password)
 	{
 		var (antiforgeryCookie, token) = await GetLoginFormAsync();

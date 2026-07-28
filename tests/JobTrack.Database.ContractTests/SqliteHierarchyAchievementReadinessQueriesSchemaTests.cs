@@ -135,6 +135,40 @@ public sealed class SqliteHierarchyAchievementReadinessQueriesSchemaTests()
 		return results;
 	}
 
+	/// <summary>Mirrors <c>SqliteAwaitingProgressQueryPort.AwaitingProgressQueryAssembly.LoadBlockedNodes</c>'s raw SQL shape.</summary>
+	protected override async Task<IReadOnlyList<long>> BlockedNodeIdsAsync(DbConnection connection)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  WITH RECURSIVE required(id) AS (
+							      SELECT DISTINCT from_id FROM job_prerequisite
+							  ), required_subtree(origin_id, id) AS (
+							      SELECT id, id FROM required
+							      UNION ALL
+							      SELECT required_subtree.origin_id, child.id
+							      FROM job_node child JOIN required_subtree ON child.parent_id = required_subtree.id
+							  ), unsatisfied(id) AS (
+							      SELECT required.id FROM required
+							      WHERE EXISTS (
+							          SELECT 1 FROM required_subtree
+							          WHERE required_subtree.origin_id = required.id
+							            AND NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = required_subtree.id)
+							            AND NOT EXISTS (
+							                SELECT 1 FROM leaf_work
+							                WHERE leaf_work.job_node_id = required_subtree.id AND leaf_work.achievement_id = @successAchievementId
+							            )
+							      )
+							  ), blocked(id) AS (
+							      SELECT jp.to_id FROM job_prerequisite jp JOIN unsatisfied ON unsatisfied.id = jp.from_id
+							      UNION
+							      SELECT child.id FROM job_node child JOIN blocked ON child.parent_id = blocked.id
+							  )
+							  SELECT id FROM blocked;
+							  """;
+		AddParameter(command, "@successAchievementId", AchievementSuccess);
+		return await ReadLongColumnAsync(command);
+	}
+
 	private static async Task<IReadOnlyList<long>> RequiredJobIdsAsync(DbConnection connection, long declaredAtNodeId)
 	{
 		await using var command = connection.CreateCommand();

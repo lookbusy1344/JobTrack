@@ -49,12 +49,16 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 	// accordingly.
 	private static readonly TimeSpan BroadTreeAwaitingProgressCeiling = TimeSpan.FromMilliseconds(500);
 
-	// 2026-07-27: a full-suite `dotnet test JobTrack.slnx` run measured 1,512.9 ms against the
-	// previous 1.5 s ceiling -- the same shared-PostgreSQL-instance contention documented throughout
-	// this file (§2.7/RealisticCombinedProductionTreeDefaultPageCeiling above, SearchNoMatchCeiling
-	// below), not a query regression (744-1,285 ms isolated, per the comment above). Widened with more
-	// headroom, same precedent.
-	private static readonly TimeSpan CombinedProductionTreeAwaitingProgressCeiling = TimeSpan.FromMilliseconds(2_500);
+	// §2.3 of the 2026-07-28 fresh-eyes review: restored from 2,500 ms back to this isolated-evidence
+	// figure. The 2026-07-27 widening to 2,500 ms was in response to a full-suite `dotnet test
+	// JobTrack.slnx` run measuring 1,512.9 ms -- shared-PostgreSQL-instance contention from every other
+	// PostgreSQL-backed test project running concurrently (744-1,285 ms isolated, per the comment
+	// above; 861 ms re-measured via scripts/perf-test.sh), not a query regression. Widening a ceiling to
+	// absorb runner contention defeats its purpose (a 2x real regression would no longer fail this
+	// guard) -- scripts/perf-test.sh is now the one deterministic, serialized lane every ceiling in this
+	// file is measured and enforced against; the full-solution run compiles but does not execute this
+	// project.
+	private static readonly TimeSpan CombinedProductionTreeAwaitingProgressCeiling = TimeSpan.FromMilliseconds(1_500);
 
 	// Measured ~573 ms (3,887 of 193,570 nodes materialized) -- the query is still an O(total job_node
 	// rows) scan (no index accelerates "find every childless, unfinished leaf" yet), so the ceiling
@@ -63,6 +67,15 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 	private static readonly TimeSpan RealisticCombinedProductionTreeAwaitingProgressCeiling = TimeSpan.FromMilliseconds(800);
 	private static readonly TimeSpan BroadTreeCostReadCeiling = TimeSpan.FromMilliseconds(150);
 	private static readonly TimeSpan CombinedProductionTreeCostReadCeiling = TimeSpan.FromMilliseconds(400);
+
+	// §2.2 of the 2026-07-28 fresh-eyes review: 5,000 dependents sharing one required branch. Separate
+	// ceilings distinguish ordinary candidate materialization from the blocked relation whose old
+	// per-edge evaluation this fixture must reject. The stored function also has a plan-shape assertion,
+	// so environmental timing variance cannot let the old relational shape pass.
+	private const int PrerequisiteFanOutDependentCount = 5_000;
+	private static readonly TimeSpan PrerequisiteFanOutIncludeBlockedCeiling = TimeSpan.FromMilliseconds(500);
+	private static readonly TimeSpan PrerequisiteFanOutExcludeBlockedCeiling = TimeSpan.FromMilliseconds(50);
+	private static readonly TimeSpan PrerequisiteFanOutBlockedQueryCeiling = TimeSpan.FromMilliseconds(25);
 
 	// 2026-07-25 scalability-follow-up plan §2.1: these benchmarks predate request-scoped filtering and
 	// deliberately measure the unfiltered, unbounded worst case (every leaf legitimately on the list) --
@@ -76,17 +89,15 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 	private static readonly AwaitingProgressQueryFilter DefaultPageFilter =
 		new() { Ownership = OwnershipFilter.All, Offset = 0, Limit = AwaitingProgressPaging.DefaultPageSize + 1 };
 
-	// Measured ~34 ms warm, isolated. Run as part of the full `dotnet test JobTrack.slnx` solution
-	// suite immediately after JobTrack.Database.ContractTests and JobTrack.Persistence.PostgreSql.Tests
-	// (hundreds of disposable databases created/dropped against the same local instance), the identical
-	// query was observed at ~317 ms -- the same class of contention already documented for
-	// SearchNoMatchCeiling below and the broad-branch child listing row (performance-budgets.md §2).
-	// Revised with headroom above that contended measurement, following the same precedent, rather than
-	// the query being slower. 2026-07-27: a further full-suite run measured 911.6 ms against this same
-	// 500 ms ceiling -- growth in the surrounding suite (more PostgreSQL-backed test classes contending
-	// for the same local instance) widened the contention window further. Revised again with headroom
-	// above that measurement, same precedent.
-	private static readonly TimeSpan RealisticCombinedProductionTreeDefaultPageCeiling = TimeSpan.FromMilliseconds(1_500);
+	// §2.3 of the 2026-07-28 fresh-eyes review: restored from 1,500 ms back to this isolated-evidence
+	// figure (measured ~34 ms originally, ~78-112 ms re-measured via scripts/perf-test.sh on different
+	// hardware). This ceiling was twice widened in response to full-suite `dotnet test JobTrack.slnx`
+	// contention (~317 ms, then ~911.6 ms as the surrounding suite grew) rather than any change to the
+	// query itself -- see CombinedProductionTreeAwaitingProgressCeiling's comment for why that is now
+	// the wrong lane to measure or enforce a ceiling against. scripts/perf-test.sh is the deterministic
+	// lane going forward. The 200 ms ceiling is below twice the highest recorded isolated warm
+	// measurement, satisfying the review's explicit "a deliberate 2x slowdown fails" criterion.
+	private static readonly TimeSpan RealisticCombinedProductionTreeDefaultPageCeiling = TimeSpan.FromMilliseconds(200);
 
 	// 2026-07-25 scalability-follow-up plan §2.3: measured ~20 ms warm, isolated, for a full parallel
 	// sequential scan of ~193,500 rows with zero matches (the worst case for
@@ -305,6 +316,121 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 			: CombinedTreeSingleLeafNodeLoadMaximum;
 		costInputs.NodesById.Count.Should().BeLessThanOrEqualTo(
 			nodeLoadMaximum, "a single-leaf cost read must remain independent of installation-wide hierarchy size");
+	}
+
+	/// <summary>
+	///     §2.2 of the 2026-07-28 fresh-eyes review: 5,000 dependent leaves all sharing one required
+	///     branch, exactly the fan-out shape the original per-edge <c>job_node_blocked</c> query repeated
+	///     the same recursive achievement traversal for. Both <c>ExcludeBlocked</c> shapes are measured,
+	///     since the blocked relation is computed either way once readiness became the first ordering key.
+	/// </summary>
+	[Fact]
+	public async Task Awaiting_progress_at_prerequisite_fan_out_scale_resolves_the_required_branch_once_per_distinct_job()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var ownerUserId = await PerformanceScaleGenerator.SeedAppUserAsync(connection, "Fan-out owner");
+		_ = await PerformanceScaleGenerator.SeedPrerequisiteFanOutAsync(connection, ownerUserId, PrerequisiteFanOutDependentCount);
+
+		await using var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
+		var awaitingProgressPort = new PostgreSqlAwaitingProgressQueryPort(dataSource);
+		var includeBlockedFilter = new AwaitingProgressQueryFilter {
+			Ownership = OwnershipFilter.All,
+			Offset = 0,
+			Limit = AwaitingProgressPaging.DefaultPageSize + 1,
+			ExcludeBlocked = false,
+		};
+		var excludeBlockedFilter = includeBlockedFilter with { ExcludeBlocked = true };
+
+		_ = await awaitingProgressPort.GetAwaitingProgressInputsAsync(includeBlockedFilter);
+		_ = await awaitingProgressPort.GetAwaitingProgressInputsAsync(excludeBlockedFilter);
+
+		var includeBlockedStopwatch = Stopwatch.StartNew();
+		var includeBlockedResult = await awaitingProgressPort.GetAwaitingProgressInputsAsync(includeBlockedFilter);
+		includeBlockedStopwatch.Stop();
+		output.WriteLine(
+			$"[prerequisite fan-out ({PrerequisiteFanOutDependentCount} dependents), ExcludeBlocked=false, warmed] " +
+			$"GetAwaitingProgressInputsAsync: {includeBlockedStopwatch.Elapsed.TotalMilliseconds:F1} ms, nodes={includeBlockedResult.NodesById.Count}");
+
+		var excludeBlockedStopwatch = Stopwatch.StartNew();
+		var excludeBlockedResult = await awaitingProgressPort.GetAwaitingProgressInputsAsync(excludeBlockedFilter);
+		excludeBlockedStopwatch.Stop();
+		output.WriteLine(
+			$"[prerequisite fan-out ({PrerequisiteFanOutDependentCount} dependents), ExcludeBlocked=true, warmed] " +
+			$"GetAwaitingProgressInputsAsync: {excludeBlockedStopwatch.Elapsed.TotalMilliseconds:F1} ms, nodes={excludeBlockedResult.NodesById.Count}");
+
+		includeBlockedStopwatch.Elapsed.Should().BeLessThan(
+			PrerequisiteFanOutIncludeBlockedCeiling, "including blocked candidates must stay on the recorded fan-out curve");
+		excludeBlockedStopwatch.Elapsed.Should().BeLessThan(
+			PrerequisiteFanOutExcludeBlockedCeiling, "excluding blocked leaves must not repeat the recursive achievement check per dependent");
+	}
+
+	[Fact]
+	public void Blocked_prerequisite_plan_guard_rejects_per_edge_achievement_evaluation()
+	{
+		const string PerEdgePlan = """
+								   Seq Scan on job_prerequisite
+								     Filter: (NOT node_succeeded(from_id))
+								   """;
+
+		BlockedPrerequisitePlanGuard.HasDistinctRequiredEvaluation(PerEdgePlan).Should().BeFalse();
+	}
+
+	[Fact]
+	public void Blocked_prerequisite_plan_guard_accepts_distinct_required_achievement_evaluation()
+	{
+		const string DistinctRequiredPlan = """
+											CTE required
+											  -> HashAggregate
+												   Group Key: job_prerequisite.from_id
+											CTE unsatisfied
+											  -> CTE Scan on required
+												   Filter: (NOT node_succeeded(id))
+											""";
+
+		BlockedPrerequisitePlanGuard.HasDistinctRequiredEvaluation(DistinctRequiredPlan).Should().BeTrue();
+	}
+
+	/// <summary>
+	///     Captures the isolated warm <c>EXPLAIN (ANALYZE, BUFFERS)</c> plan for <c>job_node_blocked()</c>
+	///     alone at the fan-out scale, recorded in docs/traceability/performance-budgets.md rather than
+	///     asserted here -- this test's only pass/fail contract is that the query completes and returns
+	///     the expected dependent count, not a specific plan shape.
+	/// </summary>
+	[Fact]
+	public async Task Job_node_blocked_at_prerequisite_fan_out_scale_resolves_the_required_branch_once()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var ownerUserId = await PerformanceScaleGenerator.SeedAppUserAsync(connection, "Fan-out explain owner");
+		var (_, _, dependentLeafIds) =
+			await PerformanceScaleGenerator.SeedPrerequisiteFanOutAsync(connection, ownerUserId, PrerequisiteFanOutDependentCount);
+
+		await using (var warmCommand = connection.CreateCommand()) {
+			warmCommand.CommandText = "SELECT count(*) FROM job_node_blocked();";
+			_ = await warmCommand.ExecuteScalarAsync();
+		}
+
+		await using var explainCommand = connection.CreateCommand();
+		explainCommand.CommandText = "EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM job_node_blocked();";
+		var planLines = new List<string>();
+		await using (var reader = await explainCommand.ExecuteReaderAsync()) {
+			while (await reader.ReadAsync()) {
+				planLines.Add(reader.GetString(0));
+			}
+		}
+
+		var plan = string.Join('\n', planLines);
+		output.WriteLine($"[prerequisite fan-out ({PrerequisiteFanOutDependentCount} dependents)] job_node_blocked() plan:\n{plan}");
+		BlockedPrerequisitePlanGuard.HasDistinctRequiredEvaluation(plan).Should().BeTrue(
+			"node_succeeded must run from the materialized distinct-required relation, never from prerequisite edges");
+		var executionTime = BlockedPrerequisitePlanGuard.ExecutionTime(plan);
+		executionTime.Should().BeLessThan(
+			PrerequisiteFanOutBlockedQueryCeiling,
+			"the isolated blocked-set query must remain below the measured old per-edge implementation");
+
+		await using var countCommand = connection.CreateCommand();
+		countCommand.CommandText = "SELECT count(*) FROM job_node_blocked();";
+		var blockedCount = (long)(await countCommand.ExecuteScalarAsync())!;
+		blockedCount.Should().Be(dependentLeafIds.Length, "every dependent shares the one unsatisfied required branch");
 	}
 
 	private static async Task<long> FirstLeafUnderAsync(NpgsqlConnection connection, long branchId)

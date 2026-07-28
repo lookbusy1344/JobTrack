@@ -1,5 +1,6 @@
 namespace JobTrack.Web;
 
+using System.Collections.Frozen;
 using Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,9 +15,9 @@ using Microsoft.AspNetCore.Mvc.Filters;
 /// </summary>
 public sealed class RequiresPasswordChangePageFilter : IAsyncPageFilter
 {
-	private static readonly HashSet<string> ExemptPagePaths = new(StringComparer.OrdinalIgnoreCase) {
-		"/Account/ChangePassword", "/Account/Logout", "/Account/Login", "/Account/AccessDenied",
-	};
+	private static readonly FrozenSet<string> ExemptPagePaths = FrozenSet.ToFrozenSet(
+		["/Account/ChangePassword", "/Account/Logout", "/Account/Login", "/Account/AccessDenied"],
+		StringComparer.OrdinalIgnoreCase);
 
 	public Task OnPageHandlerSelectionAsync(PageHandlerSelectedContext context) => Task.CompletedTask;
 
