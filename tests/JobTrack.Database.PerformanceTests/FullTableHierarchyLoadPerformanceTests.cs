@@ -39,6 +39,12 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 
 	private const int RealisticCombinedTreeAwaitingProgressNodeLoadMaximum = 10_000;
 
+	// §2.2 of the 2026-07-28 fresh-eyes review: 5,000 dependents sharing one required branch. Separate
+	// ceilings distinguish ordinary candidate materialization from the blocked relation whose old
+	// per-edge evaluation this fixture must reject. The stored function also has a plan-shape assertion,
+	// so environmental timing variance cannot let the old relational shape pass.
+	private const int PrerequisiteFanOutDependentCount = 5_000;
+
 	// Regression ceilings with headroom over the measured baseline (docs/traceability/
 	// performance-budgets.md's "Full-table hierarchy load" rows). Awaiting Progress, post-narrowing:
 	// broad tree ~30-46 ms, all-Waiting combined production tree ~744-1,285 ms (run-to-run variance;
@@ -67,12 +73,6 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 	private static readonly TimeSpan RealisticCombinedProductionTreeAwaitingProgressCeiling = TimeSpan.FromMilliseconds(800);
 	private static readonly TimeSpan BroadTreeCostReadCeiling = TimeSpan.FromMilliseconds(150);
 	private static readonly TimeSpan CombinedProductionTreeCostReadCeiling = TimeSpan.FromMilliseconds(400);
-
-	// §2.2 of the 2026-07-28 fresh-eyes review: 5,000 dependents sharing one required branch. Separate
-	// ceilings distinguish ordinary candidate materialization from the blocked relation whose old
-	// per-edge evaluation this fixture must reject. The stored function also has a plan-shape assertion,
-	// so environmental timing variance cannot let the old relational shape pass.
-	private const int PrerequisiteFanOutDependentCount = 5_000;
 	private static readonly TimeSpan PrerequisiteFanOutIncludeBlockedCeiling = TimeSpan.FromMilliseconds(500);
 	private static readonly TimeSpan PrerequisiteFanOutExcludeBlockedCeiling = TimeSpan.FromMilliseconds(50);
 	private static readonly TimeSpan PrerequisiteFanOutBlockedQueryCeiling = TimeSpan.FromMilliseconds(25);
@@ -329,7 +329,7 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var ownerUserId = await PerformanceScaleGenerator.SeedAppUserAsync(connection, "Fan-out owner");
-		_ = await PerformanceScaleGenerator.SeedPrerequisiteFanOutAsync(connection, ownerUserId, PrerequisiteFanOutDependentCount);
+		_ = await PerformanceScaleGenerator.SeedPrerequisiteFanOutAsync(connection, ownerUserId);
 
 		await using var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
 		var awaitingProgressPort = new PostgreSqlAwaitingProgressQueryPort(dataSource);
@@ -402,7 +402,7 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 		await using var connection = await OpenDeployedConnectionAsync();
 		var ownerUserId = await PerformanceScaleGenerator.SeedAppUserAsync(connection, "Fan-out explain owner");
 		var (_, _, dependentLeafIds) =
-			await PerformanceScaleGenerator.SeedPrerequisiteFanOutAsync(connection, ownerUserId, PrerequisiteFanOutDependentCount);
+			await PerformanceScaleGenerator.SeedPrerequisiteFanOutAsync(connection, ownerUserId);
 
 		await using (var warmCommand = connection.CreateCommand()) {
 			warmCommand.CommandText = "SELECT count(*) FROM job_node_blocked();";

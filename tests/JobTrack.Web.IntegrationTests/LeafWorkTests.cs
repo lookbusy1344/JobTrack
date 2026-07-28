@@ -137,11 +137,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var required = await AddWorkedLeafAsync(rootId, workerId, "Site survey");
 		var dependent = await AddChildAsync(rootId, workerId, "Excavate foundations");
 		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
-		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = context,
-			RequiredJobId = required.Id,
-			DependentJobId = dependent.Id,
-		});
+		await seedClient.Jobs.AddPrerequisiteAsync(new() { Context = context, RequiredJobId = required.Id, DependentJobId = dependent.Id });
 		var inProgress = await seedClient.Work.SetAchievementAsync(new() {
 			Context = context,
 			JobNodeId = required.Id,
@@ -165,11 +161,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		beforeDependentStarts.Should().Contain("blocked again");
 		beforeDependentStarts.Should().NotContain("work in progress right now");
 
-		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = context,
-			JobNodeId = dependent.Id,
-			WorkedByUserId = workerId,
-		});
+		_ = await seedClient.Work.StartWorkAsync(new() { Context = context, JobNodeId = dependent.Id, WorkedByUserId = workerId });
 
 		var whileDependentWorks = await (await GetAsync($"/Jobs/Work?leafNodeId={required.Id.Value}", authCookie))
 			.Content.ReadAsStringAsync();

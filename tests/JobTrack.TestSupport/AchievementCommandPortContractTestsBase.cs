@@ -289,11 +289,8 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 		});
 		var port = CreateAchievementPort(database.ConnectionString);
 		foreach (var (leafId, achievement, version) in new[] {
-					 (requiredLeaf, Achievement.InProgress, 1L),
-					 (requiredLeaf, Achievement.Success, 2L),
-					 (dependentLeaf, Achievement.InProgress, 1L),
-					 (dependentLeaf, Achievement.Success, 2L),
-					 (requiredLeaf, Achievement.Waiting, 3L),
+					 (requiredLeaf, Achievement.InProgress, 1L), (requiredLeaf, Achievement.Success, 2L), (dependentLeaf, Achievement.InProgress, 1L),
+					 (dependentLeaf, Achievement.Success, 2L), (requiredLeaf, Achievement.Waiting, 3L),
 				 }) {
 			_ = await port.SetAchievementAsync(new() {
 				Context = ContextFor(jobManagerId),

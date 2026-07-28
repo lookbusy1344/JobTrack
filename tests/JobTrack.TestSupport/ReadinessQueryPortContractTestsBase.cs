@@ -225,11 +225,7 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 
 	private static Task AddPrerequisiteAsync(
 		IJobNodeCommandPort jobNodePort, CommandContext context, JobNodeId requiredJobId, JobNodeId dependentJobId) =>
-		jobNodePort.AddPrerequisiteAsync(new() {
-			Context = context,
-			RequiredJobId = requiredJobId,
-			DependentJobId = dependentJobId,
-		});
+		jobNodePort.AddPrerequisiteAsync(new() { Context = context, RequiredJobId = requiredJobId, DependentJobId = dependentJobId });
 
 	/// <summary>
 	///     Drives an already-attached leaf through the real achievement command port to

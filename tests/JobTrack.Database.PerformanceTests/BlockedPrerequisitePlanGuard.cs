@@ -18,9 +18,9 @@ internal static class BlockedPrerequisitePlanGuard
 	internal static TimeSpan ExecutionTime(string plan)
 	{
 		var executionTimeLine = plan
-			.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-			.SingleOrDefault(static line => line.StartsWith(ExecutionTimePrefix, StringComparison.Ordinal))
-			?? throw new InvalidDataException("The PostgreSQL plan did not report an execution time.");
+									.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+									.SingleOrDefault(static line => line.StartsWith(ExecutionTimePrefix, StringComparison.Ordinal))
+								?? throw new InvalidDataException("The PostgreSQL plan did not report an execution time.");
 		var valueWithUnit = executionTimeLine[ExecutionTimePrefix.Length..].Trim();
 		if (!valueWithUnit.EndsWith(MillisecondSuffix, StringComparison.Ordinal)) {
 			throw new InvalidDataException("The PostgreSQL plan execution time was not reported in milliseconds.");

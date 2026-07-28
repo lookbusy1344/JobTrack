@@ -9,12 +9,11 @@ internal sealed class TestCookieContainerHandler(HttpMessageHandler innerHandler
 	internal IReadOnlyList<TestCookieSnapshot> SuspendCookiesContaining(Uri uri, string nameFragment)
 	{
 		var matches = cookies.GetCookies(uri)
-			.Cast<Cookie>()
 			.Where(cookie => cookie.Name.Contains(nameFragment, StringComparison.OrdinalIgnoreCase))
 			.Select(static cookie => new TestCookieSnapshot(cookie.Name, cookie.Value))
 			.ToArray();
 
-		foreach (var cookie in cookies.GetCookies(uri).Cast<Cookie>()
+		foreach (var cookie in cookies.GetCookies(uri)
 					 .Where(cookie => cookie.Name.Contains(nameFragment, StringComparison.OrdinalIgnoreCase))) {
 			cookie.Expired = true;
 		}

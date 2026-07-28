@@ -732,7 +732,7 @@ internal sealed class JobQueries : IJobQueries
 					// Only Success can be reopened into a readiness regression, and only a dependent
 					// with a *running* session is at risk of losing its gate mid-flight -- so this
 					// second round trip is spent only where the warning could actually fire.
-					hasActiveDependentWork = achievement == Abstractions.Achievement.Success
+					hasActiveDependentWork = achievement == Achievement.Success
 											 && directDependentCount > 0
 											 && await _prerequisiteQueryPort
 												 .HasActiveDependentWorkAsync(leafId, cancellationToken).ConfigureAwait(false);

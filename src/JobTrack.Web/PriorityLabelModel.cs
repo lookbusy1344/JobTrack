@@ -7,7 +7,7 @@ using Abstractions;
 ///     wherever a priority appears (Browse's node detail and subtree table, AwaitingProgress). Colour
 ///     rides on a per-level modifier class rather than an inline style, so a level earns emphasis by
 ///     its own rule in <c>site.css</c> -- currently <see cref="Abstractions.Priority.High" /> and
-///     <see cref="Priority.Urgent" /> (red, bold); Low/Medium render as plain text until a future pass
+///     <see cref="Abstractions.Priority.Urgent" /> (red, bold); Low/Medium render as plain text until a future pass
 ///     gives each its own treatment.
 /// </summary>
 public sealed class PriorityLabelModel

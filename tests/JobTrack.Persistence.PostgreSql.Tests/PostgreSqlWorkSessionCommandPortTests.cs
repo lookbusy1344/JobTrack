@@ -306,8 +306,8 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 	{
 		var (rootId, jobManagerId, workerId, dependent, requiredLeafId) = await SeedReadyLeafWithDependentAsync();
 
-		var interceptor = new BlockingReaderCommandInterceptor(
-			sql => sql.Contains("UPDATE", StringComparison.Ordinal) && sql.Contains("leaf_work", StringComparison.Ordinal));
+		var interceptor = new BlockingReaderCommandInterceptor(sql =>
+			sql.Contains("UPDATE", StringComparison.Ordinal) && sql.Contains("leaf_work", StringComparison.Ordinal));
 		var achievementPort = CreateAchievementPortWithInterceptor(ConnectionString, interceptor);
 
 		var reopenTask = TrySetAchievementAsync(achievementPort, jobManagerId, requiredLeafId, Achievement.Waiting, 3);
@@ -339,8 +339,8 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 	{
 		var (rootId, jobManagerId, workerId, dependent, requiredLeafId) = await SeedReadyLeafWithDependentAsync();
 
-		var interceptor = new BlockingReaderCommandInterceptor(
-			sql => sql.Contains("SELECT", StringComparison.Ordinal) && sql.Contains("leaf_work", StringComparison.Ordinal));
+		var interceptor = new BlockingReaderCommandInterceptor(sql =>
+			sql.Contains("SELECT", StringComparison.Ordinal) && sql.Contains("leaf_work", StringComparison.Ordinal));
 		var achievementPort = CreateAchievementPortWithInterceptor(ConnectionString, interceptor);
 
 		var reopenTask = TrySetAchievementAsync(achievementPort, jobManagerId, requiredLeafId, Achievement.Waiting, 3);

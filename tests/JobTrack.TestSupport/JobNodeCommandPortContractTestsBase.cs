@@ -352,11 +352,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var dependent = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
-		await port.AddPrerequisiteAsync(new() {
-			Context = ContextFor(jobManagerId),
-			RequiredJobId = required.Id,
-			DependentJobId = dependent.Id,
-		});
+		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
 
 		var act = () => port.MoveAsync(new() {
 			Context = ContextFor(jobManagerId),
