@@ -145,6 +145,49 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 	}
 
 	/// <summary>
+	///     "In progress" is <see cref="Achievement.InProgress" /> exactly: work has started and has not
+	///     reached any closure, achieved or otherwise. It says nothing about whether anyone is clocked on
+	///     right now, so a paused leaf stays in — but a leaf still Waiting, one with no <c>LeafWork</c>
+	///     attached at all, and any terminal outcome are all out.
+	/// </summary>
+	[Fact]
+	public async Task An_in_progress_only_filter_returns_only_leaves_whose_work_has_started_and_not_closed()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { InProgressOnly = true });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.InProgressLeafId]);
+	}
+
+	/// <summary>
+	///     The in-progress filter narrows the same candidate set the other filters scope; it does not
+	///     replace them. Owner and in-progress compose, so "what is Priya part-way through" is one query.
+	/// </summary>
+	[Fact]
+	public async Task An_in_progress_only_filter_composes_with_the_ownership_filter_rather_than_replacing_it()
+	{
+		var tree = await SeedScenarioAsync();
+		var port = CreatePort(database.ConnectionString);
+
+		var ownedByWorker = await port.GetAwaitingProgressInputsAsync(
+			DefaultFilter() with { InProgressOnly = true, Ownership = OwnershipFilter.OwnedBy(tree.WorkerId) });
+		var workerEntries = AwaitingProgressCalculator.GetAwaitingProgress(
+			ownedByWorker.NodesById, ownedByWorker.FactsById, ownedByWorker.Prerequisites);
+
+		workerEntries.Should().BeEmpty("the worker owns only the still-Waiting leaf, which is not in progress");
+
+		var ownedByJobManager = await port.GetAwaitingProgressInputsAsync(
+			DefaultFilter() with { InProgressOnly = true, Ownership = OwnershipFilter.OwnedBy(tree.JobManagerId) });
+		var jobManagerEntries = AwaitingProgressCalculator.GetAwaitingProgress(
+			ownedByJobManager.NodesById, ownedByJobManager.FactsById, ownedByJobManager.Prerequisites);
+
+		jobManagerEntries.Select(e => e.Id).Should().BeEquivalentTo([tree.InProgressLeafId]);
+	}
+
+	/// <summary>
 	///     A prerequisite declared on an ancestor gates the whole subtree beneath it (spec §6), so
 	///     exclusion must walk down from the declaring node, not only match leaves carrying their own
 	///     edge.

@@ -101,6 +101,7 @@ is_longer_project() {
 }
 
 if [[ "$skip_build" -eq 0 ]]; then
+	dotnet build-server shutdown
 	echo "==> dotnet build ${FAST_CORE_SLNF}"
 	gtimeout "$BUILD_TIMEOUT_SECONDS" dotnet build "$FAST_CORE_SLNF"
 fi

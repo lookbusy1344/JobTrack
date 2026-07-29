@@ -26,6 +26,13 @@ internal sealed record AwaitingProgressQueryFilter
 	/// </summary>
 	public bool ExcludeBlocked { get; init; }
 
+	/// <summary>
+	///     When <see langword="true" />, only leaves whose achievement is
+	///     <see cref="Achievement.InProgress" /> are returned by the port's own query — before ordering
+	///     and paging, so an excluded leaf never consumes a page slot.
+	/// </summary>
+	public bool InProgressOnly { get; init; }
+
 	public required int Offset { get; init; }
 
 	public required int Limit { get; init; }

@@ -323,6 +323,69 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		body.Should().NotContain("Blocked leaf");
 	}
 
+	/// <summary>
+	///     "In progress" is the achievement, not who is clocked on: a started leaf nobody is currently
+	///     working (paused) stays on the list, while one still waiting to be picked up drops off.
+	/// </summary>
+	[Fact]
+	public async Task Showing_only_in_progress_jobs_keeps_a_paused_leaf_and_hides_a_waiting_one()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.inprogress");
+		var rootId = bootstrappedRootId!.Value;
+		var paused = await AddLeafWithWorkAsync(rootId, workerId, "Started then paused", adminId);
+		await SetAchievementAsync(paused.JobNodeId, Achievement.InProgress, adminId, paused.Version);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Not started yet", adminId);
+		var authCookie = await SignInAsync("awaiting.inprogress");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress?inProgressOnly=true", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Started then paused");
+		body.Should().NotContain("Not started yet");
+	}
+
+	/// <summary>
+	///     The in-progress filter narrows the owner-filtered set rather than replacing it, so the two
+	///     together answer "what is this person part-way through".
+	/// </summary>
+	[Fact]
+	public async Task Showing_only_in_progress_jobs_composes_with_the_owner_filter()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.inprogressowner");
+		var rootId = bootstrappedRootId!.Value;
+		var workerLeaf = await AddLeafWithWorkAsync(rootId, workerId, "Worker started this", adminId);
+		await SetAchievementAsync(workerLeaf.JobNodeId, Achievement.InProgress, adminId, workerLeaf.Version);
+		var adminLeaf = await AddLeafWithWorkAsync(rootId, adminId, "Admin started this", adminId);
+		await SetAchievementAsync(adminLeaf.JobNodeId, Achievement.InProgress, adminId, adminLeaf.Version);
+		var authCookie = await SignInAsync("awaiting.inprogressowner");
+
+		var response = await GetAsync(
+			$"/Jobs/AwaitingProgress?inProgressOnly=true&ownerUserId={workerId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Worker started this");
+		body.Should().NotContain("Admin started this");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_in_progress_only_filter_across_a_return_visit()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.inprogressmem");
+		var rootId = bootstrappedRootId!.Value;
+		var started = await AddLeafWithWorkAsync(rootId, workerId, "Started then paused", adminId);
+		await SetAchievementAsync(started.JobNodeId, Achievement.InProgress, adminId, started.Version);
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Not started yet", adminId);
+		var authCookie = await SignInAsync("awaiting.inprogressmem");
+
+		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?inProgressOnly=true");
+		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
+
+		body.Should().Contain("Started then paused");
+		body.Should().NotContain("Not started yet");
+	}
+
 	[Fact]
 	public async Task AwaitingProgress_remembers_the_search_text_filter_across_a_return_visit()
 	{

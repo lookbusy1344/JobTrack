@@ -33,7 +33,8 @@ public sealed class AwaitingProgressModel(
 	public const int PageSize = AwaitingProgressPaging.DefaultPageSize;
 
 	// Filter memory: every filter this dashboard offers -- owner, the unassigned pool, subtree scope,
-	// search text, and blocked-job exclusion -- is remembered per session under these keys, so
+	// search text, blocked-job exclusion, and the in-progress narrowing -- is remembered per session
+	// under these keys, so
 	// returning to the dashboard (e.g. via the header link, carrying no parameters at all) restores
 	// the view the user last chose rather than resetting it. Offset is deliberately not remembered:
 	// it is a position within a result, not a filter.
@@ -43,6 +44,7 @@ public sealed class AwaitingProgressModel(
 	private const string ShowWholeTreeFilterSessionKey = "Jobs.AwaitingProgress.ShowWholeTree";
 	private const string SearchTextFilterSessionKey = "Jobs.AwaitingProgress.SearchText";
 	private const string ExcludeBlockedFilterSessionKey = "Jobs.AwaitingProgress.ExcludeBlocked";
+	private const string InProgressOnlyFilterSessionKey = "Jobs.AwaitingProgress.InProgressOnly";
 
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
@@ -71,6 +73,15 @@ public sealed class AwaitingProgressModel(
 	/// </summary>
 	[BindProperty(SupportsGet = true)]
 	public bool ExcludeBlocked { get; set; }
+
+	/// <summary>
+	///     When set, restricts to leaves whose work has started and reached no closure
+	///     (<see cref="Achievement.InProgress" />) — whether someone is clocked on right now or the leaf
+	///     is paused. Composes with the owner selector above rather than replacing it, so "what is this
+	///     person part-way through" is the two filters together.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public bool InProgressOnly { get; set; }
 
 	// Settable so LoadAsync can replace an omitted value with the actor's home node (see LoadAsync),
 	// which every replayed filter/route value then reflects.
@@ -147,6 +158,7 @@ public sealed class AwaitingProgressModel(
 		["ShowWholeTree"] = ShowWholeTree.ToString(),
 		["SearchText"] = SearchText,
 		["ExcludeBlocked"] = ExcludeBlocked.ToString(),
+		["InProgressOnly"] = InProgressOnly.ToString(),
 		["Offset"] = Offset.ToString(CultureInfo.InvariantCulture),
 	};
 
@@ -163,6 +175,7 @@ public sealed class AwaitingProgressModel(
 		showWholeTree = ShowWholeTree,
 		searchText = SearchText,
 		excludeBlocked = ExcludeBlocked,
+		inProgressOnly = InProgressOnly,
 		offset = Offset,
 	});
 
@@ -307,6 +320,7 @@ public sealed class AwaitingProgressModel(
 		["showWholeTree"] = ShowWholeTree,
 		["searchText"] = SearchText,
 		["excludeBlocked"] = ExcludeBlocked,
+		["inProgressOnly"] = InProgressOnly,
 		["offset"] = Offset,
 	};
 
@@ -331,6 +345,8 @@ public sealed class AwaitingProgressModel(
 			session, SearchTextFilterSessionKey, Request.Query.ContainsKey(nameof(SearchText)), SearchText);
 		ExcludeBlocked = FilterMemory.ResolveFlag(
 			session, ExcludeBlockedFilterSessionKey, Request.Query.ContainsKey(nameof(ExcludeBlocked)), ExcludeBlocked);
+		InProgressOnly = FilterMemory.ResolveFlag(
+			session, InProgressOnlyFilterSessionKey, Request.Query.ContainsKey(nameof(InProgressOnly)), InProgressOnly);
 
 		var scopeProvided = Request.Query.ContainsKey(nameof(SubtreeRootId)) || Request.Query.ContainsKey(nameof(ShowWholeTree));
 		SubtreeRootId = FilterMemory.Resolve(session, SubtreeRootFilterSessionKey, scopeProvided, SubtreeRootId, null);
@@ -380,6 +396,7 @@ public sealed class AwaitingProgressModel(
 					SubtreeRootId = SubtreeRootId.HasValue ? new JobNodeId(SubtreeRootId.Value) : null,
 					SearchText = SearchText,
 					ExcludeBlocked = ExcludeBlocked,
+					InProgressOnly = InProgressOnly,
 					Offset = Math.Max(0, Offset),
 					Limit = PageSize + 1,
 				},

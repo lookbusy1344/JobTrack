@@ -361,7 +361,17 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 			.ToDictionaryAsync(lw => lw.JobNodeId, lw => lw.ChangedAt, cancellationToken).ConfigureAwait(false);
 
 		var acknowledged = jobRequest.AcknowledgedAt is not null;
-		var overallStatus = RequesterStatusCalculator.Derive(acknowledged, ToLeafStates(subtreeRows.Where(r => r.IsChildless)));
+		var childlessStates = ToLeafStates(subtreeRows.Where(r => r.IsChildless));
+		var overallStatus = RequesterStatusCalculator.Derive(acknowledged, childlessStates);
+
+		// The anchor's own row carries both structural facts the projection reports: whether it is still
+		// a leaf (ADR 0035 derives kind at read time, never from a stored column) and, if so, the
+		// six-value achievement the two-value subtree rollup below deliberately collapses away.
+		var anchorRow = subtreeRows.Single(r => r.Id == request.NodeId.Value);
+		var anchorKind = JobNodeStructuralResults.DeriveKind(node.ParentId, !anchorRow.IsChildless);
+		var anchorLeafAchievement = anchorRow.IsChildless && anchorRow.AchievementId.HasValue
+			? (Achievement)anchorRow.AchievementId.Value
+			: (Achievement?)null;
 
 		var subtree = subtreeRows.Select(r => new RequesterSubtreeNodeResult {
 			JobNodeId = new(r.Id),
@@ -385,6 +395,9 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 			RequesterUserName = requestHeader.RequesterUserName,
 			Description = node.Description,
 			Status = overallStatus,
+			Kind = anchorKind,
+			SubtreeAchievement = BranchAchievementCalculator.Derive(childlessStates),
+			LeafAchievement = anchorLeafAchievement,
 			SubmittedAt = jobRequest.SubmittedAt,
 			AcknowledgedAt = jobRequest.AcknowledgedAt,
 			Version = jobRequest.RowVersion,

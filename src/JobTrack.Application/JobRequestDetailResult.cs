@@ -29,6 +29,39 @@ public sealed record JobRequestDetailResult
 	/// <summary>The request's public status, derived from the whole subtree (ADR 0034).</summary>
 	public required RequesterStatus Status { get; init; }
 
+	/// <summary>
+	///     The anchor node's structural classification, derived from real relationships at read time
+	///     (ADR 0035) — <see cref="NodeKind.Leaf" /> until triage decomposes the request,
+	///     <see cref="NodeKind.Branch" /> afterwards. Tells a caller whether
+	///     <see cref="LeafAchievement" /> can carry a value at all.
+	/// </summary>
+	public required NodeKind Kind { get; init; }
+
+	/// <summary>
+	///     The rollup achievement over the anchor node's whole subtree (spec §5.2): <see cref="BranchAchievement.Success" />
+	///     iff every childless node in it succeeded. Meaningful for a leaf and a branch alike — for a
+	///     leaf it collapses that one node's <see cref="LeafAchievement" /> to the same two-value
+	///     vocabulary, so a caller can render one rollup field regardless of <see cref="Kind" />.
+	/// </summary>
+	public required BranchAchievement SubtreeAchievement { get; init; }
+
+	/// <summary>
+	///     The anchor node's own recorded achievement when it is a leaf carrying <c>LeafWork</c>;
+	///     <see langword="null" /> for a branch (where the six-value leaf vocabulary does not apply) or
+	///     for a leaf with no work attached yet. This is the detail <see cref="SubtreeAchievement" />
+	///     deliberately collapses away.
+	/// </summary>
+	public Achievement? LeafAchievement { get; init; }
+
+	/// <summary>
+	///     Whether every prerequisite attached to the anchor node or to any of its ancestors is
+	///     satisfied (spec §6). Composed by <see cref="IRequestCommands.GetDetailAsync" /> from the
+	///     readiness port after the persistence port has performed the authoritative per-request
+	///     authorization, the same way <see cref="RequesterSubtreeNodeResult.AllocatedDuration" /> is —
+	///     so a persistence port leaves this at its default.
+	/// </summary>
+	public bool IsReady { get; init; } = true;
+
 	/// <summary>The instant this request was submitted.</summary>
 	public required Instant SubmittedAt { get; init; }
 

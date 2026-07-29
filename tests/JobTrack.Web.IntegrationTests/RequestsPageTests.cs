@@ -218,14 +218,107 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("<h1>Job request</h1>", "the head names the kind of page above the job, as /Jobs/Work does");
 		body.Should().Contain("Printer will not turn on");
-		body.Should().Contain("<dt class=\"col-sm-3\">Requester</dt>");
-		body.Should().Contain("<dd class=\"col-sm-9\">Rita Detail</dd>");
-		body.Should().Contain("<dt class=\"col-sm-3\">Username</dt>");
-		body.Should().Contain("<dd class=\"col-sm-9\">rita.detail</dd>");
-		body.Should().Contain("<dt class=\"col-sm-3\">Status</dt>");
-		body.Should().Contain("<dd class=\"col-sm-9\">Submitted</dd>");
+		body.Should().NotContain("<h2 class=\"jt-preserve-whitespace\"><a ",
+			"this page is the request's own home, so its title is not a link back to itself");
+		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Requester</dt>");
+		body.Should().Contain("<span class=\"jt-tag\">Rita Detail (rita.detail)</span>",
+			"the requester reads as one 'display name (username)' tag, as an owner does in Browse");
+		body.Should().NotContain(">Username<", "the separate username field is folded into the requester tag");
 		body.Should().Contain("<a href=\"/Requests\">&larr; Back</a>");
+	}
+
+	/// <summary>
+	///     The record card is Browse's own (ADR 0044): the two-value subtree rollup and the readiness
+	///     pill, not the requester-status vocabulary — a request's anchor may be a leaf or, after triage
+	///     decomposes it, a branch, and only those two forms are defined for both.
+	/// </summary>
+	[Fact]
+	public async Task Request_detail_shows_the_subtree_achievement_and_readiness_in_browses_own_style()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.rollup", EmployeeRole.Requester, "Rita Rollup");
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Rollup and readiness fields");
+		var authCookie = await SignInAsync("rita.rollup");
+
+		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Achievement</dt>");
+		body.Should().Contain("href=\"#jt-icon-achievement-waiting\"",
+			"an anchor with no succeeded leaf beneath it rolls up to Unfinished, which borrows the waiting glyph");
+		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Readiness</dt>");
+		body.Should().Contain("No blocks");
+		body.Should().NotContain("<dt class=\"w-25 text-nowrap\">Status</dt>",
+			"an anchor with no leaf work yet has no finer achievement to show");
+	}
+
+	/// <summary>
+	///     Only a leaf carries the six-value achievement vocabulary the rollup collapses away, so the
+	///     extra Status field appears exactly when there is a finer state to name.
+	/// </summary>
+	[Fact]
+	public async Task Request_detail_adds_the_leafs_own_achievement_when_the_anchor_is_a_worked_leaf()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.leafstatus", EmployeeRole.Requester, "Rita Leafstatus");
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Worked anchor leaf");
+		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		var leafWork = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = submitted.JobNodeId });
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = submitted.JobNodeId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Exercise the leaf status field",
+			Version = leafWork.Version,
+		});
+		var authCookie = await SignInAsync("rita.leafstatus");
+
+		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Status</dt>");
+		body.Should().Contain("href=\"#jt-icon-achievement-in-progress\"");
+	}
+
+	/// <summary>
+	///     Readiness aggregates prerequisites declared on the anchor and on every ancestor (spec §6) —
+	///     facts outside the requester-safe subtree, composed by <c>RequestCommands</c> rather than by the
+	///     request port. Blocked is a state, not an error (ADR 0051): the page names it, it does not fail.
+	/// </summary>
+	[Fact]
+	public async Task Request_detail_shows_a_blocked_pill_when_a_prerequisite_is_unsatisfied()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.blocked", EmployeeRole.Requester, "Rita Blocked");
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Blocked by a prerequisite");
+		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		var blocker = await seedClient.Jobs.AddChildAsync(new() {
+			Context = context,
+			ParentId = rootId,
+			Description = "Must finish first",
+			OwnerUserId = administratorId,
+			Priority = Priority.Medium,
+		});
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = blocker.Id });
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = context,
+			DependentJobId = submitted.JobNodeId,
+			RequiredJobId = blocker.Id,
+		});
+		var authCookie = await SignInAsync("rita.blocked");
+
+		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var body = await response.Content.ReadAsStringAsync();
+		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Readiness</dt>");
+		body.Should().Contain("status-pill-blocked");
+		body.Should().Contain(">Blocked</span>");
+		body.Should().NotContain("No blocks");
 	}
 
 	[Fact]

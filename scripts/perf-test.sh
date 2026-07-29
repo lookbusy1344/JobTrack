@@ -26,4 +26,5 @@ cleanup_test_databases() {
 trap cleanup_test_databases EXIT
 
 cleanup_test_databases
+dotnet build-server shutdown
 gtimeout "$PERF_TEST_TIMEOUT_SECONDS" dotnet test tests/JobTrack.Database.PerformanceTests -p:IsTestProject=true "$@"

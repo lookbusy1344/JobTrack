@@ -168,6 +168,10 @@ internal static partial class JobTrackApi
 			RequesterDisplayName = result.RequesterDisplayName,
 			RequesterUserName = result.RequesterUserName,
 			Status = result.Status,
+			Kind = result.Kind,
+			SubtreeAchievement = result.SubtreeAchievement,
+			LeafAchievement = result.LeafAchievement,
+			IsReady = result.IsReady,
 			SubmittedAt = result.SubmittedAt.ToDateTimeOffset(),
 			AcknowledgedAt = result.AcknowledgedAt?.ToDateTimeOffset(),
 			Version = result.Version,
@@ -234,6 +238,18 @@ internal static partial class JobTrackApi
 		public required string RequesterUserName { get; init; }
 
 		public required RequesterStatus Status { get; init; }
+
+		/// <summary>The anchor node's structural classification, derived at read time (ADR 0035).</summary>
+		public required NodeKind Kind { get; init; }
+
+		/// <summary>The two-value rollup over the anchor's whole subtree (spec §5.2).</summary>
+		public required BranchAchievement SubtreeAchievement { get; init; }
+
+		/// <summary>The anchor's own six-value achievement when it is a worked leaf; absent otherwise.</summary>
+		public Achievement? LeafAchievement { get; init; }
+
+		/// <summary>Whether every prerequisite on the anchor or any ancestor is satisfied (spec §6).</summary>
+		public required bool IsReady { get; init; }
 
 		public required DateTimeOffset SubmittedAt { get; init; }
 

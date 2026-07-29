@@ -66,6 +66,8 @@ gtimeout "$HURL_TIMEOUT_SECONDS" hurl --test \
 	--variable new_password="$new_password" \
 	tests/hurl/web-login-and-csrf.hurl
 
+dotnet build-server shutdown
+
 echo "==> JobTrack.AdminCli issue-token --username ${username}"
 token_output=$(gtimeout "$ADMINCLI_TIMEOUT_SECONDS" dotnet run --project src/JobTrack.AdminCli -- issue-token \
 	--provider "$provider" \

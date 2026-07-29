@@ -38,5 +38,6 @@ fi
 # and, on a bump, re-record the score in docs/operations/mutation-testing-gate.md.
 
 cd "$DOMAIN_DIR"
+dotnet build-server shutdown
 echo "==> dotnet-stryker --config-file ${CONFIG_FILE} (from ${DOMAIN_DIR})"
 exec dotnet-stryker --config-file "$CONFIG_FILE" "$@"

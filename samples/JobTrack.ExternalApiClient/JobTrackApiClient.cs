@@ -487,6 +487,18 @@ public sealed class RequestDetail
 
 	public required string Status { get; init; }
 
+	/// <summary>The anchor node's structural classification: <c>Root</c>, <c>Branch</c>, or <c>Leaf</c>.</summary>
+	public required string Kind { get; init; }
+
+	/// <summary>The rollup over the anchor's whole subtree: <c>Success</c> or <c>Unfinished</c>.</summary>
+	public required string SubtreeAchievement { get; init; }
+
+	/// <summary>The anchor's own achievement when it is a worked leaf; <see langword="null" /> otherwise.</summary>
+	public string? LeafAchievement { get; init; }
+
+	/// <summary>Whether every prerequisite on the anchor or any of its ancestors is satisfied.</summary>
+	public required bool IsReady { get; init; }
+
 	public required DateTimeOffset SubmittedAt { get; init; }
 
 	public DateTimeOffset? AcknowledgedAt { get; init; }

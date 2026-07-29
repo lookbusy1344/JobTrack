@@ -547,6 +547,93 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		_ = rootId;
 	}
 
+	/// <summary>
+	///     A freshly submitted request has no descendants, so its anchor is a leaf (ADR 0035, derived at
+	///     read time) with no <c>leaf_work</c> yet — hence no leaf achievement, and a subtree rollup that
+	///     cannot be <see cref="BranchAchievement.Success" /> (schema version 0013's <c>node_succeeded</c>:
+	///     a childless node without <c>leaf_work</c> never succeeds).
+	/// </summary>
+	[Fact]
+	public async Task A_freshly_submitted_requests_anchor_is_an_unfinished_leaf_with_no_achievement()
+	{
+		var (_, requesterId) = await SeedRootAndRequesterAsync();
+		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
+		var port = CreateCommandPort(database.ConnectionString);
+		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
+
+		var detail = await port.GetDetailAsync(DetailRequest(requesterId, submitted.JobNodeId));
+
+		detail.Kind.Should().Be(NodeKind.Leaf);
+		detail.LeafAchievement.Should().BeNull();
+		detail.SubtreeAchievement.Should().Be(BranchAchievement.Unfinished);
+	}
+
+	/// <summary>
+	///     Once <c>leaf_work</c> is attached the anchor carries the full six-value leaf vocabulary, which
+	///     the two-value subtree rollup deliberately collapses away — the pair is exactly why the detail
+	///     projection carries both.
+	/// </summary>
+	[Fact]
+	public async Task A_worked_anchor_leaf_reports_its_own_achievement_alongside_the_subtree_rollup()
+	{
+		var (_, requesterId) = await SeedRootAndRequesterAsync();
+		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var holdingAreaId = await SeedHoldingAreaAsync(null, jobManagerId, true);
+		var port = CreateCommandPort(database.ConnectionString);
+		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
+		var nodeCommandPort = CreateJobNodeCommandPort(database.ConnectionString);
+		_ = await nodeCommandPort.AttachLeafWorkAsync(new() {
+			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = submitted.JobNodeId,
+		});
+
+		var detail = await port.GetDetailAsync(DetailRequest(requesterId, submitted.JobNodeId));
+
+		detail.Kind.Should().Be(NodeKind.Leaf);
+		detail.LeafAchievement.Should().Be(Achievement.Waiting);
+		detail.SubtreeAchievement.Should().Be(BranchAchievement.Unfinished);
+	}
+
+	/// <summary>
+	///     After triage decomposes a request the anchor becomes a branch, where the six-value leaf
+	///     vocabulary no longer applies — only the rollup does, derived from every childless node beneath
+	///     it rather than from the anchor itself.
+	/// </summary>
+	[Fact]
+	public async Task A_decomposed_anchor_is_a_branch_with_no_leaf_achievement_of_its_own()
+	{
+		var (_, requesterId) = await SeedRootAndRequesterAsync();
+		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
+		var port = CreateCommandPort(database.ConnectionString);
+		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
+		_ = await InsertNodeAsync(submitted.JobNodeId.Value, jobManagerId, "Sub-job created by triage");
+
+		var detail = await port.GetDetailAsync(DetailRequest(requesterId, submitted.JobNodeId));
+
+		detail.Kind.Should().Be(NodeKind.Branch);
+		detail.LeafAchievement.Should().BeNull();
+		detail.SubtreeAchievement.Should().Be(BranchAchievement.Unfinished);
+	}
+
+	/// <summary>
+	///     Readiness is not the request port's to determine — it aggregates prerequisites declared on the
+	///     anchor and on every ancestor (spec §6), which reach outside the requester-safe subtree. The
+	///     port leaves it at its optimistic default; <c>RequestCommands</c> composes the real value.
+	/// </summary>
+	[Fact]
+	public async Task The_request_port_leaves_readiness_at_its_default_for_the_facade_to_compose()
+	{
+		var (_, requesterId) = await SeedRootAndRequesterAsync();
+		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
+		var port = CreateCommandPort(database.ConnectionString);
+		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
+
+		var detail = await port.GetDetailAsync(DetailRequest(requesterId, submitted.JobNodeId));
+
+		detail.IsReady.Should().BeTrue();
+	}
+
 	[Fact]
 	public async Task Requesting_detail_reflects_acknowledged_status()
 	{

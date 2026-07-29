@@ -14,7 +14,15 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 /// </summary>
 internal static class EmployeeDirectoryDisplay
 {
-	internal static string Format(EmployeeDirectoryEntry entry) => $"{entry.DisplayName} ({entry.UserName})";
+	internal static string Format(EmployeeDirectoryEntry entry) => Format(entry.DisplayName, entry.UserName);
+
+	/// <summary>
+	///     The same "display name (username)" rendering for a caller that already holds both strings
+	///     rather than a directory entry — a request's requester, whose names come from the
+	///     requester-safe detail projection and never from
+	///     <see cref="IJobQueries.GetEmployeeDirectoryAsync" />'s workflow-only scope.
+	/// </summary>
+	internal static string Format(string displayName, string userName) => $"{displayName} ({userName})";
 
 	internal static string Describe(IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> directoryById, long? userId,
 		string noneLabel = "Unassigned")

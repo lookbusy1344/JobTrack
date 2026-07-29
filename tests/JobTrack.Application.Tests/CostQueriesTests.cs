@@ -21,6 +21,8 @@ public sealed class CostQueriesTests
 
 	private static Instant At(int hour) => hour == 24 ? Instant.FromUtc(2026, 1, 2, 0, 0) : Instant.FromUtc(2026, 1, 1, hour, 0);
 
+	private static Instant At(int hour, int minute) => Instant.FromUtc(2026, 1, 1, hour, minute);
+
 	private static FakeCostQueryPort CreatePortWithNodes()
 	{
 		var port = new FakeCostQueryPort();
@@ -118,6 +120,114 @@ public sealed class CostQueriesTests
 		result.AllocatedDurations[BranchId].ToHours().Should().Be(1.5m);
 		result.AllocatedDurations[LeafId].ToHours().Should().Be(1.5m);
 		result.TzdbVersion.Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
+	}
+
+	/// <summary>
+	///     Two <em>different</em> people on the same leaf at the same time do not divide each other's
+	///     time: the concurrency divisor of spec §10.2 is per worker (one person cannot spend the same
+	///     minute on two jobs), so their allocations sum. Ten minutes each is 20 minutes worked, not 10.
+	///     Every other cost test seeds a single worker, which is why this case needed its own.
+	/// </summary>
+	[Fact]
+	public async Task Two_workers_concurrent_on_one_leaf_sum_their_time_rather_than_halving_it()
+	{
+		var port = CreatePortWithNodes();
+		var secondWorkerId = new AppUserId(3);
+		port.SeedRoles(secondWorkerId, EmployeeRole.Worker);
+		port.SeedWorker(new() {
+			Sessions = [new(Session1, LeafId, new(At(10, 0), At(10, 10)))],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		port.SeedWorker(new() {
+			Sessions = [new(Session2, LeafId, new(At(10, 0), At(10, 10)))],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		var sut = new CostQueries(port);
+
+		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+
+		result.AllocatedDurations[LeafId].ToHours().Should().Be(0.333333m, "20 minutes of work, not 10");
+		result.AllocatedDurations[LeafId].ToString().Should().Be("0.3 hrs");
+		result.AllocatedDurations[BranchId].ToHours().Should().Be(0.333333m);
+		result.ExactCosts[LeafId].Should().Be(new(20m), "20 minutes at £60/hr, both people billed in full");
+	}
+
+	/// <summary>
+	///     The same two ten-minute sessions where the second person has no rota covering them. Work is
+	///     costable only inside the worker's own effective working intervals (spec §10.2), so that
+	///     person contributes nothing and the leaf shows one person's ten minutes — 0.166667 h, which
+	///     renders as "0.2 hrs". This is the shape a missing rota takes, and it is deliberately
+	///     indistinguishable in the total from a halved 20 minutes, so it is pinned here explicitly.
+	/// </summary>
+	[Fact]
+	public async Task A_workers_session_outside_their_working_intervals_contributes_no_allocated_time()
+	{
+		var port = CreatePortWithNodes();
+		var unrotaedWorkerId = new AppUserId(3);
+		port.SeedRoles(unrotaedWorkerId, EmployeeRole.Worker);
+		port.SeedWorker(new() {
+			Sessions = [new(Session1, LeafId, new(At(10, 0), At(10, 10)))],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		port.SeedWorker(new() {
+			Sessions = [new(Session2, LeafId, new(At(10, 0), At(10, 10)))],
+			EffectiveWorkingIntervals = [],
+			ScheduledWorkingIntervals = [],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		var sut = new CostQueries(port);
+
+		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+
+		result.AllocatedDurations[LeafId].ToHours().Should().Be(0.166667m, "only the rota'd worker's ten minutes are costable");
+		result.AllocatedDurations[LeafId].ToString().Should().Be("0.2 hrs");
+	}
+
+	/// <summary>
+	///     The contrast case for the two tests above: one person's overlapping sessions on two different
+	///     leaves <em>do</em> divide, because the same minute cannot be spent twice.
+	/// </summary>
+	[Fact]
+	public async Task One_workers_concurrent_sessions_on_two_leaves_halve_each_leafs_time()
+	{
+		var port = CreatePortWithNodes();
+		port.SeedWorker(new() {
+			Sessions = [
+				new(Session1, LeafId, new(At(10, 0), At(10, 10))),
+				new(Session2, OtherLeafId, new(At(10, 0), At(10, 10))),
+			],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = new HourlyRate(60m),
+		});
+		var sut = new CostQueries(port);
+
+		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = RootId, AsOf = At(24) });
+
+		result.AllocatedDurations[LeafId].ToHours().Should().Be(0.083333m, "five of the ten minutes went to this leaf");
+		result.AllocatedDurations[OtherLeafId].ToHours().Should().Be(0.083333m);
+		result.AllocatedDurations[RootId].ToHours().Should().Be(0.166667m, "the person worked ten minutes in total");
 	}
 
 	[Fact]

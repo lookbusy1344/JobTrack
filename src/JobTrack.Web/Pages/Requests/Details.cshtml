@@ -20,30 +20,75 @@
 	};
 }
 
+@{
+	var detail = Model.Detail;
+}
+
+@* Mirrors /Jobs/Work's head: an h1 naming what kind of page this is, with the job it acts on as the
+   h2 beneath. Unlinked here, unlike Work's -- this page is already the request's own home, so a link
+   on the title would only point back at itself. *@
 <div class="jt-page-head">
-	<h1 class="jt-preserve-whitespace">@(Model.Detail is not null ? JobNodeDisplay.Title(Model.Detail.Description, Model.Detail.JobNodeId.Value) : null)</h1>
+	<h1>Job request</h1>
+	@if (detail is not null) {
+		<h2 class="jt-preserve-whitespace">@JobNodeDisplay.Title(detail.Description, detail.JobNodeId.Value)</h2>
+	}
 </div>
 
 <p><a href="@Model.BackUrl">&larr; Back</a></p>
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
-@{
-	var detail = Model.Detail;
-}
 @if (detail is not null) {
-	<dl class="row">
-		<dt class="col-sm-3">Requester</dt>
-		<dd class="col-sm-9">@detail.RequesterDisplayName</dd>
-		<dt class="col-sm-3">Username</dt>
-		<dd class="col-sm-9">@detail.RequesterUserName</dd>
-		<dt class="col-sm-3">Status</dt>
-		<dd class="col-sm-9">@EnumDisplay.Label(detail.Status)</dd>
-		<dt class="col-sm-3">Submitted</dt>
-		<dd class="col-sm-9">@InstantDisplay.Format(detail.SubmittedAt, Model.ViewerZone)</dd>
+	@* Same record card as /Jobs/Browse's node detail (ADR 0044): two field columns on wide screens,
+	   one on phones, each field its own <div class="col"> holding one dt/dd pair directly -- what
+	   HTML5's <dl> content model permits and what axe's definition-list rule requires. The fields
+	   themselves are Browse's too, so a request and the job it anchors read the same way. *@
+	<dl class="row row-cols-1 row-cols-md-2 g-2 mb-4 jt-record--full">
+		<div class="col d-flex gap-2">
+			<dt class="w-25 text-nowrap">Requester</dt>
+			<dd class="w-75 mb-0"><span class="jt-tag">@Model.RequesterLabel</span></dd>
+		</div>
+		@* The rollup, not the requester status vocabulary: the anchor may be a leaf or (after triage
+		   decomposes it) a branch, and only this two-value form is defined for both. *@
+		<div class="col d-flex gap-2">
+			<dt class="w-25 text-nowrap">Achievement</dt>
+			<dd class="w-75 mb-0">
+				<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel { Achievement = detail.SubtreeAchievement })"/>
+			</dd>
+		</div>
+		@* Only a leaf carries the six-value achievement vocabulary the rollup above collapses away, so
+		   this field appears only when there is a finer state to show. *@
+		@if (detail.Kind == NodeKind.Leaf && detail.LeafAchievement is Achievement leafAchievement) {
+			<div class="col d-flex gap-2">
+				<dt class="w-25 text-nowrap">Status</dt>
+				<dd class="w-75 mb-0">
+					<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = leafAchievement })"/>
+				</dd>
+			</div>
+		}
+		<div class="col d-flex gap-2">
+			<dt class="w-25 text-nowrap">Readiness</dt>
+			<dd class="w-75 mb-0">
+				@if (detail.IsReady) {
+					<span class="status-pill status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+					                                                               aria-hidden="true" focusable="false"><use
+								href="#jt-icon-go"></use></svg>No blocks</span>
+				} else {
+					<span class="status-pill status-pill-blocked" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+					                                                                 aria-hidden="true" focusable="false"><use
+								href="#jt-icon-stop"></use></svg>Blocked</span>
+				}
+			</dd>
+		</div>
+		<div class="col d-flex gap-2">
+			<dt class="w-25 text-nowrap">Submitted</dt>
+			<dd class="w-75 mb-0">@InstantDisplay.Format(detail.SubmittedAt, Model.ViewerZone)</dd>
+		</div>
 		@if (detail.AcknowledgedAt is Instant acknowledgedAt) {
-			<dt class="col-sm-3">Acknowledged</dt>
-			<dd class="col-sm-9">@InstantDisplay.Format(acknowledgedAt, Model.ViewerZone)</dd>
+			<div class="col d-flex gap-2">
+				<dt class="w-25 text-nowrap">Acknowledged</dt>
+				<dd class="w-75 mb-0">@InstantDisplay.Format(acknowledgedAt, Model.ViewerZone)</dd>
+			</div>
 		}
 	</dl>
 

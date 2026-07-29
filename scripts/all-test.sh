@@ -19,6 +19,7 @@ cleanup_test_databases() {
 trap cleanup_test_databases EXIT
 
 cleanup_test_databases
+dotnet build-server shutdown
 gtimeout "$FULL_SUITE_TIMEOUT_SECONDS" dotnet test JobTrack.slnx
 cleanup_test_databases
 

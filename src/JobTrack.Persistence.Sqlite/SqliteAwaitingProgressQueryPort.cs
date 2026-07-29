@@ -208,6 +208,13 @@ internal static class AwaitingProgressQueryAssembly
 				IsBlocked = blockedNodes.Any(blocked => blocked.Id == node.Id),
 			};
 
+		// Narrowed here rather than folded into the candidate `where` above so the emitted SQL carries
+		// the predicate only when it is asked for, and so it reads as one more optional filter beside
+		// ExcludeBlocked. Before ordering and paging, so an excluded leaf never consumes a page slot.
+		if (filter.InProgressOnly) {
+			query = query.Where(candidate => candidate.Achievement == Achievement.InProgress);
+		}
+
 		var ordered = query
 			.OrderBy(candidate => candidate.IsBlocked)
 			.ThenByDescending(candidate => candidate.Priority)

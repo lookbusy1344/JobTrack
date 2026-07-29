@@ -40,6 +40,14 @@
 			Hide blocked jobs (unsatisfied prerequisites)
 		</label>
 	</div>
+	@* Narrows by achievement, not by who is clocked on: a paused leaf is still in progress, so it
+	   stays in. The Owner selector above is the "everyone or a given person" half of this filter. *@
+	<div class="form-group">
+		<label asp-for="InProgressOnly">
+			<input asp-for="InProgressOnly"/>
+			In progress only (started, not closed &mdash; includes paused)
+		</label>
+	</div>
 	<div class="form-group">
 		<label asp-for="SearchText"></label>
 		<input asp-for="SearchText" class="form-control"/>
@@ -124,6 +132,7 @@
 		   asp-route-ShowWholeTree="@Model.ShowWholeTree"
 		   asp-route-SearchText="@Model.SearchText"
 		   asp-route-ExcludeBlocked="@Model.ExcludeBlocked"
+		   asp-route-InProgressOnly="@Model.InProgressOnly"
 		   asp-route-Offset="@(Model.Offset + AwaitingProgressModel.PageSize)">
 			Next page
 		</a>

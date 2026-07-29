@@ -2,6 +2,7 @@ namespace JobTrack.Application;
 
 using Abstractions;
 using Domain.Costing;
+using Domain.Hierarchy;
 using NodaTime;
 using Ports;
 
@@ -14,17 +15,24 @@ internal sealed class RequestCommands : IRequestCommands
 {
 	private readonly IJobRequestCommandPort _port;
 	private readonly IRequesterDurationQueries _durationQueries;
+	private readonly IReadinessQueryPort _readinessQueryPort;
 	private readonly IClock _clock;
 
 	/// <summary>Creates a <see cref="RequestCommands" /> over the given port.</summary>
-	public RequestCommands(IJobRequestCommandPort port, IRequesterDurationQueries durationQueries, IClock clock)
+	public RequestCommands(
+		IJobRequestCommandPort port,
+		IRequesterDurationQueries durationQueries,
+		IReadinessQueryPort readinessQueryPort,
+		IClock clock)
 	{
 		ArgumentNullException.ThrowIfNull(port);
 		ArgumentNullException.ThrowIfNull(durationQueries);
+		ArgumentNullException.ThrowIfNull(readinessQueryPort);
 		ArgumentNullException.ThrowIfNull(clock);
 
 		_port = port;
 		_durationQueries = durationQueries;
+		_readinessQueryPort = readinessQueryPort;
 		_clock = clock;
 	}
 
@@ -98,14 +106,21 @@ internal sealed class RequestCommands : IRequestCommands
 		return JobTrackOperation.TraceAsync(
 			"requests.get-detail", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			async () => {
-				// The request port performs the authoritative per-request authorization before this
-				// internal duration projection reads work-derived facts.
+				// The request port performs the authoritative per-request authorization before these
+				// internal projections read work-derived and prerequisite-derived facts.
 				var detail = await _port.GetDetailAsync(request, cancellationToken).ConfigureAwait(false);
 				var durations = await _durationQueries.GetRequesterVisibleHierarchyAsync(
 						request.NodeId, _clock.GetCurrentInstant(), cancellationToken)
 					.ConfigureAwait(false);
 
+				// Readiness aggregates prerequisites declared on the anchor and on every ancestor (spec
+				// §6), which reach outside the requester-safe subtree the request port projects -- so it
+				// is composed here from the readiness port rather than duplicated in both providers.
+				var readinessInputs = await _readinessQueryPort.GetReadinessInputsAsync(request.NodeId, cancellationToken).ConfigureAwait(false);
+				var readiness = ReadinessCalculator.IsReady(request.NodeId, readinessInputs.NodesById, readinessInputs.Prerequisites);
+
 				return detail with {
+					IsReady = readiness.IsReady,
 					Subtree = EquatableArray.CopyOf(
 						detail.Subtree.Select(node => node with {
 							AllocatedDuration = durations.GetValueOrDefault(node.JobNodeId, AllocatedDuration.Zero),

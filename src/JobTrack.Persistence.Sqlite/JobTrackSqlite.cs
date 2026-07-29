@@ -62,7 +62,7 @@ public static class JobTrackSqlite
 			costQueries,
 			new AuditQueries(audit),
 			new TokenCommands(tokens, clock),
-			new RequestCommands(requests, costQueries, clock),
+			new RequestCommands(requests, costQueries, readiness, clock),
 			new AuthenticationAuditCommands(authenticationAudit),
 			new AccountCredentialCommands(credentials));
 	}

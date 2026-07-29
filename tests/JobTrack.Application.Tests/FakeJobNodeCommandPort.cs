@@ -58,6 +58,8 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			.Where(node => filter.SubtreeRootId is not JobNodeId subtreeRootId || IsInSubtree(node.Id, subtreeRootId))
 			.Where(node => string.IsNullOrWhiteSpace(filter.SearchText)
 						   || node.Description.Contains(filter.SearchText, StringComparison.OrdinalIgnoreCase))
+			.Where(node => !filter.InProgressOnly
+						   || (_leafWork.TryGetValue(node.Id, out var leafWork) && leafWork.Achievement == Achievement.InProgress))
 			.OrderByDescending(node => node.Priority)
 			.ThenBy(node => Deadline(node) is null)
 			.ThenBy(node => Deadline(node))

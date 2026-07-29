@@ -192,39 +192,6 @@ JobTrack.Application.AuditEventSearchResult.Equals(JobTrack.Application.AuditEve
 JobTrack.Application.AuditEventSearchResult.Events.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.AuditEventResult!>
 JobTrack.Application.AuditEventSearchResult.Events.init -> void
 JobTrack.Application.AuditSearchPaging
-JobTrack.Application.BulkNodeCostResult
-JobTrack.Application.BulkNodeCostResult.<Clone>$() -> JobTrack.Application.BulkNodeCostResult!
-JobTrack.Application.BulkNodeCostResult.BulkNodeCostResult() -> void
-JobTrack.Application.BulkNodeCostResult.DisplayedCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
-JobTrack.Application.BulkNodeCostResult.DisplayedCosts.init -> void
-JobTrack.Application.BulkNodeCostResult.AllocatedDurations.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>
-JobTrack.Application.BulkNodeCostResult.AllocatedDurations.init -> void
-JobTrack.Application.BulkNodeCostResult.Equals(JobTrack.Application.BulkNodeCostResult? other) -> bool
-JobTrack.Application.GetBulkNodeCostsRequest
-JobTrack.Application.GetBulkNodeCostsRequest.<Clone>$() -> JobTrack.Application.GetBulkNodeCostsRequest!
-JobTrack.Application.GetBulkNodeCostsRequest.AsOf.get -> NodaTime.Instant
-JobTrack.Application.GetBulkNodeCostsRequest.AsOf.init -> void
-JobTrack.Application.GetBulkNodeCostsRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.GetBulkNodeCostsRequest.Context.init -> void
-JobTrack.Application.GetBulkNodeCostsRequest.Equals(JobTrack.Application.GetBulkNodeCostsRequest? other) -> bool
-JobTrack.Application.GetBulkNodeCostsRequest.GetBulkNodeCostsRequest() -> void
-JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
-JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.init -> void
-JobTrack.Application.ICostQueries.GetBulkNodeCostsAsync(JobTrack.Application.GetBulkNodeCostsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.BulkNodeCostResult!>!
-JobTrack.Application.ImportSubtreeLeafWorkSpec.AdditionalSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ImportSubtreeWorkSessionSpec!>
-JobTrack.Application.ImportSubtreeLeafWorkSpec.AdditionalSessions.init -> void
-JobTrack.Application.ImportSubtreeWorkSessionSpec
-JobTrack.Application.ImportSubtreeWorkSessionSpec.<Clone>$() -> JobTrack.Application.ImportSubtreeWorkSessionSpec!
-JobTrack.Application.ImportSubtreeWorkSessionSpec.Equals(JobTrack.Application.ImportSubtreeWorkSessionSpec? other) -> bool
-JobTrack.Application.ImportSubtreeWorkSessionSpec.FinishedAt.get -> NodaTime.Instant?
-JobTrack.Application.ImportSubtreeWorkSessionSpec.FinishedAt.init -> void
-JobTrack.Application.ImportSubtreeWorkSessionSpec.ImportSubtreeWorkSessionSpec() -> void
-JobTrack.Application.ImportSubtreeWorkSessionSpec.StartedAt.get -> NodaTime.Instant
-JobTrack.Application.ImportSubtreeWorkSessionSpec.StartedAt.init -> void
-JobTrack.Application.ImportSubtreeWorkSessionSpec.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
-JobTrack.Application.ImportSubtreeWorkSessionSpec.WorkedByUserId.init -> void
-const JobTrack.Application.AuditSearchPaging.DefaultPageSize = 50 -> int
-const JobTrack.Application.AuditSearchPaging.MaxPageSize = 200 -> int
 JobTrack.Application.AuthenticatedPersonalAccessTokenResult
 JobTrack.Application.AuthenticatedPersonalAccessTokenResult.<Clone>$() -> JobTrack.Application.AuthenticatedPersonalAccessTokenResult!
 JobTrack.Application.AuthenticatedPersonalAccessTokenResult.AuthenticatedPersonalAccessTokenResult() -> void
@@ -242,6 +209,7 @@ JobTrack.Application.AuthenticationAuditEventKind.PasswordChanged = 4 -> JobTrac
 JobTrack.Application.AuthenticationAuditEventKind.TwoFactorDisabled = 6 -> JobTrack.Application.AuthenticationAuditEventKind
 JobTrack.Application.AuthenticationAuditEventKind.TwoFactorEnabled = 5 -> JobTrack.Application.AuthenticationAuditEventKind
 JobTrack.Application.AuthenticationAuditEventKind.TwoFactorFailed = 7 -> JobTrack.Application.AuthenticationAuditEventKind
+JobTrack.Application.AwaitingProgressPaging
 JobTrack.Application.BootstrapAdministratorRequest
 JobTrack.Application.BootstrapAdministratorRequest.<Clone>$() -> JobTrack.Application.BootstrapAdministratorRequest!
 JobTrack.Application.BootstrapAdministratorRequest.BootstrapAdministratorRequest() -> void
@@ -273,6 +241,32 @@ JobTrack.Application.BootstrapAdministratorResult.RootJobNodeId.init -> void
 JobTrack.Application.BootstrapAdministratorResult.RootVersion.get -> long
 JobTrack.Application.BootstrapAdministratorResult.RootVersion.init -> void
 JobTrack.Application.BootstrapCredentialSubject
+JobTrack.Application.BulkNodeCostResult
+JobTrack.Application.BulkNodeCostResult.<Clone>$() -> JobTrack.Application.BulkNodeCostResult!
+JobTrack.Application.BulkNodeCostResult.AllocatedDurations.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>
+JobTrack.Application.BulkNodeCostResult.AllocatedDurations.init -> void
+JobTrack.Application.BulkNodeCostResult.BulkNodeCostResult() -> void
+JobTrack.Application.BulkNodeCostResult.DisplayedCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
+JobTrack.Application.BulkNodeCostResult.DisplayedCosts.init -> void
+JobTrack.Application.BulkNodeCostResult.Equals(JobTrack.Application.BulkNodeCostResult? other) -> bool
+JobTrack.Application.ChangeOwnPasswordRequest
+JobTrack.Application.ChangeOwnPasswordRequest.ActorUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.ChangeOwnPasswordRequest.ActorUserId.init -> void
+JobTrack.Application.ChangeOwnPasswordRequest.ChangeOwnPasswordRequest() -> void
+JobTrack.Application.ChangeOwnPasswordRequest.CorrelationId.get -> System.Guid
+JobTrack.Application.ChangeOwnPasswordRequest.CorrelationId.init -> void
+JobTrack.Application.ChangeOwnPasswordRequest.CurrentPassword.get -> string!
+JobTrack.Application.ChangeOwnPasswordRequest.CurrentPassword.init -> void
+JobTrack.Application.ChangeOwnPasswordRequest.IdentityUserId.get -> long
+JobTrack.Application.ChangeOwnPasswordRequest.IdentityUserId.init -> void
+JobTrack.Application.ChangeOwnPasswordRequest.NewPassword.get -> string!
+JobTrack.Application.ChangeOwnPasswordRequest.NewPassword.init -> void
+JobTrack.Application.ChangeOwnPasswordResult
+JobTrack.Application.ChangeOwnPasswordResult.ChangeOwnPasswordResult() -> void
+JobTrack.Application.ChangeOwnPasswordResult.ConcurrencyStamp.get -> string!
+JobTrack.Application.ChangeOwnPasswordResult.ConcurrencyStamp.init -> void
+JobTrack.Application.ChangeOwnPasswordResult.SecurityStamp.get -> string!
+JobTrack.Application.ChangeOwnPasswordResult.SecurityStamp.init -> void
 JobTrack.Application.CommandContext
 JobTrack.Application.CommandContext.<Clone>$() -> JobTrack.Application.CommandContext!
 JobTrack.Application.CommandContext.Actor.get -> JobTrack.Abstractions.AppUserId
@@ -281,6 +275,44 @@ JobTrack.Application.CommandContext.CommandContext() -> void
 JobTrack.Application.CommandContext.CorrelationId.get -> System.Guid
 JobTrack.Application.CommandContext.CorrelationId.init -> void
 JobTrack.Application.CommandContext.Equals(JobTrack.Application.CommandContext? other) -> bool
+JobTrack.Application.CompleteLeafRequest
+JobTrack.Application.CompleteLeafRequest.<Clone>$() -> JobTrack.Application.CompleteLeafRequest!
+JobTrack.Application.CompleteLeafRequest.CompleteLeafRequest() -> void
+JobTrack.Application.CompleteLeafRequest.CompletionNote.get -> string?
+JobTrack.Application.CompleteLeafRequest.CompletionNote.init -> void
+JobTrack.Application.CompleteLeafRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.CompleteLeafRequest.Context.init -> void
+JobTrack.Application.CompleteLeafRequest.Equals(JobTrack.Application.CompleteLeafRequest? other) -> bool
+JobTrack.Application.CompleteLeafRequest.ExpectedActiveSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ExpectedActiveSession!>
+JobTrack.Application.CompleteLeafRequest.ExpectedActiveSessions.init -> void
+JobTrack.Application.CompleteLeafRequest.FinalAchievement.get -> JobTrack.Abstractions.Achievement
+JobTrack.Application.CompleteLeafRequest.FinalAchievement.init -> void
+JobTrack.Application.CompleteLeafRequest.FinishedAt.get -> NodaTime.Instant?
+JobTrack.Application.CompleteLeafRequest.FinishedAt.init -> void
+JobTrack.Application.CompleteLeafRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.CompleteLeafRequest.JobNodeId.init -> void
+JobTrack.Application.CompleteLeafRequest.Version.get -> long
+JobTrack.Application.CompleteLeafRequest.Version.init -> void
+JobTrack.Application.CompleteLeafRequest.WriteUpChange.get -> JobTrack.Application.WriteUpChange?
+JobTrack.Application.CompleteLeafRequest.WriteUpChange.init -> void
+JobTrack.Application.CompleteLeafResult
+JobTrack.Application.CompleteLeafResult.<Clone>$() -> JobTrack.Application.CompleteLeafResult!
+JobTrack.Application.CompleteLeafResult.Achievement.get -> JobTrack.Abstractions.Achievement
+JobTrack.Application.CompleteLeafResult.Achievement.init -> void
+JobTrack.Application.CompleteLeafResult.ChangedAt.get -> NodaTime.Instant
+JobTrack.Application.CompleteLeafResult.ChangedAt.init -> void
+JobTrack.Application.CompleteLeafResult.CompleteLeafResult() -> void
+JobTrack.Application.CompleteLeafResult.Equals(JobTrack.Application.CompleteLeafResult? other) -> bool
+JobTrack.Application.CompleteLeafResult.FinishedSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>
+JobTrack.Application.CompleteLeafResult.FinishedSessions.init -> void
+JobTrack.Application.CompleteLeafResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.CompleteLeafResult.JobNodeId.init -> void
+JobTrack.Application.CompleteLeafResult.Node.get -> JobTrack.Application.JobNodeResult?
+JobTrack.Application.CompleteLeafResult.Node.init -> void
+JobTrack.Application.CompleteLeafResult.Version.get -> long
+JobTrack.Application.CompleteLeafResult.Version.init -> void
+JobTrack.Application.CompleteLeafResult.WriteUpChanged.get -> bool
+JobTrack.Application.CompleteLeafResult.WriteUpChanged.init -> void
 JobTrack.Application.CorrectNodeRateOverrideRequest
 JobTrack.Application.CorrectNodeRateOverrideRequest.<Clone>$() -> JobTrack.Application.CorrectNodeRateOverrideRequest!
 JobTrack.Application.CorrectNodeRateOverrideRequest.Context.get -> JobTrack.Application.CommandContext!
@@ -365,11 +397,11 @@ JobTrack.Application.CorrectUserCostRateRequest.Version.get -> long
 JobTrack.Application.CorrectUserCostRateRequest.Version.init -> void
 JobTrack.Application.CostDetailsResult
 JobTrack.Application.CostDetailsResult.<Clone>$() -> JobTrack.Application.CostDetailsResult!
+JobTrack.Application.CostDetailsResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration!
+JobTrack.Application.CostDetailsResult.AllocatedDuration.init -> void
 JobTrack.Application.CostDetailsResult.CostDetailsResult() -> void
 JobTrack.Application.CostDetailsResult.DisplayedCost.get -> JobTrack.Abstractions.Money
 JobTrack.Application.CostDetailsResult.DisplayedCost.init -> void
-JobTrack.Application.CostDetailsResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration!
-JobTrack.Application.CostDetailsResult.AllocatedDuration.init -> void
 JobTrack.Application.CostDetailsResult.Equals(JobTrack.Application.CostDetailsResult? other) -> bool
 JobTrack.Application.CostDetailsResult.ExactCost.get -> JobTrack.Abstractions.Money
 JobTrack.Application.CostDetailsResult.ExactCost.init -> void
@@ -522,6 +554,40 @@ JobTrack.Application.EmployeeRolesResult.Roles.get -> JobTrack.Abstractions.Equa
 JobTrack.Application.EmployeeRolesResult.Roles.init -> void
 JobTrack.Application.EmployeeRolesResult.UserId.get -> JobTrack.Abstractions.AppUserId
 JobTrack.Application.EmployeeRolesResult.UserId.init -> void
+JobTrack.Application.ExpectedActiveSession
+JobTrack.Application.ExpectedActiveSession.<Clone>$() -> JobTrack.Application.ExpectedActiveSession!
+JobTrack.Application.ExpectedActiveSession.Equals(JobTrack.Application.ExpectedActiveSession? other) -> bool
+JobTrack.Application.ExpectedActiveSession.ExpectedActiveSession() -> void
+JobTrack.Application.ExpectedActiveSession.Id.get -> JobTrack.Abstractions.WorkSessionId
+JobTrack.Application.ExpectedActiveSession.Id.init -> void
+JobTrack.Application.ExpectedActiveSession.Version.get -> long
+JobTrack.Application.ExpectedActiveSession.Version.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.<Clone>$() -> JobTrack.Application.FinishSessionAndUpdateWriteUpRequest!
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Context.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Equals(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? other) -> bool
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.FinishSessionAndUpdateWriteUpRequest() -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.FinishedAt.get -> NodaTime.Instant?
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.FinishedAt.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.LeafWorkId.get -> JobTrack.Abstractions.JobNodeId?
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.LeafWorkId.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.SessionId.get -> JobTrack.Abstractions.WorkSessionId
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.SessionId.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Version.get -> long
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Version.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.WriteUpChange.get -> JobTrack.Application.WriteUpChange?
+JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.WriteUpChange.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.<Clone>$() -> JobTrack.Application.FinishSessionAndUpdateWriteUpResult!
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Equals(JobTrack.Application.FinishSessionAndUpdateWriteUpResult? other) -> bool
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.FinishSessionAndUpdateWriteUpResult() -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Node.get -> JobTrack.Application.JobNodeResult?
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Node.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Session.get -> JobTrack.Application.WorkSessionResult!
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Session.init -> void
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.WriteUpChanged.get -> bool
+JobTrack.Application.FinishSessionAndUpdateWriteUpResult.WriteUpChanged.init -> void
 JobTrack.Application.FinishSessionRequest
 JobTrack.Application.FinishSessionRequest.<Clone>$() -> JobTrack.Application.FinishSessionRequest!
 JobTrack.Application.FinishSessionRequest.Context.get -> JobTrack.Application.CommandContext!
@@ -566,6 +632,8 @@ JobTrack.Application.GetAwaitingProgressRequest.Equals(JobTrack.Application.GetA
 JobTrack.Application.GetAwaitingProgressRequest.ExcludeBlocked.get -> bool
 JobTrack.Application.GetAwaitingProgressRequest.ExcludeBlocked.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.GetAwaitingProgressRequest() -> void
+JobTrack.Application.GetAwaitingProgressRequest.InProgressOnly.get -> bool
+JobTrack.Application.GetAwaitingProgressRequest.InProgressOnly.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Limit.get -> int?
 JobTrack.Application.GetAwaitingProgressRequest.Limit.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Offset.get -> int
@@ -576,6 +644,24 @@ JobTrack.Application.GetAwaitingProgressRequest.SearchText.get -> string?
 JobTrack.Application.GetAwaitingProgressRequest.SearchText.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.SubtreeRootId.get -> JobTrack.Abstractions.JobNodeId?
 JobTrack.Application.GetAwaitingProgressRequest.SubtreeRootId.init -> void
+JobTrack.Application.GetBranchAchievementRequest
+JobTrack.Application.GetBranchAchievementRequest.<Clone>$() -> JobTrack.Application.GetBranchAchievementRequest!
+JobTrack.Application.GetBranchAchievementRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetBranchAchievementRequest.Context.init -> void
+JobTrack.Application.GetBranchAchievementRequest.Equals(JobTrack.Application.GetBranchAchievementRequest? other) -> bool
+JobTrack.Application.GetBranchAchievementRequest.GetBranchAchievementRequest() -> void
+JobTrack.Application.GetBranchAchievementRequest.NodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.GetBranchAchievementRequest.NodeId.init -> void
+JobTrack.Application.GetBulkNodeCostsRequest
+JobTrack.Application.GetBulkNodeCostsRequest.<Clone>$() -> JobTrack.Application.GetBulkNodeCostsRequest!
+JobTrack.Application.GetBulkNodeCostsRequest.AsOf.get -> NodaTime.Instant
+JobTrack.Application.GetBulkNodeCostsRequest.AsOf.init -> void
+JobTrack.Application.GetBulkNodeCostsRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetBulkNodeCostsRequest.Context.init -> void
+JobTrack.Application.GetBulkNodeCostsRequest.Equals(JobTrack.Application.GetBulkNodeCostsRequest? other) -> bool
+JobTrack.Application.GetBulkNodeCostsRequest.GetBulkNodeCostsRequest() -> void
+JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
+JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.init -> void
 JobTrack.Application.GetCostDetailsRequest
 JobTrack.Application.GetCostDetailsRequest.<Clone>$() -> JobTrack.Application.GetCostDetailsRequest!
 JobTrack.Application.GetCostDetailsRequest.AsOf.get -> NodaTime.Instant
@@ -684,6 +770,14 @@ JobTrack.Application.GetLeafSessionsRequest.Offset.get -> int
 JobTrack.Application.GetLeafSessionsRequest.Offset.init -> void
 JobTrack.Application.GetLeafSessionsRequest.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId?
 JobTrack.Application.GetLeafSessionsRequest.WorkedByUserId.init -> void
+JobTrack.Application.GetLeafWorkPageRequest
+JobTrack.Application.GetLeafWorkPageRequest.<Clone>$() -> JobTrack.Application.GetLeafWorkPageRequest!
+JobTrack.Application.GetLeafWorkPageRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetLeafWorkPageRequest.Context.init -> void
+JobTrack.Application.GetLeafWorkPageRequest.Equals(JobTrack.Application.GetLeafWorkPageRequest? other) -> bool
+JobTrack.Application.GetLeafWorkPageRequest.GetLeafWorkPageRequest() -> void
+JobTrack.Application.GetLeafWorkPageRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.GetLeafWorkPageRequest.JobNodeId.init -> void
 JobTrack.Application.GetLeafWorkRequest
 JobTrack.Application.GetLeafWorkRequest.<Clone>$() -> JobTrack.Application.GetLeafWorkRequest!
 JobTrack.Application.GetLeafWorkRequest.Context.get -> JobTrack.Application.CommandContext!
@@ -728,12 +822,20 @@ JobTrack.Application.GetScheduleRequest.Equals(JobTrack.Application.GetScheduleR
 JobTrack.Application.GetScheduleRequest.GetScheduleRequest() -> void
 JobTrack.Application.GetScheduleRequest.UserId.get -> JobTrack.Abstractions.AppUserId
 JobTrack.Application.GetScheduleRequest.UserId.init -> void
+JobTrack.Application.GetSessionManageCapabilitiesRequest
+JobTrack.Application.GetSessionManageCapabilitiesRequest.<Clone>$() -> JobTrack.Application.GetSessionManageCapabilitiesRequest!
+JobTrack.Application.GetSessionManageCapabilitiesRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetSessionManageCapabilitiesRequest.Context.init -> void
+JobTrack.Application.GetSessionManageCapabilitiesRequest.Equals(JobTrack.Application.GetSessionManageCapabilitiesRequest? other) -> bool
+JobTrack.Application.GetSessionManageCapabilitiesRequest.GetSessionManageCapabilitiesRequest() -> void
+JobTrack.Application.GetSessionManageCapabilitiesRequest.LeafWorkIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
+JobTrack.Application.GetSessionManageCapabilitiesRequest.LeafWorkIds.init -> void
 JobTrack.Application.HierarchyTotalsResult
 JobTrack.Application.HierarchyTotalsResult.<Clone>$() -> JobTrack.Application.HierarchyTotalsResult!
-JobTrack.Application.HierarchyTotalsResult.DisplayedCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
-JobTrack.Application.HierarchyTotalsResult.DisplayedCosts.init -> void
 JobTrack.Application.HierarchyTotalsResult.AllocatedDurations.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>
 JobTrack.Application.HierarchyTotalsResult.AllocatedDurations.init -> void
+JobTrack.Application.HierarchyTotalsResult.DisplayedCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
+JobTrack.Application.HierarchyTotalsResult.DisplayedCosts.init -> void
 JobTrack.Application.HierarchyTotalsResult.Equals(JobTrack.Application.HierarchyTotalsResult? other) -> bool
 JobTrack.Application.HierarchyTotalsResult.ExactCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
 JobTrack.Application.HierarchyTotalsResult.ExactCosts.init -> void
@@ -751,12 +853,14 @@ JobTrack.Application.HoldingAreaSummaryResult.Id.init -> void
 JobTrack.Application.HoldingAreaSummaryResult.Name.get -> string!
 JobTrack.Application.HoldingAreaSummaryResult.Name.init -> void
 JobTrack.Application.IAccountCredentialCommands
+JobTrack.Application.IAccountCredentialCommands.ChangeOwnPasswordAsync(JobTrack.Application.ChangeOwnPasswordRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ChangeOwnPasswordResult!>!
 JobTrack.Application.IAccountCredentialCommands.SetTwoFactorStateAsync(JobTrack.Application.SetTwoFactorStateRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.SetTwoFactorStateResult!>!
 JobTrack.Application.IAuditQueries
 JobTrack.Application.IAuditQueries.SearchAuditEventsAsync(JobTrack.Application.AuditEventSearchRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.AuditEventSearchResult!>!
 JobTrack.Application.IAuthenticationAuditCommands
 JobTrack.Application.IAuthenticationAuditCommands.RecordAsync(JobTrack.Application.RecordAuthenticationAuditEventRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 JobTrack.Application.ICostQueries
+JobTrack.Application.ICostQueries.GetBulkNodeCostsAsync(JobTrack.Application.GetBulkNodeCostsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.BulkNodeCostResult!>!
 JobTrack.Application.ICostQueries.GetCostDetailsAsync(JobTrack.Application.GetCostDetailsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.CostDetailsResult!>!
 JobTrack.Application.ICostQueries.GetHierarchyTotalsAsync(JobTrack.Application.GetHierarchyTotalsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.HierarchyTotalsResult!>!
 JobTrack.Application.IEmployeeCommands
@@ -788,6 +892,7 @@ JobTrack.Application.IJobQueries.GetAccountStateAsync(JobTrack.Application.GetAc
 JobTrack.Application.IJobQueries.GetActiveSessionsAsync(JobTrack.Application.GetActiveSessionsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>>!
 JobTrack.Application.IJobQueries.GetAllEmployeesAsync(JobTrack.Application.GetAllEmployeesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.EmployeeDirectoryEntry!>>!
 JobTrack.Application.IJobQueries.GetAwaitingProgressAsync(JobTrack.Application.GetAwaitingProgressRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Hierarchy.AwaitingProgressEntry!>>!
+JobTrack.Application.IJobQueries.GetBranchAchievementAsync(JobTrack.Application.GetBranchAchievementRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.BranchAchievement>!
 JobTrack.Application.IJobQueries.GetEmployeeDirectoryAsync(JobTrack.Application.GetEmployeeDirectoryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.EmployeeDirectoryEntry!>>!
 JobTrack.Application.IJobQueries.GetEmployeeProfileAsync(JobTrack.Application.GetEmployeeProfileRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.EmployeeProfileResult!>!
 JobTrack.Application.IJobQueries.GetJobChildrenAsync(JobTrack.Application.GetJobChildrenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobNodeSummaryResult!>>!
@@ -796,10 +901,12 @@ JobTrack.Application.IJobQueries.GetJobSubtreeAsync(JobTrack.Application.GetJobS
 JobTrack.Application.IJobQueries.GetJobSummariesAsync(JobTrack.Application.GetJobSummariesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobNodeSummaryResult!>>!
 JobTrack.Application.IJobQueries.GetLeafSessionsAsync(JobTrack.Application.GetLeafSessionsRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>>!
 JobTrack.Application.IJobQueries.GetLeafWorkAsync(JobTrack.Application.GetLeafWorkRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.LeafWorkResult!>!
+JobTrack.Application.IJobQueries.GetLeafWorkPageAsync(JobTrack.Application.GetLeafWorkPageRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.LeafWorkPageResult!>!
 JobTrack.Application.IJobQueries.GetPrerequisitesAsync(JobTrack.Application.GetPrerequisitesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Hierarchy.PrerequisiteEdge!>>!
 JobTrack.Application.IJobQueries.GetRatesAsync(JobTrack.Application.GetRatesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.RateSnapshotResult!>!
 JobTrack.Application.IJobQueries.GetReadinessAsync(JobTrack.Application.GetReadinessRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Domain.Hierarchy.ReadinessResult!>!
 JobTrack.Application.IJobQueries.GetScheduleAsync(JobTrack.Application.GetScheduleRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ScheduleSnapshotResult!>!
+JobTrack.Application.IJobQueries.GetSessionManageCapabilitiesAsync(JobTrack.Application.GetSessionManageCapabilitiesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.LeafSessionManageCapabilityResult!>>!
 JobTrack.Application.IJobQueries.SearchJobNodesAsync(JobTrack.Application.SearchJobNodesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobNodeSummaryResult!>>!
 JobTrack.Application.IJobTrackClient
 JobTrack.Application.IJobTrackClient.Audit.get -> JobTrack.Application.IAuditQueries!
@@ -840,8 +947,12 @@ JobTrack.Application.ITokenCommands.RevokeAllAsync(JobTrack.Application.RevokeAl
 JobTrack.Application.ITokenCommands.RevokeAsync(JobTrack.Application.RevokePersonalAccessTokenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 JobTrack.Application.ITokenCommands.TryAuthenticateAsync(JobTrack.Application.TryAuthenticatePersonalAccessTokenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.AuthenticatedPersonalAccessTokenResult?>!
 JobTrack.Application.IWorkCommands
+JobTrack.Application.IWorkCommands.CompleteLeafAsync(JobTrack.Application.CompleteLeafRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.CompleteLeafResult!>!
 JobTrack.Application.IWorkCommands.CorrectSessionAsync(JobTrack.Application.CorrectSessionRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.WorkSessionResult!>!
+JobTrack.Application.IWorkCommands.FinishSessionAndUpdateWriteUpAsync(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.FinishSessionAndUpdateWriteUpResult!>!
 JobTrack.Application.IWorkCommands.FinishSessionAsync(JobTrack.Application.FinishSessionRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.WorkSessionResult!>!
+JobTrack.Application.IWorkCommands.PauseLeafAsync(JobTrack.Application.PauseLeafRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.PauseLeafResult!>!
+JobTrack.Application.IWorkCommands.ReopenAndStartWorkAsync(JobTrack.Application.ReopenAndStartWorkRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ReopenAndStartWorkResult!>!
 JobTrack.Application.IWorkCommands.SetAchievementAsync(JobTrack.Application.SetAchievementRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.LeafWorkResult!>!
 JobTrack.Application.IWorkCommands.StartSessionAsync(JobTrack.Application.StartSessionRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.WorkSessionResult!>!
 JobTrack.Application.IWorkCommands.StartWorkAsync(JobTrack.Application.StartWorkRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.WorkSessionResult!>!
@@ -849,6 +960,8 @@ JobTrack.Application.ImportSubtreeLeafWorkSpec
 JobTrack.Application.ImportSubtreeLeafWorkSpec.<Clone>$() -> JobTrack.Application.ImportSubtreeLeafWorkSpec!
 JobTrack.Application.ImportSubtreeLeafWorkSpec.Achievement.get -> JobTrack.Abstractions.Achievement
 JobTrack.Application.ImportSubtreeLeafWorkSpec.Achievement.init -> void
+JobTrack.Application.ImportSubtreeLeafWorkSpec.AdditionalSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ImportSubtreeWorkSessionSpec!>
+JobTrack.Application.ImportSubtreeLeafWorkSpec.AdditionalSessions.init -> void
 JobTrack.Application.ImportSubtreeLeafWorkSpec.Equals(JobTrack.Application.ImportSubtreeLeafWorkSpec? other) -> bool
 JobTrack.Application.ImportSubtreeLeafWorkSpec.FinishedAt.get -> NodaTime.Instant?
 JobTrack.Application.ImportSubtreeLeafWorkSpec.FinishedAt.init -> void
@@ -901,6 +1014,16 @@ JobTrack.Application.ImportSubtreeResult.Equals(JobTrack.Application.ImportSubtr
 JobTrack.Application.ImportSubtreeResult.ImportSubtreeResult() -> void
 JobTrack.Application.ImportSubtreeResult.Nodes.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ImportedJobNode!>
 JobTrack.Application.ImportSubtreeResult.Nodes.init -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec
+JobTrack.Application.ImportSubtreeWorkSessionSpec.<Clone>$() -> JobTrack.Application.ImportSubtreeWorkSessionSpec!
+JobTrack.Application.ImportSubtreeWorkSessionSpec.Equals(JobTrack.Application.ImportSubtreeWorkSessionSpec? other) -> bool
+JobTrack.Application.ImportSubtreeWorkSessionSpec.FinishedAt.get -> NodaTime.Instant?
+JobTrack.Application.ImportSubtreeWorkSessionSpec.FinishedAt.init -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec.ImportSubtreeWorkSessionSpec() -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec.StartedAt.get -> NodaTime.Instant
+JobTrack.Application.ImportSubtreeWorkSessionSpec.StartedAt.init -> void
+JobTrack.Application.ImportSubtreeWorkSessionSpec.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.ImportSubtreeWorkSessionSpec.WorkedByUserId.init -> void
 JobTrack.Application.ImportedJobNode
 JobTrack.Application.ImportedJobNode.<Clone>$() -> JobTrack.Application.ImportedJobNode!
 JobTrack.Application.ImportedJobNode.Equals(JobTrack.Application.ImportedJobNode? other) -> bool
@@ -1002,12 +1125,12 @@ JobTrack.Application.JobNodeSummaryResult
 JobTrack.Application.JobNodeSummaryResult.<Clone>$() -> JobTrack.Application.JobNodeSummaryResult!
 JobTrack.Application.JobNodeSummaryResult.Achievement.get -> JobTrack.Abstractions.Achievement?
 JobTrack.Application.JobNodeSummaryResult.Achievement.init -> void
+JobTrack.Application.JobNodeSummaryResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
+JobTrack.Application.JobNodeSummaryResult.AllocatedDuration.init -> void
 JobTrack.Application.JobNodeSummaryResult.ArchivedAt.get -> NodaTime.Instant?
 JobTrack.Application.JobNodeSummaryResult.ArchivedAt.init -> void
 JobTrack.Application.JobNodeSummaryResult.Cost.get -> JobTrack.Abstractions.Money?
 JobTrack.Application.JobNodeSummaryResult.Cost.init -> void
-JobTrack.Application.JobNodeSummaryResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
-JobTrack.Application.JobNodeSummaryResult.AllocatedDuration.init -> void
 JobTrack.Application.JobNodeSummaryResult.Description.get -> string!
 JobTrack.Application.JobNodeSummaryResult.Description.init -> void
 JobTrack.Application.JobNodeSummaryResult.Equals(JobTrack.Application.JobNodeSummaryResult? other) -> bool
@@ -1033,9 +1156,15 @@ JobTrack.Application.JobRequestDetailResult.AcknowledgedAt.init -> void
 JobTrack.Application.JobRequestDetailResult.Description.get -> string!
 JobTrack.Application.JobRequestDetailResult.Description.init -> void
 JobTrack.Application.JobRequestDetailResult.Equals(JobTrack.Application.JobRequestDetailResult? other) -> bool
+JobTrack.Application.JobRequestDetailResult.IsReady.get -> bool
+JobTrack.Application.JobRequestDetailResult.IsReady.init -> void
 JobTrack.Application.JobRequestDetailResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
 JobTrack.Application.JobRequestDetailResult.JobNodeId.init -> void
 JobTrack.Application.JobRequestDetailResult.JobRequestDetailResult() -> void
+JobTrack.Application.JobRequestDetailResult.Kind.get -> JobTrack.Abstractions.NodeKind
+JobTrack.Application.JobRequestDetailResult.Kind.init -> void
+JobTrack.Application.JobRequestDetailResult.LeafAchievement.get -> JobTrack.Abstractions.Achievement?
+JobTrack.Application.JobRequestDetailResult.LeafAchievement.init -> void
 JobTrack.Application.JobRequestDetailResult.Notes.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobRequestNoteResult!>
 JobTrack.Application.JobRequestDetailResult.Notes.init -> void
 JobTrack.Application.JobRequestDetailResult.RequesterDisplayName.get -> string!
@@ -1050,6 +1179,8 @@ JobTrack.Application.JobRequestDetailResult.SubmittedAt.get -> NodaTime.Instant
 JobTrack.Application.JobRequestDetailResult.SubmittedAt.init -> void
 JobTrack.Application.JobRequestDetailResult.Subtree.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.RequesterSubtreeNodeResult!>
 JobTrack.Application.JobRequestDetailResult.Subtree.init -> void
+JobTrack.Application.JobRequestDetailResult.SubtreeAchievement.get -> JobTrack.Abstractions.BranchAchievement
+JobTrack.Application.JobRequestDetailResult.SubtreeAchievement.init -> void
 JobTrack.Application.JobRequestDetailResult.Version.get -> long
 JobTrack.Application.JobRequestDetailResult.Version.init -> void
 JobTrack.Application.JobRequestNoteResult
@@ -1102,12 +1233,12 @@ JobTrack.Application.JobSubtreeNodeResult
 JobTrack.Application.JobSubtreeNodeResult.<Clone>$() -> JobTrack.Application.JobSubtreeNodeResult!
 JobTrack.Application.JobSubtreeNodeResult.Achievement.get -> JobTrack.Abstractions.Achievement?
 JobTrack.Application.JobSubtreeNodeResult.Achievement.init -> void
+JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
+JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.init -> void
 JobTrack.Application.JobSubtreeNodeResult.ArchivedAt.get -> NodaTime.Instant?
 JobTrack.Application.JobSubtreeNodeResult.ArchivedAt.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Cost.get -> JobTrack.Abstractions.Money?
 JobTrack.Application.JobSubtreeNodeResult.Cost.init -> void
-JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
-JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Depth.get -> int
 JobTrack.Application.JobSubtreeNodeResult.Depth.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Description.get -> string!
@@ -1148,15 +1279,65 @@ JobTrack.Application.JobSubtreeResult.Equals(JobTrack.Application.JobSubtreeResu
 JobTrack.Application.JobSubtreeResult.JobSubtreeResult() -> void
 JobTrack.Application.JobSubtreeResult.Nodes.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobSubtreeNodeResult!>
 JobTrack.Application.JobSubtreeResult.Nodes.init -> void
+JobTrack.Application.JobSubtreeResult.RootAchievement.get -> JobTrack.Abstractions.BranchAchievement?
+JobTrack.Application.JobSubtreeResult.RootAchievement.init -> void
+JobTrack.Application.JobSubtreeResult.RootAllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
+JobTrack.Application.JobSubtreeResult.RootAllocatedDuration.init -> void
 JobTrack.Application.JobSubtreeResult.RootId.get -> JobTrack.Abstractions.JobNodeId
 JobTrack.Application.JobSubtreeResult.RootId.init -> void
 JobTrack.Application.JobSubtreeResult.RootTotal.get -> JobTrack.Abstractions.Money?
 JobTrack.Application.JobSubtreeResult.RootTotal.init -> void
-JobTrack.Application.JobSubtreeResult.RootAllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
-JobTrack.Application.JobSubtreeResult.RootAllocatedDuration.init -> void
 JobTrack.Application.JobSubtreeResult.TzdbVersion.get -> string?
 JobTrack.Application.JobSubtreeResult.TzdbVersion.init -> void
 JobTrack.Application.JobTrackDiagnostics
+JobTrack.Application.LeafSessionManageCapabilityResult
+JobTrack.Application.LeafSessionManageCapabilityResult.<Clone>$() -> JobTrack.Application.LeafSessionManageCapabilityResult!
+JobTrack.Application.LeafSessionManageCapabilityResult.CanManage.get -> bool
+JobTrack.Application.LeafSessionManageCapabilityResult.CanManage.init -> void
+JobTrack.Application.LeafSessionManageCapabilityResult.Equals(JobTrack.Application.LeafSessionManageCapabilityResult? other) -> bool
+JobTrack.Application.LeafSessionManageCapabilityResult.LeafSessionManageCapabilityResult() -> void
+JobTrack.Application.LeafSessionManageCapabilityResult.LeafWorkId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.LeafSessionManageCapabilityResult.LeafWorkId.init -> void
+JobTrack.Application.LeafWorkPageResult
+JobTrack.Application.LeafWorkPageResult.<Clone>$() -> JobTrack.Application.LeafWorkPageResult!
+JobTrack.Application.LeafWorkPageResult.Achievement.get -> JobTrack.Abstractions.Achievement?
+JobTrack.Application.LeafWorkPageResult.Achievement.init -> void
+JobTrack.Application.LeafWorkPageResult.ActiveSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>
+JobTrack.Application.LeafWorkPageResult.ActiveSessions.init -> void
+JobTrack.Application.LeafWorkPageResult.ActorControlsNode.get -> bool
+JobTrack.Application.LeafWorkPageResult.ActorControlsNode.init -> void
+JobTrack.Application.LeafWorkPageResult.ActorParticipatedPreviously.get -> bool
+JobTrack.Application.LeafWorkPageResult.ActorParticipatedPreviously.init -> void
+JobTrack.Application.LeafWorkPageResult.ArchivedAt.get -> NodaTime.Instant?
+JobTrack.Application.LeafWorkPageResult.ArchivedAt.init -> void
+JobTrack.Application.LeafWorkPageResult.CanComplete.get -> bool
+JobTrack.Application.LeafWorkPageResult.CanComplete.init -> void
+JobTrack.Application.LeafWorkPageResult.CanManageSessions.get -> bool
+JobTrack.Application.LeafWorkPageResult.CanManageSessions.init -> void
+JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForOthers.get -> bool
+JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForOthers.init -> void
+JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForSelf.get -> bool
+JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForSelf.init -> void
+JobTrack.Application.LeafWorkPageResult.CanReopenWithoutStarting.get -> bool
+JobTrack.Application.LeafWorkPageResult.CanReopenWithoutStarting.init -> void
+JobTrack.Application.LeafWorkPageResult.Description.get -> string!
+JobTrack.Application.LeafWorkPageResult.Description.init -> void
+JobTrack.Application.LeafWorkPageResult.DirectDependentCount.get -> int
+JobTrack.Application.LeafWorkPageResult.DirectDependentCount.init -> void
+JobTrack.Application.LeafWorkPageResult.Equals(JobTrack.Application.LeafWorkPageResult? other) -> bool
+JobTrack.Application.LeafWorkPageResult.HasActiveDependentWork.get -> bool
+JobTrack.Application.LeafWorkPageResult.HasActiveDependentWork.init -> void
+JobTrack.Application.LeafWorkPageResult.HasLeafWork.get -> bool
+JobTrack.Application.LeafWorkPageResult.HasLeafWork.init -> void
+JobTrack.Application.LeafWorkPageResult.IsReady.get -> bool
+JobTrack.Application.LeafWorkPageResult.IsReady.init -> void
+JobTrack.Application.LeafWorkPageResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.LeafWorkPageResult.JobNodeId.init -> void
+JobTrack.Application.LeafWorkPageResult.LeafWorkPageResult() -> void
+JobTrack.Application.LeafWorkPageResult.LeafWorkVersion.get -> long?
+JobTrack.Application.LeafWorkPageResult.LeafWorkVersion.init -> void
+JobTrack.Application.LeafWorkPageResult.OwnerUserId.get -> JobTrack.Abstractions.AppUserId?
+JobTrack.Application.LeafWorkPageResult.OwnerUserId.init -> void
 JobTrack.Application.LeafWorkResult
 JobTrack.Application.LeafWorkResult.<Clone>$() -> JobTrack.Application.LeafWorkResult!
 JobTrack.Application.LeafWorkResult.Achievement.get -> JobTrack.Abstractions.Achievement
@@ -1239,6 +1420,32 @@ JobTrack.Application.NodeRateOverrideResult.UserId.get -> JobTrack.Abstractions.
 JobTrack.Application.NodeRateOverrideResult.UserId.init -> void
 JobTrack.Application.NodeRateOverrideResult.Version.get -> long
 JobTrack.Application.NodeRateOverrideResult.Version.init -> void
+JobTrack.Application.PauseLeafRequest
+JobTrack.Application.PauseLeafRequest.<Clone>$() -> JobTrack.Application.PauseLeafRequest!
+JobTrack.Application.PauseLeafRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.PauseLeafRequest.Context.init -> void
+JobTrack.Application.PauseLeafRequest.Equals(JobTrack.Application.PauseLeafRequest? other) -> bool
+JobTrack.Application.PauseLeafRequest.ExpectedActiveSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ExpectedActiveSession!>
+JobTrack.Application.PauseLeafRequest.ExpectedActiveSessions.init -> void
+JobTrack.Application.PauseLeafRequest.FinishedAt.get -> NodaTime.Instant?
+JobTrack.Application.PauseLeafRequest.FinishedAt.init -> void
+JobTrack.Application.PauseLeafRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.PauseLeafRequest.JobNodeId.init -> void
+JobTrack.Application.PauseLeafRequest.PauseLeafRequest() -> void
+JobTrack.Application.PauseLeafRequest.WriteUpChange.get -> JobTrack.Application.WriteUpChange?
+JobTrack.Application.PauseLeafRequest.WriteUpChange.init -> void
+JobTrack.Application.PauseLeafResult
+JobTrack.Application.PauseLeafResult.<Clone>$() -> JobTrack.Application.PauseLeafResult!
+JobTrack.Application.PauseLeafResult.Equals(JobTrack.Application.PauseLeafResult? other) -> bool
+JobTrack.Application.PauseLeafResult.FinishedSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>
+JobTrack.Application.PauseLeafResult.FinishedSessions.init -> void
+JobTrack.Application.PauseLeafResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.PauseLeafResult.JobNodeId.init -> void
+JobTrack.Application.PauseLeafResult.Node.get -> JobTrack.Application.JobNodeResult?
+JobTrack.Application.PauseLeafResult.Node.init -> void
+JobTrack.Application.PauseLeafResult.PauseLeafResult() -> void
+JobTrack.Application.PauseLeafResult.WriteUpChanged.get -> bool
+JobTrack.Application.PauseLeafResult.WriteUpChanged.init -> void
 JobTrack.Application.PersonalAccessTokenSummaryResult
 JobTrack.Application.PersonalAccessTokenSummaryResult.<Clone>$() -> JobTrack.Application.PersonalAccessTokenSummaryResult!
 JobTrack.Application.PersonalAccessTokenSummaryResult.CreatedAt.get -> NodaTime.Instant
@@ -1291,10 +1498,40 @@ JobTrack.Application.RemovePrerequisiteRequest.Equals(JobTrack.Application.Remov
 JobTrack.Application.RemovePrerequisiteRequest.RemovePrerequisiteRequest() -> void
 JobTrack.Application.RemovePrerequisiteRequest.RequiredJobId.get -> JobTrack.Abstractions.JobNodeId
 JobTrack.Application.RemovePrerequisiteRequest.RequiredJobId.init -> void
+JobTrack.Application.ReopenAndStartWorkRequest
+JobTrack.Application.ReopenAndStartWorkRequest.<Clone>$() -> JobTrack.Application.ReopenAndStartWorkRequest!
+JobTrack.Application.ReopenAndStartWorkRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.ReopenAndStartWorkRequest.Context.init -> void
+JobTrack.Application.ReopenAndStartWorkRequest.Equals(JobTrack.Application.ReopenAndStartWorkRequest? other) -> bool
+JobTrack.Application.ReopenAndStartWorkRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.ReopenAndStartWorkRequest.JobNodeId.init -> void
+JobTrack.Application.ReopenAndStartWorkRequest.Reason.get -> string!
+JobTrack.Application.ReopenAndStartWorkRequest.Reason.init -> void
+JobTrack.Application.ReopenAndStartWorkRequest.ReopenAndStartWorkRequest() -> void
+JobTrack.Application.ReopenAndStartWorkRequest.StartedAt.get -> NodaTime.Instant?
+JobTrack.Application.ReopenAndStartWorkRequest.StartedAt.init -> void
+JobTrack.Application.ReopenAndStartWorkRequest.Version.get -> long
+JobTrack.Application.ReopenAndStartWorkRequest.Version.init -> void
+JobTrack.Application.ReopenAndStartWorkRequest.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.ReopenAndStartWorkRequest.WorkedByUserId.init -> void
+JobTrack.Application.ReopenAndStartWorkResult
+JobTrack.Application.ReopenAndStartWorkResult.<Clone>$() -> JobTrack.Application.ReopenAndStartWorkResult!
+JobTrack.Application.ReopenAndStartWorkResult.Achievement.get -> JobTrack.Abstractions.Achievement
+JobTrack.Application.ReopenAndStartWorkResult.Achievement.init -> void
+JobTrack.Application.ReopenAndStartWorkResult.ChangedAt.get -> NodaTime.Instant
+JobTrack.Application.ReopenAndStartWorkResult.ChangedAt.init -> void
+JobTrack.Application.ReopenAndStartWorkResult.Equals(JobTrack.Application.ReopenAndStartWorkResult? other) -> bool
+JobTrack.Application.ReopenAndStartWorkResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.ReopenAndStartWorkResult.JobNodeId.init -> void
+JobTrack.Application.ReopenAndStartWorkResult.ReopenAndStartWorkResult() -> void
+JobTrack.Application.ReopenAndStartWorkResult.Session.get -> JobTrack.Application.WorkSessionResult!
+JobTrack.Application.ReopenAndStartWorkResult.Session.init -> void
+JobTrack.Application.ReopenAndStartWorkResult.Version.get -> long
+JobTrack.Application.ReopenAndStartWorkResult.Version.init -> void
 JobTrack.Application.RequesterSubtreeNodeResult
+JobTrack.Application.RequesterSubtreeNodeResult.<Clone>$() -> JobTrack.Application.RequesterSubtreeNodeResult!
 JobTrack.Application.RequesterSubtreeNodeResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration!
 JobTrack.Application.RequesterSubtreeNodeResult.AllocatedDuration.init -> void
-JobTrack.Application.RequesterSubtreeNodeResult.<Clone>$() -> JobTrack.Application.RequesterSubtreeNodeResult!
 JobTrack.Application.RequesterSubtreeNodeResult.Description.get -> string!
 JobTrack.Application.RequesterSubtreeNodeResult.Description.init -> void
 JobTrack.Application.RequesterSubtreeNodeResult.Equals(JobTrack.Application.RequesterSubtreeNodeResult? other) -> bool
@@ -1547,6 +1784,18 @@ JobTrack.Application.WorkSessionResult.Version.init -> void
 JobTrack.Application.WorkSessionResult.WorkSessionResult() -> void
 JobTrack.Application.WorkSessionResult.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
 JobTrack.Application.WorkSessionResult.WorkedByUserId.init -> void
+JobTrack.Application.WriteUpChange
+JobTrack.Application.WriteUpChange.<Clone>$() -> JobTrack.Application.WriteUpChange!
+JobTrack.Application.WriteUpChange.Equals(JobTrack.Application.WriteUpChange? other) -> bool
+JobTrack.Application.WriteUpChange.NodeVersion.get -> long
+JobTrack.Application.WriteUpChange.NodeVersion.init -> void
+JobTrack.Application.WriteUpChange.WriteUp.get -> string?
+JobTrack.Application.WriteUpChange.WriteUp.init -> void
+JobTrack.Application.WriteUpChange.WriteUpChange() -> void
+const JobTrack.Application.AuditSearchPaging.DefaultPageSize = 50 -> int
+const JobTrack.Application.AuditSearchPaging.MaxPageSize = 200 -> int
+const JobTrack.Application.AwaitingProgressPaging.DefaultPageSize = 50 -> int
+const JobTrack.Application.AwaitingProgressPaging.MaxPageSize = 200 -> int
 const JobTrack.Application.JobTrackDiagnostics.ActivitySourceName = "JobTrack.Application" -> string!
 override JobTrack.Application.AccountStateResult.Equals(object? obj) -> bool
 override JobTrack.Application.AccountStateResult.GetHashCode() -> int
@@ -1611,6 +1860,12 @@ override JobTrack.Application.BulkNodeCostResult.ToString() -> string!
 override JobTrack.Application.CommandContext.Equals(object? obj) -> bool
 override JobTrack.Application.CommandContext.GetHashCode() -> int
 override JobTrack.Application.CommandContext.ToString() -> string!
+override JobTrack.Application.CompleteLeafRequest.Equals(object? obj) -> bool
+override JobTrack.Application.CompleteLeafRequest.GetHashCode() -> int
+override JobTrack.Application.CompleteLeafRequest.ToString() -> string!
+override JobTrack.Application.CompleteLeafResult.Equals(object? obj) -> bool
+override JobTrack.Application.CompleteLeafResult.GetHashCode() -> int
+override JobTrack.Application.CompleteLeafResult.ToString() -> string!
 override JobTrack.Application.CorrectNodeRateOverrideRequest.Equals(object? obj) -> bool
 override JobTrack.Application.CorrectNodeRateOverrideRequest.GetHashCode() -> int
 override JobTrack.Application.CorrectNodeRateOverrideRequest.ToString() -> string!
@@ -1656,6 +1911,15 @@ override JobTrack.Application.EmployeeProfileResult.ToString() -> string!
 override JobTrack.Application.EmployeeRolesResult.Equals(object? obj) -> bool
 override JobTrack.Application.EmployeeRolesResult.GetHashCode() -> int
 override JobTrack.Application.EmployeeRolesResult.ToString() -> string!
+override JobTrack.Application.ExpectedActiveSession.Equals(object? obj) -> bool
+override JobTrack.Application.ExpectedActiveSession.GetHashCode() -> int
+override JobTrack.Application.ExpectedActiveSession.ToString() -> string!
+override JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Equals(object? obj) -> bool
+override JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.GetHashCode() -> int
+override JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.ToString() -> string!
+override JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Equals(object? obj) -> bool
+override JobTrack.Application.FinishSessionAndUpdateWriteUpResult.GetHashCode() -> int
+override JobTrack.Application.FinishSessionAndUpdateWriteUpResult.ToString() -> string!
 override JobTrack.Application.FinishSessionRequest.Equals(object? obj) -> bool
 override JobTrack.Application.FinishSessionRequest.GetHashCode() -> int
 override JobTrack.Application.FinishSessionRequest.ToString() -> string!
@@ -1671,6 +1935,9 @@ override JobTrack.Application.GetAllEmployeesRequest.ToString() -> string!
 override JobTrack.Application.GetAwaitingProgressRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetAwaitingProgressRequest.GetHashCode() -> int
 override JobTrack.Application.GetAwaitingProgressRequest.ToString() -> string!
+override JobTrack.Application.GetBranchAchievementRequest.Equals(object? obj) -> bool
+override JobTrack.Application.GetBranchAchievementRequest.GetHashCode() -> int
+override JobTrack.Application.GetBranchAchievementRequest.ToString() -> string!
 override JobTrack.Application.GetBulkNodeCostsRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetBulkNodeCostsRequest.GetHashCode() -> int
 override JobTrack.Application.GetBulkNodeCostsRequest.ToString() -> string!
@@ -1704,6 +1971,9 @@ override JobTrack.Application.GetJobSummariesRequest.ToString() -> string!
 override JobTrack.Application.GetLeafSessionsRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetLeafSessionsRequest.GetHashCode() -> int
 override JobTrack.Application.GetLeafSessionsRequest.ToString() -> string!
+override JobTrack.Application.GetLeafWorkPageRequest.Equals(object? obj) -> bool
+override JobTrack.Application.GetLeafWorkPageRequest.GetHashCode() -> int
+override JobTrack.Application.GetLeafWorkPageRequest.ToString() -> string!
 override JobTrack.Application.GetLeafWorkRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetLeafWorkRequest.GetHashCode() -> int
 override JobTrack.Application.GetLeafWorkRequest.ToString() -> string!
@@ -1719,6 +1989,9 @@ override JobTrack.Application.GetReadinessRequest.ToString() -> string!
 override JobTrack.Application.GetScheduleRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetScheduleRequest.GetHashCode() -> int
 override JobTrack.Application.GetScheduleRequest.ToString() -> string!
+override JobTrack.Application.GetSessionManageCapabilitiesRequest.Equals(object? obj) -> bool
+override JobTrack.Application.GetSessionManageCapabilitiesRequest.GetHashCode() -> int
+override JobTrack.Application.GetSessionManageCapabilitiesRequest.ToString() -> string!
 override JobTrack.Application.HierarchyTotalsResult.Equals(object? obj) -> bool
 override JobTrack.Application.HierarchyTotalsResult.GetHashCode() -> int
 override JobTrack.Application.HierarchyTotalsResult.ToString() -> string!
@@ -1737,12 +2010,12 @@ override JobTrack.Application.ImportSubtreeRequest.ToString() -> string!
 override JobTrack.Application.ImportSubtreeResult.Equals(object? obj) -> bool
 override JobTrack.Application.ImportSubtreeResult.GetHashCode() -> int
 override JobTrack.Application.ImportSubtreeResult.ToString() -> string!
-override JobTrack.Application.ImportedJobNode.Equals(object? obj) -> bool
-override JobTrack.Application.ImportedJobNode.GetHashCode() -> int
-override JobTrack.Application.ImportedJobNode.ToString() -> string!
 override JobTrack.Application.ImportSubtreeWorkSessionSpec.Equals(object? obj) -> bool
 override JobTrack.Application.ImportSubtreeWorkSessionSpec.GetHashCode() -> int
 override JobTrack.Application.ImportSubtreeWorkSessionSpec.ToString() -> string!
+override JobTrack.Application.ImportedJobNode.Equals(object? obj) -> bool
+override JobTrack.Application.ImportedJobNode.GetHashCode() -> int
+override JobTrack.Application.ImportedJobNode.ToString() -> string!
 override JobTrack.Application.IssuePersonalAccessTokenRequest.Equals(object? obj) -> bool
 override JobTrack.Application.IssuePersonalAccessTokenRequest.GetHashCode() -> int
 override JobTrack.Application.IssuePersonalAccessTokenRequest.ToString() -> string!
@@ -1779,6 +2052,12 @@ override JobTrack.Application.JobSubtreeNodeResult.ToString() -> string!
 override JobTrack.Application.JobSubtreeResult.Equals(object? obj) -> bool
 override JobTrack.Application.JobSubtreeResult.GetHashCode() -> int
 override JobTrack.Application.JobSubtreeResult.ToString() -> string!
+override JobTrack.Application.LeafSessionManageCapabilityResult.Equals(object? obj) -> bool
+override JobTrack.Application.LeafSessionManageCapabilityResult.GetHashCode() -> int
+override JobTrack.Application.LeafSessionManageCapabilityResult.ToString() -> string!
+override JobTrack.Application.LeafWorkPageResult.Equals(object? obj) -> bool
+override JobTrack.Application.LeafWorkPageResult.GetHashCode() -> int
+override JobTrack.Application.LeafWorkPageResult.ToString() -> string!
 override JobTrack.Application.LeafWorkResult.Equals(object? obj) -> bool
 override JobTrack.Application.LeafWorkResult.GetHashCode() -> int
 override JobTrack.Application.LeafWorkResult.ToString() -> string!
@@ -1797,6 +2076,12 @@ override JobTrack.Application.NewChildJobSpec.ToString() -> string!
 override JobTrack.Application.NodeRateOverrideResult.Equals(object? obj) -> bool
 override JobTrack.Application.NodeRateOverrideResult.GetHashCode() -> int
 override JobTrack.Application.NodeRateOverrideResult.ToString() -> string!
+override JobTrack.Application.PauseLeafRequest.Equals(object? obj) -> bool
+override JobTrack.Application.PauseLeafRequest.GetHashCode() -> int
+override JobTrack.Application.PauseLeafRequest.ToString() -> string!
+override JobTrack.Application.PauseLeafResult.Equals(object? obj) -> bool
+override JobTrack.Application.PauseLeafResult.GetHashCode() -> int
+override JobTrack.Application.PauseLeafResult.ToString() -> string!
 override JobTrack.Application.PersonalAccessTokenSummaryResult.Equals(object? obj) -> bool
 override JobTrack.Application.PersonalAccessTokenSummaryResult.GetHashCode() -> int
 override JobTrack.Application.PersonalAccessTokenSummaryResult.ToString() -> string!
@@ -1809,6 +2094,12 @@ override JobTrack.Application.RateSnapshotResult.ToString() -> string!
 override JobTrack.Application.RemovePrerequisiteRequest.Equals(object? obj) -> bool
 override JobTrack.Application.RemovePrerequisiteRequest.GetHashCode() -> int
 override JobTrack.Application.RemovePrerequisiteRequest.ToString() -> string!
+override JobTrack.Application.ReopenAndStartWorkRequest.Equals(object? obj) -> bool
+override JobTrack.Application.ReopenAndStartWorkRequest.GetHashCode() -> int
+override JobTrack.Application.ReopenAndStartWorkRequest.ToString() -> string!
+override JobTrack.Application.ReopenAndStartWorkResult.Equals(object? obj) -> bool
+override JobTrack.Application.ReopenAndStartWorkResult.GetHashCode() -> int
+override JobTrack.Application.ReopenAndStartWorkResult.ToString() -> string!
 override JobTrack.Application.RequesterSubtreeNodeResult.Equals(object? obj) -> bool
 override JobTrack.Application.RequesterSubtreeNodeResult.GetHashCode() -> int
 override JobTrack.Application.RequesterSubtreeNodeResult.ToString() -> string!
@@ -1869,6 +2160,9 @@ override JobTrack.Application.UserCostRateResult.ToString() -> string!
 override JobTrack.Application.WorkSessionResult.Equals(object? obj) -> bool
 override JobTrack.Application.WorkSessionResult.GetHashCode() -> int
 override JobTrack.Application.WorkSessionResult.ToString() -> string!
+override JobTrack.Application.WriteUpChange.Equals(object? obj) -> bool
+override JobTrack.Application.WriteUpChange.GetHashCode() -> int
+override JobTrack.Application.WriteUpChange.ToString() -> string!
 static JobTrack.Application.AccountStateResult.operator !=(JobTrack.Application.AccountStateResult? left, JobTrack.Application.AccountStateResult? right) -> bool
 static JobTrack.Application.AccountStateResult.operator ==(JobTrack.Application.AccountStateResult? left, JobTrack.Application.AccountStateResult? right) -> bool
 static JobTrack.Application.AcknowledgeJobRequestRequest.operator !=(JobTrack.Application.AcknowledgeJobRequestRequest? left, JobTrack.Application.AcknowledgeJobRequestRequest? right) -> bool
@@ -1911,6 +2205,10 @@ static JobTrack.Application.BulkNodeCostResult.operator !=(JobTrack.Application.
 static JobTrack.Application.BulkNodeCostResult.operator ==(JobTrack.Application.BulkNodeCostResult? left, JobTrack.Application.BulkNodeCostResult? right) -> bool
 static JobTrack.Application.CommandContext.operator !=(JobTrack.Application.CommandContext? left, JobTrack.Application.CommandContext? right) -> bool
 static JobTrack.Application.CommandContext.operator ==(JobTrack.Application.CommandContext? left, JobTrack.Application.CommandContext? right) -> bool
+static JobTrack.Application.CompleteLeafRequest.operator !=(JobTrack.Application.CompleteLeafRequest? left, JobTrack.Application.CompleteLeafRequest? right) -> bool
+static JobTrack.Application.CompleteLeafRequest.operator ==(JobTrack.Application.CompleteLeafRequest? left, JobTrack.Application.CompleteLeafRequest? right) -> bool
+static JobTrack.Application.CompleteLeafResult.operator !=(JobTrack.Application.CompleteLeafResult? left, JobTrack.Application.CompleteLeafResult? right) -> bool
+static JobTrack.Application.CompleteLeafResult.operator ==(JobTrack.Application.CompleteLeafResult? left, JobTrack.Application.CompleteLeafResult? right) -> bool
 static JobTrack.Application.CorrectNodeRateOverrideRequest.operator !=(JobTrack.Application.CorrectNodeRateOverrideRequest? left, JobTrack.Application.CorrectNodeRateOverrideRequest? right) -> bool
 static JobTrack.Application.CorrectNodeRateOverrideRequest.operator ==(JobTrack.Application.CorrectNodeRateOverrideRequest? left, JobTrack.Application.CorrectNodeRateOverrideRequest? right) -> bool
 static JobTrack.Application.CorrectScheduleExceptionRequest.operator !=(JobTrack.Application.CorrectScheduleExceptionRequest? left, JobTrack.Application.CorrectScheduleExceptionRequest? right) -> bool
@@ -1941,6 +2239,12 @@ static JobTrack.Application.EmployeeProfileResult.operator !=(JobTrack.Applicati
 static JobTrack.Application.EmployeeProfileResult.operator ==(JobTrack.Application.EmployeeProfileResult? left, JobTrack.Application.EmployeeProfileResult? right) -> bool
 static JobTrack.Application.EmployeeRolesResult.operator !=(JobTrack.Application.EmployeeRolesResult? left, JobTrack.Application.EmployeeRolesResult? right) -> bool
 static JobTrack.Application.EmployeeRolesResult.operator ==(JobTrack.Application.EmployeeRolesResult? left, JobTrack.Application.EmployeeRolesResult? right) -> bool
+static JobTrack.Application.ExpectedActiveSession.operator !=(JobTrack.Application.ExpectedActiveSession? left, JobTrack.Application.ExpectedActiveSession? right) -> bool
+static JobTrack.Application.ExpectedActiveSession.operator ==(JobTrack.Application.ExpectedActiveSession? left, JobTrack.Application.ExpectedActiveSession? right) -> bool
+static JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.operator !=(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? left, JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? right) -> bool
+static JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.operator ==(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? left, JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? right) -> bool
+static JobTrack.Application.FinishSessionAndUpdateWriteUpResult.operator !=(JobTrack.Application.FinishSessionAndUpdateWriteUpResult? left, JobTrack.Application.FinishSessionAndUpdateWriteUpResult? right) -> bool
+static JobTrack.Application.FinishSessionAndUpdateWriteUpResult.operator ==(JobTrack.Application.FinishSessionAndUpdateWriteUpResult? left, JobTrack.Application.FinishSessionAndUpdateWriteUpResult? right) -> bool
 static JobTrack.Application.FinishSessionRequest.operator !=(JobTrack.Application.FinishSessionRequest? left, JobTrack.Application.FinishSessionRequest? right) -> bool
 static JobTrack.Application.FinishSessionRequest.operator ==(JobTrack.Application.FinishSessionRequest? left, JobTrack.Application.FinishSessionRequest? right) -> bool
 static JobTrack.Application.GetAccountStateRequest.operator !=(JobTrack.Application.GetAccountStateRequest? left, JobTrack.Application.GetAccountStateRequest? right) -> bool
@@ -1951,6 +2255,8 @@ static JobTrack.Application.GetAllEmployeesRequest.operator !=(JobTrack.Applicat
 static JobTrack.Application.GetAllEmployeesRequest.operator ==(JobTrack.Application.GetAllEmployeesRequest? left, JobTrack.Application.GetAllEmployeesRequest? right) -> bool
 static JobTrack.Application.GetAwaitingProgressRequest.operator !=(JobTrack.Application.GetAwaitingProgressRequest? left, JobTrack.Application.GetAwaitingProgressRequest? right) -> bool
 static JobTrack.Application.GetAwaitingProgressRequest.operator ==(JobTrack.Application.GetAwaitingProgressRequest? left, JobTrack.Application.GetAwaitingProgressRequest? right) -> bool
+static JobTrack.Application.GetBranchAchievementRequest.operator !=(JobTrack.Application.GetBranchAchievementRequest? left, JobTrack.Application.GetBranchAchievementRequest? right) -> bool
+static JobTrack.Application.GetBranchAchievementRequest.operator ==(JobTrack.Application.GetBranchAchievementRequest? left, JobTrack.Application.GetBranchAchievementRequest? right) -> bool
 static JobTrack.Application.GetBulkNodeCostsRequest.operator !=(JobTrack.Application.GetBulkNodeCostsRequest? left, JobTrack.Application.GetBulkNodeCostsRequest? right) -> bool
 static JobTrack.Application.GetBulkNodeCostsRequest.operator ==(JobTrack.Application.GetBulkNodeCostsRequest? left, JobTrack.Application.GetBulkNodeCostsRequest? right) -> bool
 static JobTrack.Application.GetCostDetailsRequest.operator !=(JobTrack.Application.GetCostDetailsRequest? left, JobTrack.Application.GetCostDetailsRequest? right) -> bool
@@ -1973,6 +2279,8 @@ static JobTrack.Application.GetJobSummariesRequest.operator !=(JobTrack.Applicat
 static JobTrack.Application.GetJobSummariesRequest.operator ==(JobTrack.Application.GetJobSummariesRequest? left, JobTrack.Application.GetJobSummariesRequest? right) -> bool
 static JobTrack.Application.GetLeafSessionsRequest.operator !=(JobTrack.Application.GetLeafSessionsRequest? left, JobTrack.Application.GetLeafSessionsRequest? right) -> bool
 static JobTrack.Application.GetLeafSessionsRequest.operator ==(JobTrack.Application.GetLeafSessionsRequest? left, JobTrack.Application.GetLeafSessionsRequest? right) -> bool
+static JobTrack.Application.GetLeafWorkPageRequest.operator !=(JobTrack.Application.GetLeafWorkPageRequest? left, JobTrack.Application.GetLeafWorkPageRequest? right) -> bool
+static JobTrack.Application.GetLeafWorkPageRequest.operator ==(JobTrack.Application.GetLeafWorkPageRequest? left, JobTrack.Application.GetLeafWorkPageRequest? right) -> bool
 static JobTrack.Application.GetLeafWorkRequest.operator !=(JobTrack.Application.GetLeafWorkRequest? left, JobTrack.Application.GetLeafWorkRequest? right) -> bool
 static JobTrack.Application.GetLeafWorkRequest.operator ==(JobTrack.Application.GetLeafWorkRequest? left, JobTrack.Application.GetLeafWorkRequest? right) -> bool
 static JobTrack.Application.GetPrerequisitesRequest.operator !=(JobTrack.Application.GetPrerequisitesRequest? left, JobTrack.Application.GetPrerequisitesRequest? right) -> bool
@@ -1983,6 +2291,8 @@ static JobTrack.Application.GetReadinessRequest.operator !=(JobTrack.Application
 static JobTrack.Application.GetReadinessRequest.operator ==(JobTrack.Application.GetReadinessRequest? left, JobTrack.Application.GetReadinessRequest? right) -> bool
 static JobTrack.Application.GetScheduleRequest.operator !=(JobTrack.Application.GetScheduleRequest? left, JobTrack.Application.GetScheduleRequest? right) -> bool
 static JobTrack.Application.GetScheduleRequest.operator ==(JobTrack.Application.GetScheduleRequest? left, JobTrack.Application.GetScheduleRequest? right) -> bool
+static JobTrack.Application.GetSessionManageCapabilitiesRequest.operator !=(JobTrack.Application.GetSessionManageCapabilitiesRequest? left, JobTrack.Application.GetSessionManageCapabilitiesRequest? right) -> bool
+static JobTrack.Application.GetSessionManageCapabilitiesRequest.operator ==(JobTrack.Application.GetSessionManageCapabilitiesRequest? left, JobTrack.Application.GetSessionManageCapabilitiesRequest? right) -> bool
 static JobTrack.Application.HierarchyTotalsResult.operator !=(JobTrack.Application.HierarchyTotalsResult? left, JobTrack.Application.HierarchyTotalsResult? right) -> bool
 static JobTrack.Application.HierarchyTotalsResult.operator ==(JobTrack.Application.HierarchyTotalsResult? left, JobTrack.Application.HierarchyTotalsResult? right) -> bool
 static JobTrack.Application.HoldingAreaSummaryResult.operator !=(JobTrack.Application.HoldingAreaSummaryResult? left, JobTrack.Application.HoldingAreaSummaryResult? right) -> bool
@@ -1995,10 +2305,10 @@ static JobTrack.Application.ImportSubtreeRequest.operator !=(JobTrack.Applicatio
 static JobTrack.Application.ImportSubtreeRequest.operator ==(JobTrack.Application.ImportSubtreeRequest? left, JobTrack.Application.ImportSubtreeRequest? right) -> bool
 static JobTrack.Application.ImportSubtreeResult.operator !=(JobTrack.Application.ImportSubtreeResult? left, JobTrack.Application.ImportSubtreeResult? right) -> bool
 static JobTrack.Application.ImportSubtreeResult.operator ==(JobTrack.Application.ImportSubtreeResult? left, JobTrack.Application.ImportSubtreeResult? right) -> bool
-static JobTrack.Application.ImportedJobNode.operator !=(JobTrack.Application.ImportedJobNode? left, JobTrack.Application.ImportedJobNode? right) -> bool
-static JobTrack.Application.ImportedJobNode.operator ==(JobTrack.Application.ImportedJobNode? left, JobTrack.Application.ImportedJobNode? right) -> bool
 static JobTrack.Application.ImportSubtreeWorkSessionSpec.operator !=(JobTrack.Application.ImportSubtreeWorkSessionSpec? left, JobTrack.Application.ImportSubtreeWorkSessionSpec? right) -> bool
 static JobTrack.Application.ImportSubtreeWorkSessionSpec.operator ==(JobTrack.Application.ImportSubtreeWorkSessionSpec? left, JobTrack.Application.ImportSubtreeWorkSessionSpec? right) -> bool
+static JobTrack.Application.ImportedJobNode.operator !=(JobTrack.Application.ImportedJobNode? left, JobTrack.Application.ImportedJobNode? right) -> bool
+static JobTrack.Application.ImportedJobNode.operator ==(JobTrack.Application.ImportedJobNode? left, JobTrack.Application.ImportedJobNode? right) -> bool
 static JobTrack.Application.IssuePersonalAccessTokenRequest.operator !=(JobTrack.Application.IssuePersonalAccessTokenRequest? left, JobTrack.Application.IssuePersonalAccessTokenRequest? right) -> bool
 static JobTrack.Application.IssuePersonalAccessTokenRequest.operator ==(JobTrack.Application.IssuePersonalAccessTokenRequest? left, JobTrack.Application.IssuePersonalAccessTokenRequest? right) -> bool
 static JobTrack.Application.IssuedPersonalAccessTokenResult.operator !=(JobTrack.Application.IssuedPersonalAccessTokenResult? left, JobTrack.Application.IssuedPersonalAccessTokenResult? right) -> bool
@@ -2023,6 +2333,10 @@ static JobTrack.Application.JobSubtreeNodeResult.operator !=(JobTrack.Applicatio
 static JobTrack.Application.JobSubtreeNodeResult.operator ==(JobTrack.Application.JobSubtreeNodeResult? left, JobTrack.Application.JobSubtreeNodeResult? right) -> bool
 static JobTrack.Application.JobSubtreeResult.operator !=(JobTrack.Application.JobSubtreeResult? left, JobTrack.Application.JobSubtreeResult? right) -> bool
 static JobTrack.Application.JobSubtreeResult.operator ==(JobTrack.Application.JobSubtreeResult? left, JobTrack.Application.JobSubtreeResult? right) -> bool
+static JobTrack.Application.LeafSessionManageCapabilityResult.operator !=(JobTrack.Application.LeafSessionManageCapabilityResult? left, JobTrack.Application.LeafSessionManageCapabilityResult? right) -> bool
+static JobTrack.Application.LeafSessionManageCapabilityResult.operator ==(JobTrack.Application.LeafSessionManageCapabilityResult? left, JobTrack.Application.LeafSessionManageCapabilityResult? right) -> bool
+static JobTrack.Application.LeafWorkPageResult.operator !=(JobTrack.Application.LeafWorkPageResult? left, JobTrack.Application.LeafWorkPageResult? right) -> bool
+static JobTrack.Application.LeafWorkPageResult.operator ==(JobTrack.Application.LeafWorkPageResult? left, JobTrack.Application.LeafWorkPageResult? right) -> bool
 static JobTrack.Application.LeafWorkResult.operator !=(JobTrack.Application.LeafWorkResult? left, JobTrack.Application.LeafWorkResult? right) -> bool
 static JobTrack.Application.LeafWorkResult.operator ==(JobTrack.Application.LeafWorkResult? left, JobTrack.Application.LeafWorkResult? right) -> bool
 static JobTrack.Application.ListPersonalAccessTokensRequest.operator !=(JobTrack.Application.ListPersonalAccessTokensRequest? left, JobTrack.Application.ListPersonalAccessTokensRequest? right) -> bool
@@ -2035,6 +2349,10 @@ static JobTrack.Application.NewChildJobSpec.operator !=(JobTrack.Application.New
 static JobTrack.Application.NewChildJobSpec.operator ==(JobTrack.Application.NewChildJobSpec? left, JobTrack.Application.NewChildJobSpec? right) -> bool
 static JobTrack.Application.NodeRateOverrideResult.operator !=(JobTrack.Application.NodeRateOverrideResult? left, JobTrack.Application.NodeRateOverrideResult? right) -> bool
 static JobTrack.Application.NodeRateOverrideResult.operator ==(JobTrack.Application.NodeRateOverrideResult? left, JobTrack.Application.NodeRateOverrideResult? right) -> bool
+static JobTrack.Application.PauseLeafRequest.operator !=(JobTrack.Application.PauseLeafRequest? left, JobTrack.Application.PauseLeafRequest? right) -> bool
+static JobTrack.Application.PauseLeafRequest.operator ==(JobTrack.Application.PauseLeafRequest? left, JobTrack.Application.PauseLeafRequest? right) -> bool
+static JobTrack.Application.PauseLeafResult.operator !=(JobTrack.Application.PauseLeafResult? left, JobTrack.Application.PauseLeafResult? right) -> bool
+static JobTrack.Application.PauseLeafResult.operator ==(JobTrack.Application.PauseLeafResult? left, JobTrack.Application.PauseLeafResult? right) -> bool
 static JobTrack.Application.PersonalAccessTokenSummaryResult.operator !=(JobTrack.Application.PersonalAccessTokenSummaryResult? left, JobTrack.Application.PersonalAccessTokenSummaryResult? right) -> bool
 static JobTrack.Application.PersonalAccessTokenSummaryResult.operator ==(JobTrack.Application.PersonalAccessTokenSummaryResult? left, JobTrack.Application.PersonalAccessTokenSummaryResult? right) -> bool
 static JobTrack.Application.PickUpJobNodeRequest.operator !=(JobTrack.Application.PickUpJobNodeRequest? left, JobTrack.Application.PickUpJobNodeRequest? right) -> bool
@@ -2043,6 +2361,10 @@ static JobTrack.Application.RateSnapshotResult.operator !=(JobTrack.Application.
 static JobTrack.Application.RateSnapshotResult.operator ==(JobTrack.Application.RateSnapshotResult? left, JobTrack.Application.RateSnapshotResult? right) -> bool
 static JobTrack.Application.RemovePrerequisiteRequest.operator !=(JobTrack.Application.RemovePrerequisiteRequest? left, JobTrack.Application.RemovePrerequisiteRequest? right) -> bool
 static JobTrack.Application.RemovePrerequisiteRequest.operator ==(JobTrack.Application.RemovePrerequisiteRequest? left, JobTrack.Application.RemovePrerequisiteRequest? right) -> bool
+static JobTrack.Application.ReopenAndStartWorkRequest.operator !=(JobTrack.Application.ReopenAndStartWorkRequest? left, JobTrack.Application.ReopenAndStartWorkRequest? right) -> bool
+static JobTrack.Application.ReopenAndStartWorkRequest.operator ==(JobTrack.Application.ReopenAndStartWorkRequest? left, JobTrack.Application.ReopenAndStartWorkRequest? right) -> bool
+static JobTrack.Application.ReopenAndStartWorkResult.operator !=(JobTrack.Application.ReopenAndStartWorkResult? left, JobTrack.Application.ReopenAndStartWorkResult? right) -> bool
+static JobTrack.Application.ReopenAndStartWorkResult.operator ==(JobTrack.Application.ReopenAndStartWorkResult? left, JobTrack.Application.ReopenAndStartWorkResult? right) -> bool
 static JobTrack.Application.RequesterSubtreeNodeResult.operator !=(JobTrack.Application.RequesterSubtreeNodeResult? left, JobTrack.Application.RequesterSubtreeNodeResult? right) -> bool
 static JobTrack.Application.RequesterSubtreeNodeResult.operator ==(JobTrack.Application.RequesterSubtreeNodeResult? left, JobTrack.Application.RequesterSubtreeNodeResult? right) -> bool
 static JobTrack.Application.ResetEmployeePasswordRequest.operator !=(JobTrack.Application.ResetEmployeePasswordRequest? left, JobTrack.Application.ResetEmployeePasswordRequest? right) -> bool
@@ -2083,318 +2405,5 @@ static JobTrack.Application.UserCostRateResult.operator !=(JobTrack.Application.
 static JobTrack.Application.UserCostRateResult.operator ==(JobTrack.Application.UserCostRateResult? left, JobTrack.Application.UserCostRateResult? right) -> bool
 static JobTrack.Application.WorkSessionResult.operator !=(JobTrack.Application.WorkSessionResult? left, JobTrack.Application.WorkSessionResult? right) -> bool
 static JobTrack.Application.WorkSessionResult.operator ==(JobTrack.Application.WorkSessionResult? left, JobTrack.Application.WorkSessionResult? right) -> bool
-JobTrack.Application.AwaitingProgressPaging
-const JobTrack.Application.AwaitingProgressPaging.DefaultPageSize = 50 -> int
-const JobTrack.Application.AwaitingProgressPaging.MaxPageSize = 200 -> int
-JobTrack.Application.GetSessionManageCapabilitiesRequest
-JobTrack.Application.GetSessionManageCapabilitiesRequest.<Clone>$() -> JobTrack.Application.GetSessionManageCapabilitiesRequest!
-JobTrack.Application.GetSessionManageCapabilitiesRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.GetSessionManageCapabilitiesRequest.Context.init -> void
-JobTrack.Application.GetSessionManageCapabilitiesRequest.Equals(JobTrack.Application.GetSessionManageCapabilitiesRequest? other) -> bool
-JobTrack.Application.GetSessionManageCapabilitiesRequest.GetSessionManageCapabilitiesRequest() -> void
-JobTrack.Application.GetSessionManageCapabilitiesRequest.LeafWorkIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
-JobTrack.Application.GetSessionManageCapabilitiesRequest.LeafWorkIds.init -> void
-JobTrack.Application.IJobQueries.GetSessionManageCapabilitiesAsync(JobTrack.Application.GetSessionManageCapabilitiesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.LeafSessionManageCapabilityResult!>>!
-JobTrack.Application.LeafSessionManageCapabilityResult
-JobTrack.Application.LeafSessionManageCapabilityResult.<Clone>$() -> JobTrack.Application.LeafSessionManageCapabilityResult!
-JobTrack.Application.LeafSessionManageCapabilityResult.CanManage.get -> bool
-JobTrack.Application.LeafSessionManageCapabilityResult.CanManage.init -> void
-JobTrack.Application.LeafSessionManageCapabilityResult.Equals(JobTrack.Application.LeafSessionManageCapabilityResult? other) -> bool
-JobTrack.Application.LeafSessionManageCapabilityResult.LeafSessionManageCapabilityResult() -> void
-JobTrack.Application.LeafSessionManageCapabilityResult.LeafWorkId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.LeafSessionManageCapabilityResult.LeafWorkId.init -> void
-override JobTrack.Application.GetSessionManageCapabilitiesRequest.Equals(object? obj) -> bool
-override JobTrack.Application.GetSessionManageCapabilitiesRequest.GetHashCode() -> int
-override JobTrack.Application.GetSessionManageCapabilitiesRequest.ToString() -> string!
-override JobTrack.Application.LeafSessionManageCapabilityResult.Equals(object? obj) -> bool
-override JobTrack.Application.LeafSessionManageCapabilityResult.GetHashCode() -> int
-override JobTrack.Application.LeafSessionManageCapabilityResult.ToString() -> string!
-static JobTrack.Application.GetSessionManageCapabilitiesRequest.operator !=(JobTrack.Application.GetSessionManageCapabilitiesRequest? left, JobTrack.Application.GetSessionManageCapabilitiesRequest? right) -> bool
-static JobTrack.Application.GetSessionManageCapabilitiesRequest.operator ==(JobTrack.Application.GetSessionManageCapabilitiesRequest? left, JobTrack.Application.GetSessionManageCapabilitiesRequest? right) -> bool
-static JobTrack.Application.LeafSessionManageCapabilityResult.operator !=(JobTrack.Application.LeafSessionManageCapabilityResult? left, JobTrack.Application.LeafSessionManageCapabilityResult? right) -> bool
-static JobTrack.Application.LeafSessionManageCapabilityResult.operator ==(JobTrack.Application.LeafSessionManageCapabilityResult? left, JobTrack.Application.LeafSessionManageCapabilityResult? right) -> bool
-JobTrack.Application.CompleteLeafRequest
-JobTrack.Application.CompleteLeafRequest.<Clone>$() -> JobTrack.Application.CompleteLeafRequest!
-JobTrack.Application.CompleteLeafRequest.CompleteLeafRequest() -> void
-JobTrack.Application.CompleteLeafRequest.CompletionNote.get -> string?
-JobTrack.Application.CompleteLeafRequest.CompletionNote.init -> void
-JobTrack.Application.CompleteLeafRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.CompleteLeafRequest.Context.init -> void
-JobTrack.Application.CompleteLeafRequest.Equals(JobTrack.Application.CompleteLeafRequest? other) -> bool
-JobTrack.Application.CompleteLeafRequest.ExpectedActiveSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ExpectedActiveSession!>
-JobTrack.Application.CompleteLeafRequest.ExpectedActiveSessions.init -> void
-JobTrack.Application.CompleteLeafRequest.FinalAchievement.get -> JobTrack.Abstractions.Achievement
-JobTrack.Application.CompleteLeafRequest.FinalAchievement.init -> void
-JobTrack.Application.CompleteLeafRequest.FinishedAt.get -> NodaTime.Instant?
-JobTrack.Application.CompleteLeafRequest.FinishedAt.init -> void
-JobTrack.Application.CompleteLeafRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.CompleteLeafRequest.JobNodeId.init -> void
-JobTrack.Application.CompleteLeafRequest.Version.get -> long
-JobTrack.Application.CompleteLeafRequest.Version.init -> void
-JobTrack.Application.CompleteLeafResult
-JobTrack.Application.CompleteLeafResult.<Clone>$() -> JobTrack.Application.CompleteLeafResult!
-JobTrack.Application.CompleteLeafResult.Achievement.get -> JobTrack.Abstractions.Achievement
-JobTrack.Application.CompleteLeafResult.Achievement.init -> void
-JobTrack.Application.CompleteLeafResult.ChangedAt.get -> NodaTime.Instant
-JobTrack.Application.CompleteLeafResult.ChangedAt.init -> void
-JobTrack.Application.CompleteLeafResult.CompleteLeafResult() -> void
-JobTrack.Application.CompleteLeafResult.Equals(JobTrack.Application.CompleteLeafResult? other) -> bool
-JobTrack.Application.CompleteLeafResult.FinishedSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>
-JobTrack.Application.CompleteLeafResult.FinishedSessions.init -> void
-JobTrack.Application.CompleteLeafResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.CompleteLeafResult.JobNodeId.init -> void
-JobTrack.Application.CompleteLeafResult.Version.get -> long
-JobTrack.Application.CompleteLeafResult.Version.init -> void
-JobTrack.Application.ExpectedActiveSession
-JobTrack.Application.ExpectedActiveSession.<Clone>$() -> JobTrack.Application.ExpectedActiveSession!
-JobTrack.Application.ExpectedActiveSession.Equals(JobTrack.Application.ExpectedActiveSession? other) -> bool
-JobTrack.Application.ExpectedActiveSession.ExpectedActiveSession() -> void
-JobTrack.Application.ExpectedActiveSession.Id.get -> JobTrack.Abstractions.WorkSessionId
-JobTrack.Application.ExpectedActiveSession.Id.init -> void
-JobTrack.Application.ExpectedActiveSession.Version.get -> long
-JobTrack.Application.ExpectedActiveSession.Version.init -> void
-JobTrack.Application.IWorkCommands.CompleteLeafAsync(JobTrack.Application.CompleteLeafRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.CompleteLeafResult!>!
-JobTrack.Application.IWorkCommands.ReopenAndStartWorkAsync(JobTrack.Application.ReopenAndStartWorkRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ReopenAndStartWorkResult!>!
-JobTrack.Application.ReopenAndStartWorkRequest
-JobTrack.Application.ReopenAndStartWorkRequest.<Clone>$() -> JobTrack.Application.ReopenAndStartWorkRequest!
-JobTrack.Application.ReopenAndStartWorkRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.ReopenAndStartWorkRequest.Context.init -> void
-JobTrack.Application.ReopenAndStartWorkRequest.Equals(JobTrack.Application.ReopenAndStartWorkRequest? other) -> bool
-JobTrack.Application.ReopenAndStartWorkRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.ReopenAndStartWorkRequest.JobNodeId.init -> void
-JobTrack.Application.ReopenAndStartWorkRequest.Reason.get -> string!
-JobTrack.Application.ReopenAndStartWorkRequest.Reason.init -> void
-JobTrack.Application.ReopenAndStartWorkRequest.ReopenAndStartWorkRequest() -> void
-JobTrack.Application.ReopenAndStartWorkRequest.StartedAt.get -> NodaTime.Instant?
-JobTrack.Application.ReopenAndStartWorkRequest.StartedAt.init -> void
-JobTrack.Application.ReopenAndStartWorkRequest.Version.get -> long
-JobTrack.Application.ReopenAndStartWorkRequest.Version.init -> void
-JobTrack.Application.ReopenAndStartWorkRequest.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
-JobTrack.Application.ReopenAndStartWorkRequest.WorkedByUserId.init -> void
-JobTrack.Application.ReopenAndStartWorkResult
-JobTrack.Application.ReopenAndStartWorkResult.<Clone>$() -> JobTrack.Application.ReopenAndStartWorkResult!
-JobTrack.Application.ReopenAndStartWorkResult.Achievement.get -> JobTrack.Abstractions.Achievement
-JobTrack.Application.ReopenAndStartWorkResult.Achievement.init -> void
-JobTrack.Application.ReopenAndStartWorkResult.ChangedAt.get -> NodaTime.Instant
-JobTrack.Application.ReopenAndStartWorkResult.ChangedAt.init -> void
-JobTrack.Application.ReopenAndStartWorkResult.Equals(JobTrack.Application.ReopenAndStartWorkResult? other) -> bool
-JobTrack.Application.ReopenAndStartWorkResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.ReopenAndStartWorkResult.JobNodeId.init -> void
-JobTrack.Application.ReopenAndStartWorkResult.ReopenAndStartWorkResult() -> void
-JobTrack.Application.ReopenAndStartWorkResult.Session.get -> JobTrack.Application.WorkSessionResult!
-JobTrack.Application.ReopenAndStartWorkResult.Session.init -> void
-JobTrack.Application.ReopenAndStartWorkResult.Version.get -> long
-JobTrack.Application.ReopenAndStartWorkResult.Version.init -> void
-override JobTrack.Application.CompleteLeafRequest.Equals(object? obj) -> bool
-override JobTrack.Application.CompleteLeafRequest.GetHashCode() -> int
-override JobTrack.Application.CompleteLeafRequest.ToString() -> string!
-override JobTrack.Application.CompleteLeafResult.Equals(object? obj) -> bool
-override JobTrack.Application.CompleteLeafResult.GetHashCode() -> int
-override JobTrack.Application.CompleteLeafResult.ToString() -> string!
-override JobTrack.Application.ExpectedActiveSession.Equals(object? obj) -> bool
-override JobTrack.Application.ExpectedActiveSession.GetHashCode() -> int
-override JobTrack.Application.ExpectedActiveSession.ToString() -> string!
-override JobTrack.Application.ReopenAndStartWorkRequest.Equals(object? obj) -> bool
-override JobTrack.Application.ReopenAndStartWorkRequest.GetHashCode() -> int
-override JobTrack.Application.ReopenAndStartWorkRequest.ToString() -> string!
-override JobTrack.Application.ReopenAndStartWorkResult.Equals(object? obj) -> bool
-override JobTrack.Application.ReopenAndStartWorkResult.GetHashCode() -> int
-override JobTrack.Application.ReopenAndStartWorkResult.ToString() -> string!
-static JobTrack.Application.CompleteLeafRequest.operator !=(JobTrack.Application.CompleteLeafRequest? left, JobTrack.Application.CompleteLeafRequest? right) -> bool
-static JobTrack.Application.CompleteLeafRequest.operator ==(JobTrack.Application.CompleteLeafRequest? left, JobTrack.Application.CompleteLeafRequest? right) -> bool
-static JobTrack.Application.CompleteLeafResult.operator !=(JobTrack.Application.CompleteLeafResult? left, JobTrack.Application.CompleteLeafResult? right) -> bool
-static JobTrack.Application.CompleteLeafResult.operator ==(JobTrack.Application.CompleteLeafResult? left, JobTrack.Application.CompleteLeafResult? right) -> bool
-static JobTrack.Application.ExpectedActiveSession.operator !=(JobTrack.Application.ExpectedActiveSession? left, JobTrack.Application.ExpectedActiveSession? right) -> bool
-static JobTrack.Application.ExpectedActiveSession.operator ==(JobTrack.Application.ExpectedActiveSession? left, JobTrack.Application.ExpectedActiveSession? right) -> bool
-static JobTrack.Application.ReopenAndStartWorkRequest.operator !=(JobTrack.Application.ReopenAndStartWorkRequest? left, JobTrack.Application.ReopenAndStartWorkRequest? right) -> bool
-static JobTrack.Application.ReopenAndStartWorkRequest.operator ==(JobTrack.Application.ReopenAndStartWorkRequest? left, JobTrack.Application.ReopenAndStartWorkRequest? right) -> bool
-static JobTrack.Application.ReopenAndStartWorkResult.operator !=(JobTrack.Application.ReopenAndStartWorkResult? left, JobTrack.Application.ReopenAndStartWorkResult? right) -> bool
-static JobTrack.Application.ReopenAndStartWorkResult.operator ==(JobTrack.Application.ReopenAndStartWorkResult? left, JobTrack.Application.ReopenAndStartWorkResult? right) -> bool
-JobTrack.Application.GetLeafWorkPageRequest
-JobTrack.Application.GetLeafWorkPageRequest.<Clone>$() -> JobTrack.Application.GetLeafWorkPageRequest!
-JobTrack.Application.GetLeafWorkPageRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.GetLeafWorkPageRequest.Context.init -> void
-JobTrack.Application.GetLeafWorkPageRequest.Equals(JobTrack.Application.GetLeafWorkPageRequest? other) -> bool
-JobTrack.Application.GetLeafWorkPageRequest.GetLeafWorkPageRequest() -> void
-JobTrack.Application.GetLeafWorkPageRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.GetLeafWorkPageRequest.JobNodeId.init -> void
-JobTrack.Application.IJobQueries.GetLeafWorkPageAsync(JobTrack.Application.GetLeafWorkPageRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.LeafWorkPageResult!>!
-JobTrack.Application.LeafWorkPageResult
-JobTrack.Application.LeafWorkPageResult.<Clone>$() -> JobTrack.Application.LeafWorkPageResult!
-JobTrack.Application.LeafWorkPageResult.Achievement.get -> JobTrack.Abstractions.Achievement?
-JobTrack.Application.LeafWorkPageResult.Achievement.init -> void
-JobTrack.Application.LeafWorkPageResult.ActiveSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>
-JobTrack.Application.LeafWorkPageResult.ActiveSessions.init -> void
-JobTrack.Application.LeafWorkPageResult.ActorControlsNode.get -> bool
-JobTrack.Application.LeafWorkPageResult.ActorControlsNode.init -> void
-JobTrack.Application.LeafWorkPageResult.ActorParticipatedPreviously.get -> bool
-JobTrack.Application.LeafWorkPageResult.ActorParticipatedPreviously.init -> void
-JobTrack.Application.LeafWorkPageResult.ArchivedAt.get -> NodaTime.Instant?
-JobTrack.Application.LeafWorkPageResult.ArchivedAt.init -> void
-JobTrack.Application.LeafWorkPageResult.CanComplete.get -> bool
-JobTrack.Application.LeafWorkPageResult.CanComplete.init -> void
-JobTrack.Application.LeafWorkPageResult.CanManageSessions.get -> bool
-JobTrack.Application.LeafWorkPageResult.CanManageSessions.init -> void
-JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForOthers.get -> bool
-JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForOthers.init -> void
-JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForSelf.get -> bool
-JobTrack.Application.LeafWorkPageResult.CanReopenAndStartForSelf.init -> void
-JobTrack.Application.LeafWorkPageResult.CanReopenWithoutStarting.get -> bool
-JobTrack.Application.LeafWorkPageResult.CanReopenWithoutStarting.init -> void
-JobTrack.Application.LeafWorkPageResult.Description.get -> string!
-JobTrack.Application.LeafWorkPageResult.Description.init -> void
-JobTrack.Application.LeafWorkPageResult.DirectDependentCount.get -> int
-JobTrack.Application.LeafWorkPageResult.DirectDependentCount.init -> void
-JobTrack.Application.LeafWorkPageResult.Equals(JobTrack.Application.LeafWorkPageResult? other) -> bool
-JobTrack.Application.LeafWorkPageResult.HasActiveDependentWork.get -> bool
-JobTrack.Application.LeafWorkPageResult.HasActiveDependentWork.init -> void
-JobTrack.Application.LeafWorkPageResult.HasLeafWork.get -> bool
-JobTrack.Application.LeafWorkPageResult.HasLeafWork.init -> void
-JobTrack.Application.LeafWorkPageResult.IsReady.get -> bool
-JobTrack.Application.LeafWorkPageResult.IsReady.init -> void
-JobTrack.Application.LeafWorkPageResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.LeafWorkPageResult.JobNodeId.init -> void
-JobTrack.Application.LeafWorkPageResult.LeafWorkPageResult() -> void
-JobTrack.Application.LeafWorkPageResult.LeafWorkVersion.get -> long?
-JobTrack.Application.LeafWorkPageResult.LeafWorkVersion.init -> void
-JobTrack.Application.LeafWorkPageResult.OwnerUserId.get -> JobTrack.Abstractions.AppUserId?
-JobTrack.Application.LeafWorkPageResult.OwnerUserId.init -> void
-override JobTrack.Application.GetLeafWorkPageRequest.Equals(object? obj) -> bool
-override JobTrack.Application.GetLeafWorkPageRequest.GetHashCode() -> int
-override JobTrack.Application.GetLeafWorkPageRequest.ToString() -> string!
-override JobTrack.Application.LeafWorkPageResult.Equals(object? obj) -> bool
-override JobTrack.Application.LeafWorkPageResult.GetHashCode() -> int
-override JobTrack.Application.LeafWorkPageResult.ToString() -> string!
-static JobTrack.Application.GetLeafWorkPageRequest.operator !=(JobTrack.Application.GetLeafWorkPageRequest? left, JobTrack.Application.GetLeafWorkPageRequest? right) -> bool
-static JobTrack.Application.GetLeafWorkPageRequest.operator ==(JobTrack.Application.GetLeafWorkPageRequest? left, JobTrack.Application.GetLeafWorkPageRequest? right) -> bool
-static JobTrack.Application.LeafWorkPageResult.operator !=(JobTrack.Application.LeafWorkPageResult? left, JobTrack.Application.LeafWorkPageResult? right) -> bool
-static JobTrack.Application.LeafWorkPageResult.operator ==(JobTrack.Application.LeafWorkPageResult? left, JobTrack.Application.LeafWorkPageResult? right) -> bool
-JobTrack.Application.CompleteLeafRequest.WriteUpChange.get -> JobTrack.Application.WriteUpChange?
-JobTrack.Application.CompleteLeafRequest.WriteUpChange.init -> void
-JobTrack.Application.CompleteLeafResult.Node.get -> JobTrack.Application.JobNodeResult?
-JobTrack.Application.CompleteLeafResult.Node.init -> void
-JobTrack.Application.CompleteLeafResult.WriteUpChanged.get -> bool
-JobTrack.Application.CompleteLeafResult.WriteUpChanged.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.<Clone>$() -> JobTrack.Application.FinishSessionAndUpdateWriteUpRequest!
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Context.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Equals(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? other) -> bool
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.FinishedAt.get -> NodaTime.Instant?
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.FinishedAt.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.FinishSessionAndUpdateWriteUpRequest() -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.LeafWorkId.get -> JobTrack.Abstractions.JobNodeId?
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.LeafWorkId.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.SessionId.get -> JobTrack.Abstractions.WorkSessionId
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.SessionId.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Version.get -> long
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Version.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.WriteUpChange.get -> JobTrack.Application.WriteUpChange?
-JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.WriteUpChange.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.<Clone>$() -> JobTrack.Application.FinishSessionAndUpdateWriteUpResult!
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Equals(JobTrack.Application.FinishSessionAndUpdateWriteUpResult? other) -> bool
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.FinishSessionAndUpdateWriteUpResult() -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Node.get -> JobTrack.Application.JobNodeResult?
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Node.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Session.get -> JobTrack.Application.WorkSessionResult!
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Session.init -> void
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.WriteUpChanged.get -> bool
-JobTrack.Application.FinishSessionAndUpdateWriteUpResult.WriteUpChanged.init -> void
-JobTrack.Application.IWorkCommands.FinishSessionAndUpdateWriteUpAsync(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.FinishSessionAndUpdateWriteUpResult!>!
-JobTrack.Application.WriteUpChange
-JobTrack.Application.WriteUpChange.<Clone>$() -> JobTrack.Application.WriteUpChange!
-JobTrack.Application.WriteUpChange.Equals(JobTrack.Application.WriteUpChange? other) -> bool
-JobTrack.Application.WriteUpChange.NodeVersion.get -> long
-JobTrack.Application.WriteUpChange.NodeVersion.init -> void
-JobTrack.Application.WriteUpChange.WriteUp.get -> string?
-JobTrack.Application.WriteUpChange.WriteUp.init -> void
-JobTrack.Application.WriteUpChange.WriteUpChange() -> void
-override JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.Equals(object? obj) -> bool
-override JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.GetHashCode() -> int
-override JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.ToString() -> string!
-override JobTrack.Application.FinishSessionAndUpdateWriteUpResult.Equals(object? obj) -> bool
-override JobTrack.Application.FinishSessionAndUpdateWriteUpResult.GetHashCode() -> int
-override JobTrack.Application.FinishSessionAndUpdateWriteUpResult.ToString() -> string!
-override JobTrack.Application.WriteUpChange.Equals(object? obj) -> bool
-override JobTrack.Application.WriteUpChange.GetHashCode() -> int
-override JobTrack.Application.WriteUpChange.ToString() -> string!
-static JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.operator !=(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? left, JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? right) -> bool
-static JobTrack.Application.FinishSessionAndUpdateWriteUpRequest.operator ==(JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? left, JobTrack.Application.FinishSessionAndUpdateWriteUpRequest? right) -> bool
-static JobTrack.Application.FinishSessionAndUpdateWriteUpResult.operator !=(JobTrack.Application.FinishSessionAndUpdateWriteUpResult? left, JobTrack.Application.FinishSessionAndUpdateWriteUpResult? right) -> bool
-static JobTrack.Application.FinishSessionAndUpdateWriteUpResult.operator ==(JobTrack.Application.FinishSessionAndUpdateWriteUpResult? left, JobTrack.Application.FinishSessionAndUpdateWriteUpResult? right) -> bool
 static JobTrack.Application.WriteUpChange.operator !=(JobTrack.Application.WriteUpChange? left, JobTrack.Application.WriteUpChange? right) -> bool
 static JobTrack.Application.WriteUpChange.operator ==(JobTrack.Application.WriteUpChange? left, JobTrack.Application.WriteUpChange? right) -> bool
-JobTrack.Application.ChangeOwnPasswordRequest
-JobTrack.Application.ChangeOwnPasswordRequest.ActorUserId.get -> JobTrack.Abstractions.AppUserId
-JobTrack.Application.ChangeOwnPasswordRequest.ActorUserId.init -> void
-JobTrack.Application.ChangeOwnPasswordRequest.ChangeOwnPasswordRequest() -> void
-JobTrack.Application.ChangeOwnPasswordRequest.CorrelationId.get -> System.Guid
-JobTrack.Application.ChangeOwnPasswordRequest.CorrelationId.init -> void
-JobTrack.Application.ChangeOwnPasswordRequest.CurrentPassword.get -> string!
-JobTrack.Application.ChangeOwnPasswordRequest.CurrentPassword.init -> void
-JobTrack.Application.ChangeOwnPasswordRequest.IdentityUserId.get -> long
-JobTrack.Application.ChangeOwnPasswordRequest.IdentityUserId.init -> void
-JobTrack.Application.ChangeOwnPasswordRequest.NewPassword.get -> string!
-JobTrack.Application.ChangeOwnPasswordRequest.NewPassword.init -> void
-JobTrack.Application.ChangeOwnPasswordResult
-JobTrack.Application.ChangeOwnPasswordResult.ChangeOwnPasswordResult() -> void
-JobTrack.Application.ChangeOwnPasswordResult.ConcurrencyStamp.get -> string!
-JobTrack.Application.ChangeOwnPasswordResult.ConcurrencyStamp.init -> void
-JobTrack.Application.ChangeOwnPasswordResult.SecurityStamp.get -> string!
-JobTrack.Application.ChangeOwnPasswordResult.SecurityStamp.init -> void
-JobTrack.Application.IAccountCredentialCommands.ChangeOwnPasswordAsync(JobTrack.Application.ChangeOwnPasswordRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ChangeOwnPasswordResult!>!
-JobTrack.Application.GetBranchAchievementRequest
-JobTrack.Application.GetBranchAchievementRequest.<Clone>$() -> JobTrack.Application.GetBranchAchievementRequest!
-JobTrack.Application.GetBranchAchievementRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.GetBranchAchievementRequest.Context.init -> void
-JobTrack.Application.GetBranchAchievementRequest.Equals(JobTrack.Application.GetBranchAchievementRequest? other) -> bool
-JobTrack.Application.GetBranchAchievementRequest.GetBranchAchievementRequest() -> void
-JobTrack.Application.GetBranchAchievementRequest.NodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.GetBranchAchievementRequest.NodeId.init -> void
-override JobTrack.Application.GetBranchAchievementRequest.Equals(object? obj) -> bool
-override JobTrack.Application.GetBranchAchievementRequest.GetHashCode() -> int
-override JobTrack.Application.GetBranchAchievementRequest.ToString() -> string!
-static JobTrack.Application.GetBranchAchievementRequest.operator !=(JobTrack.Application.GetBranchAchievementRequest? left, JobTrack.Application.GetBranchAchievementRequest? right) -> bool
-static JobTrack.Application.GetBranchAchievementRequest.operator ==(JobTrack.Application.GetBranchAchievementRequest? left, JobTrack.Application.GetBranchAchievementRequest? right) -> bool
-JobTrack.Application.IJobQueries.GetBranchAchievementAsync(JobTrack.Application.GetBranchAchievementRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.BranchAchievement>!
-JobTrack.Application.JobSubtreeResult.RootAchievement.get -> JobTrack.Abstractions.BranchAchievement?
-JobTrack.Application.JobSubtreeResult.RootAchievement.init -> void
-
-JobTrack.Application.IWorkCommands.PauseLeafAsync(JobTrack.Application.PauseLeafRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.PauseLeafResult!>!
-JobTrack.Application.PauseLeafRequest
-JobTrack.Application.PauseLeafRequest.<Clone>$() -> JobTrack.Application.PauseLeafRequest!
-JobTrack.Application.PauseLeafRequest.Context.get -> JobTrack.Application.CommandContext!
-JobTrack.Application.PauseLeafRequest.Context.init -> void
-JobTrack.Application.PauseLeafRequest.Equals(JobTrack.Application.PauseLeafRequest? other) -> bool
-JobTrack.Application.PauseLeafRequest.ExpectedActiveSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ExpectedActiveSession!>
-JobTrack.Application.PauseLeafRequest.ExpectedActiveSessions.init -> void
-JobTrack.Application.PauseLeafRequest.FinishedAt.get -> NodaTime.Instant?
-JobTrack.Application.PauseLeafRequest.FinishedAt.init -> void
-JobTrack.Application.PauseLeafRequest.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.PauseLeafRequest.JobNodeId.init -> void
-JobTrack.Application.PauseLeafRequest.PauseLeafRequest() -> void
-JobTrack.Application.PauseLeafRequest.WriteUpChange.get -> JobTrack.Application.WriteUpChange?
-JobTrack.Application.PauseLeafRequest.WriteUpChange.init -> void
-JobTrack.Application.PauseLeafResult
-JobTrack.Application.PauseLeafResult.<Clone>$() -> JobTrack.Application.PauseLeafResult!
-JobTrack.Application.PauseLeafResult.Equals(JobTrack.Application.PauseLeafResult? other) -> bool
-JobTrack.Application.PauseLeafResult.FinishedSessions.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.WorkSessionResult!>
-JobTrack.Application.PauseLeafResult.FinishedSessions.init -> void
-JobTrack.Application.PauseLeafResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Application.PauseLeafResult.JobNodeId.init -> void
-JobTrack.Application.PauseLeafResult.Node.get -> JobTrack.Application.JobNodeResult?
-JobTrack.Application.PauseLeafResult.Node.init -> void
-JobTrack.Application.PauseLeafResult.PauseLeafResult() -> void
-JobTrack.Application.PauseLeafResult.WriteUpChanged.get -> bool
-JobTrack.Application.PauseLeafResult.WriteUpChanged.init -> void
-override JobTrack.Application.PauseLeafRequest.Equals(object? obj) -> bool
-override JobTrack.Application.PauseLeafRequest.GetHashCode() -> int
-override JobTrack.Application.PauseLeafRequest.ToString() -> string!
-override JobTrack.Application.PauseLeafResult.Equals(object? obj) -> bool
-override JobTrack.Application.PauseLeafResult.GetHashCode() -> int
-override JobTrack.Application.PauseLeafResult.ToString() -> string!
-static JobTrack.Application.PauseLeafRequest.operator !=(JobTrack.Application.PauseLeafRequest? left, JobTrack.Application.PauseLeafRequest? right) -> bool
-static JobTrack.Application.PauseLeafRequest.operator ==(JobTrack.Application.PauseLeafRequest? left, JobTrack.Application.PauseLeafRequest? right) -> bool
-static JobTrack.Application.PauseLeafResult.operator !=(JobTrack.Application.PauseLeafResult? left, JobTrack.Application.PauseLeafResult? right) -> bool
-static JobTrack.Application.PauseLeafResult.operator ==(JobTrack.Application.PauseLeafResult? left, JobTrack.Application.PauseLeafResult? right) -> bool

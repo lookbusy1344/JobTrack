@@ -19,5 +19,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 project="$repo/src/JobTrack.Web/JobTrack.Web.csproj"
 
+dotnet build-server shutdown
+
 echo "==> watching JobTrack.Web against jobtrack_live on https://localhost:7174 (rebuilds on change)"
 dotnet watch run --project "$project" --launch-profile "https (jobtrack_live)" --non-interactive

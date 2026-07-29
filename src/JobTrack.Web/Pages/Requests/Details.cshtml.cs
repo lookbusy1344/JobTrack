@@ -38,6 +38,15 @@ public sealed class DetailsModel(
 
 	public IReadOnlyList<SubtreeRow> OrderedSubtree { get; private set; } = [];
 
+	/// <summary>
+	///     The requester as "display name (username)" — the one rendering every staff surface uses for a
+	///     person (<see cref="EmployeeDirectoryDisplay" />), so the two names read as one fact rather
+	///     than as two adjacent fields.
+	/// </summary>
+	public string RequesterLabel => Detail is null
+		? string.Empty
+		: EmployeeDirectoryDisplay.Format(Detail.RequesterDisplayName, Detail.RequesterUserName);
+
 	/// <summary>The signed-in actor's own time zone, for formatting every timestamp on this page (<see cref="InstantDisplay" />).</summary>
 	public DateTimeZone ViewerZone { get; private set; } = DateTimeZoneProviders.Tzdb["Etc/UTC"];
 

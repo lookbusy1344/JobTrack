@@ -35,6 +35,18 @@ public sealed record GetAwaitingProgressRequest
 	public bool ExcludeBlocked { get; init; }
 
 	/// <summary>
+	///     When <see langword="true" />, restricts to leaves whose achievement is
+	///     <see cref="Achievement.InProgress" /> — work that has started and reached no closure, achieved
+	///     or otherwise. Deliberately says nothing about whether anyone is clocked on right now, so a
+	///     paused leaf (started, nobody working it) is included; a leaf still
+	///     <see cref="Achievement.Waiting" />, one with no <c>LeafWork</c> attached, and every terminal
+	///     outcome are excluded. Composes with <see cref="Ownership" /> and the other filters rather than
+	///     replacing them, and is applied by the port's own query, so an excluded leaf never consumes a
+	///     page slot.
+	/// </summary>
+	public bool InProgressOnly { get; init; }
+
+	/// <summary>
 	///     Zero-based number of matching leaves (in the calculator's own readiness/priority/deadline order) to skip
 	///     before returning results. Must be non-negative.
 	/// </summary>
