@@ -164,8 +164,12 @@ public sealed class ExternalApiClientProofTests
 		// ownership) acknowledges the request and adds a staff note, all over the same external
 		// client, no JobTrack.* library reference.
 		var requesterDetail = await requesterApiClient.GetRequestDetailAsync(submitted.JobNodeId);
+		requesterDetail.RequesterUserId.Should().Be(requesterId.Value);
+		requesterDetail.RequesterDisplayName.Should().Be("Client Proof Requester");
+		requesterDetail.RequesterUserName.Should().Be("requester.client-proof");
 		requesterDetail.Status.Should().Be("Submitted");
-		requesterDetail.Subtree.Should().ContainSingle(node => node.JobNodeId == submitted.JobNodeId);
+		requesterDetail.Subtree.Should().ContainSingle(node => node.JobNodeId == submitted.JobNodeId)
+			.Which.AllocatedHours.Should().Be(0m);
 
 		var requesterNote = await requesterApiClient.AddRequestNoteAsync(submitted.JobNodeId, "Any update?", false);
 		requesterNote.VisibleToRequester.Should().BeTrue("a requester-authored note is always visible to the requester");

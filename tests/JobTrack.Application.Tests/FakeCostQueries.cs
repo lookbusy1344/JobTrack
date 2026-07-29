@@ -1,6 +1,7 @@
 namespace JobTrack.Application.Tests;
 
 using Abstractions;
+using Domain.Costing;
 
 /// <summary>
 ///     An in-memory fake of <see cref="ICostQueries" /> for <see cref="JobQueriesTests" />'
@@ -11,6 +12,7 @@ internal sealed class FakeCostQueries : ICostQueries
 {
 	private readonly List<int> _bulkBatchSizes = [];
 	private readonly Dictionary<JobNodeId, Money> _bulkCosts = [];
+	private readonly Dictionary<JobNodeId, AllocatedDuration> _bulkDurations = [];
 	private readonly HashSet<AppUserId> _deniedActors = [];
 	private readonly Dictionary<JobNodeId, Exception> _hierarchyFailures = [];
 	private readonly Dictionary<JobNodeId, HierarchyTotalsResult> _totals = [];
@@ -65,8 +67,14 @@ internal sealed class FakeCostQueries : ICostQueries
 		var displayed = request.NodeIds
 			.Where(_bulkCosts.ContainsKey)
 			.ToDictionary(nodeId => nodeId, nodeId => _bulkCosts[nodeId]);
+		var durations = request.NodeIds
+			.Where(_bulkCosts.ContainsKey)
+			.ToDictionary(nodeId => nodeId, nodeId => _bulkDurations[nodeId]);
 
-		return Task.FromResult(new BulkNodeCostResult { DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayed) });
+		return Task.FromResult(new BulkNodeCostResult {
+			DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayed),
+			AllocatedDurations = EquatableDictionaryFactory.CopyOf(durations),
+		});
 	}
 
 	public void SeedHierarchyTotals(JobNodeId nodeId, HierarchyTotalsResult result) => _totals[nodeId] = result;
@@ -75,5 +83,9 @@ internal sealed class FakeCostQueries : ICostQueries
 
 	public void FailHierarchyTotals(JobNodeId nodeId, Exception exception) => _hierarchyFailures[nodeId] = exception;
 
-	public void SeedBulkCost(JobNodeId nodeId, Money cost) => _bulkCosts[nodeId] = cost;
+	public void SeedBulkCost(JobNodeId nodeId, Money cost, AllocatedDuration? duration = null)
+	{
+		_bulkCosts[nodeId] = cost;
+		_bulkDurations[nodeId] = duration ?? AllocatedDuration.Zero;
+	}
 }

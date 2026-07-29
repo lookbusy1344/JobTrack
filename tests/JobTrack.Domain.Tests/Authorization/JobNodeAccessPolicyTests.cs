@@ -30,6 +30,10 @@ public sealed class JobNodeAccessPolicyTests
 		JobNodeAccessPolicy.CanManage([EmployeeRole.Requester], true).Should().BeFalse();
 
 	[Fact]
+	public void A_requester_may_not_manage_a_node_even_when_they_also_hold_a_worker_role() =>
+		JobNodeAccessPolicy.CanManage([EmployeeRole.Requester, EmployeeRole.Worker], true).Should().BeFalse();
+
+	[Fact]
 	public void A_null_role_collection_is_rejected()
 	{
 		var act = () => JobNodeAccessPolicy.CanManage(null!, true);

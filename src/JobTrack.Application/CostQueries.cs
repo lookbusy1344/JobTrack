@@ -16,7 +16,7 @@ using Ports;
 ///     independently because rates, overrides, and concurrency are always resolved per worker (see
 ///     <see cref="Domain.Rates.RateResolver" />).
 /// </summary>
-internal sealed class CostQueries : ICostQueries
+internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 {
 	// Bounded ranges for cost responses (remediation plan §3.1): a cost trace/hierarchy is not
 	// offset/limit-paginated like a flat collection -- reconciliation needs the whole subtree or
@@ -78,11 +78,50 @@ internal sealed class CostQueries : ICostQueries
 		return GetBulkNodeCostsCoreAsync(request, cancellationToken);
 	}
 
-	private async Task<(CostQueryResult Inputs, Dictionary<JobNodeId, Money> ExactCosts, List<CostSegmentTrace> Trace)> CalculateAsync(
+	/// <inheritdoc />
+	public async Task<EquatableDictionary<JobNodeId, AllocatedDuration>> GetRequesterVisibleHierarchyAsync(
+		JobNodeId nodeId, Instant asOf, CancellationToken cancellationToken = default)
+	{
+		var inputs = await _port.GetCostInputsAsync(nodeId, asOf, MaxHierarchyNodeCount, cancellationToken).ConfigureAwait(false);
+		var allocatedDurations = new Dictionary<JobNodeId, AllocatedDuration>(
+			HierarchicalAllocatedDurationAggregator.Aggregate(
+				nodeId,
+				inputs.NodesById,
+				new Dictionary<JobNodeId, AllocatedDuration>()));
+
+		foreach (var worker in inputs.Workers) {
+			var allocations = CostSegmentPartitioner.Partition(
+				worker.Sessions,
+				worker.EffectiveWorkingIntervals,
+				inputs.NodesById,
+				[],
+				[],
+				inputs.Bounds);
+			var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
+			var workerDurations = HierarchicalAllocatedDurationAggregator.Aggregate(nodeId, inputs.NodesById, leafDurations);
+
+			foreach (var (id, duration) in workerDurations) {
+				allocatedDurations[id] =
+					allocatedDurations.GetValueOrDefault(id, AllocatedDuration.Zero).Add(duration);
+			}
+		}
+
+		return EquatableDictionaryFactory.CopyOf(allocatedDurations);
+	}
+
+	private async Task<(
+		CostQueryResult Inputs,
+		Dictionary<JobNodeId, Money> ExactCosts,
+		Dictionary<JobNodeId, AllocatedDuration> AllocatedDurations,
+		List<CostSegmentTrace> Trace)> CalculateAsync(
 		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxTraceSegments, CancellationToken cancellationToken) =>
 		await CalculateAsync(actorId, nodeId, asOf, MaxHierarchyNodeCount, maxTraceSegments, cancellationToken).ConfigureAwait(false);
 
-	private async Task<(CostQueryResult Inputs, Dictionary<JobNodeId, Money> ExactCosts, List<CostSegmentTrace> Trace)> CalculateAsync(
+	private async Task<(
+		CostQueryResult Inputs,
+		Dictionary<JobNodeId, Money> ExactCosts,
+		Dictionary<JobNodeId, AllocatedDuration> AllocatedDurations,
+		List<CostSegmentTrace> Trace)> CalculateAsync(
 		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, int? maxTraceSegments,
 		CancellationToken cancellationToken)
 	{
@@ -94,6 +133,7 @@ internal sealed class CostQueries : ICostQueries
 		var inputs = await _port.GetCostInputsAsync(nodeId, asOf, maxHierarchyNodes, cancellationToken).ConfigureAwait(false);
 
 		var exactCosts = new Dictionary<JobNodeId, Money>();
+		var allocatedDurations = new Dictionary<JobNodeId, AllocatedDuration>();
 		var trace = new List<CostSegmentTrace>();
 		var includedNodeIds = GetSubtreeNodeIds(nodeId, inputs.NodesById);
 		foreach (var worker in inputs.Workers) {
@@ -104,25 +144,34 @@ internal sealed class CostQueries : ICostQueries
 				includedNodeIds, remainingTraceSegments);
 
 			IReadOnlyDictionary<JobNodeId, Money> workerExactCosts;
+			IReadOnlyDictionary<JobNodeId, AllocatedDuration> workerAllocatedDurations;
 			if (maxTraceSegments.HasValue) {
 				var calculation = CostEngine.Calculate(
 					nodeId, allocations, inputs.NodesById, worker.ScheduledWorkingIntervals, worker.Exceptions, worker.NodeOverrides,
 					worker.UserCostRates, worker.UserDefaultRate);
 				workerExactCosts = calculation.ExactCosts;
+				workerAllocatedDurations = calculation.AllocatedDurations;
 				trace.AddRange(calculation.Trace);
 			} else {
 				var leafCosts = CostEngine.ComputeLeafCosts(
 					allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides,
 					worker.UserCostRates, worker.UserDefaultRate);
 				workerExactCosts = HierarchicalCostAggregator.Aggregate(nodeId, inputs.NodesById, leafCosts);
+				var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
+				workerAllocatedDurations = HierarchicalAllocatedDurationAggregator.Aggregate(nodeId, inputs.NodesById, leafDurations);
 			}
 
 			foreach (var (id, amount) in workerExactCosts) {
 				exactCosts[id] = new(exactCosts.GetValueOrDefault(id, new(0m)).Amount + amount.Amount);
 			}
+
+			foreach (var (id, duration) in workerAllocatedDurations) {
+				allocatedDurations[id] =
+					allocatedDurations.GetValueOrDefault(id, AllocatedDuration.Zero).Add(duration);
+			}
 		}
 
-		return (inputs, exactCosts, trace);
+		return (inputs, exactCosts, allocatedDurations, trace);
 	}
 
 	private static HashSet<JobNodeId> GetSubtreeNodeIds(
@@ -196,7 +245,7 @@ internal sealed class CostQueries : ICostQueries
 		JobTrackOperation.TraceAsync(
 			"costs.get-details", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			async () => {
-				var (_, exactCosts, trace) = await CalculateAsync(
+				var (_, exactCosts, allocatedDurations, trace) = await CalculateAsync(
 						request.Context.Actor, request.NodeId, request.AsOf, maxTraceSegments, cancellationToken)
 					.ConfigureAwait(false);
 
@@ -213,6 +262,7 @@ internal sealed class CostQueries : ICostQueries
 					NodeId = request.NodeId,
 					ExactCost = exact,
 					DisplayedCost = exact.RoundToPennies(),
+					AllocatedDuration = allocatedDurations.GetValueOrDefault(request.NodeId, AllocatedDuration.Zero),
 					Trace = EquatableArray.CopyOf(trace.OrderBy(entry => entry.Segment.Start).ThenBy(entry => entry.SessionId.Value)),
 					TzdbVersion = DateTimeZoneProviders.Tzdb.VersionId,
 				};
@@ -223,11 +273,14 @@ internal sealed class CostQueries : ICostQueries
 		JobTrackOperation.TraceAsync(
 			"costs.get-hierarchy-totals", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			async () => {
-				var (inputs, exactCosts, _) = await CalculateAsync(
+				var (inputs, exactCosts, allocatedDurations, _) = await CalculateAsync(
 						request.Context.Actor, request.NodeId, request.AsOf, maxHierarchyNodes, null, cancellationToken)
 					.ConfigureAwait(false);
 
 				var displayedCosts = ReconcileHierarchy(request.NodeId, inputs.NodesById, exactCosts);
+				var completeAllocatedDurations = displayedCosts.Keys.ToDictionary(
+					id => id,
+					id => allocatedDurations.GetValueOrDefault(id, AllocatedDuration.Zero));
 
 				if (displayedCosts.Count > maxHierarchyNodes) {
 					throw new ArgumentOutOfRangeException(
@@ -240,6 +293,7 @@ internal sealed class CostQueries : ICostQueries
 					NodeId = request.NodeId,
 					ExactCosts = EquatableDictionaryFactory.CopyOf(exactCosts),
 					DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayedCosts),
+					AllocatedDurations = EquatableDictionaryFactory.CopyOf(completeAllocatedDurations),
 					TzdbVersion = DateTimeZoneProviders.Tzdb.VersionId,
 				};
 			});
@@ -249,7 +303,10 @@ internal sealed class CostQueries : ICostQueries
 			"costs.get-bulk-node-costs", request.Context, null,
 			async () => {
 				if (request.NodeIds.Count == 0) {
-					return new() { DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()) };
+					return new() {
+						DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()),
+						AllocatedDurations = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration>()),
+					};
 				}
 
 				var inputs = await _port.GetBulkCostInputsAsync(
@@ -272,6 +329,7 @@ internal sealed class CostQueries : ICostQueries
 				// leaves beneath it, so summing per worker and then per root, or per root over the
 				// already-combined leaves, adds the same set of decimal amounts either way.
 				var combinedLeafCosts = new Dictionary<JobNodeId, decimal>();
+				var combinedLeafDurations = new Dictionary<JobNodeId, AllocatedDuration>();
 				foreach (var worker in inputs.Workers) {
 					var allocations = CostSegmentPartitioner.Partition(
 						worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
@@ -282,6 +340,12 @@ internal sealed class CostQueries : ICostQueries
 					foreach (var (leafId, amount) in leafCosts) {
 						combinedLeafCosts[leafId] = combinedLeafCosts.GetValueOrDefault(leafId) + amount.Amount;
 					}
+
+					var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
+					foreach (var (leafId, duration) in leafDurations) {
+						combinedLeafDurations[leafId] =
+							combinedLeafDurations.GetValueOrDefault(leafId, AllocatedDuration.Zero).Add(duration);
+					}
 				}
 
 				var exactCosts = HierarchicalCostAggregator.SumSubtreeTotals(
@@ -291,8 +355,13 @@ internal sealed class CostQueries : ICostQueries
 
 				var displayedCosts = authorizedNodeIds.ToDictionary(
 					nodeId => nodeId, nodeId => exactCosts.GetValueOrDefault(nodeId, new(0m)).RoundToPennies());
+				var allocatedDurations = HierarchicalAllocatedDurationAggregator.SumSubtreeTotals(
+					authorizedNodeIds, inputs.NodesById, combinedLeafDurations);
 
-				return new BulkNodeCostResult { DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayedCosts) };
+				return new BulkNodeCostResult {
+					DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayedCosts),
+					AllocatedDurations = EquatableDictionaryFactory.CopyOf(allocatedDurations),
+				};
 			});
 
 	/// <summary>Whether <paramref name="actorId" /> owns <paramref name="nodeId" /> or any of its ancestors, walked entirely in memory (ADR 0040).</summary>

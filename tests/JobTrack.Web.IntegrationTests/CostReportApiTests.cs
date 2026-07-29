@@ -84,6 +84,7 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		jsonDocument.RootElement.GetProperty("nodeId").GetInt64().Should().Be(leafId.Value);
 		jsonDocument.RootElement.GetProperty("displayedCost").GetDecimal().Should().BeGreaterThan(0m);
+		jsonDocument.RootElement.GetProperty("allocatedHours").GetDecimal().Should().Be(8m);
 		jsonDocument.RootElement.GetProperty("trace").GetArrayLength().Should().BeGreaterThan(0);
 		jsonDocument.RootElement.GetProperty("tzdbVersion").GetString().Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
 	}
@@ -102,6 +103,9 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		jsonDocument.RootElement.GetProperty("nodeId").GetInt64().Should().Be(rootId.Value);
 		var nodes = jsonDocument.RootElement.GetProperty("nodes");
 		nodes.EnumerateArray().Should().Contain(node => node.GetProperty("nodeId").GetInt64() == leafId.Value);
+		nodes.EnumerateArray()
+			.Single(node => node.GetProperty("nodeId").GetInt64() == leafId.Value)
+			.GetProperty("allocatedHours").GetDecimal().Should().Be(8m);
 		jsonDocument.RootElement.GetProperty("tzdbVersion").GetString().Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
 	}
 

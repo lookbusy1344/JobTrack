@@ -69,7 +69,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		await AutoClaimUnassignedNodeAsync(context, request.Context, request.LeafWorkId, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+		await EnsureTargetWorkerEligibleAsync(context, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 
 		if (await LeafSessionClosure.IsClosedAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
@@ -149,7 +149,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		await AutoClaimUnassignedNodeAsync(context, request.Context, request.JobNodeId, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+		await EnsureTargetWorkerEligibleAsync(context, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
@@ -594,7 +594,7 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			.ConfigureAwait(false);
 		await AuthorizeReopenAndStartOrThrowAsync(
 			context, request.Context.Actor, request.JobNodeId, request.WorkedByUserId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, request.Context.Actor, request.WorkedByUserId, now, cancellationToken)
+		await EnsureTargetWorkerEligibleAsync(context, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 
 		if (!await LeafReadiness.IsReadyAsync(context, request.JobNodeId, cancellationToken, request.JobNodeId).ConfigureAwait(false)) {
@@ -978,35 +978,14 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 	///     (the "Start for…" disclosure) must re-validate the target at write time, not merely trust
 	///     the picker's render-time snapshot -- a target disabled, locked, or role-revoked since the
 	///     page was rendered is rejected here rather than silently starting a session for them anyway.
-	///     A no-op when the target is the actor themselves, since <see cref="GetActorRolesAsync" />
-	///     already re-validated that account.
+	///     The target is checked even when it is the actor: a Requester role is disqualifying when
+	///     combined with a workflow role, while actor authorization evaluates the actor's authority.
 	/// </summary>
 	private static async Task EnsureTargetWorkerEligibleAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, AppUserId targetId, Instant now, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, AppUserId targetId, Instant now, CancellationToken cancellationToken)
 	{
-		if (targetId == actorId) {
-			return;
-		}
-
-		var targetIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									 .FirstOrDefaultAsync(iu => iu.AppUserId == targetId, cancellationToken).ConfigureAwait(false)
-								 ?? throw new EntityNotFoundException($"Worker {targetId} does not exist.");
-
-		if (!targetIdentityUser.IsEnabled
-			|| (targetIdentityUser.LockoutEnabled && targetIdentityUser.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
-			throw new InvariantViolationException(
-				"work-session-target-not-eligible", $"Worker {targetId} is disabled and cannot be started for.");
-		}
-
-		var targetRoles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == targetIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
-
-		if (!targetRoles.Any(role => role is EmployeeRole.Administrator or EmployeeRole.JobManager or EmployeeRole.Worker)) {
-			throw new InvariantViolationException(
-				"work-session-target-not-eligible", $"Worker {targetId} is not an eligible workflow employee.");
-		}
+		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
+			context, targetId, now, "work-session-target-not-eligible", cancellationToken).ConfigureAwait(false);
 	}
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)

@@ -63,6 +63,9 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 				$"Actor {request.Context.Actor} may not submit a request into holding area {request.HoldingAreaId}.");
 		}
 
+		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
+			context, holdingArea.DefaultOwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+
 		var node = new JobNodeEntity {
 			Id = default,
 			ParentId = holdingArea.JobNodeId,
@@ -305,8 +308,21 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 			.ConfigureAwait(false);
 		var ancestorOwnerIds = await RequireRequesterJobAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false);
 
-		var jobRequest = await context.Set<JobRequestEntity>().AsNoTracking()
-			.FirstAsync(r => r.JobNodeId == request.NodeId, cancellationToken).ConfigureAwait(false);
+		var requestHeader = await (
+				from jobRequestRow in context.Set<JobRequestEntity>().AsNoTracking()
+				join requester in context.Set<AppUserEntity>().AsNoTracking()
+					on jobRequestRow.RequesterUserId equals requester.Id
+				join requesterIdentity in context.Set<IdentityUserEntity>().AsNoTracking()
+					on requester.Id equals requesterIdentity.AppUserId
+				where jobRequestRow.JobNodeId == request.NodeId
+				select new
+				{
+					JobRequest = jobRequestRow,
+					RequesterDisplayName = requester.DisplayName,
+					RequesterUserName = requesterIdentity.UserName,
+				})
+			.FirstAsync(cancellationToken).ConfigureAwait(false);
+		var jobRequest = requestHeader.JobRequest;
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
 			.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
 		var controlsAnchor = ancestorOwnerIds.Contains(request.Context.Actor.Value);
@@ -349,6 +365,9 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 
 		return new() {
 			JobNodeId = node.Id,
+			RequesterUserId = jobRequest.RequesterUserId,
+			RequesterDisplayName = requestHeader.RequesterDisplayName,
+			RequesterUserName = requestHeader.RequesterUserName,
 			Description = node.Description,
 			Status = overallStatus,
 			SubmittedAt = jobRequest.SubmittedAt,

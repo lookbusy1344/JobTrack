@@ -156,12 +156,26 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 			Role = EmployeeRole.Requester,
 		});
 
+		var requestingWorker = await commands.CreateEmployeeAsync(new() {
+			Context = ContextFor(administratorId),
+			DisplayName = "Requesting Worker",
+			IanaTimeZone = "Europe/London",
+			UserName = "requesting.worker",
+			Password = "correct-horse-battery-staple",
+			Role = EmployeeRole.Worker,
+		});
+		_ = await commands.AssignRoleAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = requestingWorker.Id,
+			Role = EmployeeRole.Requester,
+		});
+
 		var queryPort = CreateQueryPort(database.ConnectionString);
 
 		var result = await queryPort.GetEmployeeDirectoryAsync();
 
 		result.Select(entry => entry.Id).Should().Contain([administratorId, jobManager.Id])
-			.And.NotContain([disabledWorker.Id, requester.Id]);
+			.And.NotContain([disabledWorker.Id, requester.Id, requestingWorker.Id]);
 		result.Should().ContainSingle(entry => entry.Id == administratorId)
 			.Which.Should()
 			.BeEquivalentTo(new EmployeeDirectoryEntry { Id = administratorId, DisplayName = "Ada Lovelace", UserName = "ada.lovelace" });

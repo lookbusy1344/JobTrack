@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 #
-# Build the SQLite demo image (see ../Dockerfile) with a fresh, random demo
+# Build the SQLite demo image (see ../Dockerfile) with a fresh, random admin
 # password and deploy it to Cloud Run as a throwaway reachability smoke test.
 # See docs/operations/docker-image.md, "Cloud Run smoke test", for why this
 # exists and what it deliberately does not give you (no persistent volume,
-# no fixed credential).
+# no persistent state).
 #
-# The image bakes in two accounts (see ../Dockerfile): a privileged ADMIN and a
-# normal DEMO user (demo/demo1234) that owns the sample job trees. The demo
-# credential is deliberately published and reusable; the admin credential must
+# The image bakes in three accounts (see ../Dockerfile): a privileged ADMIN, a
+# normal DEMO user (demo/demo1234) that owns the sample job trees, and a
+# REQUESTER (requester/requester1234) with six requests. Both non-admin
+# credentials are deliberately published and reusable; the admin credential must
 # not be, since Cloud Run is network-exposed. This script therefore always
 # generates a fresh, random ADMIN_PASSWORD, passes it as a build arg, and prints
 # it once at the end since nothing else records it (not committed, not logged by
-# gcloud, regenerated on every run). The demo password stays demo1234.
+# gcloud, regenerated on every run). The two demo passwords stay published.
 #
 # Usage: ./scripts/deploy-cloudrun.sh <gcp-project-id> [region]
 set -euo pipefail
@@ -34,6 +35,8 @@ admin_username="admin"
 admin_password="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
 demo_username="demo"
 demo_password="demo1234"
+requester_username="requester"
+requester_password="requester1234"
 
 if ! docker info >/dev/null 2>&1; then
   if [[ -S "$orbstack_socket" ]]; then
@@ -47,7 +50,7 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> building $image (ADMIN_PASSWORD freshly generated, demo password published, platform linux/amd64)"
+echo "==> building $image (ADMIN_PASSWORD freshly generated, demo credentials published, platform linux/amd64)"
 docker build -f "$repo/Dockerfile" \
   -t "$image" \
   --build-arg ADMIN_PASSWORD="$admin_password" \
@@ -87,11 +90,15 @@ url="$(gcloud run services describe "$service" --project="$project" --region="$r
 
 echo
 echo "==> deployed: $url"
-echo "==> sign in with either baked-in account:"
+echo "==> sign in with any baked-in account:"
 echo
 echo "      DEMO (normal user, owns the sample job trees) -- published, share freely:"
 echo "        username: $demo_username"
 echo "        password: $demo_password"
+echo
+echo "      REQUESTER (six open/closed requests) -- published, share freely:"
+echo "        username: $requester_username"
+echo "        password: $requester_password"
 echo
 echo "      ADMIN (privileged: account/role management) -- random, recorded ONLY here:"
 echo "        username: $admin_username"

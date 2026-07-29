@@ -479,6 +479,12 @@ public sealed class RequestDetail
 
 	public required string Description { get; init; }
 
+	public required long RequesterUserId { get; init; }
+
+	public required string RequesterDisplayName { get; init; }
+
+	public required string RequesterUserName { get; init; }
+
 	public required string Status { get; init; }
 
 	public required DateTimeOffset SubmittedAt { get; init; }
@@ -504,6 +510,8 @@ public sealed class RequesterSubtreeNode
 	public long? ParentId { get; init; }
 
 	public required DateTimeOffset LastUpdatedAt { get; init; }
+
+	public required decimal AllocatedHours { get; init; }
 }
 
 /// <summary>

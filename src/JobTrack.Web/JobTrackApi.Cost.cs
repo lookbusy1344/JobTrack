@@ -58,6 +58,7 @@ internal static partial class JobTrackApi
 			NodeId = result.NodeId.Value,
 			ExactCost = result.ExactCost.Amount,
 			DisplayedCost = result.DisplayedCost.Amount,
+			AllocatedHours = result.AllocatedDuration.ToHours(),
 			Trace = [.. result.Trace.Select(Map)],
 			TzdbVersion = result.TzdbVersion,
 		};
@@ -82,7 +83,10 @@ internal static partial class JobTrackApi
 			NodeId = result.NodeId.Value,
 			Nodes = [
 				.. result.ExactCosts.Select(entry => new HierarchyNodeCostResponse {
-					NodeId = entry.Key.Value, ExactCost = entry.Value.Amount, DisplayedCost = result.DisplayedCosts[entry.Key].Amount,
+					NodeId = entry.Key.Value,
+					ExactCost = entry.Value.Amount,
+					DisplayedCost = result.DisplayedCosts[entry.Key].Amount,
+					AllocatedHours = result.AllocatedDurations[entry.Key].ToHours(),
 				}),
 			],
 			TzdbVersion = result.TzdbVersion,
@@ -95,6 +99,8 @@ internal static partial class JobTrackApi
 		public required decimal ExactCost { get; init; }
 
 		public required decimal DisplayedCost { get; init; }
+
+		public required decimal AllocatedHours { get; init; }
 
 		public required CostSegmentTraceResponse[] Trace { get; init; }
 
@@ -142,5 +148,7 @@ internal static partial class JobTrackApi
 		public required decimal ExactCost { get; init; }
 
 		public required decimal DisplayedCost { get; init; }
+
+		public required decimal AllocatedHours { get; init; }
 	}
 }

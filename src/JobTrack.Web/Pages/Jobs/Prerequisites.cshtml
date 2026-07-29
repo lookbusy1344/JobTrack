@@ -37,8 +37,8 @@
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 						   asp-route-nodeId="@edge.RequiredJobId.Value">@JobNodeDisplay.Title(requiredNode)</a>
 						<partial name="_KindIcon" model="@(new KindIconModel { Kind = requiredNode.Kind })"/>
-						@if (requiredNode.Cost is Money cost) {
-							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
+						@if (requiredNode.Cost is Money cost && requiredNode.AllocatedDuration is not null) {
+							<span class="jt-amount">@CostDisplay.Format(cost, requiredNode.AllocatedDuration)</span>
 						}
 					} else {
 						<span class="jt-tag">Job @edge.RequiredJobId.Value</span>
@@ -71,8 +71,8 @@
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 						   asp-route-nodeId="@edge.DependentJobId.Value">@JobNodeDisplay.Title(dependentNode)</a>
 						<partial name="_KindIcon" model="@(new KindIconModel { Kind = dependentNode.Kind })"/>
-						@if (dependentNode.Cost is Money cost) {
-							<span class="jt-amount">@MoneyDisplay.Format(cost)</span>
+						@if (dependentNode.Cost is Money cost && dependentNode.AllocatedDuration is not null) {
+							<span class="jt-amount">@CostDisplay.Format(cost, dependentNode.AllocatedDuration)</span>
 						}
 					} else {
 						<span class="jt-tag">Job @edge.DependentJobId.Value</span>
@@ -132,7 +132,9 @@
 								<td>
 									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, ShowLabel = false })"/>
 								</td>
-								<td>@(node.Cost is Money cost ? MoneyDisplay.Format(cost) : null)</td>
+								<td>@(node.Cost is Money cost && node.AllocatedDuration is not null
+									? CostDisplay.Format(cost, node.AllocatedDuration)
+									: null)</td>
 								<td>@(node.ArchivedAt is not null ? "yes" : "no")</td>
 								<td>
 									@if (Model.ExistingRequiresIds.Contains(node.Id) || Model.ExistingRequiredByIds.Contains(node.Id)) {

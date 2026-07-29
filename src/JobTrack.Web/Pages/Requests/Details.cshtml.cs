@@ -15,8 +15,9 @@ using NodaTime;
 ///     0034, plan §7/§8). Reachable by the request's own requester or by staff triaging it — coarse
 ///     admission is <see cref="JobTrackPolicyNames.RequestDetailAccess" />, the same combined policy the
 ///     API endpoints use; the authoritative per-request check happens inside
-///     <see cref="IJobTrackClient.Requests" /> itself. Never exposes owner, rates, sessions, schedules,
-///     or audit fields — that is <c>/Jobs/{id}</c>'s surface, not this one's.
+///     <see cref="IJobTrackClient.Requests" /> itself. ADR 0054 exposes only aggregate allocated
+///     duration; owner, rates, individual sessions, schedules, and audit fields remain on the staff
+///     job surfaces.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.RequestDetailAccess)]
 public sealed class DetailsModel(
@@ -26,6 +27,12 @@ public sealed class DetailsModel(
 	: PageModel
 {
 	[BindProperty] public AddNoteInput NoteInput { get; set; } = new();
+
+	[BindProperty(SupportsGet = true)] public string? ReturnUrl { get; set; }
+
+	public string BackUrl { get; private set; } = "/";
+
+	public string? SafeReturnUrl => ReturnUrl is not null && Url.IsLocalUrl(ReturnUrl) ? ReturnUrl : null;
 
 	public JobRequestDetailResult? Detail { get; private set; }
 
@@ -72,7 +79,7 @@ public sealed class DetailsModel(
 			return NotFound();
 		}
 
-		return RedirectToPage(new { id });
+		return RedirectToPage(new { id, returnUrl = SafeReturnUrl });
 	}
 
 	public async Task<IActionResult> OnPostAcknowledgeAsync(long id, long version, CancellationToken cancellationToken)
@@ -99,7 +106,7 @@ public sealed class DetailsModel(
 			ErrorMessage = "This request was changed by someone else. Reload and try again.";
 		}
 
-		return RedirectToPage(new { id });
+		return RedirectToPage(new { id, returnUrl = SafeReturnUrl });
 	}
 
 	private async Task<IActionResult> LoadAsync(long id, CancellationToken cancellationToken)
@@ -126,6 +133,11 @@ public sealed class DetailsModel(
 		}
 
 		OrderedSubtree = BuildOrderedSubtree(Detail);
+		BackUrl = SafeReturnUrl
+				  ?? (User.IsInRole(EmployeeRoleNames.Requester)
+					  ? Url.Page("/Requests/Index")
+					  : Url.Page("/Jobs/Browse", new { nodeId = id }))
+				  ?? "/";
 		return Page();
 	}
 
@@ -142,7 +154,8 @@ public sealed class DetailsModel(
 		pending.Push((root, 0));
 		while (pending.Count > 0) {
 			var (node, depth) = pending.Pop();
-			rows.Add(new(node, depth));
+			var kind = childrenByParentId.ContainsKey(node.JobNodeId) ? NodeKind.Branch : NodeKind.Leaf;
+			rows.Add(new(node, depth, kind));
 
 			if (childrenByParentId.TryGetValue(node.JobNodeId, out var children)) {
 				foreach (var child in children.Reverse()) {
@@ -171,5 +184,5 @@ public sealed class DetailsModel(
 	}
 
 	/// <summary>One subtree node paired with its indentation depth for rendering (<see cref="BuildOrderedSubtree" />).</summary>
-	public sealed record SubtreeRow(RequesterSubtreeNodeResult Node, int Depth);
+	public sealed record SubtreeRow(RequesterSubtreeNodeResult Node, int Depth, NodeKind Kind);
 }

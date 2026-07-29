@@ -1,7 +1,7 @@
 # Fresh-Eyes Code Review Remediation Plan
 
-**Date:** 2026-07-28  
-**Status:** Proposed  
+**Date:** 2026-07-28
+**Status:** Implemented (with the §2.4 self-referential script-harness step withdrawn by owner)
 **Scope:** Current `main` at `ee903143`, with emphasis on work added after the 2026-07-25
 scalability follow-up: prerequisite regression/reopening, Awaiting Progress readiness ordering,
 performance-gate changes, and remembered web filters.
@@ -375,3 +375,64 @@ Before changing this plan to `Implemented`:
 4. record the fast-suite elapsed time and enforcement mode;
 5. confirm the plan index status matches this file; and
 6. confirm no finding was merely documented or suppressed.
+
+## 5. Completion evidence
+
+Completed on 2026-07-28. The six implementation stages and follow-up review fixes landed as:
+
+| Scope | Commits |
+|---|---|
+| §2.1 achievement-reopen serialization | `4cc70c3e` |
+| §2.2 distinct-required blocked query | `89e3c462` |
+| §2.3 isolated performance lane and discriminating guards | `ca51b8e9`, `cfa38b08`, `a0d112c3`, `cfade1a1` |
+| §2.4 single-build fast suite | `bdb5f8b8` |
+| §2.5 principal-bound session reset | `baae5622`, `cd5fae1b` |
+| §2.6 immutable constant tables and collection guard | `1d0fe059`, `f6abf054` |
+| Cross-cutting full-suite runner and failure-safe cleanup | `60c4e3ad`, `18555b62` |
+
+The proposed fast-runner unit harness was added in `39487227` and removed in `810568f4` at the
+owner's direction: a test contained inside the fast suite invoking that same suite through a fake
+runner was operationally self-referential and disproportionate. `fast-test.sh` remains an integration
+entry point verified by every real per-commit gate. This is an explicit withdrawal of that harness
+sub-step, not an unrecorded omission; build-once behaviour, per-project `gtimeout`, failure propagation
+through `set -euo pipefail`, and `--strict` remain implemented in the script.
+
+### Query and performance evidence
+
+- `job_node_blocked()` before the `MATERIALIZED` distinct-required rewrite: 46.7 ms, with
+  `node_succeeded(from_id)` evaluated from the `job_prerequisite` scan once per edge.
+- After: 4.579 ms in the isolated fan-out run, with the regression test requiring
+  `CTE Scan on required ... Filter: (NOT node_succeeded(id))` and rejecting the old plan shape.
+- At 5,000 dependents: Awaiting Progress measured 199.9 ms with blocked rows included and 13.0 ms
+  with blocked rows excluded. The separate ceilings are 500 ms and 50 ms; the stored-function
+  ceiling is 25 ms.
+- The realistic default page measured 77.8 ms installation-wide and 111.7 ms root-scoped. Its
+  200 ms ceiling is below twice the highest recorded warm measurement, so a 2× regression fails.
+- `JobTrack.Database.PerformanceTests` disables xUnit collection parallelism and runs only through
+  `scripts/perf-test.sh`; the closing serialized lane passed all 28 tests in 2 minutes 54 seconds.
+
+### Concurrency and session evidence
+
+- Reopen wins the advisory lock: the successful prerequisite becomes `Waiting`; the dependent start
+  blocks, rechecks after the reopen commits, receives `PrerequisiteBlockedException`, and leaves no
+  active session.
+- Dependent start wins and commits: the dependent retains its active session; the later prerequisite
+  reopen still succeeds and becomes `Waiting`, as ADR 0051 requires.
+- The provider race suite passed as part of the closing 465-test PostgreSQL persistence run; the
+  SQLite public-outcome counterpart passed in its 462-test suite.
+- Principal-bound state is now proved across logout, an expired authentication cookie followed by a
+  different ordinary login, and final 2FA completion. The 2FA test also proves the password challenge
+  itself does not clear state before authentication completes.
+
+### Closing gate
+
+`./scripts/all-test.sh` passed:
+
+- full solution correctness suite: 3,164 tests;
+- isolated serialized performance lane: 28 tests;
+- final orphaned PostgreSQL/SQLite database cleanup: none found.
+
+Every follow-up implementation commit from `a0d112c3` onward passed
+`dotnet build JobTrack.slnx -warnaserror`, formatting verification,
+`./scripts/fast-test.sh --build`, and its affected targeted suite before commit. Observed fast-suite
+times were 15–17 seconds against the 20-second informational commit-gate budget.

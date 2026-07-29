@@ -1,6 +1,7 @@
 namespace JobTrack.Domain.Hierarchy;
 
 using Abstractions;
+using Costing;
 using NodaTime;
 
 /// <summary>
@@ -20,6 +21,7 @@ public sealed record AwaitingProgressEntry(
 	Priority Priority,
 	Achievement? Achievement,
 	Money? Cost,
+	AllocatedDuration? AllocatedDuration,
 	Instant? NeededStart,
 	Instant? NeededFinish,
 	bool IsReady);

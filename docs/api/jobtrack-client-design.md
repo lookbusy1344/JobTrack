@@ -37,7 +37,7 @@ below is the target shape; the Status column reflects what exists in code today.
 | `Schedules` | `IScheduleCommands` | 8 (schedule versions/exceptions) | **Implemented** |
 | `Rates` | `IRateCommands` | 9 (user rates/node overrides) | **Implemented** |
 | `Query` | `IJobQueries` | 2, 5 (profiles, readiness, hierarchy) | **Implemented** — grew well past steps 2/5 below: job-tree browsing/search/summaries, awaiting-progress, work-session listing, leaf work, and prerequisite-edge queries were all added for `JobTrack.Web`'s browsing UI (plan §8.5 slice 2) and the external HTTP API (`docs/plans/2026-07-09-external-http-api-plan.md`) — see `src/JobTrack.Application/IJobQueries.cs` for the authoritative current member list, not the code block below |
-| `Costing` | `ICostQueries` | 10 (cost details, totals) | **Implemented** |
+| `Costing` | `ICostQueries` | 10 (cost details, allocated duration, totals) | **Implemented** |
 | `Audit` | `IAuditQueries` | 11 (audit search) | **Implemented** |
 
 "Rate" is broken out from "Schedule" as its own property even though `jobtrack_spec_claude.md`

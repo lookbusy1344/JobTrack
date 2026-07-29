@@ -1,12 +1,13 @@
 namespace JobTrack.Application;
 
 using Abstractions;
+using Domain.Costing;
 using NodaTime;
 
 /// <summary>
 ///     One node in the requester-safe, read-only projection of a request's subtree (ADR 0034, plan §7).
-///     Deliberately narrow — no owner, rates, sessions, schedules, or audit fields; see
-///     <see cref="IRequestCommands.GetDetailAsync" />.
+///     Deliberately narrow — ADR 0054 adds aggregate allocated duration, but no owner, rates,
+///     individual sessions, schedules, or audit fields; see <see cref="IRequestCommands.GetDetailAsync" />.
 /// </summary>
 public sealed record RequesterSubtreeNodeResult
 {
@@ -24,4 +25,10 @@ public sealed record RequesterSubtreeNodeResult
 
 	/// <summary>The instant this node's requester-visible state was last updated.</summary>
 	public required Instant LastUpdatedAt { get; init; }
+
+	/// <summary>
+	///     The concurrency-adjusted work duration recorded for this node's subtree. This is an
+	///     aggregate only: it exposes neither individual sessions nor monetary cost.
+	/// </summary>
+	public AllocatedDuration AllocatedDuration { get; init; } = AllocatedDuration.Zero;
 }

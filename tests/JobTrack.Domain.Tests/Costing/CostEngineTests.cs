@@ -121,6 +121,8 @@ public sealed class CostEngineTests
 		var result = CostEngine.Calculate(RootId, allocations, nodes, [FullDay], [], [], [], new HourlyRate(60m));
 
 		result.ExactCosts[RootId].Should().Be(new(120m));
+		result.AllocatedDurations[LeafId].ToHours().Should().Be(2m);
+		result.AllocatedDurations[RootId].ToHours().Should().Be(2m);
 		result.Trace.Should().ContainSingle();
 		result.Trace[0].Should().Be(new CostSegmentTrace(
 			new(At(9), At(11)),
@@ -163,6 +165,9 @@ public sealed class CostEngineTests
 		result.ExactCosts.Should().ContainKeys(branchId, LeafId);
 		result.ExactCosts.Should().NotContainKey(OtherLeafId);
 		result.ExactCosts[branchId].Should().Be(new(90m));
+		result.AllocatedDurations.Should().ContainKeys(branchId, LeafId);
+		result.AllocatedDurations.Should().NotContainKey(OtherLeafId);
+		result.AllocatedDurations[branchId].ToHours().Should().Be(1.5m);
 
 		result.Trace.Should().OnlyContain(entry => entry.NodeId == LeafId);
 		result.Trace.SelectMany(entry => entry.ActiveSessionIds).Should().NotContain(Session2);

@@ -313,6 +313,7 @@ internal static partial class JobTrackApi
 			RootId = result.RootId.Value,
 			RootAchievement = result.RootAchievement,
 			RootTotal = result.RootTotal?.Amount,
+			RootAllocatedHours = result.RootAllocatedDuration?.ToHours(),
 			TzdbVersion = result.TzdbVersion,
 			Nodes = [.. result.Nodes.Select(Map)],
 		};
@@ -335,6 +336,7 @@ internal static partial class JobTrackApi
 			SubtreeLft = result.SubtreeLft,
 			SubtreeRgt = result.SubtreeRgt,
 			Cost = result.Cost?.Amount,
+			AllocatedHours = result.AllocatedDuration?.ToHours(),
 		};
 
 	private static PrerequisiteEdgeResponse Map(PrerequisiteEdge result) =>
@@ -455,6 +457,9 @@ internal static partial class JobTrackApi
 		public decimal? RootTotal { get; init; }
 
 		/// <summary>Null exactly when <see cref="RootTotal" /> is.</summary>
+		public decimal? RootAllocatedHours { get; init; }
+
+		/// <summary>Null exactly when <see cref="RootTotal" /> is.</summary>
 		public string? TzdbVersion { get; init; }
 
 		public required JobSubtreeNodeResponse[] Nodes { get; init; }
@@ -507,6 +512,9 @@ internal static partial class JobTrackApi
 
 		/// <summary>Null when the actor may not view this subtree's cost (ADR 0040) -- never a whole-request denial.</summary>
 		public decimal? Cost { get; init; }
+
+		/// <summary>Null exactly when <see cref="Cost" /> is.</summary>
+		public decimal? AllocatedHours { get; init; }
 	}
 
 	internal sealed class AddPrerequisiteBody

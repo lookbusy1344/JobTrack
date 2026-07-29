@@ -335,6 +335,22 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
 	}
 
+	[Fact]
+	public async Task Starting_work_for_a_target_who_also_has_the_requester_role_throws_an_invariant_violation()
+	{
+		var (_, jobManagerId, _, leafId) = await SeedReadyLeafAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting Worker", "requesting.worker.startfor", EmployeeRole.Worker);
+		await using (var connection = await OpenExistingConnectionAsync()) {
+			await AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
+		}
+		var port = CreateSessionPort(database.ConnectionString);
+
+		var act = () => port.StartWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leafId, WorkedByUserId = requesterId });
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
+	}
+
 	private async Task SetEnabledAsync(AppUserId appUserId, bool isEnabled)
 	{
 		await using var connection = await OpenExistingConnectionAsync();

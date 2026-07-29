@@ -419,7 +419,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Cost</dt>");
-		body.Should().Contain(">&#xA3;200.00<");
+		body.Should().Contain(">&#xA3;200.00 / 8.0 hrs<");
 		body.Should().NotContain("Subtree cost");
 	}
 
@@ -441,7 +441,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Costed leaf</a>");
-		body.Should().Contain(">&#xA3;200.00<");
+		body.Should().Contain(">&#xA3;200.00 / 8.0 hrs<");
 	}
 
 	[Fact]
@@ -464,7 +464,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("Fit oak cabinets");
 		// Unlike the leaf/branch detail views, the search results table renders the cost directly
 		// inside the table cell rather than inside a wrapping <span>, so this isn't tag-delimited.
-		body.Should().Contain("&#xA3;200.00");
+		body.Should().Contain("&#xA3;200.00 / 8.0 hrs");
 	}
 
 	[Fact]

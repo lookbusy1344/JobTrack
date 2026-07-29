@@ -3,6 +3,7 @@ namespace JobTrack.Application.Tests;
 using System.Diagnostics;
 using Abstractions;
 using AwesomeAssertions;
+using Domain.Costing;
 using Domain.Hierarchy;
 using NodaTime;
 using TestSupport;
@@ -789,8 +790,10 @@ public sealed class JobQueriesTests
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, new(11), out _, out var branchId, out var leafId);
 		var costQueries = new FakeCostQueries();
-		costQueries.SeedBulkCost(branchId, new(90m));
-		costQueries.SeedBulkCost(leafId, new(45m));
+		var branchDuration = AllocatedDuration.FromShare(new(Duration.FromHours(3).BclCompatibleTicks, 1));
+		var leafDuration = AllocatedDuration.FromShare(new(Duration.FromMinutes(90).BclCompatibleTicks, 1));
+		costQueries.SeedBulkCost(branchId, new(90m), branchDuration);
+		costQueries.SeedBulkCost(leafId, new(45m), leafDuration);
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSummariesAsync(
@@ -798,6 +801,8 @@ public sealed class JobQueriesTests
 
 		result.Single(r => r.Id == branchId).Cost.Should().Be(new Money(90m));
 		result.Single(r => r.Id == leafId).Cost.Should().Be(new Money(45m));
+		result.Single(r => r.Id == branchId).AllocatedDuration.Should().Be(branchDuration);
+		result.Single(r => r.Id == leafId).AllocatedDuration.Should().Be(leafDuration);
 		// Fresh-eyes review §2.8: one bulk call prices every row, never one round trip per row.
 		costQueries.GetBulkNodeCostsCallCount.Should().Be(1);
 	}
@@ -1055,12 +1060,18 @@ public sealed class JobQueriesTests
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, new(11), out var rootId, out var branchId, out var leafId);
 		var costQueries = new FakeCostQueries();
+		var allocatedDuration = AllocatedDuration.FromShare(new(Duration.FromMinutes(90).BclCompatibleTicks, 1));
 		costQueries.SeedHierarchyTotals(rootId, new() {
 			NodeId = rootId,
 			ExactCosts = EquatableDictionaryFactory.CopyOf(
 				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
 			DisplayedCosts = EquatableDictionaryFactory.CopyOf(
 				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
+			AllocatedDurations = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration> {
+				[rootId] = allocatedDuration,
+				[branchId] = allocatedDuration,
+				[leafId] = allocatedDuration,
+			}),
 			TzdbVersion = "2025b",
 		});
 		var sut = CreateSut(port, costQueries);
@@ -1069,9 +1080,12 @@ public sealed class JobQueriesTests
 			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
 
 		result.RootTotal.Should().Be(new Money(90m));
+		result.RootAllocatedDuration.Should().Be(allocatedDuration);
 		result.TzdbVersion.Should().Be("2025b");
 		result.Nodes.Single(n => n.Id == leafId).Cost.Should().Be(new Money(90m));
 		result.Nodes.Single(n => n.Id == branchId).Cost.Should().Be(new Money(90m));
+		result.Nodes.Single(n => n.Id == leafId).AllocatedDuration.Should().Be(allocatedDuration);
+		result.Nodes.Single(n => n.Id == branchId).AllocatedDuration.Should().Be(allocatedDuration);
 		costQueries.GetHierarchyTotalsCallCount.Should().Be(
 			1, "the roll-up is one batched call over the whole subtree, never per node (Stage 6 efficiency guard)");
 	}
@@ -1098,6 +1112,12 @@ public sealed class JobQueriesTests
 				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
 			DisplayedCosts = EquatableDictionaryFactory.CopyOf(
 				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
+			AllocatedDurations = EquatableDictionaryFactory.CopyOf(
+				new Dictionary<JobNodeId, AllocatedDuration> {
+					[rootId] = AllocatedDuration.Zero,
+					[branchId] = AllocatedDuration.Zero,
+					[leafId] = AllocatedDuration.Zero,
+				}),
 			TzdbVersion = "2025b",
 		});
 		var sut = CreateSut(port, costQueries);
@@ -1136,6 +1156,8 @@ public sealed class JobQueriesTests
 			NodeId = rootId,
 			ExactCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [rootId] = new(0m) }),
 			DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [rootId] = new(0m) }),
+			AllocatedDurations = EquatableDictionaryFactory.CopyOf(
+				new Dictionary<JobNodeId, AllocatedDuration> { [rootId] = AllocatedDuration.Zero }),
 			TzdbVersion = "2025b",
 		});
 		var sut = CreateSut(port, costQueries);
@@ -1463,7 +1485,8 @@ public sealed class JobQueriesTests
 		var port = CreateSeededTree(owner, new(11), out _, out _, out var leafId);
 		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
 		var costQueries = new FakeCostQueries();
-		costQueries.SeedBulkCost(leafId, new(90m));
+		var allocatedDuration = AllocatedDuration.FromShare(new(Duration.FromMinutes(90).BclCompatibleTicks, 1));
+		costQueries.SeedBulkCost(leafId, new(90m), allocatedDuration);
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
@@ -1471,6 +1494,7 @@ public sealed class JobQueriesTests
 		result.Should().ContainSingle();
 		result[0].Id.Should().Be(leafId);
 		result[0].Cost.Should().Be(new Money(90m));
+		result[0].AllocatedDuration.Should().Be(allocatedDuration);
 		costQueries.GetBulkNodeCostsCallCount.Should().Be(1);
 	}
 

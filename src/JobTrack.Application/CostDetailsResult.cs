@@ -22,6 +22,12 @@ public sealed record CostDetailsResult
 	/// <summary>The penny-rounded (midpoint-to-even) cost presented to a caller (spec §9).</summary>
 	public required Money DisplayedCost { get; init; }
 
+	/// <summary>
+	///     The exact concurrency-allocated duration underlying this node and its subtree's labour cost.
+	///     Convert to decimal hours only at the reporting boundary via <see cref="AllocatedDuration.ToHours" />.
+	/// </summary>
+	public required AllocatedDuration AllocatedDuration { get; init; }
+
 	/// <summary>The canonical segment-by-segment explanation of <see cref="ExactCost" />.</summary>
 	public required EquatableArray<CostSegmentTrace> Trace { get; init; }
 

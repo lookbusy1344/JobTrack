@@ -34,7 +34,7 @@
 
 	var costDetails = Model.CostDetails;
 	@if (costDetails is not null) {
-		<div class="row row-cols-1 row-cols-sm-2 g-3 mb-4">
+		<div class="row row-cols-1 row-cols-sm-3 g-3 mb-4">
 			<div class="col jt-metric">
 				<span class="jt-metric-label">Exact cost</span>
 				<span class="jt-metric-value jt-amount">@MoneyDisplay.Format(costDetails.ExactCost)</span>
@@ -43,6 +43,11 @@
 				<span class="jt-metric-label">Displayed cost</span>
 				<span class="jt-metric-value jt-amount">@MoneyDisplay.Format(costDetails.DisplayedCost)</span>
 				<span class="jt-metric-sub">Rounded to pennies</span>
+			</div>
+			<div class="col jt-metric">
+				<span class="jt-metric-label">Allocated time</span>
+				<span class="jt-metric-value">@costDetails.AllocatedDuration</span>
+				<span class="jt-metric-sub">Concurrency-adjusted</span>
 			</div>
 		</div>
 

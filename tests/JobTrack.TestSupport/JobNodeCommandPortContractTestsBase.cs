@@ -118,6 +118,35 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task A_requester_cannot_be_assigned_as_the_owner_of_a_new_node()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting User", "requesting.user.create-owner", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, requesterId, rootId));
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
+	}
+
+	[Fact]
+	public async Task An_account_with_requester_and_worker_roles_cannot_be_assigned_as_a_node_owner()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting Worker", "requesting.worker.create-owner", EmployeeRole.Worker);
+		await using (var connection = await OpenExistingConnectionAsync()) {
+			await AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
+		}
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, requesterId, rootId));
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
+	}
+
+	[Fact]
 	public async Task Creating_a_node_under_a_nonexistent_parent_throws_not_found()
 	{
 		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
@@ -147,6 +176,27 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		result.Description.Should().Be("Updated description");
 		result.Priority.Should().Be(Priority.High);
 		result.Version.Should().Be(2);
+	}
+
+	[Fact]
+	public async Task A_requester_cannot_be_assigned_as_the_owner_of_an_existing_node()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting User", "requesting.user.edit-owner", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+		var node = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+
+		var act = () => port.EditAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = node.Id,
+			Description = node.Description,
+			OwnerUserId = requesterId,
+			Priority = node.Priority,
+			Version = node.Version,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
 	}
 
 	[Fact]
@@ -715,6 +765,30 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task A_requester_cannot_be_assigned_as_the_owner_of_a_decomposed_child()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting User", "requesting.user.decompose-owner", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+
+		var act = () => port.DecomposeWorkedLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			LeafNodeId = leaf.Id,
+			Version = leaf.Version,
+			BranchDescription = "Umbrella job",
+			ExistingWorkDescription = "The work already done",
+			NewChildren = [
+				new() { Description = "Requester-owned child", OwnerUserId = requesterId, Priority = Priority.Medium },
+			],
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
+	}
+
+	[Fact]
 	public async Task Concurrent_decomposes_of_the_same_leaf_allow_exactly_one_to_succeed()
 	{
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
@@ -848,6 +922,56 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var act = () => port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = childAId, DependentJobId = childBId });
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-already-exists");
+	}
+
+	[Fact]
+	public async Task A_requester_cannot_be_assigned_as_the_owner_of_an_imported_node()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting User", "requesting.user.import-owner", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var act = () => port.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = [
+				new() { LocalId = 1, Description = "Imported node", OwnerUserId = requesterId, Priority = Priority.Medium },
+			],
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
+	}
+
+	[Fact]
+	public async Task A_requester_cannot_be_recorded_as_the_worker_during_subtree_import()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting User", "requesting.user.import-work", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+		var now = SystemClock.Instance.GetCurrentInstant();
+
+		var act = () => port.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = [
+				new() {
+					LocalId = 1,
+					Description = "Imported worked leaf",
+					OwnerUserId = workerId,
+					Priority = Priority.Medium,
+					LeafWork = new() {
+						WorkedByUserId = requesterId,
+						StartedAt = now - Duration.FromHours(1),
+						FinishedAt = now,
+						Achievement = Achievement.Success,
+					},
+				},
+			],
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
 	}
 
 	[Fact]

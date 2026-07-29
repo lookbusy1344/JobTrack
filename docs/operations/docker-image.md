@@ -11,12 +11,13 @@ requirement justifies them. [`production-deployment.md`](production-deployment.m
 runbook. Several choices below (a baked-in self-signed certificate, a placeholder trusted-proxy
 address, an unencrypted data-protection key ring) are acceptable only because this image is a local
 demo artifact — see "What makes this demo-only" at the end, which is the list to work through if
-this ever needs to become a real deployment target. Most importantly, it ships a **known, published
-demo credential** (`demo` / `demo1234`) baked in at build time, so it must never be exposed to a
-network with a reachable demo account. The privileged `admin` account gets a **random** password
-generated at build time (never a known default): unknown for a plain local `docker run` — where you
-sign in as `demo` — and, on Cloud Run, an explicit random one the deploy script generates and prints
-(see "Cloud Run smoke test"). Neither account forces a password change on first sign-in.
+this ever needs to become a real deployment target. Most importantly, it ships two **known,
+published demo credentials** (`demo` / `demo1234` and `requester` / `requester1234`) baked in at
+build time, so it must never be exposed to a network with either account reachable. The privileged
+`admin` account gets a **random** password generated at build time (never a known default): unknown
+for a plain local `docker run` and, on Cloud Run, an explicit random one the deploy script generates
+and prints (see "Cloud Run smoke test"). None of the three accounts forces a password change on
+first sign-in.
 
 ## Why SQLite
 
@@ -117,22 +118,22 @@ The image ships a pre-seeded demo database, so there is no setup:
 docker run --rm -p 8443:8443 -v jobtrack-data:/app/data jobtrack-web
 ```
 
-Open <https://localhost:8443> and sign in as the normal demo user:
+Open <https://localhost:8443> and sign in with either non-admin demo account:
 
-| | |
-| --- | --- |
-| Username | `demo` |
-| Password | `demo1234` |
+| Purpose | Username | Password |
+| --- | --- | --- |
+| Staff workflow and sample job trees | `demo` | `demo1234` |
+| Submit and track six sample requests | `requester` | `requester1234` |
 
-The image bakes in **two** accounts (see "How the accounts and trees are seeded"): this `demo`
-account — a normal, non-admin `JobManager`+`Worker` who owns the five sample job trees — and a
-privileged `admin` account whose password is **random** (no known default; unknown for a local
-`docker run` unless you passed `--build-arg ADMIN_PASSWORD`). For local use you want `demo`.
+The image bakes in **three** accounts (see "How the accounts and trees are seeded"): the two
+published non-admin accounts above, plus a privileged `admin` account whose password is **random**
+(no known default; unknown for a local `docker run` unless you passed
+`--build-arg ADMIN_PASSWORD`).
 
-**Neither account forces a password change on first sign-in** — both are seeded with
-`--no-force-password-change`, so `demo1234` works repeatedly rather than only once. That is a
-deliberate demo affordance, not the ADR 0023 default, which every normally provisioned account still
-gets.
+**None of these accounts forces a password change on first sign-in** — all are seeded with
+`--no-force-password-change`, so the published credentials work repeatedly rather than only once.
+That is a deliberate demo affordance, not the ADR 0023 default, which every normally provisioned
+account still gets.
 
 `/app/data` holds both the SQLite database and the data-protection key ring. A *new* named volume is
 empty, so Docker populates it from the image — which is how the seeded accounts and trees reach the
@@ -151,7 +152,7 @@ ring sits beside it in `/app/data/keys`.
 | `docker stop` / `docker start` | kept |
 | `docker rm` the container, `docker run` a new one on the same volume | **kept** — the container is disposable, the volume is not |
 | `docker build` a new image (even with a different demo password) | kept, and the new seed is *ignored* — see below |
-| `docker volume rm jobtrack-data` | **gone**, back to the pristine seed (both accounts + the five sample trees) |
+| `docker volume rm jobtrack-data` | **gone**, back to the pristine seed (three accounts, sample trees, and six requester jobs) |
 | `docker run` with no `-v` | **gone on exit** — see the trap below |
 
 Verified rather than assumed: a password changed through the browser survived
@@ -203,8 +204,9 @@ not a backup strategy, and this image is not a deployment (see the top of this d
 
 ### How the accounts and trees are seeded
 
-Four steps run at build time (see the `/appdata` block in the Dockerfile), all through the shipped
-`JobTrack.AdminCli`:
+Six steps run at build time (see the `/appdata` block in the Dockerfile). Account and tree writes
+use the shipped `JobTrack.AdminCli`; the final requester scenario uses the build-only
+`JobTrack.UatSeed` apphost and the reusable library:
 
 1. **Schema deploy** (`JobTrack.Database deploy`).
 2. **Bootstrap the `admin`** (`AdminCli bootstrap`) — one atomic operation creating administrator
@@ -215,10 +217,15 @@ Four steps run at build time (see the `/appdata` block in the Dockerfile), all t
 3. **Create the `demo` user** (`AdminCli create-employee`) — a normal, non-admin
    `JobManager`+`Worker` employee (`demo` / `demo1234`), also `--no-force-password-change` so the
    published credential stays reusable. Employee id 2.
-4. **Import the seven sample trees** (`AdminCli import-tree`, once per file in
+4. **Create the `requester` user** (`AdminCli create-employee`) — `Client Requester`, holding only
+   the `Requester` role (`requester` / `requester1234`), with the same reusable-demo credential
+   treatment. It cannot be assigned work. Employee id 3.
+5. **Import the seven sample trees** (`AdminCli import-tree`, once per file in
    `samples/job-tree-imports/`) as `demo`, so the demo user — not the admin — owns them. Each lands a
-   subtree under the root (`--parent-id` defaults to the root, id 1). The admin owns only the root
-   node; `demo` owns everything below it.
+   subtree under the root (`--parent-id` defaults to the root, id 1).
+6. **Seed six requester jobs** through `IJobTrackClient`'s requester-intake and work commands.
+   `requester` is the recorded requester, while `demo` remains the technical work actor; the jobs
+   span Submitted, Accepted, Waiting, In progress, Completed, and Cancelled public states.
 
 Bootstrap takes its password non-interactively via `--password` (it still prompts for display
 name / time zone / username, which the build pipes on stdin); `create-employee` and `import-tree`
@@ -270,9 +277,10 @@ at all:
 
 1. **The privileged `admin` account gets a random password** the script generates and prints, since
    Cloud Run is network-exposed and a known admin credential must never be reachable. The published
-   `demo` / `demo1234` account is deliberately left as-is — it is a normal, non-admin user (owns the
-   sample trees, no account-management rights), and its whole point is to be shareable. Any change a
-   visitor makes to it is wiped back to the seed on the next recycle (see below).
+   `demo` / `demo1234` and `requester` / `requester1234` accounts are deliberately left as-is —
+   both are normal, non-admin users with no account-management rights, and their whole point is to
+   be shareable. Any change a visitor makes is wiped back to the seed on the next recycle (see
+   below).
 2. **An HTTP endpoint added at deploy time, on top of the existing HTTPS one**, because Cloud Run's
    fully-managed product terminates TLS at Google's front end and always proxies to the container
    over plain HTTP on `$PORT` — it does not do TLS passthrough to a container-side certificate.
@@ -288,8 +296,9 @@ at all:
    only Google's own front end can ever be the thing setting those headers.
 
 [`../../scripts/deploy-cloudrun.sh`](../../scripts/deploy-cloudrun.sh) does all of this —
-build with a freshly generated `ADMIN_PASSWORD` (demo stays `demo1234`), push to Artifact Registry,
-deploy — and prints **both** logins at the end, since nothing else records the random admin one:
+build with a freshly generated `ADMIN_PASSWORD` (the two demo credentials stay published), push to
+Artifact Registry, deploy — and prints **all three** logins at the end, since nothing else records
+the random admin one:
 
 ```bash
 ./scripts/deploy-cloudrun.sh <gcp-project-id> [region]   # region defaults to europe-west1
@@ -306,7 +315,8 @@ OrbStack's local Docker defaults to the host's `arm64`.
 
 **The admin password is different on every run.** The script always generates a fresh one and passes
 it via `--build-arg ADMIN_PASSWORD`; nothing pins it between deploys, and it is printed once at the
-end because it is recorded nowhere else. The demo password stays the published `demo1234`.
+end because it is recorded nowhere else. The two non-admin passwords remain the published
+`demo1234` and `requester1234`.
 
 **This deployment has no persistent volume.** Cloud Run containers are stateless and ephemeral —
 `/app/data` is just the image's writable layer, so every cold start (scale-to-zero is the default,

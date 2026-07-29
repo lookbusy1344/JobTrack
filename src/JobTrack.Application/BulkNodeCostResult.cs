@@ -1,6 +1,7 @@
 namespace JobTrack.Application;
 
 using Abstractions;
+using Domain.Costing;
 
 /// <summary>
 ///     Result of <see cref="ICostQueries.GetBulkNodeCostsAsync" />: each authorized candidate's displayed
@@ -12,4 +13,7 @@ public sealed record BulkNodeCostResult
 {
 	/// <summary>Each authorized candidate's displayed cost, keyed by node id.</summary>
 	public required EquatableDictionary<JobNodeId, Money> DisplayedCosts { get; init; }
+
+	/// <summary>Each authorized candidate's exact concurrency-allocated duration, keyed by node id.</summary>
+	public required EquatableDictionary<JobNodeId, AllocatedDuration> AllocatedDurations { get; init; }
 }

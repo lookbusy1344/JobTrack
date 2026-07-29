@@ -751,7 +751,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("Paused costed leaf");
 		body.Should().Contain("Active costed leaf");
-		body.Should().Contain(">&#xA3;200.00<");
+		body.Should().Contain(">&#xA3;200.00 / 8.0 hrs<");
 
 		// The active leaf's session is still running: its accrued cost grows with real elapsed time
 		// between the `now` captured above and this request actually rendering, so an exact string match
@@ -1056,7 +1056,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
-	[GeneratedRegex(">&#xA3;(?<amount>[0-9]+\\.[0-9]{2})<")]
+	[GeneratedRegex(">&#xA3;(?<amount>[0-9]+\\.[0-9]{2})(?= /|<)")]
 	private static partial Regex MoneyAmountPattern();
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]

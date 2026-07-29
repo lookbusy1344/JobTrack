@@ -83,10 +83,12 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 		jsonDocument.RootElement.GetProperty("rootId").GetInt64().Should().Be(rootId.Value);
 		jsonDocument.RootElement.GetProperty("rootAchievement").GetString().Should().Be(nameof(BranchAchievement.Unfinished));
 		jsonDocument.RootElement.GetProperty("rootTotal").ValueKind.Should().Be(JsonValueKind.Null);
+		jsonDocument.RootElement.GetProperty("rootAllocatedHours").ValueKind.Should().Be(JsonValueKind.Null);
 		var nodes = jsonDocument.RootElement.GetProperty("nodes").EnumerateArray().ToList();
 		nodes.Should().Contain(node => node.GetProperty("id").GetInt64() == branchId.Value);
 		nodes.Should().Contain(node => node.GetProperty("id").GetInt64() == leafId.Value);
 		nodes.Should().OnlyContain(node => node.GetProperty("cost").ValueKind == JsonValueKind.Null);
+		nodes.Should().OnlyContain(node => node.GetProperty("allocatedHours").ValueKind == JsonValueKind.Null);
 	}
 
 	/// <summary>
@@ -106,9 +108,11 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		jsonDocument.RootElement.GetProperty("rootAchievement").ValueKind.Should().Be(JsonValueKind.Null);
 		jsonDocument.RootElement.GetProperty("rootTotal").ValueKind.Should().NotBe(JsonValueKind.Null);
+		jsonDocument.RootElement.GetProperty("rootAllocatedHours").GetDecimal().Should().Be(8m);
 		var leafNode = jsonDocument.RootElement.GetProperty("nodes").EnumerateArray()
 			.Single(node => node.GetProperty("id").GetInt64() == leafId.Value);
 		leafNode.GetProperty("cost").ValueKind.Should().NotBe(JsonValueKind.Null);
+		leafNode.GetProperty("allocatedHours").GetDecimal().Should().Be(8m);
 	}
 
 	[Fact]

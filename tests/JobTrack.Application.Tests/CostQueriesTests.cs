@@ -2,6 +2,7 @@ namespace JobTrack.Application.Tests;
 
 using Abstractions;
 using AwesomeAssertions;
+using Domain.Costing;
 using Domain.Intervals;
 using NodaTime;
 
@@ -56,6 +57,7 @@ public sealed class CostQueriesTests
 		result.NodeId.Should().Be(LeafId);
 		result.ExactCost.Should().Be(new(120m));
 		result.DisplayedCost.Should().Be(new(120m));
+		result.AllocatedDuration.ToHours().Should().Be(2m);
 		result.Trace.Should().OnlyContain(entry => entry.NodeId == LeafId);
 		result.TzdbVersion.Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
 	}
@@ -113,7 +115,36 @@ public sealed class CostQueriesTests
 		result.ExactCosts[BranchId].Should().Be(new(90m));
 		result.DisplayedCosts[BranchId].Should().Be(new(90m));
 		result.DisplayedCosts[LeafId].Should().Be(new(90m));
+		result.AllocatedDurations[BranchId].ToHours().Should().Be(1.5m);
+		result.AllocatedDurations[LeafId].ToHours().Should().Be(1.5m);
 		result.TzdbVersion.Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
+	}
+
+	[Fact]
+	public async Task Requester_visible_duration_totals_do_not_require_cost_permission_or_a_resolvable_rate()
+	{
+		var port = CreatePortWithNodes();
+		port.SeedWorker(new() {
+			Sessions = [
+				new(Session1, LeafId, new(At(9), At(11))),
+				new(Session2, OtherLeafId, new(At(10), At(12))),
+			],
+			EffectiveWorkingIntervals = [FullDay],
+			ScheduledWorkingIntervals = [FullDay],
+			Exceptions = [],
+			NodeOverrides = [],
+			UserCostRates = [],
+			UserDefaultRate = null,
+		});
+		var sut = new CostQueries(port);
+
+		var result = await sut.GetRequesterVisibleHierarchyAsync(BranchId, At(24));
+
+		result.Should().ContainKeys(BranchId, LeafId);
+		result.Should().NotContainKey(OtherLeafId);
+		result[BranchId].ToHours().Should().Be(1.5m);
+		result[LeafId].ToHours().Should().Be(1.5m);
+		port.GetCostAccessInputsCallCount.Should().Be(0, "request-detail authorization happens before this internal projection");
 	}
 
 	[Fact]
@@ -124,6 +155,19 @@ public sealed class CostQueriesTests
 		var act = () => sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(WorkerId), NodeId = BranchId, AsOf = At(24) });
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task Hierarchy_totals_include_zero_duration_for_nodes_without_sessions()
+	{
+		var sut = new CostQueries(CreatePortWithNodes());
+
+		var result = await sut.GetHierarchyTotalsAsync(
+			new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+
+		result.DisplayedCosts.Should().ContainKeys(BranchId, LeafId);
+		result.AllocatedDurations.Should().ContainKeys(BranchId, LeafId);
+		result.AllocatedDurations.Should().OnlyContain(entry => entry.Value == AllocatedDuration.Zero);
 	}
 
 	[Fact]

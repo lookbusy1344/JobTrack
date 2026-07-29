@@ -31,6 +31,10 @@ public sealed class WorkSessionAccessPolicyTests
 		WorkSessionAccessPolicy.CanManage([EmployeeRole.Requester], true).Should().BeFalse();
 
 	[Fact]
+	public void A_requester_may_not_manage_a_session_even_when_they_also_hold_a_worker_role() =>
+		WorkSessionAccessPolicy.CanManage([EmployeeRole.Requester, EmployeeRole.Worker], true).Should().BeFalse();
+
+	[Fact]
 	public void A_null_role_collection_is_rejected_by_CanManage()
 	{
 		var act = () => WorkSessionAccessPolicy.CanManage(null!, true);
@@ -64,6 +68,10 @@ public sealed class WorkSessionAccessPolicyTests
 	public void A_requester_may_never_view_a_session_list() => WorkSessionAccessPolicy.CanView([EmployeeRole.Requester]).Should().BeFalse();
 
 	[Fact]
+	public void A_requester_may_not_view_a_session_list_even_when_they_also_hold_an_operational_role() =>
+		WorkSessionAccessPolicy.CanView([EmployeeRole.Requester, EmployeeRole.Worker]).Should().BeFalse();
+
+	[Fact]
 	public void A_null_role_collection_is_rejected_by_CanView()
 	{
 		var act = () => WorkSessionAccessPolicy.CanView(null!);
@@ -93,6 +101,10 @@ public sealed class WorkSessionAccessPolicyTests
 	[Fact]
 	public void A_requester_may_never_finish_even_their_own_session() =>
 		WorkSessionAccessPolicy.CanFinishSession([EmployeeRole.Requester], false, true).Should().BeFalse();
+
+	[Fact]
+	public void A_requester_may_not_finish_a_session_even_when_they_also_hold_a_worker_role() =>
+		WorkSessionAccessPolicy.CanFinishSession([EmployeeRole.Requester, EmployeeRole.Worker], true, true).Should().BeFalse();
 
 	[Fact]
 	public void An_administrator_may_finish_any_session_without_controlling_the_node() =>

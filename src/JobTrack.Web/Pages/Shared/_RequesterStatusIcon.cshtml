@@ -1,0 +1,21 @@
+@using JobTrack.Abstractions
+@model RequesterStatus
+@{
+	var glyph = Model switch {
+		RequesterStatus.Submitted or RequesterStatus.Accepted or RequesterStatus.Waiting =>
+			("jt-icon-achievement-waiting", "waiting"),
+		RequesterStatus.InProgress => ("jt-icon-achievement-in-progress", "in-progress"),
+		RequesterStatus.Completed => ("jt-icon-achievement-success", "success"),
+		RequesterStatus.Cancelled => ("jt-icon-achievement-closed", "closed"),
+		RequesterStatus.None => default((string IconId, string Modifier)?),
+		_ => throw new ArgumentOutOfRangeException(nameof(Model), Model, null),
+	};
+}
+@if (glyph is var (iconId, modifier)) {
+	<span class="jt-achievement-icon jt-achievement-icon--@modifier">
+		<svg class="jt-achievement-icon-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+			<use href="#@iconId"></use>
+		</svg>
+		<span class="visually-hidden">@EnumDisplay.Label(Model)</span>
+	</span>
+}

@@ -2,8 +2,8 @@
 JobTrack.Domain.Authorization.JobNodeDeletePolicy
 JobTrack.Domain.Authorization.JobPickupPolicy
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.<Clone>$() -> JobTrack.Domain.Hierarchy.AwaitingProgressEntry!
-JobTrack.Domain.Hierarchy.AwaitingProgressEntry.AwaitingProgressEntry(JobTrack.Abstractions.JobNodeId Id, JobTrack.Abstractions.JobNodeId? ParentId, string! Description, JobTrack.Abstractions.AppUserId? OwnerUserId, JobTrack.Abstractions.Priority Priority, JobTrack.Abstractions.Achievement? Achievement, JobTrack.Abstractions.Money? Cost, NodaTime.Instant? NeededStart, NodaTime.Instant? NeededFinish, bool IsReady) -> void
-JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Deconstruct(out JobTrack.Abstractions.JobNodeId Id, out JobTrack.Abstractions.JobNodeId? ParentId, out string! Description, out JobTrack.Abstractions.AppUserId? OwnerUserId, out JobTrack.Abstractions.Priority Priority, out JobTrack.Abstractions.Achievement? Achievement, out JobTrack.Abstractions.Money? Cost, out NodaTime.Instant? NeededStart, out NodaTime.Instant? NeededFinish, out bool IsReady) -> void
+JobTrack.Domain.Hierarchy.AwaitingProgressEntry.AwaitingProgressEntry(JobTrack.Abstractions.JobNodeId Id, JobTrack.Abstractions.JobNodeId? ParentId, string! Description, JobTrack.Abstractions.AppUserId? OwnerUserId, JobTrack.Abstractions.Priority Priority, JobTrack.Abstractions.Achievement? Achievement, JobTrack.Abstractions.Money? Cost, JobTrack.Domain.Costing.AllocatedDuration? AllocatedDuration, NodaTime.Instant? NeededStart, NodaTime.Instant? NeededFinish, bool IsReady) -> void
+JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Deconstruct(out JobTrack.Abstractions.JobNodeId Id, out JobTrack.Abstractions.JobNodeId? ParentId, out string! Description, out JobTrack.Abstractions.AppUserId? OwnerUserId, out JobTrack.Abstractions.Priority Priority, out JobTrack.Abstractions.Achievement? Achievement, out JobTrack.Abstractions.Money? Cost, out JobTrack.Domain.Costing.AllocatedDuration? AllocatedDuration, out NodaTime.Instant? NeededStart, out NodaTime.Instant? NeededFinish, out bool IsReady) -> void
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Equals(JobTrack.Domain.Hierarchy.AwaitingProgressEntry? other) -> bool
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.OwnerUserId.get -> JobTrack.Abstractions.AppUserId?
 JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts.<Clone>$() -> JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts!
@@ -68,6 +68,20 @@ JobTrack.Domain.Costing.AllocatedShare.ConcurrencyDivisor.get -> int
 JobTrack.Domain.Costing.AllocatedShare.Equals(JobTrack.Domain.Costing.AllocatedShare other) -> bool
 JobTrack.Domain.Costing.AllocatedShare.IsUninitialized.get -> bool
 JobTrack.Domain.Costing.AllocatedShare.SegmentTicks.get -> long
+JobTrack.Domain.Costing.AllocatedDuration
+JobTrack.Domain.Costing.AllocatedDuration.<Clone>$() -> JobTrack.Domain.Costing.AllocatedDuration!
+JobTrack.Domain.Costing.AllocatedDuration.Add(JobTrack.Domain.Costing.AllocatedDuration! other) -> JobTrack.Domain.Costing.AllocatedDuration!
+JobTrack.Domain.Costing.AllocatedDuration.Equals(JobTrack.Domain.Costing.AllocatedDuration? other) -> bool
+JobTrack.Domain.Costing.AllocatedDuration.ToHours() -> decimal
+JobTrack.Domain.Costing.AllocatedDuration.ToString(string? format, System.IFormatProvider? formatProvider) -> string!
+static JobTrack.Domain.Costing.AllocatedDuration.FromShare(JobTrack.Domain.Costing.AllocatedShare share) -> JobTrack.Domain.Costing.AllocatedDuration!
+static JobTrack.Domain.Costing.AllocatedDuration.Zero.get -> JobTrack.Domain.Costing.AllocatedDuration!
+static JobTrack.Domain.Costing.AllocatedDuration.operator !=(JobTrack.Domain.Costing.AllocatedDuration? left, JobTrack.Domain.Costing.AllocatedDuration? right) -> bool
+static JobTrack.Domain.Costing.AllocatedDuration.operator ==(JobTrack.Domain.Costing.AllocatedDuration? left, JobTrack.Domain.Costing.AllocatedDuration? right) -> bool
+override JobTrack.Domain.Costing.AllocatedDuration.Equals(object? obj) -> bool
+override JobTrack.Domain.Costing.AllocatedDuration.GetHashCode() -> int
+override JobTrack.Domain.Costing.AllocatedDuration.ToString() -> string!
+JobTrack.Domain.Costing.AllocatedDurationCalculator
 JobTrack.Domain.Costing.CostableSession
 JobTrack.Domain.Costing.CostableSession.<Clone>$() -> JobTrack.Domain.Costing.CostableSession!
 JobTrack.Domain.Costing.CostableSession.CostableSession(JobTrack.Abstractions.WorkSessionId SessionId, JobTrack.Abstractions.JobNodeId NodeId, JobTrack.Domain.Intervals.WorkInterval Interval) -> void
@@ -81,8 +95,10 @@ JobTrack.Domain.Costing.CostableSession.SessionId.get -> JobTrack.Abstractions.W
 JobTrack.Domain.Costing.CostableSession.SessionId.init -> void
 JobTrack.Domain.Costing.CostCalculation
 JobTrack.Domain.Costing.CostCalculation.<Clone>$() -> JobTrack.Domain.Costing.CostCalculation!
-JobTrack.Domain.Costing.CostCalculation.CostCalculation(JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money> ExactCosts, JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Costing.CostSegmentTrace!> Trace) -> void
-JobTrack.Domain.Costing.CostCalculation.Deconstruct(out JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money> ExactCosts, out JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Costing.CostSegmentTrace!> Trace) -> void
+JobTrack.Domain.Costing.CostCalculation.CostCalculation(JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money> ExactCosts, JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!> AllocatedDurations, JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Costing.CostSegmentTrace!> Trace) -> void
+JobTrack.Domain.Costing.CostCalculation.Deconstruct(out JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money> ExactCosts, out JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!> AllocatedDurations, out JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Costing.CostSegmentTrace!> Trace) -> void
+JobTrack.Domain.Costing.CostCalculation.AllocatedDurations.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>
+JobTrack.Domain.Costing.CostCalculation.AllocatedDurations.init -> void
 JobTrack.Domain.Costing.CostCalculation.Equals(JobTrack.Domain.Costing.CostCalculation? other) -> bool
 JobTrack.Domain.Costing.CostCalculation.ExactCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
 JobTrack.Domain.Costing.CostCalculation.ExactCosts.init -> void
@@ -90,6 +106,7 @@ JobTrack.Domain.Costing.CostCalculation.Trace.get -> JobTrack.Abstractions.Equat
 JobTrack.Domain.Costing.CostCalculation.Trace.init -> void
 JobTrack.Domain.Costing.CostEngine
 JobTrack.Domain.Costing.CostSegmentPartitioner
+JobTrack.Domain.Costing.HierarchicalAllocatedDurationAggregator
 JobTrack.Domain.Costing.CostSegmentTrace
 JobTrack.Domain.Costing.CostSegmentTrace.<Clone>$() -> JobTrack.Domain.Costing.CostSegmentTrace!
 JobTrack.Domain.Costing.CostSegmentTrace.ActiveSessionIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.WorkSessionId>
@@ -145,6 +162,8 @@ JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Achievement.init -> void
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Description.get -> string!
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Description.init -> void
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Cost.get -> JobTrack.Abstractions.Money?
+JobTrack.Domain.Hierarchy.AwaitingProgressEntry.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
+JobTrack.Domain.Hierarchy.AwaitingProgressEntry.AllocatedDuration.init -> void
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Cost.init -> void
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Id.get -> JobTrack.Abstractions.JobNodeId
 JobTrack.Domain.Hierarchy.AwaitingProgressEntry.Id.init -> void
@@ -361,6 +380,7 @@ static JobTrack.Domain.Costing.CostableSession.operator ==(JobTrack.Domain.Costi
 static JobTrack.Domain.Costing.CostCalculation.operator !=(JobTrack.Domain.Costing.CostCalculation? left, JobTrack.Domain.Costing.CostCalculation? right) -> bool
 static JobTrack.Domain.Costing.CostCalculation.operator ==(JobTrack.Domain.Costing.CostCalculation? left, JobTrack.Domain.Costing.CostCalculation? right) -> bool
 static JobTrack.Domain.Costing.CostEngine.AggregateExactCosts(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.SessionSegmentAllocation!>! allocations, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Intervals.WorkInterval>! scheduledWorkingIntervals, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Schedules.ScheduleExceptionEntry!>! exceptions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.NodeRateOverride!>! nodeOverrides, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.UserCostRate!>! userCostRates, JobTrack.Abstractions.HourlyRate? userDefaultRate) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>!
+static JobTrack.Domain.Costing.AllocatedDurationCalculator.ComputeLeafDurations(System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.SessionSegmentAllocation!>! allocations) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>!
 static JobTrack.Domain.Costing.CostEngine.Calculate(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.SessionSegmentAllocation!>! allocations, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Intervals.WorkInterval>! scheduledWorkingIntervals, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Schedules.ScheduleExceptionEntry!>! exceptions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.NodeRateOverride!>! nodeOverrides, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.UserCostRate!>! userCostRates, JobTrack.Abstractions.HourlyRate? userDefaultRate) -> JobTrack.Domain.Costing.CostCalculation!
 static JobTrack.Domain.Costing.CostEngine.ComputeLeafCosts(System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.SessionSegmentAllocation!>! allocations, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Schedules.ScheduleExceptionEntry!>! exceptions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.NodeRateOverride!>! nodeOverrides, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.UserCostRate!>! userCostRates, JobTrack.Abstractions.HourlyRate? userDefaultRate) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>!
 static JobTrack.Domain.Costing.CostSegmentPartitioner.Partition(System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.CostableSession!>! sessions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Intervals.WorkInterval>! effectiveWorkingIntervals, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.NodeRateOverride!>! nodeOverrides, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.UserCostRate!>! userCostRates, JobTrack.Domain.Intervals.WorkInterval bounds) -> System.Collections.Generic.IReadOnlyList<JobTrack.Domain.Costing.SessionSegmentAllocation!>!
@@ -369,6 +389,7 @@ static JobTrack.Domain.Costing.CostSegmentPartitioner.PartitionBounded(System.Co
 static JobTrack.Domain.Costing.CostSegmentTrace.operator !=(JobTrack.Domain.Costing.CostSegmentTrace? left, JobTrack.Domain.Costing.CostSegmentTrace? right) -> bool
 static JobTrack.Domain.Costing.CostSegmentTrace.operator ==(JobTrack.Domain.Costing.CostSegmentTrace? left, JobTrack.Domain.Costing.CostSegmentTrace? right) -> bool
 static JobTrack.Domain.Costing.HierarchicalCostAggregator.Aggregate(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>! leafCosts) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>!
+static JobTrack.Domain.Costing.HierarchicalAllocatedDurationAggregator.Aggregate(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>! leafDurations) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>!
 static JobTrack.Domain.Costing.HierarchyDisplayReconciler.Reconcile(JobTrack.Abstractions.Money exactParentTotal, System.Collections.Generic.IReadOnlyList<(JobTrack.Abstractions.JobNodeId ChildId, JobTrack.Abstractions.Money ExactAmount)>! children) -> System.Collections.Generic.IReadOnlyList<JobTrack.Domain.Costing.ReconciledChildCost!>!
 static JobTrack.Domain.Costing.ReconciledChildCost.operator !=(JobTrack.Domain.Costing.ReconciledChildCost? left, JobTrack.Domain.Costing.ReconciledChildCost? right) -> bool
 static JobTrack.Domain.Costing.ReconciledChildCost.operator ==(JobTrack.Domain.Costing.ReconciledChildCost? left, JobTrack.Domain.Costing.ReconciledChildCost? right) -> bool
@@ -438,3 +459,4 @@ JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy
 static JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool actorParticipatedPreviously, JobTrack.Abstractions.AppUserId actorUserId, JobTrack.Abstractions.AppUserId targetWorkedByUserId) -> bool
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanFinishSession(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool isOwnSession) -> bool
 static JobTrack.Domain.Costing.HierarchicalCostAggregator.SumSubtreeTotals(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.JobNodeId>! rootIds, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>! leafCosts) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>!
+static JobTrack.Domain.Costing.HierarchicalAllocatedDurationAggregator.SumSubtreeTotals(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.JobNodeId>! rootIds, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>! leafDurations) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>!

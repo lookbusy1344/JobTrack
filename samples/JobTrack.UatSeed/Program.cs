@@ -14,10 +14,14 @@ internal static class Program
 		"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
 
 	private const string UsageMessage =
-		"Usage: JobTrack.UatSeed --provider <postgresql|sqlite> --connection-string <connection-string>\n\n" +
+		"Usage: JobTrack.UatSeed --provider <postgresql|sqlite> --connection-string <connection-string>\n" +
+		"       JobTrack.UatSeed --provider <postgresql|sqlite> --connection-string <connection-string>\n" +
+		"           --requester-demo --requester-username <username> --job-manager-username <username>\n\n" +
 		"Seeds a synthetic end-user-testing scenario into an already-deployed, already-bootstrapped\n" +
 		"database (run 'JobTrack.Database deploy' then 'JobTrack.AdminCli bootstrap' first — see\n" +
-		"README.md \"Running on a development server\"). Every seeded employee's password is\n" +
+		"README.md \"Running on a development server\"). The requester-demo mode uses two existing\n" +
+		"accounts and creates six genuine requests spanning open and closed states. In the default\n" +
+		"scenario every seeded employee's password is\n" +
 		"'" + UatSeeder.KnownPassword + "' and forces a change at first sign-in.";
 
 	public static async Task<int> Main(string[] args)
@@ -28,7 +32,8 @@ internal static class Program
 			return 1;
 		}
 
-		var (provider, connectionString) = options.Value;
+		var provider = options.Provider;
+		var connectionString = options.ConnectionString;
 
 		await using DbConnection connection = provider == "postgresql"
 			? new NpgsqlConnection(connectionString)
@@ -40,19 +45,48 @@ internal static class Program
 			_ = await pragma.ExecuteNonQueryAsync();
 		}
 
-		await using var rootOwnerCommand = connection.CreateCommand();
-		rootOwnerCommand.CommandText = "SELECT owner_user_id FROM job_node WHERE parent_id IS NULL;";
-		var administratorId = new AppUserId(
-			Convert.ToInt64(await rootOwnerCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
-
 		var client = provider == "postgresql"
 			? JobTrackPostgreSql.Create(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build())
 			: JobTrackSqlite.Create(connectionString);
 
+		if (options.RequesterDemo) {
+			var requesterId = await FindUserIdAsync(connection, options.RequesterUserName!);
+			var jobManagerId = await FindUserIdAsync(connection, options.JobManagerUserName!);
+			var requesterSummary = await UatSeeder.SeedRequesterDemoAsync(client, connection, jobManagerId, requesterId);
+			WriteRequesterDemoSummary(requesterSummary, options.RequesterUserName!);
+			return 0;
+		}
+
+		await using var rootOwnerCommand = connection.CreateCommand();
+		rootOwnerCommand.CommandText = "SELECT owner_user_id FROM job_node WHERE parent_id IS NULL;";
+		var administratorId = new AppUserId(
+			Convert.ToInt64(await rootOwnerCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 		var summary = await UatSeeder.SeedAsync(client, connection, administratorId);
 
 		WriteSummary(summary);
 		return 0;
+	}
+
+	private static async Task<AppUserId> FindUserIdAsync(DbConnection connection, string userName)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText =
+			"SELECT app_user_id FROM identity_user WHERE normalized_user_name = @normalizedUserName;";
+		var parameter = command.CreateParameter();
+		parameter.ParameterName = "@normalizedUserName";
+		parameter.Value = userName.ToUpperInvariant();
+		_ = command.Parameters.Add(parameter);
+		var value = await command.ExecuteScalarAsync()
+					?? throw new InvalidOperationException($"Account '{userName}' does not exist.");
+		return new(Convert.ToInt64(value, CultureInfo.InvariantCulture));
+	}
+
+	private static void WriteRequesterDemoSummary(RequesterDemoSeedSummary summary, string requesterUserName)
+	{
+		Console.WriteLine($"Requester demo seeded for {requesterUserName}.");
+		foreach (var nodeId in summary.RequestNodeIds) {
+			Console.WriteLine($"Request job node: {Id(nodeId.Value)}");
+		}
 	}
 
 	private static void WriteSummary(UatSeedSummary summary)
@@ -72,26 +106,46 @@ internal static class Program
 
 	private static string Id(long value) => value.ToString(CultureInfo.InvariantCulture);
 
-	private static (string Provider, string ConnectionString)? ParseArgs(string[] arguments)
+	private static SeedOptions? ParseArgs(string[] arguments)
 	{
 		string? provider = null;
 		string? connectionString = null;
+		string? requesterUserName = null;
+		string? jobManagerUserName = null;
+		var requesterDemo = false;
 
-		for (var i = 0; i < arguments.Length - 1; ++i) {
+		for (var i = 0; i < arguments.Length; ++i) {
 			switch (arguments[i]) {
-				case "--provider":
+				case "--provider" when i + 1 < arguments.Length:
 					provider = arguments[++i];
 					break;
-				case "--connection-string":
+				case "--connection-string" when i + 1 < arguments.Length:
 					connectionString = arguments[++i];
+					break;
+				case "--requester-demo":
+					requesterDemo = true;
+					break;
+				case "--requester-username" when i + 1 < arguments.Length:
+					requesterUserName = arguments[++i];
+					break;
+				case "--job-manager-username" when i + 1 < arguments.Length:
+					jobManagerUserName = arguments[++i];
 					break;
 			}
 		}
 
-		if (provider is not ("postgresql" or "sqlite") || string.IsNullOrWhiteSpace(connectionString)) {
+		if (provider is not ("postgresql" or "sqlite") || string.IsNullOrWhiteSpace(connectionString) ||
+			requesterDemo && (string.IsNullOrWhiteSpace(requesterUserName) || string.IsNullOrWhiteSpace(jobManagerUserName))) {
 			return null;
 		}
 
-		return (provider, connectionString);
+		return new(provider, connectionString, requesterDemo, requesterUserName, jobManagerUserName);
 	}
+
+	private sealed record SeedOptions(
+		string Provider,
+		string ConnectionString,
+		bool RequesterDemo,
+		string? RequesterUserName,
+		string? JobManagerUserName);
 }

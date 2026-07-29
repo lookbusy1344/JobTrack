@@ -1,6 +1,7 @@
 namespace JobTrack.Application;
 
 using Abstractions;
+using Domain.Costing;
 using NodaTime;
 
 /// <summary>
@@ -97,4 +98,7 @@ public sealed record JobSubtreeNodeResult
 	///     denial, so the tree structure always renders.
 	/// </summary>
 	public Money? Cost { get; init; }
+
+	/// <summary>The exact allocated duration accompanying <see cref="Cost" />, with the same authorization and null semantics.</summary>
+	public AllocatedDuration? AllocatedDuration { get; init; }
 }

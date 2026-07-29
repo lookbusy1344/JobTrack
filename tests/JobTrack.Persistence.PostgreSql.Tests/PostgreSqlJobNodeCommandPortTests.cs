@@ -13,6 +13,8 @@ using TestSupport;
 public sealed class PostgreSqlJobNodeCommandPortTests()
 	: JobNodeCommandPortContractTestsBase(new PostgreSqlDatabaseFixture())
 {
+	private static readonly TimeSpan RowLockObservationTimeout = TimeSpan.FromSeconds(1);
+
 	protected override SchemaProvider Provider => SchemaProvider.PostgreSql;
 
 	protected override DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);
@@ -135,6 +137,53 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 			TryPickUpAsync(portB, workerB, unassigned.Id));
 
 		results.Count(succeeded => succeeded).Should().Be(1);
+	}
+
+	[Fact]
+	public async Task Assigning_an_owner_serializes_with_a_concurrent_requester_role_grant()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(ConnectionString);
+
+		await using var roleConnection = new NpgsqlConnection(ConnectionString);
+		await roleConnection.OpenAsync();
+		await using var roleTransaction = await roleConnection.BeginTransactionAsync();
+		await using (var lockCommand = roleConnection.CreateCommand()) {
+			lockCommand.Transaction = roleTransaction;
+			lockCommand.CommandText = "SELECT id FROM identity_user WHERE app_user_id = @appUserId FOR UPDATE;";
+			lockCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			_ = await lockCommand.ExecuteScalarAsync();
+		}
+
+		var assignment = port.AddChildAsync(new() {
+			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Concurrently assigned node",
+			OwnerUserId = workerId,
+			Priority = Priority.Medium,
+		});
+
+		var firstCompleted = await Task.WhenAny(assignment, Task.Delay(RowLockObservationTimeout));
+		firstCompleted.Should().NotBe(assignment, "owner eligibility must wait for the target account's role lock");
+
+		await using (var grantCommand = roleConnection.CreateCommand()) {
+			grantCommand.Transaction = roleTransaction;
+			grantCommand.CommandText = """
+									   INSERT INTO identity_user_role (identity_user_id, identity_role_id)
+									   SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
+									   """;
+			grantCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			grantCommand.Parameters.AddWithValue("roleId", (short)EmployeeRole.Requester);
+			_ = await grantCommand.ExecuteNonQueryAsync();
+		}
+		await roleTransaction.CommitAsync();
+
+		var completed = await Task.WhenAny(assignment, Task.Delay(RowLockObservationTimeout));
+		completed.Should().Be(assignment);
+		assignment.IsFaulted.Should().BeTrue();
+		assignment.Exception!.InnerExceptions.Should().ContainSingle()
+			.Which.Should().BeOfType<InvariantViolationException>()
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
 	}
 
 	/// <summary>

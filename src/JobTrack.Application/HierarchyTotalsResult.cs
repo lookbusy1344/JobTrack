@@ -1,6 +1,7 @@
 namespace JobTrack.Application;
 
 using Abstractions;
+using Domain.Costing;
 
 /// <summary>
 ///     Result of <see cref="ICostQueries.GetHierarchyTotalsAsync" />: <see cref="NodeId" /> and every
@@ -18,6 +19,9 @@ public sealed record HierarchyTotalsResult
 
 	/// <summary>Each node's penny-rounded displayed cost, reconciled level by level, keyed by identifier.</summary>
 	public required EquatableDictionary<JobNodeId, Money> DisplayedCosts { get; init; }
+
+	/// <summary>Each node's exact concurrency-allocated duration, keyed by identifier.</summary>
+	public required EquatableDictionary<JobNodeId, AllocatedDuration> AllocatedDurations { get; init; }
 
 	/// <summary>
 	///     The <c>DateTimeZoneProviders.Tzdb.VersionId</c> in effect when this result was calculated

@@ -216,8 +216,12 @@ public sealed partial class RequestsApiTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		body.RootElement.GetProperty("requesterUserId").GetInt64().Should().Be(requesterId.Value);
+		body.RootElement.GetProperty("requesterDisplayName").GetString().Should().Be("api.requester.detail");
+		body.RootElement.GetProperty("requesterUserName").GetString().Should().Be("api.requester.detail");
 		body.RootElement.GetProperty("status").GetString().Should().Be("Submitted");
 		body.RootElement.GetProperty("subtree").GetArrayLength().Should().Be(1);
+		body.RootElement.GetProperty("subtree")[0].GetProperty("allocatedHours").GetDecimal().Should().Be(0m);
 	}
 
 	[Fact]

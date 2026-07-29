@@ -9,7 +9,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 /// <summary>
 ///     The landing page carries no content of its own — it routes straight into the app: signed-out
-///     visitors go to the login page. Signed-in employees go to their configured home node (see
+///     visitors go to the login page and Requesters go to their request list. Signed-in employees go
+///     to their configured home node (see
 ///     <see cref="EmployeeProfileResult.HomeNodeId" />), or -- when none is set -- to the tree root. Both
 ///     are shown unfiltered: the landing applies no ownership filter, so every employee sees the whole
 ///     active tree by default and narrows it themselves via the Browse filter. This landing-only
@@ -28,6 +29,10 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 		var actor = await userManager.GetUserAsync(User);
 		if (actor is null) {
 			return RedirectToPage("/Account/Login");
+		}
+
+		if (User.IsInRole(EmployeeRoleNames.Requester)) {
+			return RedirectToPage("/Requests/Index");
 		}
 
 		var profile = await jobTrackClient.Query.GetEmployeeProfileAsync(

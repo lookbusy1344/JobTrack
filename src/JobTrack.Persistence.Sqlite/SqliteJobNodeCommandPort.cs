@@ -72,6 +72,8 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.NodeId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(node.RowVersion, request.Version);
 		EnsureRootOwnerNotNulledOrThrow(node, request.OwnerUserId);
+		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
+			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 
 		var before = SnapshotJobNode(node);
 
@@ -360,6 +362,15 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 							  .FirstOrDefaultAsync(lw => lw.JobNodeId == request.LeafNodeId, cancellationToken).ConfigureAwait(false)
 						  ?? throw new InvariantViolationException("leaf-work-not-attached", "This node has no LeafWork to decompose.");
 
+		foreach (var ownerUserId in request.NewChildren
+					 .Select(child => child.OwnerUserId)
+					 .Where(ownerUserId => ownerUserId.HasValue)
+					 .Distinct()
+					 .OrderBy(ownerUserId => ownerUserId!.Value.Value)) {
+			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
+				context, ownerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+		}
+
 		var (existingWorkChild, newChildren) = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
 			transaction, ct => DecomposeAsync(context, branch, oldLeafWork, request, now, ct), cancellationToken).ConfigureAwait(false);
 
@@ -481,6 +492,21 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.ParentId, now, cancellationToken).ConfigureAwait(false);
+		var ownerAssignees = request.Nodes
+			.Where(node => node.OwnerUserId.HasValue)
+			.Select(node => (UserId: node.OwnerUserId!.Value, ConstraintId: "job-node-owner-not-eligible"));
+		var sessionAssignees = request.Nodes
+			.Where(node => node.LeafWork is not null)
+			.SelectMany(node => ImportedSessions(node.LeafWork!))
+			.Select(session => (UserId: session.WorkedByUserId, ConstraintId: "work-session-target-not-eligible"));
+		var assignees = ownerAssignees.Concat(sessionAssignees)
+			.GroupBy(assignee => assignee.UserId)
+			.Select(group => group.First())
+			.OrderBy(assignee => assignee.UserId.Value);
+		foreach (var assignee in assignees) {
+			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
+				context, assignee.UserId, now, assignee.ConstraintId, cancellationToken).ConfigureAwait(false);
+		}
 
 		var created = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
 			transaction, ct => ImportSubtreeCoreAsync(context, request, now, ct), cancellationToken).ConfigureAwait(false);
@@ -833,6 +859,8 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.ParentId, now, cancellationToken).ConfigureAwait(false);
+		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
+			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 
 		var node = new JobNodeEntity {
 			Id = default,

@@ -91,7 +91,9 @@
 							                Paused = entryActions.IsPaused,
 						                })"/>
 					</td>
-					<td class="jt-col-cost text-end">@(entry.Cost.HasValue ? MoneyDisplay.Format(entry.Cost.Value) : null)</td>
+					<td class="jt-col-cost text-end">@(entry.Cost.HasValue && entry.AllocatedDuration is not null
+						? CostDisplay.Format(entry.Cost.Value, entry.AllocatedDuration)
+						: null)</td>
 					<td class="jt-col-cost">
 						@if (entry.Achievement is Achievement achievement) {
 							<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = achievement })"/>

@@ -197,6 +197,8 @@ JobTrack.Application.BulkNodeCostResult.<Clone>$() -> JobTrack.Application.BulkN
 JobTrack.Application.BulkNodeCostResult.BulkNodeCostResult() -> void
 JobTrack.Application.BulkNodeCostResult.DisplayedCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
 JobTrack.Application.BulkNodeCostResult.DisplayedCosts.init -> void
+JobTrack.Application.BulkNodeCostResult.AllocatedDurations.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>
+JobTrack.Application.BulkNodeCostResult.AllocatedDurations.init -> void
 JobTrack.Application.BulkNodeCostResult.Equals(JobTrack.Application.BulkNodeCostResult? other) -> bool
 JobTrack.Application.GetBulkNodeCostsRequest
 JobTrack.Application.GetBulkNodeCostsRequest.<Clone>$() -> JobTrack.Application.GetBulkNodeCostsRequest!
@@ -366,6 +368,8 @@ JobTrack.Application.CostDetailsResult.<Clone>$() -> JobTrack.Application.CostDe
 JobTrack.Application.CostDetailsResult.CostDetailsResult() -> void
 JobTrack.Application.CostDetailsResult.DisplayedCost.get -> JobTrack.Abstractions.Money
 JobTrack.Application.CostDetailsResult.DisplayedCost.init -> void
+JobTrack.Application.CostDetailsResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration!
+JobTrack.Application.CostDetailsResult.AllocatedDuration.init -> void
 JobTrack.Application.CostDetailsResult.Equals(JobTrack.Application.CostDetailsResult? other) -> bool
 JobTrack.Application.CostDetailsResult.ExactCost.get -> JobTrack.Abstractions.Money
 JobTrack.Application.CostDetailsResult.ExactCost.init -> void
@@ -728,6 +732,8 @@ JobTrack.Application.HierarchyTotalsResult
 JobTrack.Application.HierarchyTotalsResult.<Clone>$() -> JobTrack.Application.HierarchyTotalsResult!
 JobTrack.Application.HierarchyTotalsResult.DisplayedCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
 JobTrack.Application.HierarchyTotalsResult.DisplayedCosts.init -> void
+JobTrack.Application.HierarchyTotalsResult.AllocatedDurations.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>
+JobTrack.Application.HierarchyTotalsResult.AllocatedDurations.init -> void
 JobTrack.Application.HierarchyTotalsResult.Equals(JobTrack.Application.HierarchyTotalsResult? other) -> bool
 JobTrack.Application.HierarchyTotalsResult.ExactCosts.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>
 JobTrack.Application.HierarchyTotalsResult.ExactCosts.init -> void
@@ -1000,6 +1006,8 @@ JobTrack.Application.JobNodeSummaryResult.ArchivedAt.get -> NodaTime.Instant?
 JobTrack.Application.JobNodeSummaryResult.ArchivedAt.init -> void
 JobTrack.Application.JobNodeSummaryResult.Cost.get -> JobTrack.Abstractions.Money?
 JobTrack.Application.JobNodeSummaryResult.Cost.init -> void
+JobTrack.Application.JobNodeSummaryResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
+JobTrack.Application.JobNodeSummaryResult.AllocatedDuration.init -> void
 JobTrack.Application.JobNodeSummaryResult.Description.get -> string!
 JobTrack.Application.JobNodeSummaryResult.Description.init -> void
 JobTrack.Application.JobNodeSummaryResult.Equals(JobTrack.Application.JobNodeSummaryResult? other) -> bool
@@ -1030,6 +1038,12 @@ JobTrack.Application.JobRequestDetailResult.JobNodeId.init -> void
 JobTrack.Application.JobRequestDetailResult.JobRequestDetailResult() -> void
 JobTrack.Application.JobRequestDetailResult.Notes.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobRequestNoteResult!>
 JobTrack.Application.JobRequestDetailResult.Notes.init -> void
+JobTrack.Application.JobRequestDetailResult.RequesterDisplayName.get -> string!
+JobTrack.Application.JobRequestDetailResult.RequesterDisplayName.init -> void
+JobTrack.Application.JobRequestDetailResult.RequesterUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.JobRequestDetailResult.RequesterUserId.init -> void
+JobTrack.Application.JobRequestDetailResult.RequesterUserName.get -> string!
+JobTrack.Application.JobRequestDetailResult.RequesterUserName.init -> void
 JobTrack.Application.JobRequestDetailResult.Status.get -> JobTrack.Abstractions.RequesterStatus
 JobTrack.Application.JobRequestDetailResult.Status.init -> void
 JobTrack.Application.JobRequestDetailResult.SubmittedAt.get -> NodaTime.Instant
@@ -1092,6 +1106,8 @@ JobTrack.Application.JobSubtreeNodeResult.ArchivedAt.get -> NodaTime.Instant?
 JobTrack.Application.JobSubtreeNodeResult.ArchivedAt.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Cost.get -> JobTrack.Abstractions.Money?
 JobTrack.Application.JobSubtreeNodeResult.Cost.init -> void
+JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
+JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Depth.get -> int
 JobTrack.Application.JobSubtreeNodeResult.Depth.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Description.get -> string!
@@ -1136,6 +1152,8 @@ JobTrack.Application.JobSubtreeResult.RootId.get -> JobTrack.Abstractions.JobNod
 JobTrack.Application.JobSubtreeResult.RootId.init -> void
 JobTrack.Application.JobSubtreeResult.RootTotal.get -> JobTrack.Abstractions.Money?
 JobTrack.Application.JobSubtreeResult.RootTotal.init -> void
+JobTrack.Application.JobSubtreeResult.RootAllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration?
+JobTrack.Application.JobSubtreeResult.RootAllocatedDuration.init -> void
 JobTrack.Application.JobSubtreeResult.TzdbVersion.get -> string?
 JobTrack.Application.JobSubtreeResult.TzdbVersion.init -> void
 JobTrack.Application.JobTrackDiagnostics
@@ -1274,6 +1292,8 @@ JobTrack.Application.RemovePrerequisiteRequest.RemovePrerequisiteRequest() -> vo
 JobTrack.Application.RemovePrerequisiteRequest.RequiredJobId.get -> JobTrack.Abstractions.JobNodeId
 JobTrack.Application.RemovePrerequisiteRequest.RequiredJobId.init -> void
 JobTrack.Application.RequesterSubtreeNodeResult
+JobTrack.Application.RequesterSubtreeNodeResult.AllocatedDuration.get -> JobTrack.Domain.Costing.AllocatedDuration!
+JobTrack.Application.RequesterSubtreeNodeResult.AllocatedDuration.init -> void
 JobTrack.Application.RequesterSubtreeNodeResult.<Clone>$() -> JobTrack.Application.RequesterSubtreeNodeResult!
 JobTrack.Application.RequesterSubtreeNodeResult.Description.get -> string!
 JobTrack.Application.RequesterSubtreeNodeResult.Description.init -> void

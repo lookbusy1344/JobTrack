@@ -1,6 +1,7 @@
 namespace JobTrack.Application;
 
 using Abstractions;
+using Domain.Costing;
 
 /// <summary>Result of <see cref="IJobQueries.GetJobSubtreeAsync" />: a bounded Browse subtree (ADR 0039).</summary>
 public sealed record JobSubtreeResult
@@ -23,6 +24,9 @@ public sealed record JobSubtreeResult
 	///     , ADR 0040).
 	/// </summary>
 	public Money? RootTotal { get; init; }
+
+	/// <summary>The root's exact allocated-duration roll-up, null exactly when <see cref="RootTotal" /> is null.</summary>
+	public AllocatedDuration? RootAllocatedDuration { get; init; }
 
 	/// <summary>
 	///     The <c>DateTimeZoneProviders.Tzdb.VersionId</c> in effect when <see cref="RootTotal" /> was

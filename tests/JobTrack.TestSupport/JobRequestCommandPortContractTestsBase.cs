@@ -80,6 +80,19 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task A_requester_cannot_be_the_default_owner_applied_by_a_holding_area()
+	{
+		var (_, requesterId) = await SeedRootAndRequesterAsync();
+		var holdingAreaId = await SeedHoldingAreaAsync(null, requesterId, true);
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var act = () => port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
+	}
+
+	[Fact]
 	public async Task A_requester_cannot_submit_into_an_inactive_holding_area()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
@@ -526,6 +539,9 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var detail = await port.GetDetailAsync(DetailRequest(requesterId, submitted.JobNodeId));
 
 		detail.JobNodeId.Should().Be(submitted.JobNodeId);
+		detail.RequesterUserId.Should().Be(requesterId);
+		detail.RequesterDisplayName.Should().Be("Rita Requester");
+		detail.RequesterUserName.Should().Be("rita.requester");
 		detail.Status.Should().Be(RequesterStatus.Submitted);
 		detail.Subtree.Select(n => n.JobNodeId).Should().Contain([submitted.JobNodeId, new(childId)]);
 		_ = rootId;

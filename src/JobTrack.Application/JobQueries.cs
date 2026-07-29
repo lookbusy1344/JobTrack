@@ -2,6 +2,7 @@ namespace JobTrack.Application;
 
 using Abstractions;
 using Domain.Authorization;
+using Domain.Costing;
 using Domain.Hierarchy;
 using NodaTime;
 using Ports;
@@ -374,15 +375,19 @@ internal sealed class JobQueries : IJobQueries
 				var spans = JobSubtreeOrdinals.Compute(rows, request.RootId);
 
 				Money? rootTotal = null;
+				AllocatedDuration? rootAllocatedDuration = null;
 				string? tzdbVersion = null;
 				EquatableDictionary<JobNodeId, Money>? displayedCosts = null;
+				EquatableDictionary<JobNodeId, AllocatedDuration>? allocatedDurations = null;
 				try {
 					var totals = await _costQueries.GetHierarchyTotalsAsync(
 						new() { Context = request.Context, NodeId = request.RootId, AsOf = request.AsOf },
 						cancellationToken).ConfigureAwait(false);
 					rootTotal = totals.DisplayedCosts.GetValueOrDefault(request.RootId);
+					rootAllocatedDuration = totals.AllocatedDurations.GetValueOrDefault(request.RootId);
 					tzdbVersion = totals.TzdbVersion;
 					displayedCosts = totals.DisplayedCosts;
+					allocatedDurations = totals.AllocatedDurations;
 				}
 				catch (AuthorizationDeniedException) {
 					// ADR 0039 decision 4 / ADR 0040: cost is an optional field on an otherwise
@@ -404,6 +409,11 @@ internal sealed class JobQueries : IJobQueries
 				Money? CostFor(bool hasChildren, AppUserId? ownerUserId, JobNodeId nodeId) =>
 					CostAccessPolicy.CanViewNodeCost(costRoles, hasChildren, ownerUserId, request.Context.Actor)
 						? displayedCosts?.GetValueOrDefault(nodeId)
+						: null;
+
+				AllocatedDuration? DurationFor(bool hasChildren, AppUserId? ownerUserId, JobNodeId nodeId) =>
+					CostAccessPolicy.CanViewNodeCost(costRoles, hasChildren, ownerUserId, request.Context.Actor)
+						? allocatedDurations?.GetValueOrDefault(nodeId)
 						: null;
 
 				// ADR 0043: one materialization of the readiness facts for every displayed row, then the
@@ -436,6 +446,7 @@ internal sealed class JobQueries : IJobQueries
 					SubtreeLft = spans[row.Id].Lft,
 					SubtreeRgt = spans[row.Id].Rgt,
 					Cost = CostFor(row.HasChildren, row.OwnerUserId, row.Id),
+					AllocatedDuration = DurationFor(row.HasChildren, row.OwnerUserId, row.Id),
 				});
 
 				// The root's own total obeys the same rule: browsing a single leaf owned by someone
@@ -444,11 +455,15 @@ internal sealed class JobQueries : IJobQueries
 				var displayedRootTotal = rootRow is null
 					? rootTotal
 					: CostFor(rootRow.HasChildren, rootRow.OwnerUserId, rootRow.Id);
+				var displayedRootAllocatedDuration = rootRow is null
+					? rootAllocatedDuration
+					: DurationFor(rootRow.HasChildren, rootRow.OwnerUserId, rootRow.Id);
 
 				return new JobSubtreeResult {
 					RootId = request.RootId,
 					RootAchievement = subtree.RootAchievement,
 					RootTotal = displayedRootTotal,
+					RootAllocatedDuration = displayedRootAllocatedDuration,
 					TzdbVersion = tzdbVersion,
 					Nodes = EquatableArray.CopyOf(nodes),
 				};
@@ -506,9 +521,14 @@ internal sealed class JobQueries : IJobQueries
 			.ToArray();
 
 		// Fresh-eyes review §2.8: one bulk snapshot for the whole page, never one round trip per row.
-		var displayedCosts = await GetBulkDisplayedCostsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
+		var metrics = await GetBulkCostMetricsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
 
-		return [.. summaries.Select(summary => summary with { Cost = displayedCosts.GetValueOrDefault(summary.Id) })];
+		return [
+			.. summaries.Select(summary => summary with {
+				Cost = metrics.Costs.GetValueOrDefault(summary.Id),
+				AllocatedDuration = metrics.Durations.GetValueOrDefault(summary.Id),
+			}),
+		];
 	}
 
 	private async Task<EquatableArray<AwaitingProgressEntry>> EnrichAwaitingProgressWithCostAsync(
@@ -527,9 +547,14 @@ internal sealed class JobQueries : IJobQueries
 			.Select(entry => entry.Id)
 			.ToArray();
 
-		var displayedCosts = await GetBulkDisplayedCostsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
+		var metrics = await GetBulkCostMetricsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
 
-		return [.. entries.Select(entry => entry with { Cost = displayedCosts.GetValueOrDefault(entry.Id) })];
+		return [
+			.. entries.Select(entry => entry with {
+				Cost = metrics.Costs.GetValueOrDefault(entry.Id),
+				AllocatedDuration = metrics.Durations.GetValueOrDefault(entry.Id),
+			}),
+		];
 	}
 
 	/// <summary>
@@ -538,15 +563,20 @@ internal sealed class JobQueries : IJobQueries
 	///     field on an otherwise universally browsable listing (ADR 0039 decision 4), so a failure here
 	///     degrades to "no costs shown" rather than failing the whole listing.
 	/// </summary>
-	private async Task<EquatableDictionary<JobNodeId, Money>> GetBulkDisplayedCostsAsync(
+	private async Task<(
+		EquatableDictionary<JobNodeId, Money> Costs,
+		EquatableDictionary<JobNodeId, AllocatedDuration> Durations)> GetBulkCostMetricsAsync(
 		CommandContext context, JobNodeId[] candidateIds, Instant asOf, CancellationToken cancellationToken)
 	{
 		if (candidateIds.Length == 0) {
-			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
+			return (
+				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()),
+				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration>()));
 		}
 
 		try {
 			var displayed = new Dictionary<JobNodeId, Money>();
+			var durations = new Dictionary<JobNodeId, AllocatedDuration>();
 			// The bulk port rejects a candidate set wider than its cap. A listing page can legitimately
 			// exceed it (a caller-supplied id set via GetJobSummariesAsync is not page-bounded), so chunk
 			// to the cap and merge -- prices are per-node independent, so batching is exact. Overflowing
@@ -558,15 +588,23 @@ internal sealed class JobQueries : IJobQueries
 				foreach (var (nodeId, cost) in result.DisplayedCosts) {
 					displayed[nodeId] = cost;
 				}
+
+				foreach (var (nodeId, duration) in result.AllocatedDurations) {
+					durations[nodeId] = duration;
+				}
 			}
 
-			return EquatableDictionaryFactory.CopyOf(displayed);
+			return (EquatableDictionaryFactory.CopyOf(displayed), EquatableDictionaryFactory.CopyOf(durations));
 		}
 		catch (AuthorizationDeniedException) {
-			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
+			return (
+				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()),
+				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration>()));
 		}
 		catch (MissingRateException) {
-			return EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>());
+			return (
+				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()),
+				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration>()));
 		}
 	}
 

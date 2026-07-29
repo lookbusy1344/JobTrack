@@ -26,7 +26,8 @@ public interface IJobQueries
 	///     login username) — see <see cref="EmployeeDirectoryEntry" />. Filtered to
 	///     <see cref="EmployeeRole.Administrator" />, <see cref="EmployeeRole.JobManager" />, and
 	///     <see cref="EmployeeRole.Worker" />, the same roles eligible to own a job node, and excludes
-	///     disabled accounts — mirrors the existing web-layer workflow-employee dropdown filter.
+	///     disabled accounts and every account holding <see cref="EmployeeRole.Requester" /> even when
+	///     combined with a workflow role — mirrors the existing web-layer workflow-employee dropdown filter.
 	///     Carries no authorization gate of its own (see <see cref="EmployeeDirectoryEntry" />).
 	/// </summary>
 	Task<EquatableArray<EmployeeDirectoryEntry>> GetEmployeeDirectoryAsync(

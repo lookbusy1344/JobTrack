@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
@@ -21,6 +22,7 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
+	private const int ExpectedRequesterDemoRequestCount = 6;
 
 	private const string ConfigureSqliteConnectionSql =
 		"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
@@ -80,6 +82,78 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 		});
 		costDetail.Trace.Should().NotBeEmpty();
 		costDetail.DisplayedCost.Amount.Should().BePositive();
+	}
+
+	[Fact]
+	public async Task The_requester_demo_seed_creates_six_requests_spanning_open_and_closed_states()
+	{
+		await DeploySchemaAsync();
+		var client = JobTrackSqlite.Create(database.ConnectionString);
+		var bootstrap = await client.Installation.BootstrapAdministratorAsync(new() {
+			DisplayName = "Bootstrap Administrator",
+			IanaTimeZone = "Etc/UTC",
+			UserName = "admin.requester-demo",
+			Password = "Bootstrap-Horse-Battery-77!",
+			CorrelationId = Guid.NewGuid(),
+		});
+		var adminContext = new CommandContext { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() };
+		var jobManager = await client.Employees.CreateEmployeeAsync(new() {
+			Context = adminContext,
+			DisplayName = "Demo Worker",
+			IanaTimeZone = "Europe/London",
+			UserName = "demo.requester-demo",
+			Password = "demo1234",
+			Role = EmployeeRole.JobManager,
+		});
+		_ = await client.Employees.AssignRoleAsync(new() {
+			Context = adminContext with { CorrelationId = Guid.NewGuid() },
+			TargetUserId = jobManager.Id,
+			Role = EmployeeRole.Worker,
+		});
+		var requester = await client.Employees.CreateEmployeeAsync(new() {
+			Context = adminContext with { CorrelationId = Guid.NewGuid() },
+			DisplayName = "Client Requester",
+			IanaTimeZone = "Europe/London",
+			UserName = "requester",
+			Password = "requester1234",
+			Role = EmployeeRole.Requester,
+		});
+
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+		await using (var pragma = connection.CreateCommand()) {
+			pragma.CommandText = ConfigureSqliteConnectionSql;
+			_ = await pragma.ExecuteNonQueryAsync();
+		}
+
+		var summary = await UatSeeder.SeedRequesterDemoAsync(client, connection, jobManager.Id, requester.Id);
+
+		summary.RequestNodeIds.Should().HaveCount(ExpectedRequesterDemoRequestCount);
+		var requesterContext = new CommandContext { Actor = requester.Id, CorrelationId = Guid.NewGuid() };
+		var requests = await client.Requests.GetMyRequestsAsync(requesterContext);
+		requests.Should().HaveCount(ExpectedRequesterDemoRequestCount);
+		var statuses = new List<RequesterStatus>();
+		foreach (var nodeId in summary.RequestNodeIds) {
+			var detail = await client.Requests.GetDetailAsync(new() {
+				Context = requesterContext with { CorrelationId = Guid.NewGuid() },
+				NodeId = nodeId,
+			});
+			detail.RequesterUserId.Should().Be(requester.Id);
+			var node = await client.Query.GetJobNodeAsync(new() {
+				Context = adminContext with { CorrelationId = Guid.NewGuid() },
+				NodeId = nodeId,
+			});
+			node.Node.OwnerUserId.Should().Be(jobManager.Id);
+			statuses.Add(detail.Status);
+		}
+		statuses.Should().BeEquivalentTo([
+			RequesterStatus.Submitted,
+			RequesterStatus.Accepted,
+			RequesterStatus.Waiting,
+			RequesterStatus.InProgress,
+			RequesterStatus.Completed,
+			RequesterStatus.Cancelled,
+		]);
 	}
 
 	private async Task DeploySchemaAsync()

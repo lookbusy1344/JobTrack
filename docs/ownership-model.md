@@ -365,6 +365,12 @@ Creation policy:
 - no `LeafWork` is created by default unless a later product decision says every request is directly
   actionable leaf work.
 
+`RequesterUserId` and `OwnerUserId` describe different relationships and remain separate throughout
+the system. The requester is the client who submitted and monitors the request; the owner is the
+staff account currently responsible for the technical node. Staff Browse therefore labels both
+independently, shows each as a display-name/username tag, and links the requester tag to the request
+detail page. On the two-column record card, Requester sits directly below Owner.
+
 The configured holding-area `JobNodeId` must be a real node in the operational hierarchy. It should
 normally be a branch controlled by JobManager/Admin or by an intake team owner. It cannot be the
 permanent root unless an explicit product decision accepts root-level requester children.
@@ -473,7 +479,7 @@ Requester visibility is a limited projection, not full job browse. It may includ
 It must not include:
 
 - rates or costs;
-- work-session detail;
+- work-session detail (ADR 0054 permits only the concurrency-allocated aggregate duration);
 - employee schedules;
 - audit internals;
 - unrelated jobs, sibling nodes, ancestor nodes, or any node outside the request subtree;
@@ -514,8 +520,9 @@ that IT has seen the request.
 - **Technical decomposition.** Ravi splits the request into "Collect logs" and "Reconfigure VPN
   profile." The original node becomes the request branch; the `job_request` remains attached to it.
   Emma sees a read-only requester-safe tree rooted at the original request, including both child
-  jobs and their requester-facing statuses. She cannot edit, pick up, assign, record work, or see
-  rates, sessions, audit internals, staff-only notes, or unrelated siblings.
+  jobs, their requester-facing statuses, and each row's aggregate time worked. She cannot edit,
+  pick up, assign, record work, or see rates, session detail, audit internals, staff-only notes, or
+  unrelated siblings.
 - **Completion notes.** Ravi completes "Reconfigure VPN profile" and publishes a requester-visible
   note: "VPN profile rebuilt; restart required." Emma can read that note from her request detail
   page. A separate private triage note remains invisible to her.

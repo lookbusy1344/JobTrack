@@ -14,14 +14,16 @@ public static class JobNodeAccessPolicy
 	/// <summary>
 	///     An actor may manage a job node if they hold <see cref="EmployeeRole.Administrator" /> or
 	///     <see cref="EmployeeRole.JobManager" />, or hold <see cref="EmployeeRole.Worker" /> and own the
-	///     node itself or one of its ancestors.
+	///     node itself or one of its ancestors. <see cref="EmployeeRole.Requester" /> is disqualifying
+	///     even when combined with one of those workflow roles.
 	/// </summary>
 	public static bool CanManage(IReadOnlyCollection<EmployeeRole> actorRoles, bool actorOwnsNodeOrAncestor)
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
 
-		return actorRoles.Contains(EmployeeRole.Administrator)
+		return !actorRoles.Contains(EmployeeRole.Requester)
+			   && (actorRoles.Contains(EmployeeRole.Administrator)
 			   || actorRoles.Contains(EmployeeRole.JobManager)
-			   || (actorRoles.Contains(EmployeeRole.Worker) && actorOwnsNodeOrAncestor);
+			   || (actorRoles.Contains(EmployeeRole.Worker) && actorOwnsNodeOrAncestor));
 	}
 }

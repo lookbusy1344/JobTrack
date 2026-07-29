@@ -230,6 +230,22 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task The_requester_role_cannot_be_assigned_to_an_existing_job_owner()
+	{
+		var (administratorId, _) = await SeedAdministratorAndWorkerAsync();
+		var sut = CreateSut();
+
+		var act = () => sut.AssignRoleAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = administratorId,
+			Role = EmployeeRole.Requester,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("requester-role-assigned-work");
+	}
+
+	[Fact]
 	public async Task An_administrator_can_revoke_a_role()
 	{
 		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();

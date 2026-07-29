@@ -308,13 +308,16 @@ processes each worker's timeline independently:
 Every worker's timeline is costed independently and the per-node results summed, since rates,
 overrides, and concurrency are always resolved per worker.
 
-### Exact cost, displayed cost, and penny reconciliation
+### Allocated duration, exact cost, displayed cost, and penny reconciliation
 
 `double`/`float` never appears anywhere on the duration or money path. Currency is carried at
 `numeric(19,6)` internally — six decimal places of headroom above pennies for chained rate/time
 multiplication — and rounded to pennies, midpoint-to-even, **only** at the point a value is actually
 displayed or exported (ADR 0009):
 
+- **`AllocatedDuration`** — the exact rational sum of the same `segmentTicks / N` shares used to
+  calculate cost, rolled up through the node's subtree. It converts once to six-decimal-place hours
+  at the reporting boundary (ADR 0053).
 - **`ExactCost`** — the full-precision, unrounded cost of a node and its subtree.
 - **`DisplayedCost`** — `ExactCost` rounded to pennies for presentation.
 

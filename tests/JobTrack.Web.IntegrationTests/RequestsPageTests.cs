@@ -8,11 +8,13 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
+using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -61,6 +63,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		HtmlEncoder.Default.Encode(BoundarySpaceDescription[..(RowTitleMaxDescriptionLength - 1)] + "…");
 
 	private readonly SqliteDatabaseFixture database = new();
+	private AppUserId administratorId;
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
 	private JobNodeId rootId;
@@ -79,6 +82,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			Password = "Bootstrap-Horse-Battery-77!",
 			CorrelationId = Guid.NewGuid(),
 		});
+		administratorId = bootstrapResult.AdministratorId;
 		rootId = bootstrapResult.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
@@ -178,6 +182,20 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Landing_redirects_a_requester_to_their_requests()
+	{
+		_ = await SeedEmployeeAsync("rita.landing", EmployeeRole.Requester);
+		var authCookie = await SignInAsync("rita.landing");
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Be("/Requests");
+	}
+
+	[Fact]
 	public async Task A_worker_cannot_reach_the_requests_page()
 	{
 		_ = await SeedEmployeeAsync("wanda.worker", EmployeeRole.Worker);
@@ -192,7 +210,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	public async Task A_requester_can_view_their_own_request_detail_page()
 	{
 		var holdingAreaId = await SeedHoldingAreaAsync();
-		var requesterId = await SeedEmployeeAsync("rita.detail", EmployeeRole.Requester);
+		var requesterId = await SeedEmployeeAsync("rita.detail", EmployeeRole.Requester, "Rita Detail");
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
 		var authCookie = await SignInAsync("rita.detail");
 
@@ -201,7 +219,78 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		var body = await response.Content.ReadAsStringAsync();
 		body.Should().Contain("Printer will not turn on");
-		body.Should().Contain("Submitted");
+		body.Should().Contain("<dt class=\"col-sm-3\">Requester</dt>");
+		body.Should().Contain("<dd class=\"col-sm-9\">Rita Detail</dd>");
+		body.Should().Contain("<dt class=\"col-sm-3\">Username</dt>");
+		body.Should().Contain("<dd class=\"col-sm-9\">rita.detail</dd>");
+		body.Should().Contain("<dt class=\"col-sm-3\">Status</dt>");
+		body.Should().Contain("<dd class=\"col-sm-9\">Submitted</dd>");
+		body.Should().Contain("<a href=\"/Requests\">&larr; Back</a>");
+	}
+
+	[Fact]
+	public async Task Request_detail_draws_a_decomposed_subtree_and_shows_each_nodes_time_without_cost()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.decomposed", EmployeeRole.Requester);
+		var workerId = await SeedEmployeeAsync("wanda.decomposed", EmployeeRole.Worker);
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Repair the print room printer");
+		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = submitted.JobNodeId });
+		var decomposition = await seedClient.Jobs.DecomposeWorkedLeafAsync(new() {
+			Context = context,
+			LeafNodeId = submitted.JobNodeId,
+			Version = submitted.Version,
+			BranchDescription = "Repair the print room printer",
+			ExistingWorkDescription = "Diagnose paper feed",
+			NewChildren = [
+				new() { Description = "Replace feed roller", OwnerUserId = workerId, Priority = Priority.Medium },
+			],
+		});
+		var replacementId = decomposition.NewChildIds.Single();
+		var replacementWork = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = replacementId });
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = replacementId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Exercise requester progress icon",
+			Version = replacementWork.Version,
+		});
+		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
+			Context = context,
+			UserId = workerId,
+			Entry = new(
+				ScheduleExceptionEffect.AddWorkingTime,
+				new(Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 18, 0)),
+				null),
+			Reason = "Working window for requester duration test",
+		});
+		await AddFinishedSessionAsync(
+			workerId, decomposition.ExistingWorkChildId,
+			Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 11, 0));
+		await AddFinishedSessionAsync(
+			workerId, replacementId,
+			Instant.FromUtc(2026, 1, 1, 12, 0), Instant.FromUtc(2026, 1, 1, 15, 0));
+		var authCookie = await SignInAsync("rita.decomposed");
+
+		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("<th scope=\"col\" class=\"text-end\">Time worked</th>");
+		body.Should().NotContain("<th scope=\"col\">Status</th>");
+		body.Should().Contain("href=\"#jt-icon-branch\"");
+		body.Should().Contain("href=\"#jt-icon-leaf\"");
+		body.Should().Contain("Diagnose paper feed");
+		body.Should().Contain("href=\"#jt-icon-achievement-in-progress\"");
+		MyRegex().IsMatch(body)
+			.Should().BeTrue("the public status icon should immediately follow the leaf name, as it does in Browse");
+		body.Should().Contain(">5.0 hrs<");
+		body.Should().Contain(">2.0 hrs<");
+		body.Should().Contain(">3.0 hrs<");
+		body.Should().NotContain(">&#xA3;");
+		body.Should().NotContain(">Cost<");
+		body.Should().NotContain(">Sessions<");
 	}
 
 	[Fact]
@@ -225,14 +314,67 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var requesterId = await SeedEmployeeAsync("rita.note", EmployeeRole.Requester);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
 		var authCookie = await SignInAsync("rita.note");
+		const string ReturnUrl = "/Requests?view=recent";
 
-		var (antiforgeryCookie, token) = await GetDetailPageFormAsync(submitted.JobNodeId.Value, authCookie);
-		var response = await PostAddNoteAsync(submitted.JobNodeId.Value, authCookie, antiforgeryCookie, token, "Any update?");
+		var (antiforgeryCookie, token) =
+			await GetDetailPageFormAsync(submitted.JobNodeId.Value, authCookie, ReturnUrl);
+		var response = await PostAddNoteAsync(
+			submitted.JobNodeId.Value,
+			authCookie,
+			antiforgeryCookie,
+			token,
+			"Any update?",
+			ReturnUrl);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Any update?");
+		body.Should().Contain("<a href=\"/Requests?view=recent\">&larr; Back</a>");
+	}
+
+	[Fact]
+	public async Task Staff_see_public_and_private_note_visibility_in_a_compact_footer()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.note-visibility", EmployeeRole.Requester);
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
+		var jobManagerId = await SeedEmployeeAsync("priya.note-visibility", EmployeeRole.JobManager);
+		var context = new CommandContext { Actor = jobManagerId, CorrelationId = Guid.NewGuid() };
+		_ = await seedClient.Requests.AddNoteAsync(new() {
+			Context = context,
+			NodeId = submitted.JobNodeId,
+			Content = "Visible progress update",
+			VisibleToRequester = true,
+		});
+		_ = await seedClient.Requests.AddNoteAsync(new() {
+			Context = context with { CorrelationId = Guid.NewGuid() },
+			NodeId = submitted.JobNodeId,
+			Content = "Internal triage note",
+			VisibleToRequester = false,
+		});
+		var staffCookie = await SignInAsync("priya.note-visibility");
+
+		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, staffCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Visible progress update");
+		body.Should().Contain("Internal triage note");
+		body.Should().Contain("<p class=\"text-muted mb-0 d-flex flex-wrap align-items-center gap-2\">");
+		body.Should().Contain("<span class=\"status-pill status-pill-ready status-pill--compact\">Public</span>");
+		body.Should().Contain("<span class=\"status-pill status-pill-closed status-pill--compact\">Private</span>");
+		body.Should().Contain("<div class=\"form-group mb-2\">");
+	}
+
+	[Fact]
+	public async Task Empty_note_validation_message_does_not_reserve_vertical_space()
+	{
+		var response = await client.GetAsync("/css/site.css");
+		var css = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		css.Should().Contain(".field-validation-valid {\n    display: none;\n}");
 	}
 
 	[Fact]
@@ -258,13 +400,14 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, staffCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Acknowledged");
+		body.Should().Contain($"<a href=\"/Jobs/Browse?nodeId={submitted.JobNodeId.Value}\">&larr; Back</a>");
 	}
 
 	[Fact]
-	public async Task A_job_manager_browsing_the_holding_area_sees_requester_context_for_a_submitted_request()
+	public async Task A_job_manager_browsing_a_submitted_request_sees_a_request_action_without_duplicate_status()
 	{
 		var holdingAreaId = await SeedHoldingAreaAsync();
-		var requesterId = await SeedEmployeeAsync("rita.triage", EmployeeRole.Requester);
+		var requesterId = await SeedEmployeeAsync("rita.triage", EmployeeRole.Requester, "Client Requester");
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
 		_ = await SeedEmployeeAsync("priya.triage-manager", EmployeeRole.JobManager);
 		var staffCookie = await SignInAsync("priya.triage-manager");
@@ -275,12 +418,22 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain("Requester request");
-		body.Should().Contain($"/Requests/{submitted.JobNodeId.Value}");
+		body.Should().NotContain("Requester request");
+		body.Should().NotContain(">Submitted</span>");
+		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Requester</dt>");
+		body.Should().Contain("<a class=\"jt-tag\" href=\"/Requests/");
+		body.Should().Contain(">Client Requester (rita.triage)</a>");
+		body.IndexOf(">Priority</dt>", StringComparison.Ordinal).Should()
+			.BeLessThan(body.IndexOf(">Requester</dt>", StringComparison.Ordinal),
+				"the two-column card should place Priority below Kind and Requester below Owner");
+		body.Should().Contain($"href=\"/Requests/{submitted.JobNodeId.Value}?returnUrl=");
+		body.Should().Contain(
+			$"<a class=\"btn btn-secondary\" href=\"/Requests/{submitted.JobNodeId.Value}?returnUrl=%2FJobs%2FBrowse");
+		body.Should().Contain(">Request</a>");
 	}
 
 	[Fact]
-	public async Task A_job_manager_browsing_an_ordinary_node_sees_no_requester_context()
+	public async Task A_job_manager_browsing_an_ordinary_node_sees_no_request_action()
 	{
 		_ = await SeedEmployeeAsync("priya.no-request", EmployeeRole.JobManager);
 		var staffCookie = await SignInAsync("priya.no-request");
@@ -292,6 +445,33 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().NotContain("Requester request");
+		body.Should().NotContain(">Requester</dt>");
+		body.Should().NotContain("/Requests/");
+		body.Should().NotMatchRegex(">\\s*Request\\s*</a>");
+	}
+
+	[Fact]
+	public async Task A_job_worker_can_return_to_a_local_staff_page_but_not_an_external_url()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.return-target", EmployeeRole.Requester);
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
+		var workerId = await SeedEmployeeAsync("will.return-target", EmployeeRole.Worker);
+		_ = await seedClient.Jobs.PickUpAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			NodeId = submitted.JobNodeId,
+		});
+		var staffCookie = await SignInAsync("will.return-target");
+		const string LocalReturnUrl = "/Jobs/AwaitingProgress?showWholeTree=true";
+
+		var localResponse = await GetDetailPageAsync(submitted.JobNodeId.Value, staffCookie, LocalReturnUrl);
+		var localBody = await localResponse.Content.ReadAsStringAsync();
+		localBody.Should().Contain("<a href=\"/Jobs/AwaitingProgress?showWholeTree=true\">&larr; Back</a>");
+
+		var externalResponse = await GetDetailPageAsync(submitted.JobNodeId.Value, staffCookie, "https://example.test/escape");
+		var externalBody = await externalResponse.Content.ReadAsStringAsync();
+		externalBody.Should().Contain($"<a href=\"/Jobs/Browse?nodeId={submitted.JobNodeId.Value}\">&larr; Back</a>");
+		externalBody.Should().NotContain("example.test");
 	}
 
 	[Fact]
@@ -334,16 +514,40 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			Description = description,
 		});
 
-	private async Task<HttpResponseMessage> GetDetailPageAsync(long jobNodeId, string authCookie)
+	private async Task AddFinishedSessionAsync(
+		AppUserId workerId, JobNodeId leafId, Instant startedAt, Instant finishedAt)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Requests/{jobNodeId}");
+		var started = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.CorrectSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			SessionId = started.Id,
+			StartedAt = startedAt,
+			FinishedAt = finishedAt,
+			Reason = "Pin to a deterministic instant for requester duration test",
+			Version = started.Version,
+		});
+	}
+
+	private async Task<HttpResponseMessage> GetDetailPageAsync(long jobNodeId, string authCookie, string? returnUrl = null)
+	{
+		var path = returnUrl is null
+			? $"/Requests/{jobNodeId}"
+			: $"/Requests/{jobNodeId}?returnUrl={Uri.EscapeDataString(returnUrl)}";
+		using var request = new HttpRequestMessage(HttpMethod.Get, path);
 		request.Headers.Add("Cookie", authCookie);
 		return await client.SendAsync(request);
 	}
 
-	private async Task<(string CookieHeader, string Token)> GetDetailPageFormAsync(long jobNodeId, string authCookie)
+	private async Task<(string CookieHeader, string Token)> GetDetailPageFormAsync(
+		long jobNodeId,
+		string authCookie,
+		string? returnUrl = null)
 	{
-		var response = await GetDetailPageAsync(jobNodeId, authCookie);
+		var response = await GetDetailPageAsync(jobNodeId, authCookie, returnUrl);
 		var body = await response.Content.ReadAsStringAsync();
 		var antiforgeryCookie = FindSetCookie(response, "Antiforgery")
 								?? throw new InvalidOperationException("No antiforgery cookie in request detail page response.");
@@ -355,12 +559,18 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	}
 
 	private async Task<HttpResponseMessage> PostAddNoteAsync(
-		long jobNodeId, string authCookie, string antiforgeryCookie, string token, string content)
+		long jobNodeId,
+		string authCookie,
+		string antiforgeryCookie,
+		string token,
+		string content,
+		string? returnUrl = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, $"/Requests/{jobNodeId}?handler=AddNote");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
 			["NoteInput.Content"] = content,
+			["returnUrl"] = returnUrl ?? string.Empty,
 			["__RequestVerificationToken"] = token,
 		});
 
@@ -460,7 +670,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
+	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string? displayName = null)
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
@@ -468,7 +678,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		await using var insertAppUser = connection.CreateCommand();
 		insertAppUser.CommandText =
 			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
+		_ = insertAppUser.Parameters.AddWithValue("$displayName", displayName ?? userName);
 		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
 		var placeholderUser = new JobTrackIdentityUser {
@@ -569,4 +779,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
 		}
 	}
+
+	[GeneratedRegex("""<span class="jt-preserve-whitespace">Replace feed roller</span>\s*<span class="jt-achievement-icon jt-achievement-icon--in-progress">""")]
+	private static partial Regex MyRegex();
 }

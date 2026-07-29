@@ -33,6 +33,10 @@ public sealed class JobPickupPolicyTests
 	public void An_actor_with_no_roles_may_not_pick_up_an_unassigned_node() => JobPickupPolicy.CanPickUp([], true).Should().BeFalse();
 
 	[Fact]
+	public void A_requester_may_not_pick_up_even_when_they_also_hold_a_worker_role() =>
+		JobPickupPolicy.CanPickUp([EmployeeRole.Requester, EmployeeRole.Worker], true).Should().BeFalse();
+
+	[Fact]
 	public void A_null_role_collection_is_rejected()
 	{
 		var act = () => JobPickupPolicy.CanPickUp(null!, true);

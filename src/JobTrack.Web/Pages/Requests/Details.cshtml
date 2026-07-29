@@ -1,15 +1,30 @@
 @page "/Requests/{id:long}"
+@using JobTrack.Abstractions
 @using NodaTime
 @model DetailsModel
 @{
 	ViewData["Title"] = "Request detail";
+
+	static string KindIconId(NodeKind kind) => kind switch {
+		NodeKind.Root => "jt-icon-root",
+		NodeKind.Branch => "jt-icon-branch",
+		NodeKind.Leaf => "jt-icon-leaf",
+		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	};
+
+	static string KindNoun(NodeKind kind) => kind switch {
+		NodeKind.Root => "root",
+		NodeKind.Branch => "branch",
+		NodeKind.Leaf => "leaf",
+		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	};
 }
 
 <div class="jt-page-head">
 	<h1 class="jt-preserve-whitespace">@(Model.Detail is not null ? JobNodeDisplay.Title(Model.Detail.Description, Model.Detail.JobNodeId.Value) : null)</h1>
 </div>
 
-<p><a asp-page="Index">&larr; Back to your requests</a></p>
+<p><a href="@Model.BackUrl">&larr; Back</a></p>
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
@@ -18,6 +33,10 @@
 }
 @if (detail is not null) {
 	<dl class="row">
+		<dt class="col-sm-3">Requester</dt>
+		<dd class="col-sm-9">@detail.RequesterDisplayName</dd>
+		<dt class="col-sm-3">Username</dt>
+		<dd class="col-sm-9">@detail.RequesterUserName</dd>
 		<dt class="col-sm-3">Status</dt>
 		<dd class="col-sm-9">@EnumDisplay.Label(detail.Status)</dd>
 		<dt class="col-sm-3">Submitted</dt>
@@ -31,6 +50,7 @@
 	@if (Model.CanAcknowledge && detail.AcknowledgedAt is null) {
 		<form method="post" asp-page-handler="Acknowledge">
 			<input type="hidden" name="version" value="@detail.Version"/>
+			<input type="hidden" name="returnUrl" value="@Model.SafeReturnUrl"/>
 			<button type="submit" class="btn btn-secondary">Acknowledge request</button>
 		</form>
 	}
@@ -40,17 +60,36 @@
 		<table class="table">
 			<thead>
 			<tr>
-				<th>Description</th>
-				<th>Status</th>
-				<th>Last updated</th>
+				<th scope="col">Description</th>
+				<th scope="col" class="text-end">Time worked</th>
+				<th scope="col">Last updated</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var row in Model.OrderedSubtree) {
 				<tr>
-					<td class="jt-tree-row jt-preserve-whitespace"
-					    data-tree-depth="@row.Depth">@JobNodeDisplay.Title(row.Node.Description, row.Node.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</td>
-					<td>@EnumDisplay.Label(row.Node.Status)</td>
+					<td class="jt-tree-cell" data-jt-depth="@row.Depth">
+						@if (row.Depth > 0) {
+							<span class="jt-tree-guide" aria-hidden="true">
+								@for (var railLevel = 1; railLevel < row.Depth; ++railLevel) {
+									<span class="jt-tree-rail"></span>
+								}
+								<span class="jt-tree-elbow"></span>
+							</span>
+						}
+						<span class="jt-tree-label">
+							<svg class="jt-tree-icon jt-tree-icon--@KindNoun(row.Kind)" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+								<use href="#@KindIconId(row.Kind)"></use>
+							</svg>
+							<span class="jt-tree-text">
+								<span class="visually-hidden">Level @row.Depth, @KindNoun(row.Kind).</span>
+								<span class="jt-preserve-whitespace">@JobNodeDisplay.Truncate(
+									row.Node.Description, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
+								<partial name="_RequesterStatusIcon" model="@row.Node.Status"/>
+							</span>
+						</span>
+					</td>
+					<td class="text-end">@row.Node.AllocatedDuration</td>
 					<td>@InstantDisplay.Format(row.Node.LastUpdatedAt, Model.ViewerZone)</td>
 				</tr>
 			}
@@ -66,14 +105,22 @@
 			@foreach (var note in detail.Notes) {
 				<li class="jt-form-card">
 					<p class="jt-preserve-whitespace">@note.Content</p>
-					<p class="text-muted">@InstantDisplay.Format(note.CreatedAt, Model.ViewerZone)</p>
+					<p class="text-muted mb-0 d-flex flex-wrap align-items-center gap-2">
+						<span>@InstantDisplay.Format(note.CreatedAt, Model.ViewerZone)</span>
+						@if (note.VisibleToRequester) {
+							<span class="status-pill status-pill-ready status-pill--compact">Public</span>
+						} else {
+							<span class="status-pill status-pill-closed status-pill--compact">Private</span>
+						}
+					</p>
 				</li>
 			}
 		</ul>
 	}
 
 	<form method="post" asp-page-handler="AddNote" class="jt-form-card">
-		<div class="form-group">
+		<input type="hidden" name="returnUrl" value="@Model.SafeReturnUrl"/>
+		<div class="form-group mb-2">
 			<label asp-for="NoteInput.Content"></label>
 			<textarea asp-for="NoteInput.Content" class="form-control" placeholder="Add a note or ask a question"></textarea>
 			<span asp-validation-for="NoteInput.Content" class="text-danger"></span>

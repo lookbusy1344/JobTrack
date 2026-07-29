@@ -21,14 +21,13 @@ JobTrack/spikes/
 JobTrack/scripts/
 JobTrack/docs/
 
-# Sample *projects* are irrelevant to the image and large, so exclude them individually — but keep
-# samples/job-tree-imports/ (small JSON seed trees), which the demo seed step imports as the demo
-# account at build time. Excluding these by name rather than all of samples/ sidesteps Docker's
-# "cannot re-include a file whose parent directory is excluded" rule.
+# Sample projects are irrelevant to the image except JobTrack.UatSeed, which runs in the build stage
+# to create the requester scenario. Keep samples/job-tree-imports/ too; the demo seed imports those
+# small JSON trees as the demo account. Excluding the other projects by name rather than all of
+# samples/ sidesteps Docker's "cannot re-include a file whose parent directory is excluded" rule.
 JobTrack/samples/JobTrack.ExternalApiClient/
 JobTrack/samples/JobTrack.Sample.PostgreSql/
 JobTrack/samples/JobTrack.Sample.Sqlite/
-JobTrack/samples/JobTrack.UatSeed/
 
 # SQLite/Postgres scratch data and dev-only artifacts.
 JobTrack/*.db

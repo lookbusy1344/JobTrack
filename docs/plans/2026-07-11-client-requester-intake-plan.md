@@ -11,8 +11,9 @@ suite passed with no failures as the Stage 8 gate. `/Requests/{id}` and its API 
 by Stage 9 below (ADR 0034: explicit `acknowledged_at` acceptance, the `job_request_note` table, and
 the requester-safe subtree query). Still deliberately deferred, tracked as follow-up work rather than
 left silently incomplete: the staff holding-area queue UI (backed by the existing `/Jobs/Browse`-style
-children query — no new backend needed), decomposition-preserves-anchor UI evidence, and an explicit
-assignment test (existing `EditAsync` already covers setting `OwnerUserId`).  
+children query — no new backend needed) and decomposition-preserves-anchor UI evidence. Requester
+non-assignability is now enforced at every library write path, including combined role grants,
+structural imports, holding-area defaults, and session targets, with shared provider contracts.
 **Depends on:** accepted ownership model (`docs/ownership-model.md`), ADR 0031/0032, and the web/API
 authorization boundary in `docs/jobtrack_spec_codex.md` §7.3 and §13.6.
 
@@ -267,12 +268,13 @@ should carry only a small public shape:
 - title/description or requester-facing summary;
 - requester-facing status;
 - parent/child relationship inside the request subtree;
+- concurrency-allocated aggregate time worked for that node's subtree (ADR 0054);
 - last requester-visible update timestamp; and
 - requester-visible notes for that node.
 
-It must not include rates, costs, work sessions, schedules, audit events, staff-only notes, unrelated
-siblings, ancestors outside the request subtree, or edit controls. The projection is read-only and
-must not be served by relaxing `/Jobs/Browse`.
+It must not include rates, costs, individual work sessions, schedules, audit events, staff-only
+notes, unrelated siblings, ancestors outside the request subtree, or edit controls. The projection
+is read-only and must not be served by relaxing `/Jobs/Browse`.
 
 Public status should be derived from existing job state but mapped to a small requester vocabulary:
 
@@ -394,6 +396,8 @@ Tests first:
   `LeafWork`, or prerequisite ancestor/descendant violation;
 - Worker with control can update technical progress but cannot alter requester identity/routing;
 - completing staff can add requester-visible notes;
+- staff Browse shows requester identity separately from technical ownership and links it to the
+  request detail page;
 - Requester sees progress changes, the read-only request subtree, and requester-visible notes, but
   not internal work-session/rate/audit details or private triage notes.
 
@@ -478,7 +482,9 @@ Tests first, persistence (both providers):
   writes a requester-visible note; is denied once the request is closed to the requester or the actor
   has no view access;
 - `GetDetailAsync` returns the requester-safe subtree (post-decomposition) and only requester-visible
-  notes for a requester caller, and every note for a staff/admin caller.
+  notes for a requester caller, and every note for a staff/admin caller; the projection also carries
+  the requester's stable user ID, display name, and login username independently of the technical
+  node owner.
 
 Tests first, external API and web UI:
 

@@ -5,13 +5,23 @@ using NodaTime;
 
 /// <summary>
 ///     One request's requester-safe detail projection (ADR 0034, plan §7/§8 <c>/Requests/{id}</c>):
-///     status, the read-only subtree, and the notes visible to the calling actor. A requester caller sees
-///     only requester-visible notes; a staff/admin caller sees every note.
+///     status, the read-only subtree with ADR 0054's aggregate allocated duration, and the notes
+///     visible to the calling actor. A requester caller sees only requester-visible notes; a
+///     staff/admin caller sees every note.
 /// </summary>
 public sealed record JobRequestDetailResult
 {
 	/// <summary>The request's anchor <c>job_node</c> identifier.</summary>
 	public required JobNodeId JobNodeId { get; init; }
+
+	/// <summary>The client account that submitted the request, distinct from the job node's operational owner.</summary>
+	public required AppUserId RequesterUserId { get; init; }
+
+	/// <summary>The requester's current display name.</summary>
+	public required string RequesterDisplayName { get; init; }
+
+	/// <summary>The requester's current login username.</summary>
+	public required string RequesterUserName { get; init; }
 
 	/// <summary>The anchor node's description.</summary>
 	public required string Description { get; init; }

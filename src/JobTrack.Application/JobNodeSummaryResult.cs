@@ -1,6 +1,7 @@
 namespace JobTrack.Application;
 
 using Abstractions;
+using Domain.Costing;
 using NodaTime;
 
 /// <summary>
@@ -30,6 +31,9 @@ public sealed record JobNodeSummaryResult
 
 	/// <summary>The node's penny-rounded displayed cost, or <see langword="null" /> when unavailable to the caller.</summary>
 	public Money? Cost { get; init; }
+
+	/// <summary>The exact allocated duration accompanying <see cref="Cost" />, or <see langword="null" /> when cost is unavailable.</summary>
+	public AllocatedDuration? AllocatedDuration { get; init; }
 
 	/// <summary>The instant this node was archived, if archived. Archival never implies deletion.</summary>
 	public Instant? ArchivedAt { get; init; }

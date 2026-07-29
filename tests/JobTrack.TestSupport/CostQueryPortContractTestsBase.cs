@@ -59,6 +59,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		result.NodeId.Should().Be(leafId);
 		result.ExactCost.Should().Be(new(120m));
 		result.DisplayedCost.Should().Be(new(120m));
+		result.AllocatedDuration.ToHours().Should().Be(2m);
 		result.Trace.Should().OnlyContain(entry => entry.NodeId == leafId);
 	}
 
@@ -142,6 +143,8 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		result.ExactCosts[branchId].Should().Be(new(90m));
 		result.DisplayedCosts[branchId].Should().Be(new(90m));
 		result.DisplayedCosts[leafId].Should().Be(new(90m));
+		result.AllocatedDurations[branchId].ToHours().Should().Be(1.5m);
+		result.AllocatedDurations[leafId].ToHours().Should().Be(1.5m);
 	}
 
 	[Fact]
@@ -170,6 +173,9 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		bulk.DisplayedCosts[branchId].Should().Be(individualBranch.DisplayedCosts[branchId]);
 		bulk.DisplayedCosts[leafId].Should().Be(new(90m));
 		bulk.DisplayedCosts[otherLeafId].Should().Be(individualOtherLeaf.DisplayedCosts[otherLeafId]);
+		bulk.AllocatedDurations[branchId].Should().Be(individualBranch.AllocatedDurations[branchId]);
+		bulk.AllocatedDurations[leafId].ToHours().Should().Be(1.5m);
+		bulk.AllocatedDurations[otherLeafId].Should().Be(individualOtherLeaf.AllocatedDurations[otherLeafId]);
 	}
 
 	[Fact]
@@ -187,6 +193,8 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		bulk.DisplayedCosts.Should().NotContainKey(branchId);
 		bulk.DisplayedCosts[leafId].Should().Be(new(120m));
+		bulk.AllocatedDurations.Should().NotContainKey(branchId);
+		bulk.AllocatedDurations[leafId].ToHours().Should().Be(2m);
 	}
 
 	/// <summary>

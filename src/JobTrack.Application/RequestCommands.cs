@@ -1,6 +1,8 @@
 namespace JobTrack.Application;
 
 using Abstractions;
+using Domain.Costing;
+using NodaTime;
 using Ports;
 
 /// <summary>
@@ -11,13 +13,19 @@ using Ports;
 internal sealed class RequestCommands : IRequestCommands
 {
 	private readonly IJobRequestCommandPort _port;
+	private readonly IRequesterDurationQueries _durationQueries;
+	private readonly IClock _clock;
 
 	/// <summary>Creates a <see cref="RequestCommands" /> over the given port.</summary>
-	public RequestCommands(IJobRequestCommandPort port)
+	public RequestCommands(IJobRequestCommandPort port, IRequesterDurationQueries durationQueries, IClock clock)
 	{
 		ArgumentNullException.ThrowIfNull(port);
+		ArgumentNullException.ThrowIfNull(durationQueries);
+		ArgumentNullException.ThrowIfNull(clock);
 
 		_port = port;
+		_durationQueries = durationQueries;
+		_clock = clock;
 	}
 
 	/// <inheritdoc />
@@ -89,6 +97,20 @@ internal sealed class RequestCommands : IRequestCommands
 
 		return JobTrackOperation.TraceAsync(
 			"requests.get-detail", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
-			() => _port.GetDetailAsync(request, cancellationToken));
+			async () => {
+				// The request port performs the authoritative per-request authorization before this
+				// internal duration projection reads work-derived facts.
+				var detail = await _port.GetDetailAsync(request, cancellationToken).ConfigureAwait(false);
+				var durations = await _durationQueries.GetRequesterVisibleHierarchyAsync(
+						request.NodeId, _clock.GetCurrentInstant(), cancellationToken)
+					.ConfigureAwait(false);
+
+				return detail with {
+					Subtree = EquatableArray.CopyOf(
+						detail.Subtree.Select(node => node with {
+							AllocatedDuration = durations.GetValueOrDefault(node.JobNodeId, AllocatedDuration.Zero),
+						})),
+				};
+			});
 	}
 }

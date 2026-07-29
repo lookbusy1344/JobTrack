@@ -96,7 +96,7 @@ opaque `long` route identifiers.
 | GET | `/jobs/{nodeId}/children` | A node's direct children, paged (`ownerUserId`, `archiveFilter` query filters). |
 | GET | `/jobs/search` | Search node descriptions, paged (`searchText` required; `ownerUserId`, `archiveFilter` filters). |
 | GET | `/jobs/{nodeId}/readiness` | Whether prerequisites are satisfied, and the blocker set if not. |
-| GET | `/jobs/{nodeId}/subtree` | A bounded multi-level subtree rooted at a node (ADR 0039: `depth` optional, default 3, max 5; `ownerUserId`/`archiveFilter` filters). The cost roll-up (`rootTotal`, each node's `cost`) is included only when the actor may view it (ADR 0040: `Administrator`/`CostViewer`, or ownership of the queried root or an ancestor) — omitted as `null`, never a whole-request denial. |
+| GET | `/jobs/{nodeId}/subtree` | A bounded multi-level subtree rooted at a node (ADR 0039: `depth` optional, default 3, max 5; `ownerUserId`/`archiveFilter` filters). The cost roll-up (`rootTotal`/`rootAllocatedHours`, each node's `cost`/`allocatedHours`) is included only when the actor may view it (ADR 0040: `Administrator`/`CostViewer`, or ownership of the queried root or an ancestor) — both values are omitted as `null`, never a whole-request denial. |
 
 ### Work sessions (requires Administrator/JobManager/Worker)
 
@@ -123,8 +123,19 @@ opaque `long` route identifiers.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/jobs/{nodeId}/cost` | Exact and displayed cost, with the rate-provenance segment trace (`asOf` optional, defaults to now; `maxTraceSegments` optional, max 50,000). |
-| GET | `/jobs/{nodeId}/cost/hierarchy` | Reconciled cost totals for a node and its entire subtree (`asOf` optional, defaults to now; `maxHierarchyNodes` optional, max 50,000). |
+| GET | `/jobs/{nodeId}/cost` | Exact and displayed cost plus concurrency-allocated hours, with the rate-provenance segment trace (`asOf` optional, defaults to now; `maxTraceSegments` optional, max 50,000). |
+| GET | `/jobs/{nodeId}/cost/hierarchy` | Reconciled cost totals and concurrency-allocated hours for a node and its entire subtree (`asOf` optional, defaults to now; `maxHierarchyNodes` optional, max 50,000). |
+
+### Requester intake and progress
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/request-holding-areas` | Active holding areas available to the acting requester. |
+| POST | `/requests` | Submit a request into an eligible holding area. |
+| GET | `/requests` | List the acting requester's own requests. |
+| GET | `/requests/{jobNodeId}` | Requester-safe status, notes, and read-only subtree. Each subtree node includes concurrency-allocated `allocatedHours`; costs, rates, and individual sessions are not exposed (ADR 0054). |
+| POST | `/requests/{jobNodeId}/comments` | Add a note to a permitted request. |
+| POST | `/requests/{jobNodeId}/acknowledge` | Staff acknowledgement of a request. |
 
 ### Employee rates and schedule (ADR 0024's original initial-release surface)
 
@@ -218,6 +229,7 @@ Authorization: Bearer <personal-access-token>
   "nodeId": 42,
   "exactCost": 137.500000,
   "displayedCost": 137.50,
+  "allocatedHours": 5.500000,
   "trace": [
     {
       "segmentStart": "2026-07-10T09:00:00+00:00",

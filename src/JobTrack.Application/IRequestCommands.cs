@@ -88,9 +88,10 @@ public interface IRequestCommands
 
 	/// <summary>
 	///     Returns one request's requester-safe detail projection (ADR 0034, plan §7/§8): status, the
-	///     read-only subtree, and the notes visible to the calling actor
+	///     read-only subtree with aggregate concurrency-allocated duration (ADR 0054), and the notes visible to the calling actor
 	///     (<see cref="RequesterAccessPolicy.CanView" />). A requester caller sees only requester-visible
-	///     notes; a staff/admin caller sees every note.
+	///     notes; a staff/admin caller sees every note. No monetary cost or individual work-session
+	///     record is exposed.
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">The actor may not view this request.</exception>
 	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>

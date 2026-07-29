@@ -164,6 +164,9 @@ internal static partial class JobTrackApi
 		new() {
 			JobNodeId = result.JobNodeId.Value,
 			Description = result.Description,
+			RequesterUserId = result.RequesterUserId.Value,
+			RequesterDisplayName = result.RequesterDisplayName,
+			RequesterUserName = result.RequesterUserName,
 			Status = result.Status,
 			SubmittedAt = result.SubmittedAt.ToDateTimeOffset(),
 			AcknowledgedAt = result.AcknowledgedAt?.ToDateTimeOffset(),
@@ -179,6 +182,7 @@ internal static partial class JobTrackApi
 			Status = result.Status,
 			ParentId = result.ParentId?.Value,
 			LastUpdatedAt = result.LastUpdatedAt.ToDateTimeOffset(),
+			AllocatedHours = result.AllocatedDuration.ToHours(),
 		};
 
 	private static RequestNoteResponse Map(JobRequestNoteResult result) =>
@@ -223,6 +227,12 @@ internal static partial class JobTrackApi
 
 		public required string Description { get; init; }
 
+		public required long RequesterUserId { get; init; }
+
+		public required string RequesterDisplayName { get; init; }
+
+		public required string RequesterUserName { get; init; }
+
 		public required RequesterStatus Status { get; init; }
 
 		public required DateTimeOffset SubmittedAt { get; init; }
@@ -247,6 +257,8 @@ internal static partial class JobTrackApi
 		public long? ParentId { get; init; }
 
 		public required DateTimeOffset LastUpdatedAt { get; init; }
+
+		public required decimal AllocatedHours { get; init; }
 	}
 
 	internal sealed class RequestNoteResponse

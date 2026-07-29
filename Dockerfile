@@ -15,10 +15,12 @@
 #
 #   docker build -f Dockerfile -t jobtrack-web ..
 #
-# The image bundles three apphosts, all framework-dependent/ReadyToRun for the target arch:
+# The runtime image bundles three apphosts, all framework-dependent/ReadyToRun for the target arch:
 #   ./web/JobTrack.Web           — the application itself (default ENTRYPOINT)
 #   ./database/JobTrack.Database — one-time SQLite schema deployment (--entrypoint override)
 #   ./admincli/JobTrack.AdminCli — one-time administrator bootstrap (--entrypoint override)
+# The build stage also publishes JobTrack.UatSeed solely to create the baked-in requester scenario;
+# it is not copied into the runtime image.
 #
 # First-run sequence against a fresh named volume:
 #
@@ -73,7 +75,8 @@ ARG TARGETARCH
 RUN RID=linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/') && echo "$RID" > /rid \
     && dotnet restore src/JobTrack.Web/JobTrack.Web.csproj -r "$RID" -p:PublishReadyToRun=true \
     && dotnet restore src/JobTrack.Database/JobTrack.Database.csproj -r "$RID" -p:PublishReadyToRun=true \
-    && dotnet restore src/JobTrack.AdminCli/JobTrack.AdminCli.csproj -r "$RID" -p:PublishReadyToRun=true
+    && dotnet restore src/JobTrack.AdminCli/JobTrack.AdminCli.csproj -r "$RID" -p:PublishReadyToRun=true \
+    && dotnet restore samples/JobTrack.UatSeed/JobTrack.UatSeed.csproj -r "$RID" -p:PublishReadyToRun=true
 
 # Framework-dependent publish; the aspnet runtime image supplies the framework (itself already
 # R2R-compiled), so only each app's own assemblies need crossgen here.
@@ -83,7 +86,9 @@ RUN RID="$(cat /rid)" \
     && dotnet publish src/JobTrack.Database/JobTrack.Database.csproj \
          -c Release -o /app/database --no-restore -r "$RID" --self-contained false -p:PublishReadyToRun=true \
     && dotnet publish src/JobTrack.AdminCli/JobTrack.AdminCli.csproj \
-         -c Release -o /app/admincli --no-restore -r "$RID" --self-contained false -p:PublishReadyToRun=true
+         -c Release -o /app/admincli --no-restore -r "$RID" --self-contained false -p:PublishReadyToRun=true \
+    && dotnet publish samples/JobTrack.UatSeed/JobTrack.UatSeed.csproj \
+         -c Release -o /app/uatseed --no-restore -r "$RID" --self-contained false -p:PublishReadyToRun=true
 
 # Data directory (SQLite file + data-protection key ring). Built here rather than in the runtime
 # stage because chiseled has no shell/mkdir/chown, and so its ownership can be set on COPY below.
@@ -91,7 +96,7 @@ RUN RID="$(cat /rid)" \
 # The demo database is seeded at build time so `docker run` is immediately usable with no manual
 # setup. A named volume mounted at /app/data is empty on first use and Docker populates it from this
 # image content, so the seeded accounts and trees survive into the volume; an existing volume is
-# left untouched. Three steps, in order:
+# left untouched. Six steps, in order:
 #
 #   1. Deploy the schema.
 #   2. Bootstrap the ADMINISTRATOR (privileged account: owns the root node and can manage accounts).
@@ -106,17 +111,21 @@ RUN RID="$(cat /rid)" \
 #      credential is deliberately reusable: --no-force-password-change clears the ADR 0023 default
 #      so demo/demo1234 keeps working without a forced change on first sign-in (any live change is
 #      wiped back to this seed on a Cloud Run recycle -- see docs/operations/docker-image.md).
-#   4. Import the sample job trees as the DEMO account, so demo -- not the admin -- owns them. Each
+#   4. Create the REQUESTER account with the same reusable-demo treatment. It can submit and inspect
+#      requests but cannot be assigned work.
+#   5. Import the sample job trees as the DEMO account, so demo -- not the admin -- owns them. Each
 #      import lands a subtree under the root (import-tree's default --parent-id 1).
+#   6. Submit six requester-owned jobs through the library requester-intake API and move them into a
+#      representative mix of open and closed states. DEMO remains their technical work actor.
 #
 # Bootstrap still prompts interactively for display name / time zone / username (only the password
 # has a --password flag), so those three lines are piped on stdin; --password removes the need for
 # the `script` pty the old single-account seed used. create-employee and import-tree are fully
 # non-interactive (all flags), so they need no stdin.
 #
-# The only known credential baked in is the published DEMO one, tolerable solely because this image
-# is a local demo artifact (see the header comment) -- which is precisely why it must never be
-# exposed to a network with a reachable demo account. The admin password is never a known default.
+# The known DEMO and REQUESTER credentials are tolerable solely because this image is a local demo
+# artifact (see the header comment) -- which is precisely why it must never be exposed to a network
+# with either account reachable. The admin password is never a known default.
 ARG ADMIN_USERNAME=admin
 # Empty by default -- a random password is generated in the RUN below when this is not supplied, so
 # the image never carries a known admin credential. Pass --build-arg ADMIN_PASSWORD to pin one.
@@ -125,6 +134,9 @@ ARG ADMIN_DISPLAY_NAME="Administrator"
 ARG DEMO_USERNAME=demo
 ARG DEMO_PASSWORD=demo1234
 ARG DEMO_DISPLAY_NAME="Demo User"
+ARG REQUESTER_USERNAME=requester
+ARG REQUESTER_PASSWORD=requester1234
+ARG REQUESTER_DISPLAY_NAME="Client Requester"
 ARG SEED_TIME_ZONE=Europe/London
 RUN mkdir -p /appdata/keys \
     && admin_password="${ADMIN_PASSWORD:-$(head -c 18 /dev/urandom | base64 | tr -d '/+=' | cut -c1-24)}" \
@@ -140,11 +152,19 @@ RUN mkdir -p /appdata/keys \
          --actor "$ADMIN_USERNAME" --username "$DEMO_USERNAME" --password "$DEMO_PASSWORD" \
          --display-name "$DEMO_DISPLAY_NAME" --iana-time-zone "$SEED_TIME_ZONE" \
          --roles JobManager,Worker --no-force-password-change \
+    && /app/admincli/JobTrack.AdminCli create-employee --provider sqlite \
+         --connection-string "Data Source=/appdata/jobtrack.db" \
+         --actor "$ADMIN_USERNAME" --username "$REQUESTER_USERNAME" --password "$REQUESTER_PASSWORD" \
+         --display-name "$REQUESTER_DISPLAY_NAME" --iana-time-zone "$SEED_TIME_ZONE" \
+         --roles Requester --no-force-password-change \
     && for tree in samples/job-tree-imports/*.json; do \
          /app/admincli/JobTrack.AdminCli import-tree --provider sqlite \
            --connection-string "Data Source=/appdata/jobtrack.db" \
            --username "$DEMO_USERNAME" --file "$tree" || exit 1; \
        done \
+    && /app/uatseed/JobTrack.UatSeed --provider sqlite \
+         --connection-string "Data Source=/appdata/jobtrack.db" \
+         --requester-demo --requester-username "$REQUESTER_USERNAME" --job-manager-username "$DEMO_USERNAME" \
     && test -f /appdata/jobtrack.db
 
 # ---- runtime stage ---------------------------------------------------------

@@ -83,6 +83,8 @@ and the design rules (immutability, strong typing, cancellation) applied through
 system ("Console") — its tokens, layout primitives, and accessibility constraints.
 [`docs/ownership-model.md`](docs/ownership-model.md) documents node ownership, the unassigned
 pickup pool, and owner-gated work-session authorization (ADR 0031/0032).
+[`docs/requester-user-guide.md`](docs/requester-user-guide.md) is the brief end-user guide for
+submitting and tracking work with a `Requester` account.
 [`docs/plans/2026-07-11-client-requester-intake-plan.md`](docs/plans/2026-07-11-client-requester-intake-plan.md)
 documents requester self-service intake — a low-permission `Requester` role that submits jobs into
 configured holding areas and tracks their own request's status, separate from the six operational
@@ -99,9 +101,10 @@ delivery plan:
 - [`docs/operations/postgresql-backup-restore.md`](docs/operations/postgresql-backup-restore.md) —
   what the automated backup/restore smoke test proves, and the manual procedure it's modelled on.
 - [`docs/operations/docker-image.md`](docs/operations/docker-image.md) — the SQLite-backed container
-  image for a throwaway local demo instance, pre-seeded with a `demo` administrator so it runs with
-  no setup. Explicitly *not* the deployment story (ADR 0014 defers containers) and it ships a known
-  credential, so it must never be network-exposed; read it before changing `Dockerfile`.
+  image for a throwaway local demo instance, pre-seeded with staff and requester demo accounts so it
+  runs with no setup. Explicitly *not* the deployment story (ADR 0014 defers containers) and it ships
+  known non-admin credentials, so it must never be network-exposed; read it before changing
+  `Dockerfile`.
 - [`docs/operations/local-live-instance.md`](docs/operations/local-live-instance.md) — running a
   single persistent local database (not a disposable `jobtrack_dev`/UAT scenario) for your own
   ongoing use, without the full production-deployment runbook. `scripts/run-web.sh` is the
@@ -173,8 +176,10 @@ remains the way to claim a node you are not about to start work on.
   session hours would reveal their hourly rate, which spec §7.3 reserves to the rate/cost roles.
 
 A redacted cost simply renders blank; cost is an optional field on an otherwise browsable listing,
-never a whole-request denial. See [`docs/ownership-model.md`](docs/ownership-model.md) §5.1 for the
-full read/write matrix.
+never a whole-request denial. When visible, actual cost is accompanied by the exact
+concurrency-allocated time underlying it and is rendered as, for example, `£50.00 / 3.5 hrs`
+(ADR 0053). See [`docs/ownership-model.md`](docs/ownership-model.md) §5.1 for the full read/write
+matrix.
 
 ## Prerequisites, readiness, and completion
 

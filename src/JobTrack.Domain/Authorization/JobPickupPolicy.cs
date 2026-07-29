@@ -16,13 +16,15 @@ public static class JobPickupPolicy
 	///     An actor may pick up a node if it is currently unassigned (<paramref name="ownerIsNull" />)
 	///     and they hold <see cref="EmployeeRole.Worker" />, <see cref="EmployeeRole.JobManager" />, or
 	///     <see cref="EmployeeRole.Administrator" />. Read-only roles (RateManager, CostViewer, Auditor)
-	///     may never pick up, since they cannot work.
+	///     may never pick up, since they cannot work. <see cref="EmployeeRole.Requester" /> is
+	///     disqualifying even when combined with one of the workflow roles.
 	/// </summary>
 	public static bool CanPickUp(IReadOnlyCollection<EmployeeRole> actorRoles, bool ownerIsNull)
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
 
 		return ownerIsNull
+			   && !actorRoles.Contains(EmployeeRole.Requester)
 			   && (actorRoles.Contains(EmployeeRole.Worker)
 				   || actorRoles.Contains(EmployeeRole.JobManager)
 				   || actorRoles.Contains(EmployeeRole.Administrator));

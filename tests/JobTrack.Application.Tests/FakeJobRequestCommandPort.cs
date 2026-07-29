@@ -9,6 +9,10 @@ using Ports;
 /// </summary>
 internal sealed class FakeJobRequestCommandPort : IJobRequestCommandPort
 {
+	public JobRequestDetailResult? DetailResult { get; set; }
+
+	public Exception? GetDetailException { get; set; }
+
 	public SubmitJobRequestRequest? LastSubmitRequest { get; private set; }
 
 	public MoveRequesterJobRequest? LastMoveRequest { get; private set; }
@@ -62,5 +66,7 @@ internal sealed class FakeJobRequestCommandPort : IJobRequestCommandPort
 		throw new NotSupportedException();
 
 	public Task<JobRequestDetailResult> GetDetailAsync(GetJobRequestDetailRequest request, CancellationToken cancellationToken = default) =>
-		throw new NotSupportedException();
+		GetDetailException is not null
+			? Task.FromException<JobRequestDetailResult>(GetDetailException)
+			: Task.FromResult(DetailResult ?? throw new NotSupportedException());
 }

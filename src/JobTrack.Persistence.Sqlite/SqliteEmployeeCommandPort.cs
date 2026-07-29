@@ -121,6 +121,11 @@ internal sealed class SqliteEmployeeCommandPort : IEmployeeCommandPort
 			return new() { UserId = request.TargetUserId, Roles = currentRoles };
 		}
 
+		if (request.Role == EmployeeRole.Requester) {
+			await WorkflowEmployeeEligibility.EnsureMayGrantRequesterRoleAsync(
+				context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
+		}
+
 		_ = context.Add(new IdentityUserRoleEntity { IdentityUserId = targetIdentityUserId, IdentityRoleId = (short)request.Role });
 
 		AuditEventWriter.Add(

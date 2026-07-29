@@ -120,6 +120,8 @@ public static class CostEngine
 
 		var leafCosts = leafCostAmounts.ToDictionary(entry => entry.Key, entry => new Money(entry.Value));
 		var exactCosts = HierarchicalCostAggregator.Aggregate(nodeId, nodesById, leafCosts);
+		var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
+		var allocatedDurations = HierarchicalAllocatedDurationAggregator.Aggregate(nodeId, nodesById, leafDurations);
 
 		// The narrowed session list depends only on the segment, and trace entries sharing a segment
 		// share one ActiveSessionIds instance — so narrow once per segment rather than once per entry.
@@ -133,7 +135,10 @@ public static class CostEngine
 			.Select(entry => entry with { ActiveSessionIds = exposedSessionsBySegment[entry.Segment] })
 			.ToArray();
 
-		return new(EquatableDictionaryFactory.CopyOf(exactCosts), EquatableArray.CopyOf(exposedTrace));
+		return new(
+			EquatableDictionaryFactory.CopyOf(exactCosts),
+			EquatableDictionaryFactory.CopyOf(allocatedDurations),
+			EquatableArray.CopyOf(exposedTrace));
 	}
 
 	/// <summary>

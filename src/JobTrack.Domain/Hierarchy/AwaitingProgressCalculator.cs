@@ -90,6 +90,7 @@ public static class AwaitingProgressCalculator
 				candidate.Facts.Priority,
 				candidate.Node.LeafAchievement,
 				null,
+				null,
 				candidate.Facts.NeededStart,
 				candidate.Facts.NeededFinish,
 				ReadinessCalculator.IsReady(candidate.Node.Id, nodesById, prerequisites).IsReady));

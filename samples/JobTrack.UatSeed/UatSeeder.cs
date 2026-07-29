@@ -72,7 +72,8 @@ public static class UatSeeder
 			OwnerUserId = jobManagerId,
 			Priority = Priority.Medium,
 		}, cancellationToken).ConfigureAwait(false);
-		var holdingAreaId = await SeedHoldingAreaAsync(connection, holdingAreaNode.Id, departmentId, cancellationToken).ConfigureAwait(false);
+		var holdingAreaId = await SeedHoldingAreaAsync(connection, holdingAreaNode.Id, departmentId, null, cancellationToken)
+			.ConfigureAwait(false);
 
 		var unassignedRequest = await client.Requests
 			.SubmitAsync(new() { Context = requesterContext, HoldingAreaId = holdingAreaId, Description = "Printer will not turn on" },
@@ -179,6 +180,121 @@ public static class UatSeeder
 		};
 	}
 
+	/// <summary>
+	///     Seeds the container demo's six requester-owned jobs through the requester intake API. The
+	///     supplied job manager remains the technical work owner/actor; the Requester is recorded only
+	///     through <c>job_request.requester_user_id</c> and is never assigned work.
+	/// </summary>
+	public static async Task<RequesterDemoSeedSummary> SeedRequesterDemoAsync(
+		IJobTrackClient client, DbConnection connection, AppUserId jobManagerId, AppUserId requesterId,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(client);
+		ArgumentNullException.ThrowIfNull(connection);
+
+		var jobManagerContext = ContextFor(jobManagerId);
+		var requesterContext = ContextFor(requesterId);
+		var root = await client.Query.GetJobNodeAsync(new() { Context = jobManagerContext, NodeId = null }, cancellationToken)
+			.ConfigureAwait(false);
+		var departmentId = await SeedDepartmentAsync(connection, "Client Services", cancellationToken).ConfigureAwait(false);
+		await SeedAppUserDepartmentAsync(connection, requesterId, departmentId, cancellationToken).ConfigureAwait(false);
+		var holdingAreaNode = await client.Jobs.AddChildAsync(new() {
+			Context = jobManagerContext,
+			ParentId = root.Node.Id,
+			Description = "Client requests",
+			OwnerUserId = jobManagerId,
+			Priority = Priority.Medium,
+		}, cancellationToken).ConfigureAwait(false);
+		var holdingAreaId = await SeedHoldingAreaAsync(
+				connection, holdingAreaNode.Id, departmentId, jobManagerId, cancellationToken)
+			.ConfigureAwait(false);
+
+		var submitted = await SubmitDemoRequestAsync(
+			client, requesterContext, holdingAreaId, "Replace reception printer toner", cancellationToken).ConfigureAwait(false);
+		var accepted = await SubmitDemoRequestAsync(
+			client, requesterContext, holdingAreaId, "Set up a visitor Wi-Fi account", cancellationToken).ConfigureAwait(false);
+		var waiting = await SubmitDemoRequestAsync(
+			client, requesterContext, holdingAreaId, "Install the meeting-room display", cancellationToken).ConfigureAwait(false);
+		var inProgress = await SubmitDemoRequestAsync(
+			client, requesterContext, holdingAreaId, "Repair the warehouse label printer", cancellationToken).ConfigureAwait(false);
+		var completed = await SubmitDemoRequestAsync(
+			client, requesterContext, holdingAreaId, "Configure the training-room laptops", cancellationToken).ConfigureAwait(false);
+		var cancelled = await SubmitDemoRequestAsync(
+			client, requesterContext, holdingAreaId, "Recover an archived shared mailbox", cancellationToken).ConfigureAwait(false);
+
+		_ = await AcknowledgeDemoRequestAsync(client, jobManagerContext, accepted, cancellationToken).ConfigureAwait(false);
+		_ = await AcknowledgeDemoRequestAsync(client, jobManagerContext, waiting, cancellationToken).ConfigureAwait(false);
+		_ = await client.Jobs
+			.AttachLeafWorkAsync(new() { Context = jobManagerContext, JobNodeId = waiting.JobNodeId }, cancellationToken)
+			.ConfigureAwait(false);
+
+		await SetDemoAchievementAsync(
+			client, jobManagerContext, inProgress, Achievement.InProgress, cancellationToken).ConfigureAwait(false);
+		await SetDemoAchievementAsync(
+			client, jobManagerContext, completed, Achievement.Success, cancellationToken).ConfigureAwait(false);
+		await SetDemoAchievementAsync(
+			client, jobManagerContext, cancelled, Achievement.Cancelled, cancellationToken).ConfigureAwait(false);
+
+		return new() {
+			RequestNodeIds = [
+				submitted.JobNodeId,
+				accepted.JobNodeId,
+				waiting.JobNodeId,
+				inProgress.JobNodeId,
+				completed.JobNodeId,
+				cancelled.JobNodeId,
+			],
+		};
+	}
+
+	private static Task<JobRequestResult> SubmitDemoRequestAsync(
+		IJobTrackClient client, CommandContext requesterContext, RequestHoldingAreaId holdingAreaId, string description,
+		CancellationToken cancellationToken) =>
+		client.Requests.SubmitAsync(new() {
+			Context = requesterContext with { CorrelationId = Guid.NewGuid() },
+			HoldingAreaId = holdingAreaId,
+			Description = description,
+		}, cancellationToken);
+
+	private static Task<JobRequestResult> AcknowledgeDemoRequestAsync(
+		IJobTrackClient client, CommandContext jobManagerContext, JobRequestResult request, CancellationToken cancellationToken) =>
+		client.Requests.AcknowledgeAsync(new() {
+			Context = jobManagerContext with { CorrelationId = Guid.NewGuid() },
+			NodeId = request.JobNodeId,
+			Version = request.Version,
+		}, cancellationToken);
+
+	private static async Task SetDemoAchievementAsync(
+		IJobTrackClient client, CommandContext jobManagerContext, JobRequestResult request, Achievement achievement,
+		CancellationToken cancellationToken)
+	{
+		_ = await AcknowledgeDemoRequestAsync(client, jobManagerContext, request, cancellationToken).ConfigureAwait(false);
+		var leafWork = await client.Jobs
+			.AttachLeafWorkAsync(
+				new() { Context = jobManagerContext with { CorrelationId = Guid.NewGuid() }, JobNodeId = request.JobNodeId },
+				cancellationToken)
+			.ConfigureAwait(false);
+		var version = leafWork.Version;
+		if (achievement != Achievement.InProgress) {
+			var started = await client.Work.SetAchievementAsync(new() {
+				Context = jobManagerContext with { CorrelationId = Guid.NewGuid() },
+				JobNodeId = request.JobNodeId,
+				NewAchievement = Achievement.InProgress,
+				Reason = "Demo request work started.",
+				Version = version,
+			}, cancellationToken).ConfigureAwait(false);
+			version = started.Version;
+		}
+
+		_ = await client.Work.SetAchievementAsync(new() {
+			Context = jobManagerContext with { CorrelationId = Guid.NewGuid() },
+			JobNodeId = request.JobNodeId,
+			NewAchievement = achievement,
+			Reason = "Seeded requester demo outcome.",
+			Version = version,
+		}, cancellationToken).ConfigureAwait(false);
+	}
+
 	private static async Task<JobNodeResult> AddAndAttachLeafAsync(
 		IJobTrackClient client, CommandContext context, JobNodeId parentId, string description, AppUserId ownerId,
 		CancellationToken cancellationToken)
@@ -256,7 +372,8 @@ public static class UatSeeder
 	}
 
 	private static async Task<RequestHoldingAreaId> SeedHoldingAreaAsync(
-		DbConnection connection, JobNodeId jobNodeId, DepartmentId departmentId, CancellationToken cancellationToken)
+		DbConnection connection, JobNodeId jobNodeId, DepartmentId departmentId, AppUserId? defaultOwnerUserId,
+		CancellationToken cancellationToken)
 	{
 		var isSqlite = IsSqlite(connection);
 		await using var command = connection.CreateCommand();
@@ -265,19 +382,20 @@ public static class UatSeeder
 			  INSERT INTO request_holding_area
 			  (job_node_id, department_id, name, default_priority_id, default_owner_user_id, is_active)
 			  VALUES
-			  (@jobNodeId, @departmentId, 'IT Helpdesk Intake', @priorityId, NULL, 1);
+			  (@jobNodeId, @departmentId, 'IT Helpdesk Intake', @priorityId, @defaultOwnerUserId, 1);
 			  SELECT last_insert_rowid();
 			  """
 			: """
 			  INSERT INTO request_holding_area
 			  (job_node_id, department_id, name, default_priority_id, default_owner_user_id, is_active)
 			  VALUES
-			  (@jobNodeId, @departmentId, 'IT Helpdesk Intake', @priorityId, NULL, true)
+			  (@jobNodeId, @departmentId, 'IT Helpdesk Intake', @priorityId, @defaultOwnerUserId, true)
 			  RETURNING id;
 			  """;
 		AddParameter(command, "@jobNodeId", jobNodeId.Value);
 		AddParameter(command, "@departmentId", departmentId.Value);
 		AddParameter(command, "@priorityId", PriorityMedium);
+		AddParameter(command, "@defaultOwnerUserId", defaultOwnerUserId.HasValue ? defaultOwnerUserId.Value.Value : DBNull.Value);
 		return new(
 			Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture));
 	}

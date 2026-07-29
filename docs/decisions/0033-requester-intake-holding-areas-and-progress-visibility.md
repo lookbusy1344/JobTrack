@@ -47,6 +47,14 @@ over wherever the work turns out to belong. All of `MoveAsync`'s existing hierar
 invariants (permanent root, no cycles, no `LeafWork` parent, prerequisite ancestor/descendant check,
 optimistic concurrency, audit) still apply unchanged to a requester-originated move.
 
+`Requester` is disqualifying rather than additive for technical work. An account holding it cannot
+own a node, be selected as a session worker, pick up work, or exercise structural/work-session
+authority even if it also holds Worker, JobManager, or Administrator. Every ownership write
+(create/edit/decompose/import and holding-area default application) and work-session target is
+revalidated inside the provider transaction. Granting Requester is rejected while the target owns
+a node or has an active session, preventing a role change from manufacturing an already-assigned
+Requester account.
+
 ## Rationale
 
 - A new role rather than a new authentication mechanism keeps requesters inside the existing

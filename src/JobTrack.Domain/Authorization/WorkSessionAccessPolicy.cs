@@ -19,14 +19,16 @@ public static class WorkSessionAccessPolicy
 	///     self-session rule: a controlling owner may record a session for any
 	///     <c>worked_by_user_id</c>, and a Worker who controls nothing on the tree may record no work
 	///     there, not even their own, until they pick up a node (ownership model §4.3).
+	///     <see cref="EmployeeRole.Requester" /> is disqualifying even when combined with a workflow role.
 	/// </summary>
 	public static bool CanManage(IReadOnlyCollection<EmployeeRole> actorRoles, bool actorControlsNode)
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
 
-		return actorRoles.Contains(EmployeeRole.Administrator)
+		return !actorRoles.Contains(EmployeeRole.Requester)
+			   && (actorRoles.Contains(EmployeeRole.Administrator)
 			   || actorRoles.Contains(EmployeeRole.JobManager)
-			   || (actorRoles.Contains(EmployeeRole.Worker) && actorControlsNode);
+			   || (actorRoles.Contains(EmployeeRole.Worker) && actorControlsNode));
 	}
 
 	/// <summary>
@@ -49,7 +51,8 @@ public static class WorkSessionAccessPolicy
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
 
-		return actorRoles.Any(role => role is EmployeeRole.Administrator
+		return !actorRoles.Contains(EmployeeRole.Requester)
+			   && actorRoles.Any(role => role is EmployeeRole.Administrator
 			or EmployeeRole.JobManager
 			or EmployeeRole.Worker
 			or EmployeeRole.RateManager
@@ -71,6 +74,7 @@ public static class WorkSessionAccessPolicy
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
 
-		return CanManage(actorRoles, actorControlsNode) || (actorRoles.Contains(EmployeeRole.Worker) && isOwnSession);
+		return !actorRoles.Contains(EmployeeRole.Requester)
+			   && (CanManage(actorRoles, actorControlsNode) || (actorRoles.Contains(EmployeeRole.Worker) && isOwnSession));
 	}
 }
