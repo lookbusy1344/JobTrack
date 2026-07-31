@@ -15,6 +15,16 @@ using Microsoft.Playwright;
 ///     Requires <c>playwright install chromium</c> to have been run once outside this repo's usual
 ///     <c>dotnet restore</c>/<c>dotnet build</c> -- see <c>docs/operations/browser-testing.md</c>.
 /// </remarks>
+/// <summary>
+///     Which point of an element a hit test samples: its middle, or just inside its bottom edge (the edge
+///     an ancestor's clipping or a later sibling's paint order takes away first).
+/// </summary>
+public enum SamplePoint
+{
+	Centre,
+	BottomEdge,
+}
+
 public abstract class JobBrowseBrowserTestsBase
 {
 	private const int RequiredSimultaneousWorkerCount = 3;
@@ -33,6 +43,15 @@ public abstract class JobBrowseBrowserTestsBase
 	private const int DesktopHeight = 800;
 	private const int ReflowWidth = 320;
 	private const int ReflowHeight = 640;
+
+	// What TopmostAtAsync reports when the hit test lands on the element it was asked about; anything
+	// else it returns is a description of whatever was painted over it.
+	private const string TopmostIsExpectedElement = "the expected element";
+
+	// Hit-testing a floating panel samples just inside its own bottom edge rather than exactly on it:
+	// the edge pixel itself belongs to the border, and sub-pixel bounding-box rounding can land the
+	// sample one device pixel outside the element altogether.
+	private const double PopoverEdgeSampleInset = 4.0;
 
 	private readonly BrowserFixture fixture;
 
@@ -497,6 +516,147 @@ public abstract class JobBrowseBrowserTestsBase
 			.BeTrue("a finished row has no Pause, so Correct must be its one phone action");
 		(await phoneRow.GetByTitle("Pause job").IsVisibleAsync()).Should().BeFalse("a finished session has nothing to pause");
 	}
+
+	[Theory]
+	/// <summary>
+	/// A page scrolls as one unit: nothing inside it is its own scrolling region. A nested scroller hides
+	/// content behind a scrollbar a touch reader never sees, fights the page's own scroll gesture, clips
+	/// any popover opened inside it, and pins a sticky table heading to the inner box rather than the
+	/// viewport. Checked at the narrowest and widest viewports on a page carrying every table Browse can
+	/// show — the subtree tree, and a leaf's own Sessions table.
+	/// </summary>
+	[MemberData(nameof(ViewportMatrix))]
+	public async Task Nothing_on_the_browse_page_is_its_own_scrolling_region(int width, int height)
+	{
+		var branchId = await fixture.SeedBranchAsync("Scroll-region branch");
+		_ = await fixture.SeedLeafAsync("Scroll-region first leaf", branchId);
+		_ = await fixture.SeedLeafAsync("Scroll-region second leaf", branchId);
+
+		await using var context = await fixture.NewContextAsync(width, height);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
+
+		var scrollers = await ScrollingRegionsAsync(page);
+
+		scrollers.Should().BeEmpty($"the page should scroll as one unit at {width}x{height}, but these elements scroll on their own: " +
+			string.Join("; ", scrollers));
+	}
+
+	[Fact]
+	/// <summary>
+	/// The Start-for panel opened from the very last row of the subtree table floats over whatever
+	/// follows the table (the Show archived control, the recently-visited list) rather than being clipped
+	/// by an ancestor or painted over by it. Sampled by hit-testing the panel's own bottom edge: a
+	/// clipped or under-painted panel does not answer at the point it appears to occupy.
+	/// </summary>
+	public async Task The_last_rows_start_for_panel_floats_clear_of_everything_below_the_table()
+	{
+		var branchId = await fixture.SeedBranchAsync("Popover branch");
+		_ = await fixture.SeedLeafAsync("Popover first leaf", branchId);
+		var lastLeafId = await fixture.SeedLeafAsync("Popover last leaf", branchId);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+
+		var lastRow = page.Locator("tbody tr", new() { HasTextString = "Popover last leaf" }).Last;
+		var trigger = lastRow.GetByTitle("Start for…");
+		await trigger.ScrollIntoViewIfNeededAsync();
+		await trigger.ClickAsync();
+
+		var panel = lastRow.Locator(".jt-backdate-panel--anchored");
+		(await panel.IsVisibleAsync()).Should().BeTrue($"the Start-for panel for leaf {lastLeafId.Value} should open");
+
+		// <details>'s own toggle event is queued, not dispatched synchronously from the click, so the
+		// panel is briefly open but not yet pinned to the viewport by site.js -- hit-testing it in that
+		// window measures the un-upgraded absolute position and fails for the wrong reason.
+		await Assertions.Expect(panel).ToHaveCSSAsync("position", "fixed");
+
+		var topmostAtBottomEdge = await TopmostAtAsync(panel, ".jt-backdate-panel", SamplePoint.BottomEdge);
+
+		topmostAtBottomEdge.Should().Be(TopmostIsExpectedElement,
+			"the panel's own bottom edge should be the topmost thing at that point — anything else means it is clipped or painted over");
+	}
+
+	[Fact]
+	/// <summary>
+	/// Every column heading paints above the rows beneath it, not behind them: the subtree's description
+	/// cells are positioned (they draw the tree guides), which without an explicit stacking order lets
+	/// row content paint over a heading that overlaps it.
+	/// </summary>
+	public async Task Every_subtree_column_heading_is_the_topmost_thing_at_its_own_position()
+	{
+		var branchId = await fixture.SeedBranchAsync("Heading order branch");
+		_ = await fixture.SeedLeafAsync("Heading order leaf", branchId);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+
+		var headings = page.Locator(".jt-browse-children-table thead th");
+		var headingCount = await headings.CountAsync();
+		headingCount.Should().BeGreaterThan(0);
+
+		for (var index = 0; index < headingCount; ++index) {
+			var heading = headings.Nth(index);
+			if (!await heading.IsVisibleAsync()) {
+				continue;
+			}
+
+			var topmost = await TopmostAtAsync(heading, "thead", SamplePoint.Centre);
+
+			topmost.Should().Be(TopmostIsExpectedElement, $"column heading {index} should not be painted over by the table's own rows");
+		}
+	}
+
+	/// <summary>
+	///     Hit-tests one point of <paramref name="element" /> and reports what the browser says is topmost
+	///     there: <see cref="TopmostIsExpectedElement" /> when it is the element itself (or anything inside
+	///     <paramref name="expectedAncestorSelector" />), otherwise a description of whatever won instead.
+	///     Everything happens in the page, because Playwright's bounding boxes and
+	///     <c>document.elementFromPoint</c> do not share a coordinate space once the page has scrolled.
+	/// </summary>
+	private static async Task<string> TopmostAtAsync(ILocator element, string expectedAncestorSelector, SamplePoint point) =>
+		await element.EvaluateAsync<string>(
+			"""
+			(element, [selector, sampleFromBottom, inset, expected]) => {
+				element.scrollIntoView({ block: "center" });
+				const rect = element.getBoundingClientRect();
+				const x = rect.left + (rect.width / 2);
+				const y = sampleFromBottom ? rect.bottom - inset : rect.top + (rect.height / 2);
+				const hit = document.elementFromPoint(x, y);
+				if (hit === null) {
+					return `off-viewport y=${Math.round(y)} h=${window.innerHeight} ` +
+						`scrollY=${Math.round(window.scrollY)}/${document.documentElement.scrollHeight - window.innerHeight}`;
+				}
+
+				return hit.closest(selector) !== null ? expected : hit.outerHTML.slice(0, 120);
+			}
+			""",
+			new object[] { expectedAncestorSelector, point == SamplePoint.BottomEdge, PopoverEdgeSampleInset, TopmostIsExpectedElement });
+
+	/// <summary>
+	///     Every element whose computed overflow scrolls in either axis, described for a failure message.
+	///     A declaration is enough to fail on: whether it happens to overflow right now depends on the
+	///     data, and the rule is that no element may be a scrolling region at all.
+	/// </summary>
+	private static async Task<string[]> ScrollingRegionsAsync(IPage page) =>
+		await page.EvaluateAsync<string[]>(
+			"""
+			() => Array.from(document.querySelectorAll("body *"))
+				.filter(element => {
+					const style = window.getComputedStyle(element);
+					const scrolls = value => value === "auto" || value === "scroll";
+					return scrolls(style.overflowX) || scrolls(style.overflowY);
+				})
+				.map(element => `${element.tagName.toLowerCase()}.${element.className || "(no class)"}`);
+			""");
 
 	[Fact]
 	public async Task The_job_browse_page_has_no_critical_or_serious_accessibility_violations()

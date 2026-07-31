@@ -42,31 +42,36 @@
 @if (Model.Events.Count == 0) {
 	<p class="jt-empty">No matching audit events.</p>
 } else {
-	<div class="jt-table-scroll">
+	<div class="jt-table-block">
 		<table class="table">
 			<thead>
+			@* Eight columns never fit a phone, and the widest of them (a 36-character correlation id, a
+			   whole before/after field dump) are the least likely to be what someone is scanning for.
+			   When the event happened, what happened, and to which entity survive at every width; the
+			   forensic detail returns as the viewport grows, and every column stays filterable from the
+			   form above regardless of whether it is currently painted. *@
 			<tr>
 				<th>Occurred at</th>
-				<th>Actor</th>
+				<th class="d-none d-md-table-cell">Actor</th>
 				<th>Operation</th>
-				<th>Entity type</th>
-				<th>Entity id</th>
-				<th>Correlation id</th>
-				<th>Reason</th>
-				<th>Detail</th>
+				<th class="d-none d-md-table-cell">Entity type</th>
+				<th class="d-none d-md-table-cell">Entity id</th>
+				<th class="d-none d-xxl-table-cell">Correlation id</th>
+				<th class="d-none d-lg-table-cell">Reason</th>
+				<th class="d-none d-xl-table-cell">Detail</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var auditEvent in Model.Events) {
 				<tr>
 					<td>@InstantDisplay.Format(auditEvent.OccurredAt, Model.ViewerZone)</td>
-					<td class="jt-id">@(auditEvent.ActorId?.Value.ToString() ?? "system")</td>
+					<td class="jt-id d-none d-md-table-cell">@(auditEvent.ActorId?.Value.ToString() ?? "system")</td>
 					<td>@auditEvent.Operation</td>
-					<td>@auditEvent.EntityType</td>
-					<td class="jt-id">@auditEvent.EntityId</td>
-					<td class="jt-id">@auditEvent.CorrelationId</td>
-					<td>@auditEvent.Reason</td>
-					<td>
+					<td class="d-none d-md-table-cell">@auditEvent.EntityType</td>
+					<td class="jt-id d-none d-md-table-cell">@auditEvent.EntityId</td>
+					<td class="jt-id d-none d-xxl-table-cell">@auditEvent.CorrelationId</td>
+					<td class="d-none d-lg-table-cell">@auditEvent.Reason</td>
+					<td class="d-none d-xl-table-cell">
 						@if (auditEvent.IsRedacted) {
 							<span>redacted</span>
 						} else {

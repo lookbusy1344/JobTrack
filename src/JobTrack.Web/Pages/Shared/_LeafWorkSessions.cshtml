@@ -23,7 +23,7 @@
 @if (Model.Sessions.Count == 0) {
 	<p class="jt-empty">@(Model.DisplayedWorkedByName is null ? "No sessions yet." : $"No sessions for {Model.DisplayedWorkedByName}.")</p>
 } else {
-	<div class="jt-table-scroll">
+	<div class="jt-table-block">
 		<table class="table">
 			<thead>
 			<tr>

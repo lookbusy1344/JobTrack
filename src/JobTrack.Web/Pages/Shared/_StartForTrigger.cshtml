@@ -6,8 +6,8 @@
    (`jt-backdate-panel--anchored`, positioned absolute against this <details> element), which pushes
    nothing else on the page down. The icon-only per-row variant anchors to the trigger's *right* edge
    and grows left (`--anchor-end`) since it sits at a table's rightmost column, where growing right
-   risks the panel running past the viewport or into `.jt-table-scroll`'s clipped horizontal
-   overflow; the labelled toolbar variant anchors left and grows right, where there is more room. *@
+   risks the panel running past the viewport; the labelled toolbar variant anchors left and grows
+   right, where there is more room. *@
 <details class="jt-start-for-disclosure" id="@Model.RowId">
 	@if (Model.Labelled) {
 		<summary class="btn btn-secondary jt-start-for-summary">

@@ -27,14 +27,17 @@
 	@if (Model.Snapshot.Versions.Count == 0) {
 		<p class="jt-empty">None.</p>
 	} else {
-		<div class="jt-table-scroll">
+		<div class="jt-table-block">
 			<table class="table">
 				<thead>
 				<tr>
+					@* A phone keeps the version's own identity (when it starts) and the one way into it
+					   (Correct, which shows every dropped field in full); the rest come back as the
+					   viewport widens. *@
 					<th>Effective start</th>
-					<th>Effective end</th>
-					<th>Zone</th>
-					<th>Weekly intervals</th>
+					<th class="d-none d-md-table-cell">Effective end</th>
+					<th class="d-none d-lg-table-cell">Zone</th>
+					<th class="d-none d-lg-table-cell">Weekly intervals</th>
 					<th></th>
 				</tr>
 				</thead>
@@ -42,9 +45,9 @@
 				@foreach (var version in Model.Snapshot.Versions) {
 					<tr>
 						<td>@version.Schedule.EffectiveStart</td>
-						<td>@(version.Schedule.EffectiveEnd?.ToString() ?? "current")</td>
-						<td>@version.Schedule.Zone.Id</td>
-						<td>
+						<td class="d-none d-md-table-cell">@(version.Schedule.EffectiveEnd?.ToString() ?? "current")</td>
+						<td class="d-none d-lg-table-cell">@version.Schedule.Zone.Id</td>
+						<td class="d-none d-lg-table-cell">
 							@foreach (var interval in version.Schedule.WeeklyIntervals) {
 								<div>@interval.Day @interval.Start to @interval.End</div>
 							}
@@ -106,15 +109,17 @@
 	@if (Model.Snapshot.Exceptions.Count == 0) {
 		<p class="jt-empty">None.</p>
 	} else {
-		<div class="jt-table-scroll">
+		<div class="jt-table-block">
 			<table class="table">
 				<thead>
 				<tr>
+					@* Same reflow as the versions table above: a phone keeps what the exception is, when
+					   it starts, and the way into its full record. *@
 					<th>Effect</th>
 					<th>Start</th>
-					<th>End</th>
-					<th>Rate override</th>
-					<th>Reason</th>
+					<th class="d-none d-md-table-cell">End</th>
+					<th class="d-none d-lg-table-cell">Rate override</th>
+					<th class="d-none d-lg-table-cell">Reason</th>
 					<th></th>
 				</tr>
 				</thead>
@@ -123,9 +128,9 @@
 					<tr>
 						<td>@EnumDisplay.Label(exception.Entry.Effect)</td>
 						<td>@InstantDisplay.Format(exception.Entry.Interval.Start, Model.ViewerZone)</td>
-						<td>@InstantDisplay.Format(exception.Entry.Interval.End, Model.ViewerZone)</td>
-						<td>@(exception.Entry.RateOverride?.AmountPerHour.ToString() ?? "-")</td>
-						<td>@exception.Reason</td>
+						<td class="d-none d-md-table-cell">@InstantDisplay.Format(exception.Entry.Interval.End, Model.ViewerZone)</td>
+						<td class="d-none d-lg-table-cell">@(exception.Entry.RateOverride?.AmountPerHour.ToString() ?? "-")</td>
+						<td class="d-none d-lg-table-cell">@exception.Reason</td>
 						<td>
 							<a asp-page="/Rota/CorrectException" asp-route-userId="@Model.DisplayedUserId"
 							   asp-route-exceptionId="@exception.Id.Value">Correct</a>

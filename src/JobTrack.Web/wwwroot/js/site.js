@@ -16,12 +16,13 @@ document.addEventListener('click', (event) => {
 // Toggle a backdate popover (data-jt-disclosure-toggle="<target id>") open/closed. The panel floats
 // over the page from the trigger's own position (`.jt-backdate-panel--floating`, position: fixed)
 // rather than pushing surrounding content down, so on first open it is moved to the end of <body> --
-// this also escapes any ancestor's own overflow clipping (e.g. `.jt-table-scroll`'s horizontal
-// scroll), which a plain `position: absolute` panel nested inside the table could not. aria-controls/
+// this also escapes any ancestor's own overflow clipping (e.g. the Browse row-height clamp's
+// `overflow: hidden`), which a plain `position: absolute` panel nested inside the table could not. aria-controls/
 // aria-expanded associate trigger and panel by id, which keeps working regardless of where the panel
 // ends up in the DOM. Start-for uses native details/summary instead of this hook entirely, so its
 // complete form remains usable without JavaScript; its panel floats via plain CSS positioning
-// against its own <details> element (see _StartForTrigger.cshtml).
+// against its own <details> element, and is pinned to the viewport by this same positioning function
+// when JavaScript is available (see pinStartForPanel below and _StartForTrigger.cshtml).
 function positionFloatingPopover(panel, trigger) {
     const margin = 8;
     const triggerRect = trigger.getBoundingClientRect();
@@ -99,15 +100,57 @@ document.addEventListener('click', (event) => {
     document.addEventListener('keydown', target._jtEscape, true);
 });
 
-// The reverse of the exclusion above: opening a Start-for <details> closes any open floating
-// backdate popover, so the two disclosure mechanisms still never show at once. The 'toggle' event
-// doesn't bubble, but a capturing listener on document still sees it on its way down to the target.
-document.addEventListener('toggle', (event) => {
-    const details = event.target;
-    if (!(details instanceof HTMLDetailsElement) || !details.classList.contains('jt-start-for-disclosure') || !details.open) {
+// Pin an open Start-for panel to the viewport at coordinates computed from its own <summary>. The
+// panel stays where it is in the DOM (moving it would break the native details/summary disclosure
+// relationship assistive tech relies on) -- only its positioning scheme changes, from `absolute`
+// against its <details> to `fixed`. That matters for the last row of a table: an absolutely
+// positioned box inside a table does not extend the document's scrollable area, so a panel hanging
+// below the final row cannot be scrolled to at all. Without JavaScript the plain CSS anchoring still
+// applies (see _StartForTrigger.cshtml), so the form is never unreachable.
+function pinStartForPanel(details) {
+    const panel = details.querySelector('.jt-backdate-panel');
+    const summary = details.querySelector('summary');
+    if (!panel || !summary) {
         return;
     }
 
+    panel.classList.add('jt-backdate-panel--pinned');
+    panel._jtReposition = () => positionFloatingPopover(panel, summary);
+    panel._jtReposition();
+
+    window.addEventListener('scroll', panel._jtReposition, true);
+    window.addEventListener('resize', panel._jtReposition);
+}
+
+function unpinStartForPanel(details) {
+    const panel = details.querySelector('.jt-backdate-panel');
+    if (!panel) {
+        return;
+    }
+
+    panel.classList.remove('jt-backdate-panel--pinned');
+    panel.style.removeProperty('top');
+    panel.style.removeProperty('left');
+    window.removeEventListener('scroll', panel._jtReposition, true);
+    window.removeEventListener('resize', panel._jtReposition);
+}
+
+// Opening a Start-for <details> pins its panel (above) and closes any open floating backdate popover,
+// so the two disclosure mechanisms never show at once -- the reverse of the exclusion above. The
+// 'toggle' event doesn't bubble, but a capturing listener on document still sees it on its way down
+// to the target.
+document.addEventListener('toggle', (event) => {
+    const details = event.target;
+    if (!(details instanceof HTMLDetailsElement) || !details.classList.contains('jt-start-for-disclosure')) {
+        return;
+    }
+
+    if (!details.open) {
+        unpinStartForPanel(details);
+        return;
+    }
+
+    pinStartForPanel(details);
     document.querySelectorAll('.jt-backdate-panel--floating:not([hidden])').forEach((panel) => {
         const trigger = document.querySelector(`[data-jt-disclosure-toggle="${panel.id}"]`);
         if (trigger) {

@@ -1169,10 +1169,13 @@ fieldset legend {
 .jt-tree-cell {
     position: relative;
 
-    /* Names are the reason to look at this table: give them room to sit on one line at the depths
-       that matter, and let `.jt-table-scroll` take the overflow rather than wrapping every row into
-       three lines and destroying the stepped silhouette. */
-    min-width: 20rem;
+    /* Names are the reason to look at this table, so the column asks for room to hold one at the
+       depths that matter -- but only as much as the viewport can actually spare. `min-width` would
+       be a floor the table could not go below, forcing the page into the horizontal scroll this
+       layout no longer has anywhere to put; `width` is a preference table layout satisfies when
+       there is room and shrinks when there isn't. The two-line clamp below bounds what wrapping
+       can do to the stepped silhouette. */
+    width: 20rem;
     vertical-align: top;
 }
 
@@ -1407,11 +1410,22 @@ fieldset legend {
 }
 
 /* The icon-only per-row Start-for trigger sits in a table's rightmost column, so its panel grows
-   leftward from that edge instead of risking an overflow past the viewport or into
-   `.jt-table-scroll`'s clipped horizontal overflow. */
+   leftward from that edge instead of risking an overflow past the viewport. */
 .jt-backdate-panel--anchor-end {
     left: auto;
     right: 0;
+}
+
+/* site.js's JavaScript upgrade of an --anchored panel: same panel, same place in the DOM, but pinned
+   to the viewport at coordinates computed from its own trigger (`top`/`left` arrive inline), so it
+   can flip above the trigger when there is no room below. The absolute anchoring above cannot do
+   that, and worse, an absolutely positioned box inside a table does not extend the document's
+   scrollable area -- a panel opened from a table's last row hangs below the end of the page where
+   nothing can scroll to it. `right: auto` undoes --anchor-end: with `left` set inline as well, the
+   two together would stretch the panel between both edges. */
+.jt-backdate-panel--pinned {
+    position: fixed;
+    right: auto;
 }
 
 /* Every _BackdatePanel: site.js moves it to the end of <body> and sets its own top/left inline the
@@ -1611,7 +1625,6 @@ nav[aria-label="breadcrumb"] ol {
     box-shadow: var(--jt-shadow-sm);
     color: var(--jt-muted);
     max-width: 100%;
-    overflow-x: auto;
 }
 
 nav[aria-label="breadcrumb"] li {
@@ -1631,11 +1644,12 @@ nav[aria-label="breadcrumb"] li + li::before {
 
 /* ---- Tables (ledger) ---------------------------------------------------------------------- */
 
-/* Horizontal scroll lives on `.jt-table-scroll` so the table itself keeps `display: table` and
-   columns expand to the full content width on wide viewports. */
-.jt-table-scroll {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+/* A table's block wrapper: spacing and a width bound, deliberately *not* a scrolling region. A page
+   scrolls as one unit (CLAUDE.md), so a table that will not fit reflows -- columns drop out at their
+   breakpoints via Bootstrap display utilities and names wrap -- rather than hiding its right-hand
+   columns behind a scrollbar a touch reader never sees, clipping any popover opened in a row, and
+   giving `position: sticky` an inner box to stick to instead of the viewport. */
+.jt-table-block {
     max-width: 100%;
     margin-bottom: var(--jt-space-4);
 }
@@ -1654,9 +1668,13 @@ nav[aria-label="breadcrumb"] li + li::before {
     color: var(--jt-ink);
 }
 
+/* Not sticky: with the page scrolling as one unit the only thing a sticky heading could stick to is
+   the viewport, where `.app-header` (sticky, opaque, z-index 1030) already sits -- the headings would
+   slide underneath it and be replaced by nothing. A heading row that scrolls away with its table is
+   also the one that can never paint over, or under, the rows it labels. Headings wrap, too: with no
+   horizontal scroller to absorb them, a `white-space: nowrap` heading ("Amount per hour") is a hard
+   floor on its column's width and the usual reason a narrow viewport overflows. */
 .table thead th {
-    position: sticky;
-    top: 0;
     background: var(--jt-surface-2);
     border-bottom: 1px solid var(--jt-line-strong);
     padding: 0.75rem 1rem;
@@ -1665,7 +1683,6 @@ nav[aria-label="breadcrumb"] li + li::before {
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--jt-muted);
-    white-space: nowrap;
 }
 
 .table tbody td {
