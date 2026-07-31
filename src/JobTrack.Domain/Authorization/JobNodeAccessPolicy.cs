@@ -23,7 +23,7 @@ public static class JobNodeAccessPolicy
 
 		return !actorRoles.Contains(EmployeeRole.Requester)
 			   && (actorRoles.Contains(EmployeeRole.Administrator)
-			   || actorRoles.Contains(EmployeeRole.JobManager)
-			   || (actorRoles.Contains(EmployeeRole.Worker) && actorOwnsNodeOrAncestor));
+				   || actorRoles.Contains(EmployeeRole.JobManager)
+				   || (actorRoles.Contains(EmployeeRole.Worker) && actorOwnsNodeOrAncestor));
 	}
 }

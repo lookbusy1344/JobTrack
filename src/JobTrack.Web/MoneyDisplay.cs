@@ -14,5 +14,8 @@ using Abstractions;
 /// </remarks>
 internal static class MoneyDisplay
 {
-	internal static string Format(Money money) => money.ToString();
+	/// <summary>Stands in for a zero cost so it doesn't read as "nothing recorded".</summary>
+	private const string ZeroCostPlaceholder = "-";
+
+	internal static string Format(Money money) => money.Amount == 0m ? ZeroCostPlaceholder : money.ToString();
 }

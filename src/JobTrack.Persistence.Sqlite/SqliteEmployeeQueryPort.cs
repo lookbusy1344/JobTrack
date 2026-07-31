@@ -72,16 +72,15 @@ internal sealed class SqliteEmployeeQueryPort : IEmployeeQueryPort
 		await using var context = CreateContext();
 
 		var rows = await (
-				from iu in context.Set<IdentityUserEntity>().AsNoTracking()
-				join ur in context.Set<IdentityUserRoleEntity>().AsNoTracking() on iu.Id equals ur.IdentityUserId
-				join au in context.Set<AppUserEntity>().AsNoTracking() on iu.AppUserId equals au.Id
-				where iu.IsEnabled
-					  && WorkflowRoleIds.Contains(ur.IdentityRoleId)
-					  && !context.Set<IdentityUserRoleEntity>().Any(
-						  requesterRole => requesterRole.IdentityUserId == iu.Id
-										   && requesterRole.IdentityRoleId == (short)EmployeeRole.Requester)
-				select new { au.Id, au.DisplayName, iu.UserName }
-			).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+			from iu in context.Set<IdentityUserEntity>().AsNoTracking()
+			join ur in context.Set<IdentityUserRoleEntity>().AsNoTracking() on iu.Id equals ur.IdentityUserId
+			join au in context.Set<AppUserEntity>().AsNoTracking() on iu.AppUserId equals au.Id
+			where iu.IsEnabled
+				  && WorkflowRoleIds.Contains(ur.IdentityRoleId)
+				  && !context.Set<IdentityUserRoleEntity>().Any(requesterRole => requesterRole.IdentityUserId == iu.Id
+																				 && requesterRole.IdentityRoleId == (short)EmployeeRole.Requester)
+			select new { au.Id, au.DisplayName, iu.UserName }
+		).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return EquatableArray.CopyOf(
 			rows.Select(row => new EmployeeDirectoryEntry { Id = row.Id, DisplayName = row.DisplayName, UserName = row.UserName })

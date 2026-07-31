@@ -233,6 +233,34 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Both_start_disclosure_panels_give_their_submit_the_primary_button_treatment()
+	{
+		// A floating disclosure panel has exactly one action, and it is why the panel was opened, so
+		// it takes `btn btn-primary` in both panels. "Start for…" used to hardcode `btn-secondary`
+		// while the backdated-start panel beside it took the accent, which read as the two panels
+		// disagreeing about whether their own submit was the thing to click.
+		var ownerId = await SeedEmployeeAsync("work.panel.primary-owner", EmployeeRole.Administrator);
+		_ = await SeedEmployeeAsync("work.panel.primary-target", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Panel button leaf");
+		var authCookie = await SignInAsync("work.panel.primary-owner");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}&workedByUserId={ownerId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("Start for…", "the disclosure under test must actually be on the page");
+		SubmitButtonClass(body, StartForSubmitPattern(), "Start session for worker").Should().Be("btn btn-primary");
+		SubmitButtonClass(body, BackdatedStartSubmitPattern(), "Start session at this time").Should().Be("btn btn-primary");
+	}
+
+	/// <summary>The <c>class</c> of the submit button <paramref name="pattern" /> matches.</summary>
+	private static string SubmitButtonClass(string body, Regex pattern, string label)
+	{
+		var match = pattern.Match(body);
+		match.Success.Should().BeTrue($"the page should have a submit button labelled '{label}'");
+		return match.Groups["class"].Value;
+	}
+
+	[Fact]
 	public async Task The_start_for_disclosure_survives_an_active_session_on_the_leaf()
 	{
 		// Same rule as Browse's leaf toolbar: only the viewer's *own* primary action toggles when they
@@ -1925,6 +1953,14 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	/// <summary>The leaf toolbar's own one-click Start button, as distinct from "Start session for worker".</summary>
 	[GeneratedRegex(@">\s*Start session\s*</button>")]
 	private static partial Regex OwnStartButtonPattern();
+
+	// Both capture the submit's class across the glyph <svg> that sits between the opening tag and
+	// the label -- `(?:(?!</button>).)*?` keeps the match inside the one button it started in.
+	[GeneratedRegex("""<button type="submit" class="(?<class>[^"]*)"[^>]*>(?:(?!</button>).)*?Start session for worker""", RegexOptions.Singleline)]
+	private static partial Regex StartForSubmitPattern();
+
+	[GeneratedRegex("""<button type="submit" class="(?<class>[^"]*)"[^>]*>(?:(?!</button>).)*?Start session at this time""", RegexOptions.Singleline)]
+	private static partial Regex BackdatedStartSubmitPattern();
 
 	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
 	{

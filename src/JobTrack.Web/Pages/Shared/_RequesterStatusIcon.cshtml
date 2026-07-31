@@ -1,5 +1,5 @@
 @using JobTrack.Abstractions
-@model RequesterStatus
+@model JobTrack.Abstractions.RequesterStatus
 @{
 	var glyph = Model switch {
 		RequesterStatus.Submitted or RequesterStatus.Accepted or RequesterStatus.Waiting =>

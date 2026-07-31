@@ -176,6 +176,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 			grantCommand.Parameters.AddWithValue("roleId", (short)EmployeeRole.Requester);
 			_ = await grantCommand.ExecuteNonQueryAsync();
 		}
+
 		await roleTransaction.CommitAsync();
 
 		var completed = await Task.WhenAny(assignment, Task.Delay(RowLockObservationTimeout));

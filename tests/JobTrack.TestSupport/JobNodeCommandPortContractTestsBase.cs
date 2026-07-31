@@ -138,6 +138,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		await using (var connection = await OpenExistingConnectionAsync()) {
 			await AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
 		}
+
 		var port = CreateCommandPort(database.ConnectionString);
 
 		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, requesterId, rootId));
@@ -961,10 +962,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 					OwnerUserId = workerId,
 					Priority = Priority.Medium,
 					LeafWork = new() {
-						WorkedByUserId = requesterId,
-						StartedAt = now - Duration.FromHours(1),
-						FinishedAt = now,
-						Achievement = Achievement.Success,
+						WorkedByUserId = requesterId, StartedAt = now - Duration.FromHours(1), FinishedAt = now, Achievement = Achievement.Success,
 					},
 				},
 			],

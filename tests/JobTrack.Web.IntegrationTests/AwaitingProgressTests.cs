@@ -572,7 +572,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		body.Should().Contain("<th class=\"jt-col-active\">Active</th>");
+		body.Should().Contain("<th class=\"jt-col-active d-none d-md-table-cell\">Active</th>");
 		body.Should().Contain(">Priority</th>");
 		body.Should().Contain("Active since");
 	}
@@ -814,7 +814,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("Paused costed leaf");
 		body.Should().Contain("Active costed leaf");
-		body.Should().Contain(">&#xA3;200.00 / 8.0 hrs<");
+		body.Should().Contain(">&#xA3;200.00 /&#xA0;8.0 hrs<");
 
 		// The active leaf's session is still running: its accrued cost grows with real elapsed time
 		// between the `now` captured above and this request actually rendering, so an exact string match

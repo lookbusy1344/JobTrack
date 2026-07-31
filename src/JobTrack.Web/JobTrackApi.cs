@@ -491,7 +491,8 @@ internal static partial class JobTrackApi
 		_ = api.MapGet("/requests/{jobNodeId:long}", GetRequestDetailAsync)
 			.RequireAuthorization(JobTrackPolicyNames.RequestDetailAccess)
 			.WithName("GetRequestDetail")
-			.WithSummary("Get one permitted request's requester-safe detail: status, read-only subtree with allocated hours, and visible notes (ADR 0034/0054).")
+			.WithSummary(
+				"Get one permitted request's requester-safe detail: status, read-only subtree with allocated hours, and visible notes (ADR 0034/0054).")
 			.Produces<RequestDetailResponse>()
 			.ProducesProblem(StatusCodes.Status401Unauthorized)
 			.ProducesProblem(StatusCodes.Status403Forbidden)

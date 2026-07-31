@@ -68,10 +68,17 @@ document.addEventListener('click', (event) => {
         document.body.appendChild(target);
     }
 
+    // Start-for's native <details> and this floating popover are independent disclosures that can
+    // otherwise both end up open and overlapping (they share the same z-index) -- opening one closes
+    // the other so only one popup is ever showing.
+    document.querySelectorAll('.jt-start-for-disclosure[open]').forEach((details) => details.removeAttribute('open'));
+
     target.removeAttribute('hidden');
     trigger.setAttribute('aria-expanded', 'true');
     positionFloatingPopover(target, trigger);
-    target.querySelector('input[type="datetime-local"], select, input[type="text"]')?.focus();
+    // Deliberately not auto-focusing the datetime-local field here: focusing it immediately pops the
+    // native date/time picker on mobile browsers before the user has read the panel, which reads as
+    // the page misbehaving rather than as a helpful default.
 
     target._jtReposition = () => positionFloatingPopover(target, trigger);
     target._jtOutsideClick = (outsideEvent) => {
@@ -91,6 +98,23 @@ document.addEventListener('click', (event) => {
     document.addEventListener('click', target._jtOutsideClick, true);
     document.addEventListener('keydown', target._jtEscape, true);
 });
+
+// The reverse of the exclusion above: opening a Start-for <details> closes any open floating
+// backdate popover, so the two disclosure mechanisms still never show at once. The 'toggle' event
+// doesn't bubble, but a capturing listener on document still sees it on its way down to the target.
+document.addEventListener('toggle', (event) => {
+    const details = event.target;
+    if (!(details instanceof HTMLDetailsElement) || !details.classList.contains('jt-start-for-disclosure') || !details.open) {
+        return;
+    }
+
+    document.querySelectorAll('.jt-backdate-panel--floating:not([hidden])').forEach((panel) => {
+        const trigger = document.querySelector(`[data-jt-disclosure-toggle="${panel.id}"]`);
+        if (trigger) {
+            closeFloatingPopover(panel, trigger);
+        }
+    });
+}, true);
 
 // Clear client-side "recently visited" job history on sign-out (data-jt-clear-history-on-submit),
 // so a stale account's breadcrumbs never leak into the next signed-in session. The storage key must

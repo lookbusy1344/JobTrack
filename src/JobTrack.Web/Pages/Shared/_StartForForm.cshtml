@@ -18,7 +18,9 @@
 		<label for="@(Model.RowId)-input">Started at (leave blank for now)</label>
 		<input type="datetime-local" id="@(Model.RowId)-input" name="startedAt" class="form-control" step="60"/>
 	</div>
-	<button type="submit" class="btn btn-secondary">
+	@* Primary, like the backdated-start panel's own submit: a floating disclosure panel has exactly
+	   one action, and it is the reason the panel was opened. *@
+	<button type="submit" class="btn btn-primary">
 		<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 			<use href="#jt-icon-start"></use>
 		</svg>

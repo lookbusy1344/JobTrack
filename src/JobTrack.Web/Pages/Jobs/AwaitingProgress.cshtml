@@ -21,36 +21,38 @@
 	</p>
 }
 
-<form method="get" asp-page="/Jobs/AwaitingProgress" class="jt-form-card">
+<form method="get" asp-page="/Jobs/AwaitingProgress" class="jt-form-card jt-filter-form">
 	<input type="hidden" asp-for="SubtreeRootId"/>
 	<input type="hidden" asp-for="ShowWholeTree"/>
-	<div class="form-group">
-		<label asp-for="OwnerUserId">Owner</label>
-		<select asp-for="OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
-	</div>
-	<div class="form-group">
-		<label asp-for="UnassignedOnly">
-			<input asp-for="UnassignedOnly"/>
-			Unassigned only (the pickup pool)
-		</label>
-	</div>
-	<div class="form-group">
-		<label asp-for="ExcludeBlocked">
-			<input asp-for="ExcludeBlocked"/>
-			Hide blocked jobs (unsatisfied prerequisites)
-		</label>
-	</div>
-	@* Narrows by achievement, not by who is clocked on: a paused leaf is still in progress, so it
-	   stays in. The Owner selector above is the "everyone or a given person" half of this filter. *@
-	<div class="form-group">
-		<label asp-for="InProgressOnly">
-			<input asp-for="InProgressOnly"/>
-			In progress only (started, not closed &mdash; includes paused)
-		</label>
-	</div>
-	<div class="form-group">
-		<label asp-for="SearchText"></label>
-		<input asp-for="SearchText" class="form-control"/>
+	<div class="row g-3">
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="OwnerUserId">Owner</label>
+			<select asp-for="OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
+		</div>
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="SearchText"></label>
+			<input asp-for="SearchText" class="form-control"/>
+		</div>
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="UnassignedOnly">
+				<input asp-for="UnassignedOnly"/>
+				Unassigned only (the pickup pool)
+			</label>
+		</div>
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="ExcludeBlocked">
+				<input asp-for="ExcludeBlocked"/>
+				Hide blocked jobs (unsatisfied prerequisites)
+			</label>
+		</div>
+		@* Narrows by achievement, not by who is clocked on: a paused leaf is still in progress, so it
+		   stays in. The Owner selector above is the "everyone or a given person" half of this filter. *@
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="InProgressOnly">
+				<input asp-for="InProgressOnly"/>
+				In progress only (started, not closed &mdash; includes paused)
+			</label>
+		</div>
 	</div>
 	<button type="submit" class="btn btn-primary">Apply</button>
 	<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.SubtreeRootId">Browse</a>
@@ -64,12 +66,12 @@
 			<thead>
 			<tr>
 				<th>Description</th>
-				<th class="jt-col-secondary jt-col-owner">Owner</th>
-				<th class="jt-col-active">Active</th>
-				<th class="jt-col-cost text-end">Cost</th>
-				<th class="jt-col-cost">Achievement</th>
-				<th class="jt-col-secondary">Priority</th>
-				<th class="jt-col-secondary">Deadline</th>
+				<th class="jt-col-secondary jt-col-owner d-none d-lg-table-cell">Owner</th>
+				<th class="jt-col-active d-none d-md-table-cell">Active</th>
+				<th class="jt-col-cost text-end d-none d-md-table-cell">Cost</th>
+				<th class="jt-col-cost d-none d-md-table-cell">Achievement</th>
+				<th class="jt-col-secondary d-none d-lg-table-cell">Priority</th>
+				<th class="jt-col-secondary d-none d-lg-table-cell">Deadline</th>
 				<th class="text-end">Actions</th>
 			</tr>
 			</thead>
@@ -86,8 +88,8 @@
 						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 						   asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 					</td>
-					<td class="jt-col-secondary jt-col-owner">@Model.DescribeOwner(entry.OwnerUserId)</td>
-					<td class="jt-col-active">
+					<td class="jt-col-secondary jt-col-owner d-none d-lg-table-cell">@Model.DescribeOwner(entry.OwnerUserId)</td>
+					<td class="jt-col-active d-none d-md-table-cell">
 						<partial name="_ActiveSincePill"
 						         model="@(new ActiveSessionSummaryModel {
 							                ActiveSessions = entryActions.ActiveSessions,
@@ -99,20 +101,20 @@
 							                Paused = entryActions.IsPaused,
 						                })"/>
 					</td>
-					<td class="jt-col-cost text-end">@(entry.Cost.HasValue && entry.AllocatedDuration is not null
-						? CostDisplay.Format(entry.Cost.Value, entry.AllocatedDuration)
-						: null)</td>
-					<td class="jt-col-cost">
+					<td class="jt-col-cost text-end d-none d-md-table-cell">@(entry.Cost.HasValue && entry.AllocatedDuration is not null
+							? CostDisplay.Format(entry.Cost.Value, entry.AllocatedDuration)
+							: null)</td>
+					<td class="jt-col-cost d-none d-md-table-cell">
 						@if (entry.Achievement is Achievement achievement) {
 							<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = achievement })"/>
 						} else {
 							<span class="jt-muted">None</span>
 						}
 					</td>
-					<td class="jt-col-secondary">
+					<td class="jt-col-secondary d-none d-lg-table-cell">
 						<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = entry.Priority })"/>
 					</td>
-					<td class="jt-col-secondary">@{ var needed = entry.NeededFinish ?? entry.NeededStart; }
+					<td class="jt-col-secondary d-none d-lg-table-cell">@{ var needed = entry.NeededFinish ?? entry.NeededStart; }
 						@(needed.HasValue ? InstantDisplay.Format(needed.Value, Model.ViewerZone) : null)</td>
 					<td>
 						<partial name="_WorkRowActions" model="entryActions"/>

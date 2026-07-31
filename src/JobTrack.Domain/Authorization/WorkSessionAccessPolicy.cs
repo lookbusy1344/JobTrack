@@ -27,8 +27,8 @@ public static class WorkSessionAccessPolicy
 
 		return !actorRoles.Contains(EmployeeRole.Requester)
 			   && (actorRoles.Contains(EmployeeRole.Administrator)
-			   || actorRoles.Contains(EmployeeRole.JobManager)
-			   || (actorRoles.Contains(EmployeeRole.Worker) && actorControlsNode));
+				   || actorRoles.Contains(EmployeeRole.JobManager)
+				   || (actorRoles.Contains(EmployeeRole.Worker) && actorControlsNode));
 	}
 
 	/// <summary>
@@ -53,11 +53,11 @@ public static class WorkSessionAccessPolicy
 
 		return !actorRoles.Contains(EmployeeRole.Requester)
 			   && actorRoles.Any(role => role is EmployeeRole.Administrator
-			or EmployeeRole.JobManager
-			or EmployeeRole.Worker
-			or EmployeeRole.RateManager
-			or EmployeeRole.CostViewer
-			or EmployeeRole.Auditor);
+				   or EmployeeRole.JobManager
+				   or EmployeeRole.Worker
+				   or EmployeeRole.RateManager
+				   or EmployeeRole.CostViewer
+				   or EmployeeRole.Auditor);
 	}
 
 	/// <summary>

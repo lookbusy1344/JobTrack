@@ -526,8 +526,7 @@ internal sealed class JobQueries : IJobQueries
 
 		return [
 			.. summaries.Select(summary => summary with {
-				Cost = metrics.Costs.GetValueOrDefault(summary.Id),
-				AllocatedDuration = metrics.Durations.GetValueOrDefault(summary.Id),
+				Cost = metrics.Costs.GetValueOrDefault(summary.Id), AllocatedDuration = metrics.Durations.GetValueOrDefault(summary.Id),
 			}),
 		];
 	}
@@ -552,8 +551,7 @@ internal sealed class JobQueries : IJobQueries
 
 		return [
 			.. entries.Select(entry => entry with {
-				Cost = metrics.Costs.GetValueOrDefault(entry.Id),
-				AllocatedDuration = metrics.Durations.GetValueOrDefault(entry.Id),
+				Cost = metrics.Costs.GetValueOrDefault(entry.Id), AllocatedDuration = metrics.Durations.GetValueOrDefault(entry.Id),
 			}),
 		];
 	}

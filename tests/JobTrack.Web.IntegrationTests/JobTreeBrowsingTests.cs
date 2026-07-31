@@ -419,8 +419,29 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Cost</dt>");
-		body.Should().Contain(">&#xA3;200.00 / 8.0 hrs<");
+		body.Should().Contain(">&#xA3;200.00 /&#xA0;8.0 hrs<");
 		body.Should().NotContain("Subtree cost");
+	}
+
+	[Fact]
+	public async Task Browsing_a_node_costed_at_a_zero_rate_shows_a_dash_instead_of_zero_amounts()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.zero-cost");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, adminId, "Zero-cost branch");
+		var leafId = await AddChildAsync(branchId, workerId, "Zero-cost leaf");
+		await AttachLeafWorkAsync(leafId, adminId);
+		await AddWorkingWindowAsync(workerId, adminId);
+		await AddUserCostRateAsync(workerId, adminId, 0m);
+		await AddFinishedSessionAsync(workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 17, 0));
+		var authCookie = await SignInAsync("browse.zero-cost");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain("&#xA3;0.00");
+		body.Should().Contain(">-<");
 	}
 
 	[Fact]
@@ -441,7 +462,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Costed leaf</a>");
-		body.Should().Contain(">&#xA3;200.00 / 8.0 hrs<");
+		body.Should().Contain(">&#xA3;200.00 /&#xA0;8.0 hrs<");
 	}
 
 	[Fact]
@@ -464,7 +485,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("Fit oak cabinets");
 		// Unlike the leaf/branch detail views, the search results table renders the cost directly
 		// inside the table cell rather than inside a wrapping <span>, so this isn't tag-delimited.
-		body.Should().Contain("&#xA3;200.00 / 8.0 hrs");
+		body.Should().Contain("&#xA3;200.00 /&#xA0;8.0 hrs");
 	}
 
 	[Fact]

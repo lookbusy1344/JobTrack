@@ -133,8 +133,8 @@
 									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, ShowLabel = false })"/>
 								</td>
 								<td>@(node.Cost is Money cost && node.AllocatedDuration is not null
-									? CostDisplay.Format(cost, node.AllocatedDuration)
-									: null)</td>
+										? CostDisplay.Format(cost, node.AllocatedDuration)
+										: null)</td>
 								<td>@(node.ArchivedAt is not null ? "yes" : "no")</td>
 								<td>
 									@if (Model.ExistingRequiresIds.Contains(node.Id) || Model.ExistingRequiredByIds.Contains(node.Id)) {

@@ -304,11 +304,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = blocker.Id });
-		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = context,
-			DependentJobId = submitted.JobNodeId,
-			RequiredJobId = blocker.Id,
-		});
+		await seedClient.Jobs.AddPrerequisiteAsync(new() { Context = context, DependentJobId = submitted.JobNodeId, RequiredJobId = blocker.Id });
 		var authCookie = await SignInAsync("rita.blocked");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
@@ -863,6 +859,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 	}
 
+	[GeneratedRegex(
+		"""<span class="jt-preserve-whitespace">Replace feed roller</span>\s*<span class="jt-achievement-icon jt-achievement-icon--in-progress">""")]
+	private static partial Regex MyRegex();
+
 	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
 	{
 		protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -872,7 +872,4 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
 		}
 	}
-
-	[GeneratedRegex("""<span class="jt-preserve-whitespace">Replace feed roller</span>\s*<span class="jt-achievement-icon jt-achievement-icon--in-progress">""")]
-	private static partial Regex MyRegex();
 }

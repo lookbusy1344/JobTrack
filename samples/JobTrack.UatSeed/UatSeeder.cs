@@ -250,19 +250,15 @@ public static class UatSeeder
 	private static Task<JobRequestResult> SubmitDemoRequestAsync(
 		IJobTrackClient client, CommandContext requesterContext, RequestHoldingAreaId holdingAreaId, string description,
 		CancellationToken cancellationToken) =>
-		client.Requests.SubmitAsync(new() {
-			Context = requesterContext with { CorrelationId = Guid.NewGuid() },
-			HoldingAreaId = holdingAreaId,
-			Description = description,
-		}, cancellationToken);
+		client.Requests.SubmitAsync(
+			new() { Context = requesterContext with { CorrelationId = Guid.NewGuid() }, HoldingAreaId = holdingAreaId, Description = description },
+			cancellationToken);
 
 	private static Task<JobRequestResult> AcknowledgeDemoRequestAsync(
 		IJobTrackClient client, CommandContext jobManagerContext, JobRequestResult request, CancellationToken cancellationToken) =>
-		client.Requests.AcknowledgeAsync(new() {
-			Context = jobManagerContext with { CorrelationId = Guid.NewGuid() },
-			NodeId = request.JobNodeId,
-			Version = request.Version,
-		}, cancellationToken);
+		client.Requests.AcknowledgeAsync(
+			new() { Context = jobManagerContext with { CorrelationId = Guid.NewGuid() }, NodeId = request.JobNodeId, Version = request.Version },
+			cancellationToken);
 
 	private static async Task SetDemoAchievementAsync(
 		IJobTrackClient client, CommandContext jobManagerContext, JobRequestResult request, Achievement achievement,

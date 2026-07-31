@@ -12,7 +12,9 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8"/>
-	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+	@* No maximum-scale/user-scalable: capping or disabling pinch-zoom is a WCAG 1.4.4 (Resize Text)
+	   AA failure and a critical axe meta-viewport violation. *@
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 	<meta name="theme-color" content="#1a1109"/>
 	<title>@ViewData["Title"] - JobTrack</title>
 	@* Preload the workhorse display weight (h1/brand) so headings settle without a fallback flash;

@@ -33,6 +33,10 @@ public sealed record AllocatedDuration : IFormattable
 	/// <summary>No allocated work-session duration.</summary>
 	public static AllocatedDuration Zero { get; } = new(BigInteger.Zero, BigInteger.One);
 
+	/// <inheritdoc />
+	public string ToString(string? format, IFormatProvider? formatProvider) =>
+		ToHours().ToString(format ?? DefaultNumericFormat, formatProvider ?? CultureInfo.InvariantCulture) + HoursSuffix;
+
 	/// <summary>Creates an exact duration from one concurrency-allocated segment share.</summary>
 	/// <exception cref="ArgumentException"><paramref name="share" /> is uninitialized.</exception>
 	public static AllocatedDuration FromShare(AllocatedShare share)
@@ -72,10 +76,6 @@ public sealed record AllocatedDuration : IFormattable
 
 		return (decimal)scaledHours / ReportingScaleDecimal;
 	}
-
-	/// <inheritdoc />
-	public string ToString(string? format, IFormatProvider? formatProvider) =>
-		ToHours().ToString(format ?? DefaultNumericFormat, formatProvider ?? CultureInfo.InvariantCulture) + HoursSuffix;
 
 	/// <summary>Renders decimal hours to one decimal place, e.g. <c>3.5 hrs</c> or <c>3.0 hrs</c>.</summary>
 	public override string ToString() => ToString(null, null);

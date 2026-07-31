@@ -139,13 +139,11 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 				NodeId = nodeId,
 			});
 			detail.RequesterUserId.Should().Be(requester.Id);
-			var node = await client.Query.GetJobNodeAsync(new() {
-				Context = adminContext with { CorrelationId = Guid.NewGuid() },
-				NodeId = nodeId,
-			});
+			var node = await client.Query.GetJobNodeAsync(new() { Context = adminContext with { CorrelationId = Guid.NewGuid() }, NodeId = nodeId });
 			node.Node.OwnerUserId.Should().Be(jobManager.Id);
 			statuses.Add(detail.Status);
 		}
+
 		statuses.Should().BeEquivalentTo([
 			RequesterStatus.Submitted,
 			RequesterStatus.Accepted,

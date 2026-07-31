@@ -104,9 +104,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		// jt-col-active, not jt-col-secondary: which jobs are being worked on right now survives the
-		// 992px cut that drops owner/priority/deadline, and goes only at phone width.
-		body.Should().Contain("<th scope=\"col\" class=\"jt-col-active\">Active</th>");
+		// jt-col-active + d-none d-md-table-cell, not jt-col-secondary + d-none d-lg-table-cell:
+		// which jobs are being worked on right now survives the lg cut that drops
+		// owner/priority/deadline, and goes only at phone width.
+		body.Should().Contain("<th scope=\"col\" class=\"jt-col-active d-none d-md-table-cell\">Active</th>");
 		body.Should().Contain(">Priority</th>");
 		body.Should().Contain(">Deadline</th>");
 		body.Should().NotContain(">Owner</th>");

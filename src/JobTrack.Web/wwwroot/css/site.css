@@ -75,8 +75,9 @@
     --jt-font-size-sm: 0.8125rem;
     --jt-font-size-xs: 0.7rem;
     --jt-font-size-xxs: 0.6875rem;
-    /* Title/heading step of the same scale — h1/h2 read these rather than a literal, and the xl
-       breakpoint below only overrides these two variables instead of restating the element rules. */
+    /* Title/heading step of the same scale — h1/h2 read these rather than a literal. Deliberately
+       breakpoint-independent: type is one size everywhere from the tablet scale up, so widening the
+       viewport never shrinks it (see the xxl density block below, which tightens whitespace only). */
     --jt-font-size-title: 2.15rem;
     --jt-font-size-heading: 1.45rem;
 
@@ -213,25 +214,27 @@ html {
     }
 }
 
-/* Desktop density — from xl up only. Tablet (768–1199) keeps the 16px scale exercised in the
-   end-to-end viewport matrix; phones stay on the 14px base above. */
-@media (min-width: 1200px) {
-    html {
-        font-size: 14px;
-    }
+/* Desktop density — from xxl (1400px) up only; tablet and standard desktop (768–1399) keep the
+   plain 16px scale exercised in the end-to-end viewport matrix, phones the 14px base above.
 
+   Density here is *whitespace only* — gaps, padding, radii, line-height. This block deliberately
+   does NOT touch the root font-size or any font-size token: a wider viewport must never render
+   text smaller than a narrower one. It used to drop `html` to 14px, which shrank every rem-based
+   size on the page at once (the visible symptom: type snapped smaller exactly as Browse's
+   xxl-only Position column appeared between Cost and Actions).
+
+   Because the root stays at 16px, every length below is the old 14px-root value rescaled by
+   14/16 — the tightened spacing is preserved at its previous computed pixel size. */
+@media (min-width: 1400px) {
     :root {
-        --bs-body-font-size: 1rem;
         --bs-body-line-height: 1.5;
-        --jt-space-3: 0.75rem;
-        --jt-space-4: 1rem;
-        --jt-space-5: 1.375rem;
-        --jt-space-6: 2rem;
-        --bs-border-radius: 0.75rem;
-        --bs-border-radius-sm: 0.5rem;
-        --jt-radius-lg: 1.125rem;
-        --jt-font-size-title: 1.9rem;
-        --jt-font-size-heading: 1.3rem;
+        --jt-space-3: 0.65rem;
+        --jt-space-4: 0.875rem;
+        --jt-space-5: 1.2rem;
+        --jt-space-6: 1.75rem;
+        --bs-border-radius: 0.65rem;
+        --bs-border-radius-sm: 0.4375rem;
+        --jt-radius-lg: 1rem;
     }
 
     h1 {
@@ -248,28 +251,14 @@ html {
         padding-bottom: var(--jt-space-2);
     }
 
-    .app-header .navbar-brand {
-        font-size: 1.05rem;
-    }
-
     .jt-brand-mark {
-        width: 1.75rem;
-        height: 1.75rem;
+        width: 1.5rem;
+        height: 1.5rem;
     }
 
     .btn {
-        --bs-btn-padding-y: 0.375rem;
-        --bs-btn-padding-x: 0.875rem;
-        font-size: 0.875rem;
-    }
-
-    .table thead th,
-    .table tbody td {
-        padding: 0.5rem 0.75rem;
-    }
-
-    .jt-metric-value {
-        font-size: 2rem;
+        --bs-btn-padding-y: 0.325rem;
+        --bs-btn-padding-x: 0.75rem;
     }
 
     dl {
@@ -746,6 +735,22 @@ form.inline-form {
     margin-bottom: var(--jt-space-3);
 }
 
+/* AwaitingProgress's filter form has five independent fields plus two buttons -- the plain `form`
+   rule above caps every form at 40rem, which is right for a single-column create/edit form but
+   stacks this one field-per-row for no reason on a wide viewport. This opts back into the full
+   card width; the two-per-row/one-per-row responsive layout itself comes from Bootstrap's grid on
+   the fields in the markup (`row g-3` / `col-md-6`), not from a bespoke breakpoint here. */
+.jt-filter-form {
+    max-width: none;
+}
+
+/* The grid's own `g-3` gutter already spaces the fields both between columns and between wrapped
+   rows -- `.form-group`'s own margin-bottom would stack on top of that gutter, doubling the gap
+   once the fields wrap to one column on a narrow viewport. */
+.jt-filter-form .form-group {
+    margin-bottom: 0;
+}
+
 .form-group label,
 .form-label {
     display: block;
@@ -769,11 +774,16 @@ form.inline-form {
     color: var(--jt-faint);
 }
 
-/* Below the tablet breakpoint the root font-size drops to 14px, which would leave
+/* One of the documented custom-breakpoint exceptions (CLAUDE.md): Bootstrap has no utility for
+   "font-size floor below sm", and the thing being corrected is a consequence of the root-scale
+   rule above, which is itself custom.
+
+   Below the tablet breakpoint the root font-size drops to 14px, which would leave
    .form-control/.form-select at a 14px computed size (Bootstrap's font-size: 1rem) — under
-   iOS Safari's 16px auto-zoom threshold. With pinch-zoom disabled at the viewport, a forced
-   zoom-on-focus there could no longer be manually undone, so pin form fields to the 16px floor
-   on phones specifically rather than letting them track the root scale. */
+   iOS Safari's 16px auto-zoom threshold, so focusing a field yanks the whole page in. Pinch-zoom
+   is available to undo it (the viewport meta no longer disables zoom — WCAG 1.4.4), but making the
+   reader fight the browser on every field is still the wrong default: pin form fields to the 16px
+   floor on phones specifically rather than letting them track the root scale. */
 @media (max-width: 767.98px) {
     .form-control,
     .form-select {
@@ -1458,19 +1468,34 @@ fieldset legend {
 
 /* ---- Tree table reflow --------------------------------------------------------------------- */
 
-/* Below 992px these tables keep only what the task at hand needs and drop the columns that are one
-   tap away on the row's own page (owner, priority, kind/archived, span, deadline). Cost is the one
-   secondary column worth keeping at that width — it is what most people scanning the table are
-   actually looking for — so it carries `.jt-col-cost` instead of `.jt-col-secondary` and survives
-   down to phone width, where it finally goes too: six-plus columns at phone width would squeeze the
-   name to a couple of characters per line and push the page into a horizontal scroll, which WCAG
-   1.4.10 Reflow forbids. `display: none` is deliberate over a visually-hidden treatment: this is
-   redundant-at-this-size content, not content withheld from assistive tech. */
-@media (max-width: 991.98px) {
-    .jt-col-secondary {
-        display: none;
-    }
+/* Which columns survive which width is decided in the markup with Bootstrap display utilities, not
+   here — see CLAUDE.md. This section only records the policy those utilities implement and carries
+   the handful of *visual* adjustments that ride along with it.
 
+   `d-none d-lg-table-cell` (`.jt-col-secondary` cells): below lg these tables drop the columns that
+   are one tap away on the row's own page — owner, priority, kind/archived, span, deadline.
+
+   `d-none d-md-table-cell` (`.jt-col-cost`, `.jt-col-active`, `.jt-session-started` cells): cost is
+   the one secondary column worth keeping at tablet width — it is what most people scanning the
+   table are actually looking for — as is the active-session column, since which jobs are being
+   worked on right now is a live fact that changes under the reader rather than something they can
+   be sent to another page for. Both go at phone width: six-plus columns there would squeeze the
+   name to a couple of characters per line and push the page into a horizontal scroll, which WCAG
+   1.4.10 Reflow forbids. `.jt-session-started` is the same cut on the leaf's own Sessions table
+   (_LeafWorkSessions) — Worked by, Finished (which already carries the Active status pill), and one
+   Pause button are what a phone reader needs at a glance.
+
+   `display: none` throughout is deliberate over a visually-hidden treatment: this is
+   redundant-at-this-size content, not content withheld from assistive tech.
+
+   `.jt-row-action-extra` is the one member of this policy that stays a hand-written breakpoint
+   below, because Bootstrap ships no `d-*-contents` utility and `display: contents` is load-bearing
+   for it. */
+
+/* Visual companions to the lg column cut above — a token value and a min-width, neither of which is
+   a Bootstrap utility. 991.98px is Bootstrap's own lg boundary; it is stated numerically because a
+   media query cannot read a custom property. */
+@media (max-width: 991.98px) {
     /* The name no longer competes with five other columns, so it can give the indent back. */
     .jt-tree-cell {
         min-width: 0;
@@ -1481,32 +1506,13 @@ fieldset legend {
     }
 }
 
-/* Cost (and, on the awaiting-progress table, achievement) survives the 992px cut above but not
-   phone width — at that width only the name and the row's own action(s) still fit without pushing
-   the page into horizontal scroll.
-
-   The active-session column keeps the same treatment: which jobs are being worked on right now is a
-   live fact that changes under the reader, unlike owner or priority, so it is not something they can
-   reasonably be sent to the row's own page for at tablet width. It goes at phone width with the
-   rest.
-
-   The same cut drops every row action except Sessions (`.jt-row-action-extra`, defined above): at
-   this width the row's own page is one tap away for Start/Backdate/"Start for…" too, and keeping
-   them squeezed into a repeating cell is what forces the horizontal scroll this section exists to
-   avoid.
-
-   `.jt-session-started` is the equivalent cut for the leaf's own Sessions table
-   (_LeafWorkSessions): Worked by, Finished (which already carries the Active status pill), and one
-   Pause button are what a phone reader needs at a glance -- Started, the backdate trigger, and
-   Correct all stay one tap away via that same row. */
+/* Below md the row's own page is one tap away for Start/Backdate/"Start for…" too, and keeping them
+   squeezed into a repeating cell is what forces the horizontal scroll the policy above exists to
+   avoid. This cannot be `d-none d-md-block`: the wrapper is `display: contents` so its children are
+   direct flex items of `.jt-toolbar`, and no Bootstrap utility restores that. 767.98px is
+   Bootstrap's own md boundary. */
 @media (max-width: 767.98px) {
-    .jt-col-cost,
-    .jt-col-active {
-        display: none;
-    }
-
-    .jt-row-action-extra,
-    .jt-session-started {
+    .jt-row-action-extra {
         display: none;
     }
 }
@@ -1666,6 +1672,41 @@ nav[aria-label="breadcrumb"] li + li::before {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--jt-line);
     vertical-align: middle;
+}
+
+/* Browse's child-node rows repeat often and carry no more than a name/icon/pill per cell, so a
+   shorter row lets more of the tree show without scrolling — other tables keep the taller default.
+   The row height itself is fixed at two lines of the default cell text (1.5rem/line at every
+   breakpoint this file defines) plus this padding, so scanning a long list doesn't jump around;
+   `overflow: hidden` clips anything that would otherwise push a row taller (a long name, several
+   active-session badges) rather than letting it grow. */
+.jt-browse-children-table tbody td {
+    height: 3.375rem;
+    padding-top: 0.1875rem;
+    padding-bottom: 0.1875rem;
+    overflow: hidden;
+}
+
+/* The Actions cell holds only fixed-size icon buttons, never content tall enough to need the
+   row-height clamp above -- but that clamp's `overflow: hidden` also clips the Start-for
+   popover, since its containing block (`.jt-start-for-disclosure`, position: relative) lives
+   inside this cell. Excluding just this column lets the popover escape the row instead of being
+   clipped to it (and painted over by the next row's background). */
+.jt-browse-children-table tbody td:last-child {
+    overflow: visible;
+}
+
+/* Visually clamps a node's name to that same two-line budget with an ellipsis -- the character-count
+   clip `JobNodeDisplay.Title`/`Truncate` already applies is a data-hygiene bound, not a guarantee of
+   fit, since the actual fit depends on the column's rendered width. `-webkit-inline-box`, not
+   `-webkit-box`: the achievement icon that follows this link in the markup is its inline sibling, and
+   the block-level form of this box forces a line break before/after itself, dropping that icon onto
+   its own line below the name instead of right after it. */
+.jt-browse-children-table a.jt-preserve-whitespace {
+    display: -webkit-inline-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .table tbody tr {

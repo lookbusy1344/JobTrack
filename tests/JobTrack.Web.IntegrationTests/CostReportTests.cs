@@ -160,7 +160,32 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 		body.Should().Contain(">&#xA3;120.00<");
 	}
 
-	private async Task<JobNodeId> SeedLeafWithCostedSessionAsync(AppUserId administratorId, AppUserId workerId)
+	/// <summary>
+	///     A leaf costed against a &#163;0/hour rate has real allocated time but an exact and displayed
+	///     cost of &#163;0.00; the report shows a dash rather than a zero amount that reads as "nothing
+	///     recorded" (this behaviour also covers the identical seam in <c>MoneyDisplay</c>/
+	///     <c>CostDisplay</c> used by Browse and Awaiting Progress).
+	/// </summary>
+	[Fact]
+	public async Task A_leaf_costed_at_a_zero_rate_shows_a_dash_instead_of_zero_amounts()
+	{
+		var administratorId = await SeedAdministratorAsync();
+		var workerId = await SeedEmployeeAsync("cost.zero-rate-worker", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("cost.zero-rate-viewer", EmployeeRole.CostViewer);
+		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId, 0m);
+		var authCookie = await SignInAsync("cost.zero-rate-viewer");
+
+		var response = await GetAsync($"/Jobs/CostReport?nodeId={leafId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain("&#xA3;0.00");
+		body.Should().Contain(">2.0 hrs<");
+		body.Should().Contain(">-<");
+	}
+
+	private async Task<JobNodeId> SeedLeafWithCostedSessionAsync(
+		AppUserId administratorId, AppUserId workerId, decimal hourlyRate = 60m)
 	{
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
 			Context = ContextFor(administratorId),
@@ -188,7 +213,7 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
 			Context = ContextFor(administratorId),
 			UserId = workerId,
-			Rate = new(new(60m), Instant.FromUtc(2000, 1, 1, 0, 0), null),
+			Rate = new(new(hourlyRate), Instant.FromUtc(2000, 1, 1, 0, 0), null),
 		});
 
 		var session = await seedClient.Work.StartSessionAsync(new() {

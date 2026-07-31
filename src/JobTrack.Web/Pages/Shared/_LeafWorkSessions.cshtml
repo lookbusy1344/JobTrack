@@ -28,7 +28,7 @@
 			<thead>
 			<tr>
 				<th>Worked by</th>
-				<th class="jt-session-started">Started</th>
+				<th class="jt-session-started d-none d-md-table-cell">Started</th>
 				<th>Finished</th>
 				<th class="text-end">Actions</th>
 			</tr>
@@ -48,7 +48,7 @@
 					: null;
 				<tr>
 					<td>@Model.DescribeWorker(session.WorkedByUserId)</td>
-					<td class="jt-session-started">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
+					<td class="jt-session-started d-none d-md-table-cell">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
 					<td>
 						@if (session.FinishedAt is Instant finishedAt) {
 							@InstantDisplay.Format(finishedAt, Model.ViewerZone)

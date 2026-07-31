@@ -147,7 +147,7 @@
 			<div class="col d-flex gap-2">
 				<dt class="w-25 text-nowrap">Cost</dt>
 				<dd class="w-75 mb-0"><span class="jt-amount">@CostDisplay.Format(
-					Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span></dd>
+							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span></dd>
 			</div>
 		}
 		@if (Model.CurrentNodeAchievement is Achievement currentAchievement) {
@@ -394,15 +394,15 @@
 		<p class="jt-empty">No jobs to show.</p>
 	} else {
 		<div class="jt-table-scroll">
-			<table class="table">
+			<table class="table jt-browse-children-table">
 				<thead>
 				<tr>
 					<th scope="col">Description</th>
 					<th scope="col">Kind</th>
-					<th scope="col" class="jt-col-secondary jt-col-owner">Owner</th>
-					<th scope="col" class="jt-col-active">Active</th>
-					<th scope="col" class="jt-col-cost text-end">Cost</th>
-					<th scope="col" class="jt-col-secondary">Archived</th>
+					<th scope="col" class="jt-col-secondary jt-col-owner d-none d-lg-table-cell">Owner</th>
+					<th scope="col" class="jt-col-active d-none d-md-table-cell">Active</th>
+					<th scope="col" class="jt-col-cost text-end d-none d-md-table-cell">Cost</th>
+					<th scope="col" class="jt-col-secondary d-none d-lg-table-cell">Archived</th>
 					<th scope="col" class="text-end">Actions</th>
 				</tr>
 				</thead>
@@ -424,7 +424,7 @@
 						<td>
 							<partial name="_KindIcon" model="@(new KindIconModel { Kind = child.Kind, ShowLabel = false })"/>
 						</td>
-						<td class="jt-col-secondary jt-col-owner">
+						<td class="jt-col-secondary jt-col-owner d-none d-lg-table-cell">
 							@if (child.OwnerUserId is AppUserId childOwnerUserId) {
 								@Model.DescribeOwner(childOwnerUserId)
 							} else {
@@ -435,7 +435,7 @@
 								</span>
 							}
 						</td>
-						<td class="jt-col-active">
+						<td class="jt-col-active d-none d-md-table-cell">
 							<partial name="_ActiveSincePill"
 							         model="@(new ActiveSessionSummaryModel {
 								                ActiveSessions = childActions?.ActiveSessions ?? [],
@@ -447,12 +447,12 @@
 								                Paused = childActions?.IsPaused ?? false,
 							                })"/>
 						</td>
-						<td class="jt-col-cost text-end">
+						<td class="jt-col-cost text-end d-none d-md-table-cell">
 							@if (child.Cost is Money cost && child.AllocatedDuration is not null) {
 								@CostDisplay.Format(cost, child.AllocatedDuration)
 							}
 						</td>
-						<td class="jt-col-secondary">@(child.ArchivedAt is not null ? "yes" : "no")</td>
+						<td class="jt-col-secondary d-none d-lg-table-cell">@(child.ArchivedAt is not null ? "yes" : "no")</td>
 						<td>
 							@if (childActions is not null) {
 								<partial name="_WorkRowActions" model="childActions"/>
@@ -471,20 +471,24 @@
 		<p class="jt-empty">No jobs to show.</p>
 	} else {
 		<div class="jt-table-scroll">
-			<table class="table">
+			<table class="table jt-browse-children-table">
 				<thead>
 				<tr>
 					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
 					   archived row is flagged in place beside its name. *@
 					<th scope="col">Description</th>
-					<th scope="col" class="jt-col-secondary">Priority</th>
-					<th scope="col" class="jt-col-secondary">Deadline</th>
-					<th scope="col" class="jt-col-active">Active</th>
-					<th scope="col" class="jt-col-cost text-end">Cost</th>
+					<th scope="col" class="jt-col-secondary d-none d-lg-table-cell">Priority</th>
+					<th scope="col" class="jt-col-secondary d-none d-lg-table-cell">Deadline</th>
+					<th scope="col" class="jt-col-active d-none d-md-table-cell">Active</th>
+					<th scope="col" class="jt-col-cost text-end d-none d-md-table-cell">Cost</th>
 					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
 					   the width of the bar it labels, so with it visible the column can never narrow to
-					   the bar's own size however small the bar gets. Assistive tech still gets the name. *@
-					<th scope="col" class="jt-col-secondary jt-col-span"><span class="visually-hidden">Position</span></th>
+					   the bar's own size however small the bar gets. Assistive tech still gets the name.
+					   d-none/d-xxl-table-cell: the bar itself is low-value background context (site.css),
+					   so it only earns space back once the viewport is wide enough to spare it. *@
+					<th scope="col" class="jt-col-span d-none d-xxl-table-cell">
+						<span class="visually-hidden">Position</span>
+					</th>
 					<th scope="col" class="text-end">Actions</th>
 				</tr>
 				</thead>
@@ -544,12 +548,12 @@
 								</span>
 							</span>
 						</td>
-						<td class="jt-col-secondary">
+						<td class="jt-col-secondary d-none d-lg-table-cell">
 							<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = node.Priority })"/>
 						</td>
-						<td class="jt-col-secondary">@{ var needed = node.NeededFinish ?? node.NeededStart; }
-							@(needed.HasValue ? InstantDisplay.Format(needed.Value, Model.ViewerZone) : null)</td>
-						<td class="jt-col-active">
+						<td class="jt-col-secondary d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
+							@(needed.HasValue ? InstantDisplay.FormatCompact(needed.Value, Model.ViewerZone, Model.Now) : null)</td>
+						<td class="jt-col-active d-none d-md-table-cell">
 							<partial name="_ActiveSincePill"
 							         model="@(new ActiveSessionSummaryModel {
 								                ActiveSessions = nodeActions?.ActiveSessions ?? [],
@@ -561,12 +565,12 @@
 								                Paused = nodeActions?.IsPaused ?? false,
 							                })"/>
 						</td>
-						<td class="jt-col-cost text-end">
+						<td class="jt-col-cost text-end d-none d-md-table-cell">
 							@if (node.Cost is Money cost && node.AllocatedDuration is not null) {
 								@CostDisplay.Format(cost, node.AllocatedDuration)
 							}
 						</td>
-						<td class="jt-col-secondary jt-col-span">
+						<td class="jt-col-span d-none d-xxl-table-cell">
 							@* Geometry as SVG presentation attributes, not a `style` attribute: the CSP is
 							   `style-src 'self'` with no `'unsafe-inline'`, so an inline style is dropped
 							   and the bar silently collapses to nothing. The viewBox is 100 wide, so the

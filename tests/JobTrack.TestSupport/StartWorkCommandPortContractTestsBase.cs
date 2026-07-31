@@ -343,6 +343,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 		await using (var connection = await OpenExistingConnectionAsync()) {
 			await AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
 		}
+
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var act = () => port.StartWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leafId, WorkedByUserId = requesterId });

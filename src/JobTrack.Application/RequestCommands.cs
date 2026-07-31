@@ -13,10 +13,10 @@ using Ports;
 /// </summary>
 internal sealed class RequestCommands : IRequestCommands
 {
-	private readonly IJobRequestCommandPort _port;
-	private readonly IRequesterDurationQueries _durationQueries;
-	private readonly IReadinessQueryPort _readinessQueryPort;
 	private readonly IClock _clock;
+	private readonly IRequesterDurationQueries _durationQueries;
+	private readonly IJobRequestCommandPort _port;
+	private readonly IReadinessQueryPort _readinessQueryPort;
 
 	/// <summary>Creates a <see cref="RequestCommands" /> over the given port.</summary>
 	public RequestCommands(

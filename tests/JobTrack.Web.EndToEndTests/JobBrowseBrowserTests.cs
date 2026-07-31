@@ -76,6 +76,28 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
+	/// <summary>
+	/// WCAG 1.4.4 (Resize Text) requires the page to scale to at least 200%. A viewport meta that
+	/// pins <c>maximum-scale</c> or sets <c>user-scalable=no</c> takes pinch-zoom away from every
+	/// touch reader, and axe rates it a *critical* <c>meta-viewport</c> violation. The layout is
+	/// shared, so proving it once here covers every page.
+	/// </summary>
+	public async Task The_viewport_meta_leaves_pinch_zoom_available()
+	{
+		await using var context = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
+		var page = await context.NewPageAsync();
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
+
+		var viewport = await page.Locator("meta[name=viewport]").GetAttributeAsync("content");
+
+		viewport.Should().NotBeNull();
+		viewport!.Should().NotContain("user-scalable", "disabling zoom fails WCAG 1.4.4");
+		viewport.Should().NotContain("maximum-scale", "capping the scale factor fails WCAG 1.4.4");
+		viewport.Should().NotContain("minimum-scale", "pinning the scale floor is the same defect from the other side");
+	}
+
+	[Fact]
 	public async Task Signing_in_is_fully_operable_by_keyboard_with_visible_focus()
 	{
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
