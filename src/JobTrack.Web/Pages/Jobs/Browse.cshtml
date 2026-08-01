@@ -89,16 +89,16 @@
 	   definition-list rule requires -- the label/value split within that one div is plain flex + width
 	   utilities rather than a nested Bootstrap row/col, so the grid can reflow the variable
 	   (conditional) set of fields below. *@
-	<dl class="row row-cols-1 row-cols-md-2 g-2 mb-4 jt-record--full">
-		<div class="col d-flex gap-2">
-			<dt class="w-25 text-nowrap">Kind</dt>
-			<dd class="w-75 mb-0">
+	<dl class="row row-cols-1 row-cols-md-2 g-2 jt-record--full">
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Kind</dt>
+			<dd class="col-12 col-sm-8 mb-0">
 				<partial name="_KindIcon" model="@(new KindIconModel { Kind = Model.CurrentNode.Node.Kind })"/>
 			</dd>
 		</div>
-		<div class="col d-flex gap-2">
-			<dt class="w-25 text-nowrap">Owner</dt>
-			<dd class="w-75 mb-0 d-flex flex-wrap align-items-center gap-2">
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Owner</dt>
+			<dd class="col-12 col-sm-8 mb-0 d-flex flex-wrap align-items-center gap-2">
 				<span class="jt-tag">@Model.DescribeOwner(Model.CurrentNode.Node.OwnerUserId)</span>
 				@* The claim control sits on the field it changes, not only in the toolbar — an
 				   unassigned owner and the one action that resolves it read as a single fact. *@
@@ -108,9 +108,9 @@
 				}
 			</dd>
 		</div>
-		<div class="col d-flex gap-2">
-			<dt class="w-25 text-nowrap">Priority</dt>
-			<dd class="w-75 mb-0">@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Priority</dt>
+			<dd class="col-12 col-sm-8 mb-0">@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }
 				<partial
 					name="_PriorityLabel"
 					model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority })"/>@(priorityDeadline is Instant priorityDeadlineInstant
@@ -118,18 +118,18 @@
 							                                                                                  : null)</dd>
 		</div>
 		@if (Model.RequestContext is not null) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Requester</dt>
-				<dd class="w-75 mb-0">
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Requester</dt>
+				<dd class="col-12 col-sm-8 mb-0">
 					<a class="jt-tag" asp-page="/Requests/Details" asp-route-id="@Model.RequestContext.JobNodeId.Value"
 					   asp-route-returnUrl="@Model.BrowseReturnUrl">@Model.RequestContext.RequesterDisplayName (@Model.RequestContext.RequesterUserName)</a>
 				</dd>
 			</div>
 		}
 		@if (showActive) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Active</dt>
-				<dd class="w-75 mb-0">
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Active</dt>
+				<dd class="col-12 col-sm-8 mb-0">
 					<partial name="_ActiveSincePill" model="@(new ActiveSessionSummaryModel {
 						                                        ActiveSessions = toolbarActions!.ActiveSessions,
 						                                        ViewerId = Model.CurrentActorId ?? new AppUserId(0),
@@ -144,32 +144,32 @@
 			</div>
 		}
 		@if (Model.Subtree?.RootTotal.HasValue == true && Model.Subtree.RootAllocatedDuration is not null) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Cost</dt>
-				<dd class="w-75 mb-0"><span class="jt-amount">@CostDisplay.Format(
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Cost</dt>
+				<dd class="col-12 col-sm-8 mb-0"><span class="jt-amount">@CostDisplay.Format(
 							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span></dd>
 			</div>
 		}
 		@if (Model.CurrentNodeAchievement is Achievement currentAchievement) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Achievement</dt>
-				<dd class="w-75 mb-0">
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Achievement</dt>
+				<dd class="col-12 col-sm-8 mb-0">
 					<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = currentAchievement })"/>
 				</dd>
 			</div>
 		}
 		@if (Model.CurrentNodeBranchAchievement is BranchAchievement branchAchievement) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Achievement</dt>
-				<dd class="w-75 mb-0">
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Achievement</dt>
+				<dd class="col-12 col-sm-8 mb-0">
 					<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel { Achievement = branchAchievement })"/>
 				</dd>
 			</div>
 		}
 		@if (Model.Readiness is not null) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Readiness</dt>
-				<dd class="w-75 mb-0">
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Readiness</dt>
+				<dd class="col-12 col-sm-8 mb-0">
 					@if (Model.Readiness.IsReady) {
 						<span class="status-pill status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
 						                                                               aria-hidden="true" focusable="false"><use
@@ -184,7 +184,7 @@
 		}
 		@if (!string.IsNullOrWhiteSpace(Model.CurrentNode.Node.WriteUp)) {
 			@* Full width at every breakpoint with the label stacked above a full-width value (no
-			   w-25/w-75 split): a write-up can run long, so it gets the whole card width while the
+			   label/value column split): a write-up can run long, so it gets the whole card width while the
 			   short fields pair up two-per-row beside it. w-100 (not col-12) because row-cols-md-2's
 			   `> *` rule outranks .col-12 on equal specificity -- only the !important width wins. *@
 			<div class="col w-100">
@@ -193,15 +193,15 @@
 			</div>
 		}
 		@if (Model.CurrentNode.Node.ArchivedAt is Instant archivedAt) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Archived</dt>
-				<dd class="w-75 mb-0">@InstantDisplay.Format(archivedAt, Model.ViewerZone)</dd>
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Archived</dt>
+				<dd class="col-12 col-sm-8 mb-0">@InstantDisplay.Format(archivedAt, Model.ViewerZone)</dd>
 			</div>
 		}
 	</dl>
 
 	BackdateDisclosureModel? toolbarBackdate = null;
-	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
+	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 		@if (toolbarActions is not null) {
 			@if (toolbarActions.ViewerSession is null && !toolbarActions.IsStartClosed) {
 				<form method="post" asp-page-handler="Start" class="inline-form">
@@ -297,7 +297,7 @@
 		   heading. Hidden entirely rather than shown as an empty "None." card when the node has
 		   neither edge -- most nodes never declare a prerequisite, so a permanently empty card would
 		   be the common case, not the exception it's styled for. *@
-		<div class="jt-card mb-4">
+		<div class="jt-card">
 			<div class="row g-4">
 				<div class="col-md-6 jt-prereq-col">
 					<p class="jt-list-heading">&larr; Requires (must finish first)</p>

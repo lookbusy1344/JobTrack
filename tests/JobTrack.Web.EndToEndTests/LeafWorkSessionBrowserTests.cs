@@ -31,6 +31,12 @@ public abstract class LeafWorkSessionBrowserTestsBase
 	private const int ReflowWidth = 320;
 	private const int ReflowHeight = 640;
 
+	// One Bootstrap spacing step (`mb-3` = 1rem) as rendered, with room for the root font-size scaling
+	// site.css applies per breakpoint: anything under the floor reads as two elements touching, anything
+	// over the ceiling as a blank line between them.
+	private const int MinimumStackedGapPixels = 8;
+	private const int MaximumStackedGapPixels = 24;
+
 	private readonly BrowserFixture fixture;
 
 	protected LeafWorkSessionBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
@@ -73,6 +79,31 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
 		(await page.GetByRole(AriaRole.Button, new() { Name = "Start session" }).IsVisibleAsync()).Should().BeTrue();
+	}
+
+	/// <summary>
+	///     The same 320px reflow bar as the test above, but with the Sessions table populated. The
+	///     empty-leaf version cannot see this: with no rows there is no actions cell, and the actions cell
+	///     is what sets the table's minimum width. A recorded session is the ordinary state of this page.
+	/// </summary>
+	[Fact]
+	public async Task Reflowing_the_work_page_with_a_recorded_session_keeps_the_table_within_the_page()
+	{
+		var (leafId, _, _) = await fixture.SeedFinishedSessionAsync("Replace reception printer toner cartridge");
+
+		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		(await page.Locator("table tbody tr").CountAsync()).Should().BeGreaterThan(0,
+			"the reflow bar only means something once the table has a row to lay out");
+
+		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
+		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
+		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth,
+			"WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 	}
 
 	[Fact]
@@ -206,6 +237,38 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work with three active workers");
 	}
 
+	/// <summary>
+	///     The blocked-with-work-in-flight state (ADR 0051), measured rather than eyeballed: the "Blocked by
+	///     a prerequisite" notice and the "Active since" pill are both conditional, so their neighbourhood
+	///     only exists in this one combination -- which is how the notice came to butt straight against the
+	///     pill with no gap at all. `.jt-notice` carries no margin of its own, so the gap is the notice's own
+	///     `mb-3`; this asserts one spacing step actually renders, and that a following `mt-*` never
+	///     compounds into a second blank line.
+	/// </summary>
+	[Fact]
+	public async Task A_blocked_notice_is_separated_from_the_active_session_pill_by_one_spacing_step()
+	{
+		var (leafId, _) = await fixture.SeedActiveSessionsAsync("Blocked active work leaf", 1);
+		var requiredId = await fixture.SeedLeafAsync("Unfinished prerequisite for blocked work leaf");
+		await fixture.SeedPrerequisiteAsync(requiredId, leafId);
+
+		await using var context = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		var notice = await page.Locator("#status .jt-notice").BoundingBoxAsync();
+		var pill = await page.Locator("#status .status-pill-active").BoundingBoxAsync();
+
+		notice.Should().NotBeNull("the blocked notice must be rendered for a leaf whose prerequisite is unfinished");
+		pill.Should().NotBeNull("the active-session pill must be rendered for a leaf with work in flight");
+
+		var gap = pill!.Y - (notice!.Y + notice.Height);
+		gap.Should().BeInRange(MinimumStackedGapPixels, MaximumStackedGapPixels,
+			"a notice and the pill below it are separated by one spacing step -- neither touching nor a double line");
+	}
+
 	[Fact]
 	public async Task The_work_page_has_no_critical_or_serious_accessibility_violations()
 	{
@@ -250,6 +313,34 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		(await page.Locator("form[action*='handler=ReopenAndStart']").CountAsync()).Should()
 			.Be(0, "an archived leaf cannot start a new session regardless of achievement");
 		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for an archived terminal leaf");
+	}
+
+	/// <summary>
+	///     The other half of the notice's spacing, on the page's other conditional pairing: here the notice
+	///     is followed by the standalone write-up form, which already names its own <c>mt-3</c>. Adjacent
+	///     sibling margins collapse inside the plain block <c>.jt-card</c>, so the notice's <c>mb-3</c> must
+	///     not stack on top of it into a blank line.
+	/// </summary>
+	[Fact]
+	public async Task An_archived_notice_and_the_write_up_below_it_render_one_gap_not_two()
+	{
+		var leafId = await fixture.SeedArchivedTerminalLeafAsync("Archived spacing leaf");
+
+		await using var context = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
+
+		var notice = await page.Locator("#status .jt-notice").BoundingBoxAsync();
+		var writeUp = await page.Locator("#writeup").BoundingBoxAsync();
+
+		notice.Should().NotBeNull("an archived leaf explains why no session can start here");
+		writeUp.Should().NotBeNull("every state that has no ending section still gets the standalone write-up form");
+
+		var gap = writeUp!.Y - (notice!.Y + notice.Height);
+		gap.Should().BeInRange(MinimumStackedGapPixels, MaximumStackedGapPixels,
+			"the notice's own bottom margin collapses with the write-up form's top margin into a single spacing step");
 	}
 
 	[Fact]

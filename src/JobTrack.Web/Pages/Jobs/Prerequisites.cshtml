@@ -18,7 +18,7 @@
 			class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 			asp-route-nodeId="@Model.NodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
 
-	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-4">
+	<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Back to Browse</a>
 		@if (Model.CurrentNode.Node.Kind != NodeKind.Leaf) {
 			<a class="btn btn-secondary" asp-page="/Jobs/AwaitingProgress" asp-route-subtreeRootId="@Model.NodeId">Back to subtree job list</a>

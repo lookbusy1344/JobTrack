@@ -25,8 +25,10 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (Model.IssuedPlaintextToken is not null) {
-	<div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
-		<p><strong>Copy this token now — it will not be shown again.</strong></p>
+	@* flex-column, not the alert partials' row: the secret is an opaque unbreakable string, and beside
+	   the sentence it gets a fraction of the width to render in. Stacked it has the full alert. *@
+	<div class="alert alert-warning d-flex flex-column align-items-start gap-2" role="alert">
+		<p class="mb-0"><strong>Copy this token now — it will not be shown again.</strong></p>
 		<code>@Model.IssuedPlaintextToken</code>
 	</div>
 }
@@ -53,11 +55,15 @@
 	<div class="jt-table-block">
 		<table class="table">
 			<thead>
+			@* Reflow policy (CLAUDE.md, docs/design-language.md): six columns of formatted timestamps do
+			   not fit a phone, and a table that will not fit reflows rather than scrolls. A phone keeps
+			   what the row is (Label), what state it is in (Status), and its one action; Expires returns at
+			   md because it is the field a token is judged on, and the two audit timestamps at lg. *@
 			<tr>
 				<th>Label</th>
-				<th>Created</th>
-				<th>Expires</th>
-				<th>Last used</th>
+				<th class="jt-col-secondary d-none d-lg-table-cell">Created</th>
+				<th class="jt-col-cost d-none d-md-table-cell">Expires</th>
+				<th class="jt-col-secondary d-none d-lg-table-cell">Last used</th>
 				<th>Status</th>
 				<th></th>
 			</tr>
@@ -66,9 +72,9 @@
 			@foreach (var token in Model.Tokens) {
 				<tr>
 					<td>@token.Label</td>
-					<td>@InstantDisplay.Format(token.CreatedAt, Model.ViewerZone)</td>
-					<td>@InstantDisplay.Format(token.ExpiresAt, Model.ViewerZone)</td>
-					<td>@(token.LastUsedAt.HasValue ? InstantDisplay.Format(token.LastUsedAt.Value, Model.ViewerZone) : "Never")</td>
+					<td class="jt-col-secondary d-none d-lg-table-cell">@InstantDisplay.Format(token.CreatedAt, Model.ViewerZone)</td>
+					<td class="jt-col-cost d-none d-md-table-cell">@InstantDisplay.Format(token.ExpiresAt, Model.ViewerZone)</td>
+					<td class="jt-col-secondary d-none d-lg-table-cell">@(token.LastUsedAt.HasValue ? InstantDisplay.Format(token.LastUsedAt.Value, Model.ViewerZone) : "Never")</td>
 					<td>@(token.RevokedAt is not null ? "Revoked" : "Active")</td>
 					<td>
 						@if (token.RevokedAt is null) {

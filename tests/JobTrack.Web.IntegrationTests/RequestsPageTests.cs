@@ -222,7 +222,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("Printer will not turn on");
 		body.Should().NotContain("<h2 class=\"jt-preserve-whitespace\"><a ",
 			"this page is the request's own home, so its title is not a link back to itself");
-		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Requester</dt>");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Requester</dt>");
 		body.Should().Contain("<span class=\"jt-tag\">Rita Detail (rita.detail)</span>",
 			"the requester reads as one 'display name (username)' tag, as an owner does in Browse");
 		body.Should().NotContain(">Username<", "the separate username field is folded into the requester tag");
@@ -246,12 +246,12 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		var body = await response.Content.ReadAsStringAsync();
-		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Achievement</dt>");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Achievement</dt>");
 		body.Should().Contain("href=\"#jt-icon-achievement-waiting\"",
 			"an anchor with no succeeded leaf beneath it rolls up to Unfinished, which borrows the waiting glyph");
-		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Readiness</dt>");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Readiness</dt>");
 		body.Should().Contain("No blocks");
-		body.Should().NotContain("<dt class=\"w-25 text-nowrap\">Status</dt>",
+		body.Should().NotContain("<dt class=\"col-12 col-sm-4\">Status</dt>",
 			"an anchor with no leaf work yet has no finer achievement to show");
 	}
 
@@ -280,7 +280,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		var body = await response.Content.ReadAsStringAsync();
-		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Status</dt>");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Status</dt>");
 		body.Should().Contain("href=\"#jt-icon-achievement-in-progress\"");
 	}
 
@@ -311,7 +311,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		var body = await response.Content.ReadAsStringAsync();
-		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Readiness</dt>");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Readiness</dt>");
 		body.Should().Contain("status-pill-blocked");
 		body.Should().Contain(">Blocked</span>");
 		body.Should().NotContain("No blocks");
@@ -488,7 +488,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var reloaded = await FollowRedirectAsync(response, staffCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
-		body.Should().Contain("Acknowledged");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Acknow</dt>");
 		body.Should().Contain($"<a href=\"/Jobs/Browse?nodeId={submitted.JobNodeId.Value}\">&larr; Back</a>");
 	}
 
@@ -509,7 +509,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().NotContain("Requester request");
 		body.Should().NotContain(">Submitted</span>");
-		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Requester</dt>");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Requester</dt>");
 		body.Should().Contain("<a class=\"jt-tag\" href=\"/Requests/");
 		body.Should().Contain(">Client Requester (rita.triage)</a>");
 		body.IndexOf(">Priority</dt>", StringComparison.Ordinal).Should()

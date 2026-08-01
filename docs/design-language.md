@@ -69,13 +69,17 @@ re-check contrast before committing.
 
 ### Typography
 
-System fonts only — no webfonts, to keep the front end self-contained and fast (consistent with
-the pinned-assets discipline in `CLAUDE.md`).
+Body and mono are system stacks. The display face is the one webfont: **Mulish** (SIL OFL),
+self-hosted from `wwwroot/lib/mulish` and pinned via `libman.json` like every other client asset —
+four weights, latin subset, `font-display: swap`. Nothing is fetched from a CDN at runtime, so the
+front end stays self-contained; see the `@font-face` block at the top of `site.css` for why the
+commercial Avenir Next is named in the stack but never shipped.
 
-- **Display** (`--jt-font-display`): a rounded system stack (`ui-rounded` / SF Pro Rounded /
-  Quicksand → Segoe UI / system-ui). Titles (`h1`/`h2`), the brand wordmark, and metric labels.
-  Gives headings a younger, more characterful voice where the platform offers a rounded face, and
-  degrades gracefully to the body sans elsewhere — no webfont dependency.
+- **Display** (`--jt-font-display`): `"Avenir Next"` → `"Mulish"` → `ui-rounded` / SF Pro Rounded /
+  Hiragino Maru Gothic ProN → Segoe UI / system-ui. Titles (`h1`/`h2`), the brand wordmark, and
+  metric labels. Apple platforms render their bundled Avenir Next; everywhere else (and in CI) the
+  self-hosted Mulish gives the same geometric-humanist voice, so headings look the same on a phone,
+  a Linux desktop, and a screenshot in a test artefact.
 - **Sans** (`--bs-font-sans-serif`): Segoe UI / system-ui stack. Body, controls, labels.
 - **Mono** (`--bs-font-monospace`): SF Mono / JetBrains Mono / Consolas stack. Identifiers, money,
   metric read-outs, and eyebrows — anything that benefits from tabular alignment or a "machine"
@@ -86,9 +90,32 @@ Scale: `h1` 2.15rem / 800 weight / tight negative tracking; `h2` 1.45rem / 750; 
 tick. Body is 0.9375rem at 1.6 line-height. The root font-size steps from 14px to 16px at the 768px
 breakpoint.
 
+### Measures and target size
+
+Every `max-width` in `site.css` references one of five named content measures, so a width is a stated
+decision rather than a rem literal repeated across unrelated rules:
+
+| Measure | Token | Value | Used by |
+|---|---|---|---|
+| Page content column | `--jt-measure-page` | `70rem` | `.container` |
+| Running text | `--jt-measure-prose` | `52rem` | `p`, `.alert` |
+| Narrow panel | `--jt-measure-panel` | `44rem` | `<dl>`, `.jt-list`, `.jt-empty`, `.jt-page-narrow`, `.jt-card--narrow`, `.jt-history` |
+| Field column | `--jt-measure-field` | `40rem` | `.form-control`, `.form-select`, `textarea`, `.jt-notice` |
+| Sign-in column | `--jt-measure-auth` | `26rem` | `.jt-auth` |
+
+The field measure sits on the **controls**, not on `<form>`: a form also wraps toolbars, single
+buttons, filter grids and tables, none of which want a readable-text cap, and as an element rule it
+needed five `max-width: none` escapes to undo it. A control inside a grid column or a compact panel is
+already narrower than the cap, so on the control the rule simply never binds where it shouldn't.
+
+`--jt-target-min` (`24px`) is WCAG 2.2 SC 2.5.8's AA minimum target size, used as a floor via
+`max(1.75rem, var(--jt-target-min))` on `.jt-icon-button` — a rem-sized control must not fall under a
+normative px minimum when the root font-size scales down.
+
 ### Shape, elevation, motion
 
-- Radius: cards `--jt-radius-lg` (1.125rem), controls `--bs-border-radius-sm` (0.5rem).
+- Radius: cards `--jt-radius-lg` (1.375rem, tightening to 1rem at xxl with the rest of the density
+  block), panels `--bs-border-radius` (0.875rem), controls `--bs-border-radius-sm` (0.625rem).
 - Shadows are soft, layered, warm-tinted (`--jt-shadow-sm/md/lg`, plus `--jt-glow` for accents).
 - Motion is minimal and subject-serving: a 6px page-load rise on `main`, hover lift on the primary
   button, and focus glow rings. All motion collapses to `0ms` under
@@ -101,12 +128,11 @@ The markup composes these classes; styling lives entirely in `site.css`.
 | Primitive | Purpose |
 |---|---|
 | `.app-header` | The deep, glowing command header. Sticky, with brand emblem, active-nav underlight, and a user status chip. |
-| `.jt-page-head` + `.jt-eyebrow` | Page title block: a mono uppercase kicker over the `h1`. |
+| `.jt-page-head` | Page title block: the page's `h1`, with the record it acts on as an `h2` beneath. |
 | `.jt-page-narrow` | Centres a single-purpose, one-action page (create/edit/move/decompose, change password, assign a role…) as one narrow column, so it doesn't hug the left edge of the wide `.container` on large screens. Not for pages that mix a form with a wide table or list. |
 | `.jt-context` | A quiet subtitle line naming the record/context a page acts on (`label` + `strong` value). |
 | `.jt-card` | Generic white surface card. |
-| `.jt-grid` | Auto-fit responsive card grid. |
-| `.jt-metrics` / `.jt-metric` | The signature metric read-out: a large tabular number under a mono label, with an orange→gold baseline. Used for cost figures. |
+| `.jt-metric` (+ `-label`, `-value`, `-sub`) | The signature metric read-out: a large tabular number under a mono label, with an orange→gold baseline. Used for cost figures. Multi-card layout is Bootstrap's own grid on the markup (`row row-cols-1 row-cols-sm-3 g-3`, each metric a `.col`), not a bespoke grid here. |
 | `.jt-form-card` | Framed card wrapping a primary form (login, create, edit, filters). |
 | `.jt-toolbar` | A wrapping cluster of action buttons/forms, so actions read as a control group. |
 | `.status-pill` (`-ready` / `-blocked`) | A pill for readiness/achievement state, led by a stop/go sign — see below. Add `.status-pill--icon` for the sign alone. |
@@ -116,13 +142,34 @@ The markup composes these classes; styling lives entirely in `site.css`.
 | `.jt-empty` | Dashed empty-state panel ("None.", "No jobs to show."). |
 | `.jt-notice` | Framed informational/denied panel. |
 | `.jt-auth` | Centred column for sign-in / sign-out / access screens. |
-| `.table` | Ledger table — firm header rule, hairline rows, a warm orange hover wash, horizontal scroll on narrow viewports. Add `.jt-id` / `.jt-amount` to cells for mono tabular rendering. |
+| `.table` | Ledger table — firm header rule, hairline rows, a warm orange hover wash. Never a scrolling box: a table that will not fit reflows (see "Responsiveness"). Wrap it in `.jt-table-block` for spacing. Add `.jt-id` / `.jt-amount` to cells for mono tabular rendering. |
 | `<dl>` | Record card — a label/value grid with a burnt-orange spine, collapsing to one column below 30em. |
 | `.jt-tree-cell` (+ `.jt-tree-guide`, `.jt-tree-label`, `.jt-tree-icon`) | The Browse subtree's description cell, styled as a file-manager listing — see below. |
 | `.jt-col-secondary` | A table column that is dropped below 768px. See "The tree row" for what qualifies. |
 | `.jt-icon-button` (+ `.jt-backdate-trigger`) | A small square glyph button, for an action repeated once per row or list item, or a rare action sitting beside a common one (Backdate, next to Start/Finish). Always carries a visually-hidden name. Add `.jt-icon-button--primary` for the action a row exists for, `.jt-icon-button--danger` for one whose consequence is not undoable in the UI. A `.jt-backdate-trigger` toggles the matching `.jt-backdate-row`/`.jt-backdate-panel` open via `aria-expanded`/`aria-controls` (site.js), rather than opening a floating popup. |
 | `_PickUpButton.cshtml` | The one claim-this-node control (Browse's record card, search rows, subtree rows), always icon-only. Posts `PickUpButtonModel.NodeFieldName`, never `nodeId` — see below. |
 | `.jt-backdate-row` / `.jt-backdate-panel` | The tinted, hidden-by-default expansion a backdate trigger reveals: a full-width table row (`.jt-backdate-row`, one cell spanning the table via `colspan`) or a block under a toolbar (`.jt-backdate-panel`), each wrapping the shared `.jt-backdate-form` (label + `datetime-local` input + submit). |
+
+### Vertical rhythm
+
+**A block-level component owns its own gap to the block below it, in `site.css`, on the
+`--jt-space-*` scale — never as an `mb-*` in the markup.** One shared rule at the top of the
+stylesheet gives every member of the family (`.jt-card`, `.jt-notice`, `.jt-toolbar`,
+`.jt-form-card`, `.jt-table-block`, `.jt-list`, `.jt-empty`, `.jt-page-head`, `.jt-lede`,
+`.jt-context`, `fieldset`, `dl`) the same `margin-bottom`, and drops it for the one that visibly ends
+its container, so a trailing action row never pads out the card it closes. Adding a component to the
+family means adding it to that rule and to `BlockComponentSpacingArchitectureTests`, which enforces
+both halves: the stylesheet must declare the margin, and no markup may restate it.
+
+Two mechanisms for one decision is what made this unguessable before: `.jt-form-card` spaced itself
+while `.jt-card` relied on an `mb-4` at three of its five uses, `<dl>` declared a margin *and* carried
+an `mb-4` at both call sites, `.jt-toolbar` had four different answers across sixteen uses, and
+`.jt-notice` declared nothing — which is how a blocked job's notice came to sit flush against the pill
+below it. The tokens are also breakpoint-scaled where Bootstrap's utilities are fixed `rem`, so a
+utility silently opts its element out of the responsive scale.
+
+A markup utility remains correct for a deliberate per-instance deviation: `mb-0` to cancel the gap, or
+an `mt-*` to add a *top* margin, which is a different decision from the component's own trailing gap.
 
 ### Stop and go
 
@@ -280,10 +327,17 @@ Three details are load-bearing:
 Mobile-first and verified down to phone widths:
 
 - The header collapses to the Bootstrap toggler below the `sm` breakpoint.
-- Card grids (`.jt-grid`, `.jt-metrics`) are `auto-fit` and collapse to a single column.
+- Card rows (the cost metrics) use Bootstrap's `row-cols-*` and collapse to a single column below `sm`.
 - `<dl>` record cards drop to a single stacked column below 30em.
-- `.table` scrolls horizontally inside its own box (overflow is set on the table element, so no
-  `.table-responsive` wrapper is needed in markup).
+- **A page scrolls as one unit.** Nothing inside it is its own scrolling region — no `overflow:
+  auto`/`scroll` in `site.css`, no `.table-responsive`/`overflow-auto` in markup
+  (`NestedScrollingRegionArchitectureTests` enforces both). A nested scroller swallows the page's own
+  scroll gesture on a touch device, hides content behind a scrollbar nobody sees, clips popovers, and
+  gives `position: sticky` an inner box to stick to instead of the viewport.
+- A `.table` that will not fit therefore **reflows**: secondary columns drop out at their breakpoints
+  via Bootstrap display utilities (`d-none d-md-table-cell`, `.jt-col-secondary`) and headings wrap.
+  Table headings are not sticky — the only thing they could stick to is the viewport, where the
+  opaque sticky `.app-header` already sits.
 - Type and spacing scale up at the 768px breakpoint.
 
 ## Working on the UI

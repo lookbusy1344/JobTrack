@@ -434,6 +434,14 @@ tokei          # whole repo, all languages
   *local development* `appsettings.Development.json` override purely for convenience, since it
   needs no separate service to stand up. The application's own default (`appsettings.json`,
   i.e. what a real deployment gets absent that development override) is PostgreSQL.
+- The [LibMan](https://learn.microsoft.com/aspnet/core/client-side/libman/) CLI, to restore the
+  pinned client-side assets (Bootstrap and the Mulish display face) before running or browser-testing
+  the web app — see "Client-side assets" under Build:
+
+  ```bash
+  dotnet tool install --global Microsoft.Web.LibraryManager.Cli
+  ```
+
 - [Playwright](https://playwright.dev/) browser binaries, only if you intend to run the real-browser
   end-to-end tests (not needed to build, unit-test, or run the app) — see
   `docs/operations/browser-testing.md`.
@@ -453,6 +461,22 @@ problem. Shut it down and rebuild:
 dotnet build-server shutdown
 dotnet build JobTrack.slnx
 ```
+
+### Client-side assets
+
+`JobTrack.Web`'s client-side dependencies are pinned in `src/JobTrack.Web/libman.json` (Bootstrap and
+the self-hosted Mulish display face) and restored into `wwwroot/lib/`, which is **git-ignored** — so a
+fresh clone has neither until you restore them once:
+
+```bash
+cd src/JobTrack.Web && libman restore   # run from the directory holding libman.json
+```
+
+`dotnet build` does not do this for you. Skip it and the app still builds and runs, but every page
+renders unstyled (no Bootstrap, no display face) and the end-to-end suite fails in a way that points
+at the wrong thing — a pile of axe colour-contrast and layout failures rather than a missing
+stylesheet. Re-run it after any change to `libman.json`, and bump versions there rather than editing
+files under `wwwroot/lib/` by hand.
 
 ## Test
 

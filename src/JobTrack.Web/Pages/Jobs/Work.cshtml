@@ -35,7 +35,7 @@
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (workPage is not null) {
-	<div class="jt-card mb-4" id="status">
+	<div class="jt-card" id="status">
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 			<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = workPage.Achievement })"/>
 			@* "No blocks" is reassurance for a job nobody has started, so it stays on the narrow
@@ -195,7 +195,7 @@
 			// the pause/ending controls below stay -- work already recorded is never withdrawn.
 			var canStartForSelf = presentation.ViewerSession is null && !startingIsBlocked;
 			@if (workPage.CanManageSessions) {
-				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center mb-3">
+				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 					@if (canStartForSelf) {
 						<form method="post" asp-page-handler="Start" class="inline-form">
 							@foreach (var field in Model.ToolbarStateFields) {
@@ -324,7 +324,7 @@
 	</div>
 
 	@if (Model.ChangeOutcomeOptions.Count > 0 && !isArchived) {
-		<details class="jt-card mb-4">
+		<details class="jt-card">
 			<summary>Change outcome</summary>
 			<form method="post" asp-page-handler="SetAchievement" class="jt-form-card mt-3">
 				<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>

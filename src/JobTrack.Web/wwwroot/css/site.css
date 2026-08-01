@@ -150,6 +150,10 @@
     --bs-secondary-color: var(--jt-muted);
     --bs-border-color: var(--jt-line);
     --bs-emphasis-color: var(--jt-ink);
+    /* Bootstrap's default code colour is a pink (#d63384) that clears AA on white but not on a tinted
+       alert -- which is where the app's one <code> actually lives (the one-time token secret, on amber).
+       Machine text takes the same ink as the rest of the palette; the mono face already distinguishes it. */
+    --bs-code-color: var(--jt-ink);
 
     /* Spacing scale (multiples of 0.25rem, matching Bootstrap's spacer unit). */
     --jt-space-1: 0.25rem;
@@ -178,6 +182,18 @@
        in a table cell (.jt-kind-icon) rather than leading a tree row -- too small a target for a
        stepped hierarchy, but the right weight next to a line of prose or a cost figure. */
     --jt-icon-size-kind-inline: 1rem;
+
+    /* Content measures — the widths that keep line length and field length readable. Every max-width in
+       this stylesheet references one of these; a bare rem literal there is a magic number. */
+    --jt-measure-page: 70rem;
+    --jt-measure-prose: 52rem;
+    --jt-measure-panel: 44rem;
+    --jt-measure-field: 40rem;
+    --jt-measure-auth: 26rem;
+
+    /* WCAG 2.2 SC 2.5.8 Target Size (Minimum), AA: 24 CSS px. A floor, not a size -- it exists so a
+       control sized in rem cannot fall under the normative minimum when the root scales down. */
+    --jt-target-min: 24px;
 
     /* Shape — generously rounded for a younger, more dynamic feel. */
     --bs-border-radius: 0.875rem;
@@ -268,7 +284,11 @@ html {
 }
 
 body {
+    /* dvh, with vh first for anything that does not know the unit: on a mobile browser 100vh is the
+       viewport with the address bar *retracted*, so it leaves ~60-100px of phantom scroll on every page
+       that would otherwise fit. dvh tracks the chrome as it collapses. */
     min-height: 100vh;
+    min-height: 100dvh;
     background: radial-gradient(1200px 600px at 78% -12%, rgb(249 100 15 / 10%), transparent 60%),
     var(--jt-canvas);
     -webkit-font-smoothing: antialiased;
@@ -277,11 +297,13 @@ body {
 /* Content column: capped for line-length discipline on the forms-and-ledgers pages, but wide
    enough for the dashboard card grids. */
 .container {
-    max-width: 70rem;
+    max-width: var(--jt-measure-page);
 }
 
-/* Removes the ~300ms tap delay and stops the double-tap-to-zoom gesture from firing on
-   interactive elements, now that pinch-zoom is disabled at the viewport. */
+/* Removes the ~300ms tap delay and stops the double-tap-to-zoom gesture from firing on interactive
+   elements. `manipulation` keeps panning and *pinch*-zoom, which is the gesture WCAG 1.4.4 requires and
+   which the viewport meta deliberately leaves enabled -- only the double-tap shortcut goes, and only on
+   controls, where a stray double-tap is a mis-zoom rather than an intent to read closer. */
 a, button, [role="button"], input, select, textarea, .form-control, .form-select, .btn {
     touch-action: manipulation;
 }
@@ -348,7 +370,17 @@ h4 {
 }
 
 p {
-    max-width: 52rem;
+    max-width: var(--jt-measure-prose);
+}
+
+/* An opaque machine string -- a personal access token, a correlation id, a hash -- has no space to
+   break at, so left alone it sets its own container's min-content width and pushes the page wider than
+   the viewport. That is a WCAG 1.4.10 Reflow failure whose severity depends on where the random
+   characters happen to fall, which makes it exactly the kind of defect that reproduces intermittently.
+   `anywhere` rather than `break-word`: it lets the browser break mid-token only when nothing else
+   fits, and unlike `word-break: break-all` it leaves ordinary prose in `code` alone. */
+code {
+    overflow-wrap: anywhere;
 }
 
 /* Bootstrap 5.3 bakes the base `a` colour in as a literal hex at compile time rather than
@@ -562,6 +594,54 @@ main[role="main"] {
     }
 }
 
+/* ---- Block-component vertical rhythm ------------------------------------------------------- */
+
+/* Every block-level component owns its own gap to the next thing, here, on the --jt-space-* scale —
+   never as an `mb-*` in the markup. Two mechanisms for one decision is what made the rhythm
+   unpredictable: `.jt-form-card` spaced itself while `.jt-card` did not, `<dl>` declared a margin
+   here *and* an `mb-4` at both call sites (the utility silently won, at Bootstrap's off-scale fixed
+   1.5rem), `.jt-toolbar` shipped four different answers across sixteen uses, and `.jt-notice`
+   declared nothing at all — so a blocked job's notice butted straight against the pill below it.
+   The tokens are also breakpoint-scaled where Bootstrap's utilities are fixed rem, so a utility
+   opts that element out of the whole responsive scale.
+   A markup utility is now only for a deliberate per-instance deviation (`mb-0` to cancel), which
+   BlockComponentSpacingArchitectureTests allows while banning the rest.
+   The gap belongs *between* siblings, so a component that ends its container drops it rather than
+   padding the container's own bottom out. */
+.jt-card,
+.jt-notice,
+.jt-toolbar,
+.jt-form-card,
+.jt-table-block,
+.jt-list,
+.jt-empty,
+.jt-page-head,
+.jt-lede,
+.jt-context,
+fieldset,
+dl {
+    margin-bottom: var(--jt-space-4);
+}
+
+/* "Ends its container" has to mean *visibly* ends it: Razor appends the anti-forgery hidden input after
+   the last real child of every POST form, so a plain `:last-child` would miss the action row that ends a
+   form card and leave a trailing gap above the card's own padding. Read as: no following sibling other
+   than a hidden input. Subsumes the true last-child case, so it is the only suppression needed. */
+.jt-card:not(:has(~ *:not([type="hidden"]))),
+.jt-notice:not(:has(~ *:not([type="hidden"]))),
+.jt-toolbar:not(:has(~ *:not([type="hidden"]))),
+.jt-form-card:not(:has(~ *:not([type="hidden"]))),
+.jt-table-block:not(:has(~ *:not([type="hidden"]))),
+.jt-list:not(:has(~ *:not([type="hidden"]))),
+.jt-empty:not(:has(~ *:not([type="hidden"]))),
+.jt-page-head:not(:has(~ *:not([type="hidden"]))),
+.jt-lede:not(:has(~ *:not([type="hidden"]))),
+.jt-context:not(:has(~ *:not([type="hidden"]))),
+fieldset:not(:has(~ *:not([type="hidden"]))),
+dl:not(:has(~ *:not([type="hidden"]))) {
+    margin-bottom: 0;
+}
+
 /* ---- Cards -------------------------------------------------------------------------------- */
 
 .jt-card {
@@ -635,15 +715,20 @@ main[role="main"] {
 
 /* ---- Record cards (<dl>) ------------------------------------------------------------------ */
 
-/* Every detail view renders a <dl> of one record's fields. Styled as a spec card: a label/value
-   grid on a white surface with a burnt-orange spine. The label/value column layout and its
-   stacking-on-phones behaviour come from Bootstrap's row/col-sm-* grid on the markup (dt/dd pairs
-   carry col-sm-3/col-sm-9), not from custom CSS here. */
+/* Every detail view renders a <dl> of one record's fields. Styled as a spec card: a label/value grid
+   on a white surface with a burnt-orange spine. Layout is entirely Bootstrap's grid on the markup, at
+   two levels: the <dl> is a `row row-cols-1 row-cols-md-2`, so fields stack on a phone and pair up from
+   md; each field's wrapper is itself a `col row`, with its `dt`/`dd` as `col-12 col-sm-4`/`col-12
+   col-sm-8` -- so the label sits above its value on a phone and beside it from sm. The wrapper carries
+   both classes rather than nesting another <div>, because HTML5's <dl> content model (and axe's
+   definition-list rule) require the div inside a <dl> to contain the dt/dd pair directly. */
 dl {
     row-gap: var(--jt-space-3);
-    margin: 0 0 var(--jt-space-4);
+    /* Drops the UA's top margin only — the gap below comes from the block-component rule above, so a
+       shorthand here would silently overwrite it. */
+    margin-top: 0;
     padding: var(--jt-space-4) var(--jt-space-4) var(--jt-space-4) calc(var(--jt-space-4) + 3px);
-    max-width: 44rem;
+    max-width: var(--jt-measure-panel);
     background: var(--jt-surface);
     border: 1px solid var(--jt-line);
     border-left: 3px solid var(--jt-orange-600);
@@ -652,8 +737,8 @@ dl {
 }
 
 /* The <dl> carries Bootstrap's `.row` for its label/value grid, and `.row` sets a negative inline
-   margin that outranks the shorthand `margin: 0` above — pulling the card's spine half a gutter
-   left of every sibling block on the page. Restore the flush edge the base rule already intends so
+   margin — pulling the card's spine half a gutter left of every sibling block on the page. Restore
+   the flush edge the base rule already intends so
    the record card lines up with the toolbar, list cards, and table below it. */
 dl.row {
     margin-inline: 0;
@@ -668,6 +753,10 @@ dl.row {
     row-gap: 0;
 }
 
+/* Deliberately *not* `white-space: nowrap`: a label is a grid column that may be narrower than its own
+   text, and nowrap made every label a hard floor under its column -- an over-long one overran the box
+   and printed across its own value ("ACKNOWLEDGED" over its timestamp on a phone). Wrapping is the
+   whole point of giving the label a real column. */
 dt {
     font-size: var(--jt-font-size-xxs);
     font-weight: 600;
@@ -675,7 +764,6 @@ dt {
     text-transform: uppercase;
     color: var(--jt-faint);
     align-self: center;
-    white-space: nowrap;
 }
 
 dd {
@@ -690,12 +778,7 @@ dd {
 /* Pages expose a row of navigation/action buttons, grouped into a wrapping toolbar (Bootstrap's
    d-flex flex-wrap gap-2 align-items-center on the markup) so they read as a control cluster
    rather than a stray paragraph of links. This class is a marker for `.jt-toolbar form` below. */
-.jt-toolbar {
-    max-width: none;
-}
-
 .jt-toolbar form {
-    max-width: none;
     margin: 0;
 }
 
@@ -709,14 +792,22 @@ dd {
 
 /* ---- Forms -------------------------------------------------------------------------------- */
 
-/* One column, comfortably narrow. `.form-group` is a Bootstrap 4 holdover the markup still uses;
-   it is styled here rather than renamed at every call site. */
-form {
-    max-width: 40rem;
+/* The readable-width cap belongs to the controls, not to `<form>`. As an element rule it applied to
+   every form on the site -- including the ones that wrap a toolbar, a single button, a filter grid or a
+   table -- so five separate `max-width: none` escapes existed only to undo it (`.jt-toolbar form`,
+   `form.inline-form`, `.jt-filter-form`, `.jt-backdate-form`, `.jt-auth form`), and a new wide form was
+   silently capped until someone noticed and added a sixth. A text input, select or textarea is the thing
+   whose line length actually matters, and capping it directly needs no escapes: a control inside a grid
+   column or a compact panel is already narrower than the cap, so the rule simply never binds there.
+   `.form-group` is a Bootstrap 4 holdover the markup still uses; it is styled here rather than renamed
+   at every call site. */
+.form-control,
+.form-select,
+textarea {
+    max-width: var(--jt-measure-field);
 }
 
 form.inline-form {
-    max-width: none;
     display: inline;
     margin: 0;
 }
@@ -724,7 +815,6 @@ form.inline-form {
 /* A framed card for the primary form on a page (login, create, edit…). */
 .jt-form-card {
     padding: var(--jt-space-4);
-    margin-bottom: var(--jt-space-4);
     background: var(--jt-surface);
     border: 1px solid var(--jt-line);
     border-radius: var(--jt-radius-lg);
@@ -733,15 +823,6 @@ form.inline-form {
 
 .form-group {
     margin-bottom: var(--jt-space-3);
-}
-
-/* AwaitingProgress's filter form has five independent fields plus two buttons -- the plain `form`
-   rule above caps every form at 40rem, which is right for a single-column create/edit form but
-   stacks this one field-per-row for no reason on a wide viewport. This opts back into the full
-   card width; the two-per-row/one-per-row responsive layout itself comes from Bootstrap's grid on
-   the fields in the markup (`row g-3` / `col-md-6`), not from a bespoke breakpoint here. */
-.jt-filter-form {
-    max-width: none;
 }
 
 /* The grid's own `g-3` gutter already spaces the fields both between columns and between wrapped
@@ -792,7 +873,6 @@ form.inline-form {
 }
 
 fieldset {
-    margin-bottom: var(--jt-space-4);
     padding: var(--jt-space-3) var(--jt-space-4) var(--jt-space-2);
     /* White (not surface-2): the bright-orange <legend> needs a pure-white backdrop to clear WCAG
        AA at 11px — on the off-white surface-2 it dips to 4.35:1. */
@@ -888,7 +968,7 @@ fieldset legend {
 /* Layout (icon-beside-message) comes from Bootstrap's d-flex align-items-start gap-2 on each
    call site's markup. */
 .alert {
-    max-width: 52rem;
+    max-width: var(--jt-measure-prose);
     border: 1px solid transparent;
     border-left-width: 3px;
     border-radius: var(--bs-border-radius-sm);
@@ -915,6 +995,15 @@ fieldset legend {
     --bs-alert-color: var(--jt-green-700);
     --bs-alert-bg: var(--jt-green-100);
     --bs-alert-border-color: rgb(23 115 74 / 30%);
+}
+
+/* The one-time secret on /Account/PersonalAccessTokens is the only warning alert in the app, and it was
+   rendering in raw Bootstrap amber -- off-palette, and outside the token set every other surface is
+   contrast-checked against. Same documented amber pair as the status pills. */
+.alert-warning {
+    --bs-alert-color: var(--jt-amber-700);
+    --bs-alert-bg: var(--jt-amber-100);
+    --bs-alert-border-color: rgb(138 86 6 / 30%);
 }
 
 .alert-success::before {
@@ -1066,33 +1155,25 @@ fieldset legend {
     color: var(--jt-muted);
 }
 
-/* Same clip technique as Bootstrap's `.visually-hidden`, but gated to a breakpoint instead of
-   permanent — the label stays in the accessibility tree at every width, it just isn't painted
-   below desktop width. The Requires/Depends-on-this-job cards go side by side (`row-cols-md-2`)
-   starting at the md breakpoint already, so gating this on md too would reveal the label at the
-   exact width where each card has the least room to spare; wait for lg, where those cards are
-   wide enough again. */
-.jt-kind-icon-label--collapsible {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
-@media (min-width: 992px) {
+/* Bootstrap's `.visually-hidden` is permanent and has no responsive variant, so a label that is hidden
+   only below a breakpoint has to be written here. Stated once, as the hidden state scoped to below lg --
+   not as Bootstrap's hidden state applied unconditionally and then reversed by a second rule, which is
+   the same decision made twice and needs `!important` to win the second time. `d-none d-lg-inline` is
+   not the alternative: `display: none` takes the text out of the accessibility tree, and the point of
+   this label is that it stays readable to a screen reader at every width.
+   Below lg, not md: the Requires/Depends-on-this-job cards go side by side from md (`row-cols-md-2`), so
+   revealing at md would bring the label back at the exact width where each card has least room. */
+@media (max-width: 991.98px) {
     .jt-kind-icon-label--collapsible {
-        position: static;
-        width: auto;
-        height: auto;
-        margin: 0;
-        overflow: visible;
-        clip: auto;
-        white-space: normal;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 }
 
@@ -1312,8 +1393,11 @@ fieldset legend {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.75rem;
-    height: 1.75rem;
+    /* 1.75rem is 24.5px against the phone's 14px root -- half a pixel of margin on an AA criterion. The
+       max() makes the floor explicit rather than incidental, so a future root-size change cannot quietly
+       take these under it. */
+    width: max(1.75rem, var(--jt-target-min));
+    height: max(1.75rem, var(--jt-target-min));
     padding: 0;
     border: 1px solid var(--jt-line);
     border-radius: 0.625rem;
@@ -1447,7 +1531,6 @@ fieldset legend {
     flex-wrap: wrap;
     align-items: end;
     gap: var(--jt-space-2) var(--jt-space-3);
-    max-width: none;
     margin: 0;
 }
 
@@ -1651,7 +1734,6 @@ nav[aria-label="breadcrumb"] li + li::before {
    giving `position: sticky` an inner box to stick to instead of the viewport. */
 .jt-table-block {
     max-width: 100%;
-    margin-bottom: var(--jt-space-4);
 }
 
 /* Identifiers and money render in monospace for scan-ability. Ledger styling — a firm header
@@ -1689,6 +1771,18 @@ nav[aria-label="breadcrumb"] li + li::before {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--jt-line);
     vertical-align: middle;
+}
+
+/* A table cannot lay out narrower than the sum of its columns' min-content widths, so one long word --
+   an employee's name, a job description, an identifier -- is a hard floor that pushes the whole table
+   past a narrow viewport however many columns have already been dropped. `anywhere` is the only value
+   that lowers min-content: `overflow-wrap: break-word` breaks lines but leaves the intrinsic minimum
+   at the longest word, and `word-break: break-all` breaks even when there is room. So a cell only ever
+   breaks mid-word as a last resort, and the reflow policy no longer depends on nobody having a long
+   name. */
+.table th,
+.table td {
+    overflow-wrap: anywhere;
 }
 
 /* Browse's child-node rows repeat often and carry no more than a name/icon/pill per cell, so a
@@ -1798,10 +1892,6 @@ nav[aria-label="breadcrumb"] li + li::before {
 
 /* ---- Page head + lede --------------------------------------------------------------------- */
 
-.jt-page-head {
-    margin-bottom: var(--jt-space-4);
-}
-
 .jt-page-head h1 {
     margin-bottom: var(--jt-space-2);
 }
@@ -1809,13 +1899,11 @@ nav[aria-label="breadcrumb"] li + li::before {
 .jt-lede {
     font-size: 1.05rem;
     color: var(--jt-muted);
-    margin-bottom: var(--jt-space-4);
 }
 
 /* A quiet subtitle line naming the record/context a page is acting on. Wrapping/alignment/gap
    come from Bootstrap's d-flex flex-wrap align-items-baseline gap-2 on the markup. */
 .jt-context {
-    margin-bottom: var(--jt-space-4);
     color: var(--jt-muted);
     font-size: 0.9375rem;
 }
@@ -1829,9 +1917,10 @@ nav[aria-label="breadcrumb"] li + li::before {
    rather than default browser bullets. */
 .jt-list {
     list-style: none;
-    margin: 0 0 var(--jt-space-4);
+    /* UA top margin only — the gap below is the block-component rule's. */
+    margin-top: 0;
     padding: 0;
-    max-width: 44rem;
+    max-width: var(--jt-measure-panel);
 }
 
 /* The inherited-blockers list isn't split into a two-column grid like Requires/Depends-on above
@@ -1866,14 +1955,14 @@ nav[aria-label="breadcrumb"] li + li::before {
    its own width override. Not for dashboard-style pages that mix a form with a wide table or
    list (Browse, Work, AwaitingProgress, Prerequisites…) — those stay full width. */
 .jt-page-narrow {
-    max-width: 44rem;
+    max-width: var(--jt-measure-panel);
     margin-inline: auto;
 }
 
 /* ---- Auth screens ------------------------------------------------------------------------- */
 
 .jt-auth {
-    max-width: 26rem;
+    max-width: var(--jt-measure-auth);
     margin: var(--jt-space-5) auto;
 }
 
@@ -1894,13 +1983,9 @@ nav[aria-label="breadcrumb"] li + li::before {
     font-weight: 700;
 }
 
-.jt-auth form {
-    max-width: none;
-}
-
 /* A framed notice panel for empty/denied/informational states. */
 .jt-notice {
-    max-width: 40rem;
+    max-width: var(--jt-measure-field);
     padding: var(--jt-space-4);
     background: var(--jt-surface);
     border: 1px solid var(--jt-line);
@@ -1916,18 +2001,18 @@ nav[aria-label="breadcrumb"] li + li::before {
     background: var(--jt-surface-2);
     border: 1px dashed var(--jt-line-strong);
     border-radius: var(--bs-border-radius);
-    max-width: 44rem;
+    max-width: var(--jt-measure-panel);
 }
 
 /* Caps a jt-card's width for content that reads badly stretched full-width, e.g. the Search form. */
 .jt-card--narrow {
-    max-width: 44rem;
+    max-width: var(--jt-measure-panel);
 }
 
 /* Compact client-side browse history — links only, sits below the children table. */
 .jt-history {
     margin-top: var(--jt-space-4);
-    max-width: 44rem;
+    max-width: var(--jt-measure-panel);
 }
 
 .jt-history-label {

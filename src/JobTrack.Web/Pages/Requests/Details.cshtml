@@ -43,32 +43,32 @@
 	   one on phones, each field its own <div class="col"> holding one dt/dd pair directly -- what
 	   HTML5's <dl> content model permits and what axe's definition-list rule requires. The fields
 	   themselves are Browse's too, so a request and the job it anchors read the same way. *@
-	<dl class="row row-cols-1 row-cols-md-2 g-2 mb-4 jt-record--full">
-		<div class="col d-flex gap-2">
-			<dt class="w-25 text-nowrap">Requester</dt>
-			<dd class="w-75 mb-0"><span class="jt-tag">@Model.RequesterLabel</span></dd>
+	<dl class="row row-cols-1 row-cols-md-2 g-2 jt-record--full">
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Requester</dt>
+			<dd class="col-12 col-sm-8 mb-0"><span class="jt-tag">@Model.RequesterLabel</span></dd>
 		</div>
 		@* The rollup, not the requester status vocabulary: the anchor may be a leaf or (after triage
 		   decomposes it) a branch, and only this two-value form is defined for both. *@
-		<div class="col d-flex gap-2">
-			<dt class="w-25 text-nowrap">Achievement</dt>
-			<dd class="w-75 mb-0">
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Achievement</dt>
+			<dd class="col-12 col-sm-8 mb-0">
 				<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel { Achievement = detail.SubtreeAchievement })"/>
 			</dd>
 		</div>
 		@* Only a leaf carries the six-value achievement vocabulary the rollup above collapses away, so
 		   this field appears only when there is a finer state to show. *@
 		@if (detail.Kind == NodeKind.Leaf && detail.LeafAchievement is Achievement leafAchievement) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Status</dt>
-				<dd class="w-75 mb-0">
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Status</dt>
+				<dd class="col-12 col-sm-8 mb-0">
 					<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = leafAchievement })"/>
 				</dd>
 			</div>
 		}
-		<div class="col d-flex gap-2">
-			<dt class="w-25 text-nowrap">Readiness</dt>
-			<dd class="w-75 mb-0">
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Readiness</dt>
+			<dd class="col-12 col-sm-8 mb-0">
 				@if (detail.IsReady) {
 					<span class="status-pill status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
 					                                                               aria-hidden="true" focusable="false"><use
@@ -80,14 +80,16 @@
 				}
 			</dd>
 		</div>
-		<div class="col d-flex gap-2">
-			<dt class="w-25 text-nowrap">Submitted</dt>
-			<dd class="w-75 mb-0">@InstantDisplay.Format(detail.SubmittedAt, Model.ViewerZone)</dd>
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Submitted</dt>
+			<dd class="col-12 col-sm-8 mb-0">@InstantDisplay.Format(detail.SubmittedAt, Model.ViewerZone)</dd>
 		</div>
 		@if (detail.AcknowledgedAt is Instant acknowledgedAt) {
-			<div class="col d-flex gap-2">
-				<dt class="w-25 text-nowrap">Acknowledged</dt>
-				<dd class="w-75 mb-0">@InstantDisplay.Format(acknowledgedAt, Model.ViewerZone)</dd>
+			@* "Acknow", not "Acknowledged": kept as the chosen copy. The layout reason is gone -- the label is a
+			   real grid column now and wraps like any other -- so the full word would fit if wanted. *@
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Acknow</dt>
+				<dd class="col-12 col-sm-8 mb-0">@InstantDisplay.Format(acknowledgedAt, Model.ViewerZone)</dd>
 			</div>
 		}
 	</dl>

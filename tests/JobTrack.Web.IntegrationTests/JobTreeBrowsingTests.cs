@@ -418,7 +418,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain("<dt class=\"w-25 text-nowrap\">Cost</dt>");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Cost</dt>");
 		body.Should().Contain(">&#xA3;200.00 /&#xA0;8.0 hrs<");
 		body.Should().NotContain("Subtree cost");
 	}

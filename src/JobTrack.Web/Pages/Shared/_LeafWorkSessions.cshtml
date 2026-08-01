@@ -56,7 +56,11 @@
 							<span class="status-pill status-pill-ready">Active</span>
 						}
 					</td>
-					<td class="text-end text-nowrap">
+					@* text-end only, never text-nowrap: nowrap on a cell is a hard floor under its column's
+					   width, which is what site.css's own table comment names as the usual reason a narrow
+					   viewport overflows -- it put this table 8px past a 320px viewport. The inner toolbar's
+					   flex-nowrap is what actually keeps the buttons on one line. *@
+					<td class="text-end">
 						@* On a phone (.jt-row-action-extra, site.css) exactly one button survives here: Pause
 						   for an active session, Correct for a finished one -- the backdate trigger, and
 						   Correct on an active row, are one tap away from the row's own worker/session, and

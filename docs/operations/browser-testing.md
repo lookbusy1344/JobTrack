@@ -38,6 +38,14 @@ pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install c
 Firefox and WebKit are only exercised by `CrossBrowserCompatibilityTests` (plan §8.7 browser
 compatibility) -- every other browser-test class uses Chromium.
 
+The **client-side assets** are the other one-time setup this suite depends on, and the one whose
+absence is easiest to misread. Bootstrap and the Mulish display face are pinned in
+`src/JobTrack.Web/libman.json` and restored into the git-ignored `wwwroot/lib/` (`cd
+src/JobTrack.Web && libman restore` -- see README's "Client-side assets"). `dotnet build` does not
+restore them. Without them the host still serves every page, so the failures arrive as a pile of axe
+`color-contrast` violations and layout assertions -- unstyled text on an unstyled background, scanned
+faithfully -- rather than anything naming a missing stylesheet.
+
 This is a one-time step per machine (the binary is cached under
 `~/Library/Caches/ms-playwright` on macOS, `~/.cache/ms-playwright` on Linux). It requires network
 access to Playwright's CDN; re-run it after bumping the `Microsoft.Playwright` package version in

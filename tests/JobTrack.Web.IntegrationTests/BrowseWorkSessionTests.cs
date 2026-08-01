@@ -274,7 +274,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("<span class=\"visually-hidden\">Pick up</span>");
 		// The Owner field's own copy: the <dd> holding the owner value lays its value and claim button
 		// out on one baseline.
-		body.Should().Contain("class=\"w-75 mb-0 d-flex flex-wrap align-items-center gap-2\"");
+		body.Should().Contain("class=\"col-12 col-sm-8 mb-0 d-flex flex-wrap align-items-center gap-2\"");
 		// Exactly one control, for the browsed branch itself -- its unassigned grandchild no longer
 		// gets a row-level copy now that the subtree table's Owner column is gone.
 		(body.Split("Pick up").Length - 1).Should().Be(2);
