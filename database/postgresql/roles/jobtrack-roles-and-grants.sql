@@ -8,12 +8,31 @@
 -- re-applied after every successful schema deployment on PostgreSQL, so
 -- grants stay in sync as tables are added across schema versions.
 --
--- Five roles, from least to most privileged. All are NOLOGIN group roles;
+-- Eight roles, from least to most privileged. All are NOLOGIN group roles;
 -- an actual login account for a deployment environment is created
 -- separately (outside this repository, which holds no environment
 -- credentials) and granted membership in the appropriate role below.
 --   jobtrack_readonly        -- SELECT only, for reporting/auditors.
---   jobtrack_application     -- the running web/CLI app's runtime identity.
+--   jobtrack_domain          -- the running web/CLI app's runtime identity for
+--                                domain data, actor operations, and audit
+--                                writes (IJobTrackClient). Split from ASP.NET
+--                                Core Identity's own sign-in path (security
+--                                review remediation §2.6) so a compromised
+--                                credential on one side does not automatically
+--                                carry the other's blast radius; has no direct
+--                                PAT authority beyond revoke-all (needed by
+--                                atomic credential transitions) and, as a
+--                                documented residual, still shares
+--                                identity_user secret-column access with
+--                                jobtrack_identity because password-reset/2FA-
+--                                reset/enable-disable command ports write
+--                                those columns inside the same ACID
+--                                transaction as their audit row.
+--   jobtrack_identity        -- ASP.NET Core Identity's own sign-in path
+--                                (JobTrackIdentityDbContext only): identity_user,
+--                                identity_user_role, identity_role.
+--   jobtrack_pat_authentication -- bearer-token lookup/last-used only.
+--   jobtrack_pat_management  -- self-service/admin PAT lifecycle and its audit rows.
 --   jobtrack_emergency_reset -- narrowly scoped credential-reset path (spec §8.6).
 --   jobtrack_schema_deployer -- runs schema-versions scripts (inherits DDL
 --                                rights via jobtrack_owner membership).
@@ -38,7 +57,19 @@ BEGIN
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
     BEGIN
-        CREATE ROLE jobtrack_application NOLOGIN;
+        CREATE ROLE jobtrack_domain NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
+        CREATE ROLE jobtrack_identity NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
+        CREATE ROLE jobtrack_pat_authentication NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
+        CREATE ROLE jobtrack_pat_management NOLOGIN;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
     BEGIN
@@ -77,7 +108,9 @@ GRANT jobtrack_owner TO jobtrack_schema_deployer;
 -- pre-15 instances rather than a behaviour change.
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 
-GRANT USAGE ON SCHEMA public TO jobtrack_application, jobtrack_readonly, jobtrack_emergency_reset;
+GRANT USAGE ON SCHEMA public TO
+    jobtrack_domain, jobtrack_identity, jobtrack_pat_authentication, jobtrack_pat_management,
+    jobtrack_readonly, jobtrack_emergency_reset;
 
 -- jobtrack_readonly: SELECT on every current table, re-granted each time
 -- this script re-runs after a schema deployment, plus ALTER DEFAULT
@@ -89,8 +122,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO jobtrack_rea
 -- Identity secret columns are never exposed to the ordinary reporting/
 -- auditor path (threat model row 11, TC-DB-ROLES-002): reporting has no
 -- legitimate reason to read a password hash or session-revocation stamp,
--- unlike jobtrack_application, which needs them for ASP.NET Core
--- Identity's own authentication/password-change flows. A column-level
+-- unlike jobtrack_domain/jobtrack_identity, which need them for ASP.NET
+-- Core Identity's own authentication/password-change flows. A column-level
 -- REVOKE alone is not sufficient here: PostgreSQL still permits selecting
 -- a column covered by a broader table-level GRANT, so the table-level
 -- grant on identity_user must be replaced with an explicit column list.
@@ -113,48 +146,82 @@ GRANT SELECT
     (id, app_user_id, label, created_at, expires_at, revoked_at, last_used_at)
     ON personal_access_token TO jobtrack_readonly;
 
--- jobtrack_application: ordinary CRUD on current-state tables, no DDL
--- (never granted CREATE/ownership), and no DELETE on retained-history or
--- audit tables (spec §16, plan §2 "retain completed and cost-relevant
+-- jobtrack_domain/jobtrack_identity: ordinary CRUD on current-state tables,
+-- no DDL (never granted CREATE/ownership), and no DELETE on retained-history
+-- or audit tables (spec §16, plan §2 "retain completed and cost-relevant
 -- history; use archival rather than deletion"). audit_event additionally
 -- has no UPDATE, matching its own append-only triggers as defense in
 -- depth (see 0012_audit-event.sql).
 GRANT SELECT ON
-    achievement_status, priority, schedule_exception_effect, identity_role
-    TO jobtrack_application, jobtrack_emergency_reset;
+    achievement_status, priority, schedule_exception_effect
+    TO jobtrack_domain, jobtrack_emergency_reset;
 
-GRANT SELECT, INSERT ON initialised_marker TO jobtrack_application;
+-- identity_role is read by both the domain connection (role-name lookups
+-- alongside identity_user_role) and jobtrack_identity's own sign-in path.
+GRANT SELECT ON identity_role TO jobtrack_domain, jobtrack_identity, jobtrack_emergency_reset;
 
-GRANT SELECT, INSERT, UPDATE ON app_user TO jobtrack_application;
+GRANT SELECT, INSERT ON initialised_marker TO jobtrack_domain;
+
+GRANT SELECT, INSERT, UPDATE ON app_user TO jobtrack_domain;
 GRANT SELECT, UPDATE ON app_user TO jobtrack_emergency_reset;
 
-GRANT SELECT, INSERT, UPDATE ON identity_user TO jobtrack_application;
+-- identity_user/identity_user_role (security review remediation §2.6,
+-- documented residual): jobtrack_identity is ASP.NET Core Identity's own
+-- sign-in path; jobtrack_domain also keeps full access because command
+-- ports (password reset, 2FA reset, enable/disable, role assignment) write
+-- these columns inside the same ACID transaction as their audit row (impl
+-- plan §7.3, CLAUDE.md "compound writes are single ACID transactions") --
+-- splitting those writes into a further SECURITY DEFINER boundary is left
+-- as explicit follow-up work, not silently dropped (remediation item 6).
+GRANT SELECT, INSERT, UPDATE ON identity_user TO jobtrack_domain, jobtrack_identity;
 GRANT SELECT, UPDATE ON identity_user TO jobtrack_emergency_reset;
-GRANT SELECT, INSERT, DELETE ON identity_user_role TO jobtrack_application;
+GRANT SELECT, INSERT, DELETE ON identity_user_role TO jobtrack_domain;
+GRANT SELECT ON identity_user_role TO jobtrack_identity;
+
+-- PAT management authenticates and authorizes the actor against current Identity state before
+-- calling the narrow lifecycle functions, then appends the matching audit row in the same
+-- transaction. It may read Identity state/roles but cannot change either. The bearer-authentication
+-- role needs no table grant: pat_try_authenticate performs its enabled/lockout check inside the
+-- SECURITY DEFINER function and returns only the non-secret token/user identifiers.
+REVOKE SELECT ON identity_user FROM jobtrack_pat_management;
+GRANT SELECT (id, app_user_id, is_enabled, lockout_enabled, lockout_end)
+    ON identity_user TO jobtrack_pat_management;
+GRANT SELECT ON identity_user_role, identity_role TO jobtrack_pat_management;
+GRANT SELECT, INSERT ON audit_event TO jobtrack_pat_management;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON
     job_node, leaf_work,
     user_schedule_version, user_schedule_interval, user_schedule_exception,
     user_cost_rate, node_rate_override
-    TO jobtrack_application;
+    TO jobtrack_domain;
 
-GRANT SELECT, INSERT, DELETE ON job_prerequisite TO jobtrack_application;
+GRANT SELECT, INSERT, DELETE ON job_prerequisite TO jobtrack_domain;
 
 -- work_session: cost-relevant execution history -- corrected, never
 -- deleted (spec: "audited correction").
-GRANT SELECT, INSERT, UPDATE ON work_session TO jobtrack_application;
+GRANT SELECT, INSERT, UPDATE ON work_session TO jobtrack_domain;
 
--- personal_access_token (ADR 0029): jobtrack_application owns the full
--- issue/list/revoke/last-used-update lifecycle. jobtrack_emergency_reset
--- may only revoke -- its emergency password reset also revokes every live
--- token (ADR 0029), so it gets only the non-secret columns needed to scope
--- revocation plus UPDATE on revoked_at. It never reads token_hash and never
--- mutates token-bearing metadata.
-GRANT SELECT, INSERT, UPDATE ON personal_access_token TO jobtrack_application;
-REVOKE SELECT, UPDATE ON personal_access_token FROM jobtrack_emergency_reset;
+-- personal_access_token (ADR 0029, security review remediation §2.6):
+-- jobtrack_domain has NO direct table grant here at all -- a compromised
+-- domain credential can no longer read token_hash for offline replay, or
+-- forge/extend/revoke a token outside the narrow function shapes below.
+-- The full issue/authenticate/list/revoke/last-used-update lifecycle is
+-- exposed only through the SECURITY DEFINER functions in
+-- database/postgresql/functions/, EXECUTE-granted to jobtrack_domain
+-- there. jobtrack_emergency_reset keeps its pre-existing narrow
+-- column-level revoke-only access unchanged -- its emergency password
+-- reset also revokes every live token (ADR 0029), so it gets only the
+-- non-secret columns needed to scope revocation plus UPDATE on
+-- revoked_at. It never reads token_hash and never mutates token-bearing
+-- metadata.
+REVOKE ALL ON personal_access_token FROM jobtrack_emergency_reset;
 GRANT SELECT (id, app_user_id, revoked_at) ON personal_access_token TO jobtrack_emergency_reset;
 GRANT UPDATE (revoked_at) ON personal_access_token TO jobtrack_emergency_reset;
 
--- audit_event: append-only to every normal role, including the
--- application role that writes it (spec §16).
-GRANT SELECT, INSERT ON audit_event TO jobtrack_application, jobtrack_emergency_reset;
+-- audit_event: append-only to every normal role, including the domain role
+-- that writes it (spec §16) and reads it back for the administrator
+-- audit-history view (PostgreSqlAuditQueryPort). Left as direct table
+-- grants rather than a SECURITY DEFINER function in this remediation slice
+-- (documented residual, remediation item 6) -- narrowing this further is
+-- explicit follow-up work, not silently dropped.
+GRANT SELECT, INSERT ON audit_event TO jobtrack_domain, jobtrack_emergency_reset;

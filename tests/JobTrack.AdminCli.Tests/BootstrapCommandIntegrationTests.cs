@@ -162,5 +162,6 @@ public sealed class BootstrapCommandIntegrationTests
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(provider));
 		var deployer = new SchemaDeployer(connection, createStore(connection), createLockStrategy(connection), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
+		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, provider);
 	}
 }

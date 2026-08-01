@@ -108,6 +108,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 		new() {
 			ActorUserId = seeded.AppUserId,
 			IdentityUserId = seeded.IdentityUserId,
+			Username = "credential.user",
 			CurrentPassword = currentPassword,
 			NewPassword = NewPassword,
 			CorrelationId = Guid.NewGuid(),
@@ -193,6 +194,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 		var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
+		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 	}
 
 	private async Task<DbConnection> OpenExistingConnectionAsync()

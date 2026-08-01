@@ -128,6 +128,11 @@ public sealed partial class ProviderSmokeTests
 					var deployer = new SchemaDeployer(connection, new PostgreSqlSchemaVersionStore(), new PostgreSqlDeploymentLockStrategy(),
 						ApplicationVersion, AppliedBy);
 					await deployer.DeployAsync(scripts, CancellationToken.None);
+					// Matches the real deploy topology (security review remediation §2.6): the
+					// jobtrack_domain role and its pat_* SECURITY DEFINER functions must exist even
+					// though this fixture connects as the admin/superuser rather than jobtrack_domain
+					// itself.
+					await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, SchemaProvider.PostgreSql);
 				}
 
 				break;
@@ -231,6 +236,15 @@ public sealed partial class ProviderSmokeTests
 			_ = builder.UseEnvironment("Development");
 			_ = builder.UseSetting("Database:Provider", provider.ToString());
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", connectionString);
+			// Security review remediation §2.6: PostgreSQL now reads a second connection string for
+			// IJobTrackClient (jobtrack_domain). This fixture's admin connection is a superuser that
+			// can act as any role, so reusing the same connection string for both is sufficient here
+			// -- the role split itself is proven by PostgreSqlRoleGrantsTests, not this smoke test.
+			if (provider == SchemaProvider.PostgreSql) {
+				_ = builder.UseSetting("ConnectionStrings:JobTrackDomain", connectionString);
+				_ = builder.UseSetting("ConnectionStrings:JobTrackPatManagement", connectionString);
+				_ = builder.UseSetting("ConnectionStrings:JobTrackPatAuthentication", connectionString);
+			}
 		}
 	}
 }

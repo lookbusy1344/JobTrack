@@ -14,7 +14,10 @@ public interface IInstallationCommands
 	///     initialised-installation marker in a single transaction (ADR 0005, ADR 0015).
 	/// </summary>
 	/// <exception cref="InvariantViolationException">
-	///     The installation is already initialised (<c>ConstraintId</c> <c>"installation-already-initialised"</c>).
+	///     The installation is already initialised (<c>ConstraintId</c> <c>"installation-already-initialised"</c>),
+	///     or <see cref="BootstrapAdministratorRequest.Password" /> does not satisfy
+	///     <see cref="PasswordPolicy" />/<see cref="PasswordBlocklist" /> (<c>ConstraintId</c>
+	///     <c>"account-new-password-policy"</c>).
 	/// </exception>
 	Task<BootstrapAdministratorResult> BootstrapAdministratorAsync(
 		BootstrapAdministratorRequest request, CancellationToken cancellationToken = default);

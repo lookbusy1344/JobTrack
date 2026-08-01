@@ -67,6 +67,37 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
 
+	/// <summary>
+	///     Remediation plan §2.4: <c>GetActorRolesAsync</c> is the one primitive every
+	///     actor-admission check in the application layer relies on, so a disabled actor must be
+	///     rejected here rather than only at a caller's own re-check. A locked-out actor shares the
+	///     same <c>ActorAccountState.EnsureMayAct</c> code path, so this single representative case
+	///     covers both without a second near-identical fixture (remediation plan §2.4 step 1: a table
+	///     of representative cases, not one test per superficial variant).
+	/// </summary>
+	[Fact]
+	public async Task GetEmployeeProfileAsync_throws_for_a_disabled_actor()
+	{
+		var administratorId = await SeedAdministratorAsync();
+		var commands = new EmployeeCommands(CreateCommandPort(database.ConnectionString), new PasswordHasher<EmployeeCredentialSubject>());
+
+		var disabledWorker = await commands.CreateEmployeeAsync(new() {
+			Context = ContextFor(administratorId),
+			DisplayName = "Disabled Worker",
+			IanaTimeZone = "Europe/London",
+			UserName = "disabled.worker",
+			Password = "correct-horse-battery-staple",
+			Role = EmployeeRole.Worker,
+		});
+		_ = await commands.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = disabledWorker.Id, Enabled = false });
+
+		var queryPort = CreateQueryPort(database.ConnectionString);
+
+		var act = async () => await queryPort.GetEmployeeProfileAsync(disabledWorker.Id, administratorId);
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
 	[Fact]
 	public async Task GetAccountStateAsync_returns_the_target_account_state_and_actors_roles()
 	{
@@ -220,6 +251,7 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
+			await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 		}
 
 		var queryPort = CreateQueryPort(database.ConnectionString);
@@ -235,6 +267,7 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
+			await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 		}
 
 		var bootstrapPort = CreateBootstrapPort(database.ConnectionString);

@@ -15,12 +15,32 @@ public sealed class BootstrapCommandOptionsTests
 	}
 
 	[Fact]
-	public void Parses_an_optional_password()
+	public void Rejects_a_password_supplied_in_process_arguments_without_echoing_it()
 	{
-		var options = BootstrapCommandOptions.Parse(
-			new(["--provider", "sqlite", "--connection-string", "Data Source=test.db", "--password", "correct-horse-battery-staple"]));
+		const string secret = "argv-must-not-contain-this-secret";
+		var act = () => BootstrapCommandOptions.Parse(
+			new(["--provider", "sqlite", "--connection-string", "Data Source=test.db", "--password", secret]));
 
-		options.Password.Should().Be("correct-horse-battery-staple");
+		act.Should().Throw<AdminCliUsageException>().Which.Message.Should().NotContain(secret);
+	}
+
+	[Fact]
+	public void Rejects_a_direct_connection_string_containing_a_password_without_echoing_it()
+	{
+		const string secret = "database-secret-in-argv";
+		var act = () => BootstrapCommandOptions.Parse(
+			new(["--provider", "postgresql", "--connection-string", $"Host=localhost;Password={secret}"]));
+
+		act.Should().Throw<AdminCliUsageException>().Which.Message.Should().NotContain(secret);
+	}
+
+	[Fact]
+	public void Rejects_the_pwd_connection_string_alias()
+	{
+		var act = () => BootstrapCommandOptions.Parse(
+			new(["--provider", "postgresql", "--connection-string", "Host=localhost;Pwd=secret"]));
+
+		act.Should().Throw<AdminCliUsageException>();
 	}
 
 	[Fact]
@@ -94,6 +114,50 @@ public sealed class BootstrapCommandOptionsTests
 	{
 		var act = () => BootstrapCommandOptions.Parse(new(["--provider", "sqlite"]));
 
-		act.Should().Throw<PicoArgsException>();
+		act.Should().Throw<AdminCliUsageException>();
+	}
+
+	[Fact]
+	public void Parses_a_connection_string_file_flag()
+	{
+		var path = Path.GetTempFileName();
+		try {
+			File.WriteAllText(path, "Data Source=test.db\n");
+
+			var options = BootstrapCommandOptions.Parse(new(["--provider", "sqlite", "--connection-string-file", path]));
+
+			options.ConnectionString.Should().Be("Data Source=test.db");
+		}
+		finally {
+			File.Delete(path);
+		}
+	}
+
+	[Fact]
+	public void Rejects_both_connection_string_and_connection_string_file()
+	{
+		var act = () => BootstrapCommandOptions.Parse(
+			new(["--provider", "sqlite", "--connection-string", "x", "--connection-string-file", "/tmp/does-not-matter"]));
+
+		act.Should().Throw<AdminCliUsageException>().WithMessage("*mutually exclusive*");
+	}
+
+	[Fact]
+	public void Sets_password_from_stdin_flag()
+	{
+		var options = BootstrapCommandOptions.Parse(
+			new(["--provider", "sqlite", "--connection-string", "x", "--password-stdin"]));
+
+		options.PasswordFromStdin.Should().BeTrue();
+		options.Password.Should().BeNull();
+	}
+
+	[Fact]
+	public void Rejects_password_even_when_password_stdin_is_also_present()
+	{
+		var act = () => BootstrapCommandOptions.Parse(
+			new(["--provider", "sqlite", "--connection-string", "x", "--password", "secret", "--password-stdin"]));
+
+		act.Should().Throw<AdminCliUsageException>().WithMessage("*not supported*");
 	}
 }

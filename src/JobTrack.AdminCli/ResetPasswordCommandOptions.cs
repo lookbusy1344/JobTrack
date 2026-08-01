@@ -21,7 +21,7 @@ public sealed record ResetPasswordCommandOptions
 		ArgumentNullException.ThrowIfNull(pico);
 
 		var provider = BootstrapCommandOptions.ParseProvider(pico.GetParam("--provider"));
-		var connectionString = pico.GetParam("--connection-string");
+		var connectionString = ConnectionStringSource.Parse(pico);
 		var username = pico.GetParam("--username");
 		pico.Finished();
 

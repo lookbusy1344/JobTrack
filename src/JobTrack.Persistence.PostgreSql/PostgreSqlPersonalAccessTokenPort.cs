@@ -19,12 +19,22 @@ using Shared.Entities;
 internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPort
 {
 	private readonly IClock clock;
-	private readonly NpgsqlDataSource dataSource;
+	private readonly NpgsqlDataSource authenticationDataSource;
+	private readonly NpgsqlDataSource managementDataSource;
+
+	public PostgreSqlPersonalAccessTokenPort(NpgsqlDataSource dataSource, IClock clock)
+		: this(dataSource, dataSource, clock)
+	{
+	}
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlPersonalAccessTokenPort(NpgsqlDataSource dataSource, IClock clock)
+	public PostgreSqlPersonalAccessTokenPort(
+		NpgsqlDataSource managementDataSource,
+		NpgsqlDataSource authenticationDataSource,
+		IClock clock)
 	{
-		this.dataSource = dataSource;
+		this.managementDataSource = managementDataSource;
+		this.authenticationDataSource = authenticationDataSource;
 		this.clock = clock;
 	}
 
@@ -32,7 +42,7 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	public async Task<IssuePersonalAccessTokenPersistenceResult> IssueAsync(
 		IssuePersonalAccessTokenPersistenceRequest request, CancellationToken cancellationToken = default)
 	{
-		await using var context = CreateContext();
+		await using var context = CreateManagementContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		await AuthorizeIssueOrThrowAsync(context, request.Context.Actor, request.TargetUserId, request.CreatedAt, cancellationToken)
@@ -40,30 +50,23 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 
 		PersonalAccessTokenPolicy.EnsureValidExpiry(request.CreatedAt, request.ExpiresAt);
 
-		var token = new PersonalAccessTokenEntity {
-			Id = default,
-			AppUserId = request.TargetUserId,
-			TokenHash = request.TokenHash,
-			Label = request.Label,
-			CreatedAt = request.CreatedAt,
-			ExpiresAt = request.ExpiresAt,
-		};
-		_ = context.Add(token);
-		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+		var tokenId = await PostgreSqlPersonalAccessTokenFunctions.IssueAsync(
+			context, request.TargetUserId, request.TokenHash, request.Label, request.CreatedAt, request.ExpiresAt, cancellationToken)
+			.ConfigureAwait(false);
 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, request.CreatedAt, "issue-personal-access-token", "personal_access_token",
-			token.Id.Value, request.Context.CorrelationId, null, null,
+			tokenId.Value, request.Context.CorrelationId, null, null,
 			new Dictionary<string, string?> { ["label"] = request.Label });
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 		return new() {
-			Id = token.Id,
-			Label = token.Label,
-			CreatedAt = token.CreatedAt,
-			ExpiresAt = token.ExpiresAt,
+			Id = tokenId,
+			Label = request.Label,
+			CreatedAt = request.CreatedAt,
+			ExpiresAt = request.ExpiresAt,
 		};
 	}
 
@@ -71,47 +74,44 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	public async Task<EquatableArray<PersonalAccessTokenSummaryResult>> ListAsync(
 		ListPersonalAccessTokensRequest request, CancellationToken cancellationToken = default)
 	{
-		await using var context = CreateContext();
+		await using var context = CreateManagementContext();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.TargetUserId, clock.GetCurrentInstant(), cancellationToken)
 			.ConfigureAwait(false);
 
-		var tokens = await context.Set<PersonalAccessTokenEntity>().AsNoTracking()
-			.Where(t => t.AppUserId == request.TargetUserId)
-			.OrderByDescending(t => t.CreatedAt)
-			.Select(t => new PersonalAccessTokenSummaryResult {
-				Id = t.Id,
+		var tokens = await PostgreSqlPersonalAccessTokenFunctions.ListAsync(context, request.TargetUserId, cancellationToken)
+			.ConfigureAwait(false);
+
+		return [
+			.. tokens.Select(t => new PersonalAccessTokenSummaryResult {
+				Id = new(t.Id),
 				Label = t.Label,
 				CreatedAt = t.CreatedAt,
 				ExpiresAt = t.ExpiresAt,
 				RevokedAt = t.RevokedAt,
 				LastUsedAt = t.LastUsedAt,
-			})
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
-
-		return [.. tokens];
+			}),
+		];
 	}
 
 	/// <inheritdoc />
 	public async Task RevokeAsync(RevokePersonalAccessTokenRequest request, CancellationToken cancellationToken = default)
 	{
-		await using var context = CreateContext();
+		await using var context = CreateManagementContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.TargetUserId, now, cancellationToken).ConfigureAwait(false);
 
-		var token = await context.Set<PersonalAccessTokenEntity>()
-						.FirstOrDefaultAsync(
-							t => t.Id == request.TokenId && t.AppUserId == request.TargetUserId, cancellationToken)
-						.ConfigureAwait(false)
-					?? throw new EntityNotFoundException($"Token {request.TokenId} does not exist for user {request.TargetUserId}.");
+		var result = await PostgreSqlPersonalAccessTokenFunctions.RevokeAsync(
+			context, request.TokenId, request.TargetUserId, now, cancellationToken).ConfigureAwait(false);
+		if (!result.Found) {
+			throw new EntityNotFoundException($"Token {request.TokenId} does not exist for user {request.TargetUserId}.");
+		}
 
-		if (token.RevokedAt is null) {
-			token.RevokedAt = now;
-
+		if (result.NewlyRevoked) {
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "revoke-personal-access-token", "personal_access_token",
-				token.Id.Value, request.Context.CorrelationId, null, null, null);
+				request.TokenId.Value, request.Context.CorrelationId, null, null, null);
 
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		}
@@ -122,13 +122,13 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	/// <inheritdoc />
 	public async Task RevokeAllAsync(RevokeAllPersonalAccessTokensRequest request, CancellationToken cancellationToken = default)
 	{
-		await using var context = CreateContext();
+		await using var context = CreateManagementContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.TargetUserId, now, cancellationToken).ConfigureAwait(false);
 
-		var revoked = await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
+		var revoked = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 
 		if (revoked > 0) {
@@ -142,31 +142,33 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	}
 
 	/// <inheritdoc />
+	/// <remarks>
+	///     <c>pat_try_authenticate</c> touches <c>last_used_at</c> as soon as the token itself is
+	///     unrevoked and unexpired, before this method's separate owner-enabled/lockout check --
+	///     unchanged from the pre-§2.6 behaviour in spirit (the token row and the owner row were
+	///     always two separate reads), but a token whose owner is currently disabled/locked out now
+	///     still records the attempt as a "use" even though authentication still fails overall.
+	/// </remarks>
 	public async Task<AuthenticatedPersonalAccessTokenResult?> TryAuthenticateAsync(
 		string tokenHash, CancellationToken cancellationToken = default)
 	{
-		await using var context = CreateContext();
+		await using var context = CreateAuthenticationContext();
 
 		var now = clock.GetCurrentInstant();
-		var token = await context.Set<PersonalAccessTokenEntity>()
-			.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken).ConfigureAwait(false);
-		if (token is null || token.RevokedAt is not null || token.ExpiresAt <= now) {
+		var token = await PostgreSqlPersonalAccessTokenFunctions.TryAuthenticateAsync(context, tokenHash, now, cancellationToken)
+			.ConfigureAwait(false);
+		if (token is null) {
 			return null;
 		}
 
-		var owner = await context.Set<IdentityUserEntity>().AsNoTracking()
-			.FirstOrDefaultAsync(iu => iu.AppUserId == token.AppUserId, cancellationToken).ConfigureAwait(false);
-		if (owner is null || !owner.IsEnabled || (owner.LockoutEnabled && owner.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
-			return null;
-		}
-
-		token.LastUsedAt = now;
-		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-		return new() { UserId = token.AppUserId, TokenId = token.Id };
+		return new() { UserId = new(token.AppUserId), TokenId = new(token.Id) };
 	}
 
-	private PostgreSqlJobTrackDbContext CreateContext()
+	private PostgreSqlJobTrackDbContext CreateManagementContext() => CreateContext(managementDataSource);
+
+	private PostgreSqlJobTrackDbContext CreateAuthenticationContext() => CreateContext(authenticationDataSource);
+
+	private static PostgreSqlJobTrackDbContext CreateContext(NpgsqlDataSource dataSource)
 	{
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
 			.UseNpgsql(dataSource, o => o.UseNodaTime())
@@ -200,14 +202,19 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 		}
 	}
 
-	private static async Task<IdentityUserEntity> LoadActingIdentityUserAsync(
+	private static async Task<PatActorAccountState> LoadActingIdentityUserAsync(
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+									.Where(iu => iu.AppUserId == actorId)
+									.Select(iu => new PatActorAccountState(iu.Id, iu.IsEnabled, iu.LockoutEnabled, iu.LockoutEnd))
+									.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
+		ActorAccountState.EnsureMayAct(
+			actorIdentityUser.IsEnabled, actorIdentityUser.LockoutEnabled, actorIdentityUser.LockoutEnd, actorId, now);
 
 		return actorIdentityUser;
 	}
 }
+
+internal sealed record PatActorAccountState(long Id, bool IsEnabled, bool LockoutEnabled, Instant? LockoutEnd);

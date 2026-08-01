@@ -261,6 +261,8 @@ JobTrack.Application.ChangeOwnPasswordRequest.IdentityUserId.get -> long
 JobTrack.Application.ChangeOwnPasswordRequest.IdentityUserId.init -> void
 JobTrack.Application.ChangeOwnPasswordRequest.NewPassword.get -> string!
 JobTrack.Application.ChangeOwnPasswordRequest.NewPassword.init -> void
+JobTrack.Application.ChangeOwnPasswordRequest.Username.get -> string!
+JobTrack.Application.ChangeOwnPasswordRequest.Username.init -> void
 JobTrack.Application.ChangeOwnPasswordResult
 JobTrack.Application.ChangeOwnPasswordResult.ChangeOwnPasswordResult() -> void
 JobTrack.Application.ChangeOwnPasswordResult.ConcurrencyStamp.get -> string!
@@ -1554,6 +1556,8 @@ JobTrack.Application.ResetEmployeePasswordRequest.NewPassword.init -> void
 JobTrack.Application.ResetEmployeePasswordRequest.ResetEmployeePasswordRequest() -> void
 JobTrack.Application.ResetEmployeePasswordRequest.TargetUserId.get -> JobTrack.Abstractions.AppUserId
 JobTrack.Application.ResetEmployeePasswordRequest.TargetUserId.init -> void
+JobTrack.Application.ResetEmployeePasswordRequest.TargetUserName.get -> string!
+JobTrack.Application.ResetEmployeePasswordRequest.TargetUserName.init -> void
 JobTrack.Application.ResetEmployeeTwoFactorRequest
 JobTrack.Application.ResetEmployeeTwoFactorRequest.<Clone>$() -> JobTrack.Application.ResetEmployeeTwoFactorRequest!
 JobTrack.Application.ResetEmployeeTwoFactorRequest.Context.get -> JobTrack.Application.CommandContext!

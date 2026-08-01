@@ -12,7 +12,8 @@ data), follow the same three steps against a differently named database that you
 This is the "simple persistent local DB" tier — a single Homebrew PostgreSQL instance, your own OS
 login role, no separate `LOGIN` role or secrets file. For an actual multi-user production
 deployment, use [`production-deployment.md`](production-deployment.md) instead, which provisions a
-dedicated `LOGIN` role scoped to the `jobtrack_application`/`jobtrack_schema_deployer` group roles.
+dedicated `LOGIN` roles scoped to the `jobtrack_domain`/`jobtrack_identity`/
+`jobtrack_pat_management`/`jobtrack_pat_authentication`/`jobtrack_schema_deployer` group roles.
 
 ```bash
 # 1. Create the database (once).
@@ -48,7 +49,7 @@ workflow too. `scripts/run-web.sh` wraps exactly this:
 which runs:
 
 ```bash
-Database__Provider=PostgreSql ConnectionStrings__JobTrackIdentity="Host=/tmp;Port=5432;Database=jobtrack_live" dotnet run --project src/JobTrack.Web --launch-profile https
+dotnet run --project src/JobTrack.Web --launch-profile "https (jobtrack_live)"
 ```
 
 **Sign-in requires the `https` profile.** `Program.cs` sets `Cookie.SecurePolicy = CookieSecurePolicy.Always`

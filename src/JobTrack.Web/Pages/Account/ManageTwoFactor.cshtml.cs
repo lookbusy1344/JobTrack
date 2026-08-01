@@ -52,6 +52,8 @@ public sealed class ManageTwoFactorModel(
 		return Page();
 	}
 
+	/// <summary>ADR 0057 (§2.2): binding a new second factor requires proof of recent authentication.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostConfirmAsync()
 	{
 		var user = await userManager.GetUserAsync(User);
@@ -85,6 +87,8 @@ public sealed class ManageTwoFactorModel(
 		return RedirectToPage();
 	}
 
+	/// <summary>ADR 0057 (§2.2): removing an enrolled second factor requires proof of recent authentication too.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostDisableAsync()
 	{
 		var user = await userManager.GetUserAsync(User);

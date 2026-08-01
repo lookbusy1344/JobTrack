@@ -22,8 +22,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 [Authorize(Policy = EmployeeRoleNames.Administrator)]
 public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
 {
-	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
-		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
+	private Dictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById = [];
 
 	[BindProperty] public CreateEmployeeInput CreateEmployee { get; set; } = new();
 
@@ -55,6 +54,8 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 	public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadTargetUserOptionsAsync(cancellationToken);
 
+	/// <summary>ADR 0057 (§2.2): provisioning a credentialed employee account requires recent authentication.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostCreateEmployeeAsync(CancellationToken cancellationToken)
 	{
 		ModelState.Clear();
@@ -92,6 +93,8 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 		return RedirectToPage();
 	}
 
+	/// <summary>ADR 0057 (§2.2): disabling/re-enabling another account is an administrator action requiring recent authentication.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostSetEnabledAsync(CancellationToken cancellationToken)
 	{
 		// Automatic model binding validates every [BindProperty] member up front, so ModelState
@@ -173,6 +176,8 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 		return RedirectToPage();
 	}
 
+	/// <summary>ADR 0057 (§2.2): resetting another employee's password requires recent authentication.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostResetPasswordAsync(CancellationToken cancellationToken)
 	{
 		ModelState.Clear();
@@ -194,6 +199,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 				new() {
 					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
 					TargetUserId = targetUserId,
+					TargetUserName = _employeeDirectoryById.TryGetValue(targetUserId, out var targetEntry) ? targetEntry.UserName : string.Empty,
 					NewPassword = ResetPassword.NewPassword,
 				}, cancellationToken);
 
@@ -215,6 +221,8 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 	///     ADR 0037: clears an employee's TOTP two-factor enrolment when they have lost their
 	///     authenticator device, mirroring <see cref="OnPostResetPasswordAsync" />'s shape.
 	/// </summary>
+	/// <summary>ADR 0057 (§2.2): resetting another employee's two-factor enrolment requires recent authentication.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostResetTwoFactorAsync(CancellationToken cancellationToken)
 	{
 		ModelState.Clear();
@@ -255,6 +263,8 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 	///     another user's personal access tokens, but never mint one -- issuance stays strictly
 	///     self-service (<see cref="Domain.Authorization.PersonalAccessTokenAccessPolicy.CanIssue" />).
 	/// </summary>
+	/// <summary>ADR 0057 (§2.2): revoking another employee's tokens requires recent authentication.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostRevokeAllTokensAsync(CancellationToken cancellationToken)
 	{
 		ModelState.Clear();

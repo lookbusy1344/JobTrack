@@ -188,6 +188,31 @@ public sealed class InlineDmlArchitectureTests
 			"LoadAsync",
 			"SqlQueryRaw",
 			"sql"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlPersonalAccessTokenFunctions.cs"),
+			"IssueAsync",
+			"SqlQuery",
+			"pat_issue"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlPersonalAccessTokenFunctions.cs"),
+			"TryAuthenticateAsync",
+			"SqlQuery",
+			"pat_try_authenticate"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlPersonalAccessTokenFunctions.cs"),
+			"ListAsync",
+			"SqlQuery",
+			"pat_list"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlPersonalAccessTokenFunctions.cs"),
+			"RevokeAsync",
+			"SqlQuery",
+			"pat_revoke"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlPersonalAccessTokenFunctions.cs"),
+			"RevokeAllForUserAsync",
+			"SqlQuery",
+			"pat_revoke_all"),
 	];
 
 	private static readonly FrozenSet<string> RawSqlReadMethods = FrozenSet.ToFrozenSet(

@@ -84,32 +84,32 @@ public sealed class JobQueriesTests
 			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeJobNodeCommandPort browseReadinessAndAwaitingProgressQueryPort) =>
-		new(new FakeEmployeeQueryPort(), browseReadinessAndAwaitingProgressQueryPort, browseReadinessAndAwaitingProgressQueryPort,
+		new(FakeEmployeeQueryPort.AllowingAnyActor(), browseReadinessAndAwaitingProgressQueryPort, browseReadinessAndAwaitingProgressQueryPort,
 			browseReadinessAndAwaitingProgressQueryPort, new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(),
 			new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(), new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeWorkSessionQueryPort workSessionQueryPort) =>
-		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
+		new(FakeEmployeeQueryPort.AllowingAnyActor(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			workSessionQueryPort, new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
 			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeLeafWorkQueryPort leafWorkQueryPort) =>
-		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
+		new(FakeEmployeeQueryPort.AllowingAnyActor(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), leafWorkQueryPort, new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
 			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakePrerequisiteQueryPort prerequisiteQueryPort) =>
-		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
+		new(FakeEmployeeQueryPort.AllowingAnyActor(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), prerequisiteQueryPort, new FakeScheduleQueryPort(),
 			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeScheduleQueryPort scheduleQueryPort) =>
-		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
+		new(FakeEmployeeQueryPort.AllowingAnyActor(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), scheduleQueryPort,
 			new FakeRateQueryPort(), new FakeCostQueries(), SystemClock.Instance);
 
 	private static JobQueries CreateSut(FakeRateQueryPort rateQueryPort) =>
-		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
+		new(FakeEmployeeQueryPort.AllowingAnyActor(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
 			rateQueryPort, new FakeCostQueries(), SystemClock.Instance);
 
@@ -127,7 +127,7 @@ public sealed class JobQueriesTests
 	/// </summary>
 	private static FakeEmployeeQueryPort EmployeePortMirroring(FakeJobNodeCommandPort source)
 	{
-		var employeeQueryPort = new FakeEmployeeQueryPort();
+		var employeeQueryPort = FakeEmployeeQueryPort.AllowingAnyActor();
 		foreach (var (actorId, roles) in source.SeededRoles) {
 			employeeQueryPort.SeedRoles(actorId, roles);
 		}
@@ -136,7 +136,7 @@ public sealed class JobQueriesTests
 	}
 
 	private static JobQueries CreateSut(FakeCostQueries costQueries) =>
-		new(new FakeEmployeeQueryPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
+		new(FakeEmployeeQueryPort.AllowingAnyActor(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
 			new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(), new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(),
 			new FakeRateQueryPort(), costQueries, SystemClock.Instance);
 
@@ -1870,15 +1870,28 @@ public sealed class JobQueriesTests
 	}
 
 	[Fact]
-	public async Task GetSessionManageCapabilitiesAsync_with_no_leaves_returns_an_empty_result_without_querying_the_port()
+	public async Task GetSessionManageCapabilitiesAsync_with_no_leaves_authenticates_the_actor_and_returns_an_empty_result()
 	{
 		var worker = new AppUserId(20);
-		var sut = CreateSut(new FakeWorkSessionQueryPort());
+		var port = new FakeWorkSessionQueryPort();
+		port.SeedRoles(worker, EmployeeRole.Worker);
+		var sut = CreateSut(port);
 
 		var result = await sut.GetSessionManageCapabilitiesAsync(
 			new() { Context = ContextFor(worker), LeafWorkIds = [] });
 
 		result.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task GetSessionManageCapabilitiesAsync_with_no_leaves_rejects_a_nonexistent_actor()
+	{
+		var sut = CreateSut(new FakeWorkSessionQueryPort());
+
+		var act = () => sut.GetSessionManageCapabilitiesAsync(
+			new() { Context = ContextFor(new(21)), LeafWorkIds = [] });
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
 
 	[Fact]
@@ -2429,5 +2442,101 @@ public sealed class JobQueriesTests
 		var act = () => sut.GetLeafWorkPageAsync(null!);
 
 		await act.Should().ThrowAsync<ArgumentNullException>();
+	}
+
+	/// <summary>
+	///     Remediation plan §2.4 step 1: a representative table of read-capability classes across the
+	///     general job/work query surface (structural, listing, leaf, and edge reads), rather than one
+	///     near-identical test per every public <c>IJobQueries</c> member.
+	/// </summary>
+	public static TheoryData<string> JobDataBrowseCallNames() =>
+		new() { "GetJobNodeAsync", "GetAwaitingProgressAsync", "GetLeafWorkAsync", "GetPrerequisitesAsync", "GetEmployeeDirectoryAsync" };
+
+	private static Task InvokeJobDataBrowseCallAsync(string caseName, JobQueries sut, CommandContext context) =>
+		caseName switch {
+			"GetJobNodeAsync" => sut.GetJobNodeAsync(new() { Context = context, NodeId = null }),
+			"GetAwaitingProgressAsync" => sut.GetAwaitingProgressAsync(new() { Context = context }),
+			"GetLeafWorkAsync" => sut.GetLeafWorkAsync(new() { Context = context, JobNodeId = new(1) }),
+			"GetPrerequisitesAsync" => sut.GetPrerequisitesAsync(new() { Context = context, NodeId = new(1) }),
+			"GetEmployeeDirectoryAsync" => sut.GetEmployeeDirectoryAsync(new() { Context = context }),
+			_ => throw new ArgumentOutOfRangeException(nameof(caseName), caseName, "Unknown job-data browse case."),
+		};
+
+	[Theory]
+	[MemberData(nameof(JobDataBrowseCallNames))]
+	public async Task A_requester_only_actor_may_not_browse_the_general_job_data_query_surface(string caseName)
+	{
+		var actor = new AppUserId(9001);
+		var employeeQueryPort = new FakeEmployeeQueryPort();
+		employeeQueryPort.SeedRoles(actor, [EmployeeRole.Requester]);
+		var sut = CreateSut(employeeQueryPort);
+
+		var act = () => InvokeJobDataBrowseCallAsync(caseName, sut, ContextFor(actor));
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Theory]
+	[MemberData(nameof(JobDataBrowseCallNames))]
+	public async Task A_requester_with_an_operational_role_may_not_browse_the_general_job_data_query_surface(string caseName)
+	{
+		var actor = new AppUserId(9005);
+		var employeeQueryPort = new FakeEmployeeQueryPort();
+		employeeQueryPort.SeedRoles(actor, [EmployeeRole.Requester, EmployeeRole.Worker]);
+		var sut = CreateSut(employeeQueryPort);
+
+		var act = () => InvokeJobDataBrowseCallAsync(caseName, sut, ContextFor(actor));
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Theory]
+	[MemberData(nameof(JobDataBrowseCallNames))]
+	public async Task A_role_less_actor_may_not_browse_the_general_job_data_query_surface(string caseName)
+	{
+		var actor = new AppUserId(9002);
+		var employeeQueryPort = new FakeEmployeeQueryPort();
+		employeeQueryPort.SeedRoles(actor, []);
+		var sut = CreateSut(employeeQueryPort);
+
+		var act = () => InvokeJobDataBrowseCallAsync(caseName, sut, ContextFor(actor));
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Theory]
+	[MemberData(nameof(JobDataBrowseCallNames))]
+	public async Task A_nonexistent_actor_may_not_browse_the_general_job_data_query_surface(string caseName)
+	{
+		var actor = new AppUserId(9003);
+		var sut = CreateSut(new FakeEmployeeQueryPort());
+
+		var act = () => InvokeJobDataBrowseCallAsync(caseName, sut, ContextFor(actor));
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	[Fact]
+	public async Task GetAllEmployeesAsync_requires_administrator()
+	{
+		var actor = new AppUserId(9004);
+		var employeeQueryPort = new FakeEmployeeQueryPort();
+		employeeQueryPort.SeedRoles(actor, [EmployeeRole.JobManager]);
+		var sut = CreateSut(employeeQueryPort);
+
+		var act = () => sut.GetAllEmployeesAsync(new() { Context = ContextFor(actor) });
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task GetAllEmployeesAsync_throws_for_a_nonexistent_actor()
+	{
+		var actor = new AppUserId(9005);
+		var sut = CreateSut(new FakeEmployeeQueryPort());
+
+		var act = () => sut.GetAllEmployeesAsync(new() { Context = ContextFor(actor) });
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
 }

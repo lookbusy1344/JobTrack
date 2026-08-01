@@ -27,11 +27,17 @@ public sealed record CreateEmployeeCommandOptions
 	public required string Username { get; init; }
 
 	/// <summary>
-	///     The new account's initial credential, supplied non-interactively for scripted
-	///     provisioning (e.g. container image build steps). As with <see cref="BootstrapCommandOptions.Password" />,
-	///     passing it here is an explicit trade-off — it is visible in the process list and shell history.
+	///     The resolved new-account credential. Argument parsing always leaves this null; the host
+	///     resolves it from standard input or the masked interactive prompt before invoking the command.
 	/// </summary>
-	public required string Password { get; init; }
+	public string? Password { get; init; }
+
+	/// <summary>
+	///     <see langword="true" /> when <c>--password-stdin</c> is passed: the new account's initial
+	///     credential is read as one line from standard input, matching
+	///     <see cref="BootstrapCommandOptions.PasswordFromStdin" />.
+	/// </summary>
+	public bool PasswordFromStdin { get; init; }
 
 	public required string DisplayName { get; init; }
 
@@ -63,16 +69,22 @@ public sealed record CreateEmployeeCommandOptions
 		ArgumentNullException.ThrowIfNull(pico);
 
 		var provider = BootstrapCommandOptions.ParseProvider(pico.GetParam("--provider"));
-		var connectionString = pico.GetParam("--connection-string");
+		var connectionString = ConnectionStringSource.Parse(pico);
 		var actorUsername = pico.GetParam("--actor");
 		var username = pico.GetParam("--username");
-		var password = pico.GetParam("--password");
+		var password = pico.GetParamOpt("--password");
+		var passwordFromStdin = pico.Contains("--password-stdin");
 		var displayName = pico.GetParam("--display-name");
 		var rolesRaw = pico.GetParam("--roles");
 		var ianaTimeZone = pico.GetParamOpt("--iana-time-zone") ?? DefaultIanaTimeZone;
 		var rateRaw = pico.GetParamOpt("--default-hourly-rate");
 		var noForcePasswordChange = pico.Contains("--no-force-password-change");
 		pico.Finished();
+
+		if (password is not null) {
+			throw new AdminCliUsageException(
+				"'--password' is not supported because process arguments are not a safe secret channel; use '--password-stdin' or the masked interactive prompt.");
+		}
 
 		var roles = ParseRoles(rolesRaw);
 		var defaultHourlyRate = ParseDefaultHourlyRate(rateRaw);
@@ -83,6 +95,7 @@ public sealed record CreateEmployeeCommandOptions
 			ActorUsername = actorUsername,
 			Username = username,
 			Password = password,
+			PasswordFromStdin = passwordFromStdin,
 			DisplayName = displayName,
 			IanaTimeZone = ianaTimeZone,
 			Roles = roles,

@@ -9,8 +9,13 @@ internal static class ActorAccountState
 {
 	public static void EnsureMayAct(IdentityUserEntity identityUser, AppUserId actorId, Instant now)
 	{
-		if (!identityUser.IsEnabled
-			|| (identityUser.LockoutEnabled && identityUser.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
+		EnsureMayAct(identityUser.IsEnabled, identityUser.LockoutEnabled, identityUser.LockoutEnd, actorId, now);
+	}
+
+	public static void EnsureMayAct(bool isEnabled, bool lockoutEnabled, Instant? lockoutEnd, AppUserId actorId, Instant now)
+	{
+		if (!isEnabled
+			|| (lockoutEnabled && lockoutEnd is Instant lockedUntil && lockedUntil > now)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} has a disabled or locked account.");
 		}
 	}

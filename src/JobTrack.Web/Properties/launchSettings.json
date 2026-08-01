@@ -27,7 +27,10 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "Database__Provider": "PostgreSql",
-        "ConnectionStrings__JobTrackIdentity": "Host=/tmp;Port=5432;Database=jobtrack_live"
+        "ConnectionStrings__JobTrackIdentity": "Host=/tmp;Port=5432;Database=jobtrack_live",
+        "ConnectionStrings__JobTrackDomain": "Host=/tmp;Port=5432;Database=jobtrack_live",
+        "ConnectionStrings__JobTrackPatManagement": "Host=/tmp;Port=5432;Database=jobtrack_live",
+        "ConnectionStrings__JobTrackPatAuthentication": "Host=/tmp;Port=5432;Database=jobtrack_live"
       }
     }
   }

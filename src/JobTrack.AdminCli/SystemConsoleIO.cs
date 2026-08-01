@@ -15,6 +15,8 @@ public sealed class SystemConsoleIO : IConsoleIO
 		return Console.ReadLine() ?? string.Empty;
 	}
 
+	public string ReadStdinLine() => Console.In.ReadLine() ?? string.Empty;
+
 	public string ReadPassword(string prompt)
 	{
 		Console.Write(prompt);

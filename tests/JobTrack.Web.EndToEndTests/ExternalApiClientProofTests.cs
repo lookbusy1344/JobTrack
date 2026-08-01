@@ -312,6 +312,7 @@ public sealed class ExternalApiClientProofTests
 					var deployer = new SchemaDeployer(connection, new PostgreSqlSchemaVersionStore(), new PostgreSqlDeploymentLockStrategy(),
 						ApplicationVersion, AppliedBy);
 					await deployer.DeployAsync(scripts, CancellationToken.None);
+					await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, SchemaProvider.PostgreSql);
 				}
 
 				break;
@@ -327,6 +328,11 @@ public sealed class ExternalApiClientProofTests
 			_ = builder.UseEnvironment("Development");
 			_ = builder.UseSetting("Database:Provider", provider.ToString());
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", connectionString);
+			if (provider == SchemaProvider.PostgreSql) {
+				_ = builder.UseSetting("ConnectionStrings:JobTrackDomain", connectionString);
+				_ = builder.UseSetting("ConnectionStrings:JobTrackPatManagement", connectionString);
+				_ = builder.UseSetting("ConnectionStrings:JobTrackPatAuthentication", connectionString);
+			}
 		}
 	}
 }

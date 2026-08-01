@@ -39,4 +39,12 @@ public static class RepositoryPaths
 	/// </summary>
 	public static string PostgreSqlRolesAndGrantsScriptPath() =>
 		Path.Combine(SolutionRoot(), "database", "postgresql", "roles", "jobtrack-roles-and-grants.sql");
+
+	/// <summary>
+	///     PostgreSQL-only: the fixed, unversioned SECURITY DEFINER functions script (security
+	///     review remediation §2.6) applied after schema deployment and after
+	///     <see cref="PostgreSqlRolesAndGrantsScriptPath" />, not tracked in <c>schema_version</c>.
+	/// </summary>
+	public static string PostgreSqlFunctionsScriptPath() =>
+		Path.Combine(SolutionRoot(), "database", "postgresql", "functions", "jobtrack-security-definer-functions.sql");
 }

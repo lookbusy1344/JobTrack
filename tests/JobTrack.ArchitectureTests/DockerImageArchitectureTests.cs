@@ -11,7 +11,9 @@ public sealed class DockerImageArchitectureTests
 		var dockerfile = File.ReadAllText(Path.Combine(RepositoryPaths.SolutionRoot(), "Dockerfile"));
 
 		dockerfile.Should().Contain("ARG REQUESTER_USERNAME=requester");
-		dockerfile.Should().Contain("ARG REQUESTER_PASSWORD=requester1234");
+		dockerfile.Should().Contain("ARG DEMO_PASSWORD=demo-jobtrack-1234");
+		dockerfile.Should().Contain("ARG REQUESTER_PASSWORD=requester-jobtrack-1234");
+		dockerfile.Should().NotContain("--allow-weak-password");
 		dockerfile.Should().Contain("--roles Requester --no-force-password-change");
 		dockerfile.Should().Contain("/app/uatseed/JobTrack.UatSeed --provider sqlite");
 		dockerfile.Should().Contain(

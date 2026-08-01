@@ -33,7 +33,7 @@ public sealed record JobTreeImportCommandOptions
 		ArgumentNullException.ThrowIfNull(pico);
 
 		var provider = BootstrapCommandOptions.ParseProvider(pico.GetParam("--provider"));
-		var connectionString = pico.GetParam("--connection-string");
+		var connectionString = ConnectionStringSource.Parse(pico);
 		var username = pico.GetParam("--username");
 		var filePath = pico.GetParam("--file");
 		var parentIdRaw = pico.GetParamOpt("--parent-id") ?? DefaultParentJobNodeId.ToString(CultureInfo.InvariantCulture);

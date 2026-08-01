@@ -3,13 +3,15 @@
 # mandatory forced-password-change redirect every freshly seeded/bootstrapped account gets
 # (JobTrackIdentityUser.RequiresPasswordChange -- see RequiresPasswordChangePageFilter), then use
 # the resulting session cookie plus a GET /api/antiforgery-token capture to make one CSRF-protected
-# JSON write through the external HTTP API's cookie-authenticated path.
+# JSON write through the external HTTP API's cookie-authenticated path. Finally mints a bearer PAT
+# through the self-service /Account/PersonalAccessTokens page using this same session -- the only
+# issuance path there is (ADR 0029, ADR 0055) -- for api-bearer-reads.hurl to consume.
 #
 # Assumes a freshly seeded account (samples/JobTrack.UatSeed) that has never signed in before --
 # this suite is not re-runnable against the same account without reseeding, since the forced
 # password change it drives is a one-time transition. See docs/testing/hurl-smoke-tests.md.
 #
-#   hurl --variable base_url=http://localhost:5034 --variable username=priya.manager \
+#   hurl --test --json --variable base_url=http://localhost:5034 --variable username=priya.manager \
 #        --variable password=Uat-Seed-Battery-42! --variable new_password=Hurl-Smoke-Battery-42! \
 #        tests/hurl/web-login-and-csrf.hurl
 
@@ -66,3 +68,26 @@ Content-Type: application/json; charset=utf-8
 [Asserts]
 jsonpath "$.id" == {{pool_leaf_id}}
 jsonpath "$.ownerUserId" isInteger
+
+# Mint a bearer PAT for api-bearer-reads.hurl through the same self-service page and session a real
+# signed-in user would use -- there is no other issuance path (ADR 0029, ADR 0055).
+GET {{base_url}}/Account/PersonalAccessTokens
+HTTP 200
+[Captures]
+issue_token_antiforgery: xpath "string(//form[@action='/Account/PersonalAccessTokens?handler=Issue']//input[@name='__RequestVerificationToken']/@value)"
+
+POST {{base_url}}/Account/PersonalAccessTokens?handler=Issue
+[FormParams]
+__RequestVerificationToken: {{issue_token_antiforgery}}
+Issue.Label: hurl-smoke
+Issue.LifetimeDays: 1
+HTTP 302
+[Captures]
+issued_pat_location: header "Location"
+
+GET {{base_url}}{{issued_pat_location}}
+HTTP 200
+[Captures]
+pat_token: xpath "string(//code/text())"
+[Asserts]
+xpath "string(//code/text())" matches "^\\S+$"

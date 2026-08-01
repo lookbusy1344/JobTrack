@@ -54,6 +54,23 @@ Supporting projects, not part of that chain:
 - **`JobTrack.AdminCli`** — a narrowly scoped CLI for one-time administrator bootstrap and
   emergency password reset, consuming the library in-process (layer 2), not over HTTP.
 
+### Text storage and Unicode
+
+Both providers store text as their platform default (PostgreSQL's `UTF8` database encoding;
+SQLite's `UTF-8` text encoding), via unconstrained `text` columns — neither is pinned explicitly in
+connection setup, and no length caps live at the schema level. .NET strings are UTF-16 internally,
+so any length check written as `string.Length` counts UTF-16 code units, not Unicode codepoints —
+a character outside the Basic Multilingual Plane (e.g. most emoji) is a surrogate pair and counts as
+2. Most length validation in this codebase (`[MaxLength(n)]` on Razor Page models, e.g.
+`Requests/Details.cshtml.cs`, `Requests/Index.cshtml.cs`, `Account/PersonalAccessTokens.cshtml.cs`)
+is `.Length`-based and inherits that behaviour. The one deliberate exception is the password policy
+(`JobTrack.Abstractions/PasswordPolicy.cs`, ADR 0056): its 15–128 length bound is counted via
+`password.EnumerateRunes().Count()` — Unicode scalar values — specifically so a password containing
+surrogate-pair characters isn't double-counted. Job-description search is also Unicode-aware:
+PostgreSQL's native `lower()` handles it, while SQLite's built-in `lower()` is ASCII-only, so
+`JobTrack.Persistence.Sqlite` registers a custom deterministic case-folding function instead (ADR
+0050).
+
 ### Architectural philosophy
 
 The shape is ports and adapters (hexagonal) — close to Clean Architecture, but not a doctrinaire
@@ -638,10 +655,21 @@ working directory, so a relative SQLite path resolves from wherever you invoke i
    dotnet run --project src/JobTrack.AdminCli -- bootstrap --provider postgresql --connection-string "Host=/tmp;Port=5432;Database=jobtrack_dev"
    ```
 
+   A direct `--connection-string` is accepted only when it contains no `Password`/`Pwd` property.
+   Every `JobTrack.AdminCli`/`JobTrack.Database` command accepts `--connection-string-file <path>`
+   (the file's trimmed contents); a PostgreSQL passfile or integrated authentication also keeps the
+   database credential out of `argv`. `bootstrap`/`create-employee` accept `--password-stdin` (one
+   line read from standard input, matching `docker login --password-stdin`) for automation. The
+   removed `--password` flag is rejected; omitting `--password-stdin` falls back to the masked
+   interactive prompt (security review remediation §2.7).
+
 4. **Point the web app at that database and run it.** Either edit
    `src/JobTrack.Web/appsettings.Development.json` (`Database:Provider` → `PostgreSql`,
-   `ConnectionStrings:JobTrackIdentity` → the connection string above) or set the equivalent
-   environment variables, then:
+   `ConnectionStrings:JobTrackIdentity`, `ConnectionStrings:JobTrackDomain`,
+   `ConnectionStrings:JobTrackPatManagement`, and `ConnectionStrings:JobTrackPatAuthentication` →
+   the connection string above. Security review remediation §2.6 split the runtime credentials by
+   capability; a local superuser connection satisfies all four, so the same connection string works
+   for every key here) or set the equivalent environment variables, then:
 
    ```bash
    dotnet run --project src/JobTrack.Web
@@ -745,15 +773,17 @@ Two further commands exist for scripted setup, where the web interface is the no
 - `create-employee` provisions a non-administrator employee under an existing administrator
   (`--actor`), granting `--roles` (first entry as the initial role, the rest assigned after).
   `--no-force-password-change` clears the ADR 0023 forced-change flag, for a deliberately shared
-  credential such as the container demo's `demo` account.
-- `issue-token` mints a bearer personal access token for an existing account without a browser
-  session — for scripting and tooling, such as the hurl smoke tests of the external HTTP API. The
-  only other issuance path is the self-service API-tokens page (ADR 0029).
-
+  credential such as the container demo's `demo` account. The new account's password satisfies
+  `PasswordPolicy` (15+ characters, not blocklisted; ADR 0056) without an operational bypass.
+  Omitting `--password-stdin` (like `bootstrap`) prompts interactively without echo; automation
+  passes one line through standard input. Plaintext password arguments are rejected.
 ```bash
-dotnet run --project src/JobTrack.AdminCli -- create-employee --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --actor <admin-username> --username <username> --password <password> --display-name <name> --roles Worker
-dotnet run --project src/JobTrack.AdminCli -- issue-token --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --username <username> --label <label> [--lifetime-days <days>]
+printf '%s\n' "$INITIAL_PASSWORD" | dotnet run --project src/JobTrack.AdminCli -- create-employee --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --actor <admin-username> --username <username> --password-stdin --display-name <name> --roles Worker
 ```
+
+A personal access token can only be issued through the self-service `/Account/PersonalAccessTokens`
+page by the signed-in owner (ADR 0029, ADR 0055) — there is no CLI or unauthenticated path to mint
+one for another account.
 
 Run `JobTrack.AdminCli` with no arguments for the full option list of every command.
 

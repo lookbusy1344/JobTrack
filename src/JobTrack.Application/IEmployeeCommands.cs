@@ -17,7 +17,10 @@ public interface IEmployeeCommands
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">The actor does not hold <see cref="EmployeeRole.Administrator" />.</exception>
 	/// <exception cref="InvariantViolationException">
-	///     The username is already taken (<c>ConstraintId</c> <c>"employee-username-already-taken"</c>).
+	///     The username is already taken (<c>ConstraintId</c> <c>"employee-username-already-taken"</c>),
+	///     or <see cref="CreateEmployeeRequest.Password" /> does not satisfy
+	///     <see cref="PasswordPolicy" />/<see cref="PasswordBlocklist" /> (<c>ConstraintId</c>
+	///     <c>"account-new-password-policy"</c>).
 	/// </exception>
 	Task<AccountStateResult> CreateEmployeeAsync(
 		CreateEmployeeRequest request, CancellationToken cancellationToken = default);
@@ -67,6 +70,11 @@ public interface IEmployeeCommands
 	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">The actor does not hold <see cref="EmployeeRole.Administrator" />.</exception>
 	/// <exception cref="EntityNotFoundException">The target employee does not exist.</exception>
+	/// <exception cref="InvariantViolationException">
+	///     <see cref="ResetEmployeePasswordRequest.NewPassword" /> does not satisfy
+	///     <see cref="PasswordPolicy" />/<see cref="PasswordBlocklist" /> (<c>ConstraintId</c>
+	///     <c>"account-new-password-policy"</c>).
+	/// </exception>
 	Task<AccountStateResult> ResetPasswordAsync(
 		ResetEmployeePasswordRequest request, CancellationToken cancellationToken = default);
 

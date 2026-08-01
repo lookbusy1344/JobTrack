@@ -102,7 +102,7 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 			DisplayName = "Demo Worker",
 			IanaTimeZone = "Europe/London",
 			UserName = "demo.requester-demo",
-			Password = "demo1234",
+			Password = "Demo-Worker-Battery-77!",
 			Role = EmployeeRole.JobManager,
 		});
 		_ = await client.Employees.AssignRoleAsync(new() {
@@ -115,7 +115,7 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 			DisplayName = "Client Requester",
 			IanaTimeZone = "Europe/London",
 			UserName = "requester",
-			Password = "requester1234",
+			Password = "Requester-Battery-77!",
 			Role = EmployeeRole.Requester,
 		});
 

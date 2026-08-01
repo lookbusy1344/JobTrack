@@ -197,9 +197,7 @@ public sealed class IndexModel(
 		DisplayedUserId = targetUserId.Value;
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
 
-		var directory = await jobTrackClient.Query.GetAllEmployeesAsync(
-			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } },
-			cancellationToken);
+		var directory = await LoadEmployeeDirectoryAsync(actor, cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		UserOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Myself", string.Empty));
 
@@ -212,6 +210,26 @@ public sealed class IndexModel(
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That employee does not exist.";
+		}
+	}
+
+	/// <summary>
+	///     <see cref="IJobQueries.GetAllEmployeesAsync" /> now requires <see cref="EmployeeRole.Administrator" />
+	///     (remediation plan §2.4), but this page is also reachable by a plain
+	///     <see cref="EmployeeRole.Worker" /> viewing their own rota (<see cref="JobTrackPolicyNames.ScheduleAdministration" />).
+	///     A non-administrator falls back to <see cref="IJobQueries.GetEmployeeDirectoryAsync" /> --
+	///     workflow-employee-only, but sufficient to resolve the viewer's own display name and populate
+	///     the "switch employee" picker for someone who could not use it beyond themselves anyway.
+	/// </summary>
+	private async Task<EquatableArray<EmployeeDirectoryEntry>> LoadEmployeeDirectoryAsync(AppUserId actor, CancellationToken cancellationToken)
+	{
+		try {
+			return await jobTrackClient.Query.GetAllEmployeesAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+		}
+		catch (AuthorizationDeniedException) {
+			return await jobTrackClient.Query.GetEmployeeDirectoryAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
 		}
 	}
 

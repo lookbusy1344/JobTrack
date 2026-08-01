@@ -21,12 +21,11 @@ Every route below requires either:
   is never attached by a browser automatically, so it carries none of the ambient-credential risk
   antiforgery protects against.
 
-There is no HTTP endpoint to issue a PAT — users and administrators manage tokens through the
-signed-in Razor surface at `/Account/PersonalAccessTokens`, which calls `ITokenCommands` in-process.
-Administrators may also issue tokens through `JobTrack.AdminCli` or another host composition root.
-The one-time-revealed secret is handed to the client out of band. A PAT is
-revoked automatically on account disablement, role changes, and password reset/change, alongside
-that user's web sessions.
+There is no HTTP endpoint, CLI command, or other path to issue a PAT — a user mints one only for
+themselves, only through the signed-in Razor surface at `/Account/PersonalAccessTokens`, which calls
+`ITokenCommands` in-process (ADR 0029, ADR 0055). The one-time-revealed secret is handed to the
+client out of band. A PAT is revoked automatically on account disablement, role changes, and
+password reset/change, alongside that user's web sessions.
 
 Every non-2xx response is an RFC 7807 problem-details JSON body (`Content-Type:
 application/problem+json`) with a stable `type` URI you can branch on (`/problems/entity-not-found`,

@@ -13,6 +13,7 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	private readonly Dictionary<AppUserId, AccountStateResult> _accountStates = [];
 	private readonly Dictionary<AppUserId, EmployeeProfileResult> _profiles = [];
 	private readonly Dictionary<AppUserId, EquatableArray<EmployeeRole>> _roles = [];
+	private EquatableArray<EmployeeRole>? _defaultRolesForUnseededActors;
 	private EquatableArray<EmployeeDirectoryEntry> _allEmployees = [];
 	private EquatableArray<EmployeeDirectoryEntry> _directory = [];
 
@@ -26,11 +27,29 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 
 	public int GetAllEmployeesCallCount { get; private set; }
 
+	/// <summary>
+	///     A fake pre-seeded with <see cref="EmployeeRole.Worker" /> for any actor id that a test does
+	///     not explicitly seed — the tree/readiness/session fakes below exist to test domain composition,
+	///     not the actor-admission gate itself (remediation plan §2.4), so most of their tests use
+	///     whatever <see cref="AppUserId" /> reads naturally in the scenario without also having to seed
+	///     it. Tests that exercise admission denial construct a bare <see cref="FakeEmployeeQueryPort" />
+	///     instead.
+	/// </summary>
+	public static FakeEmployeeQueryPort AllowingAnyActor()
+	{
+		var port = new FakeEmployeeQueryPort { _defaultRolesForUnseededActors = [EmployeeRole.Worker] };
+		return port;
+	}
+
 	public Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		AppUserId actorId, CancellationToken cancellationToken = default)
 	{
 		++GetActorRolesCallCount;
 		if (!_roles.TryGetValue(actorId, out var actorRoles)) {
+			if (_defaultRolesForUnseededActors is EquatableArray<EmployeeRole> defaultRoles) {
+				return Task.FromResult(defaultRoles);
+			}
+
 			throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		}
 

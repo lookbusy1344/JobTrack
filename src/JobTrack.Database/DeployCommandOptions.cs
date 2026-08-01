@@ -15,6 +15,7 @@ public sealed record DeployCommandOptions
 	{
 		SchemaProvider? provider = null;
 		string? connectionString = null;
+		string? connectionStringFile = null;
 		string? scriptsRoot = null;
 
 		for (var index = 0; index < args.Count; index += 2) {
@@ -32,6 +33,9 @@ public sealed record DeployCommandOptions
 				case "--connection-string":
 					connectionString = value;
 					break;
+				case "--connection-string-file":
+					connectionStringFile = value;
+					break;
 				case "--scripts-root":
 					scriptsRoot = value;
 					break;
@@ -44,11 +48,9 @@ public sealed record DeployCommandOptions
 			throw new SchemaDeploymentException("Missing required flag '--provider'.");
 		}
 
-		if (connectionString is null) {
-			throw new SchemaDeploymentException("Missing required flag '--connection-string'.");
-		}
+		var resolvedConnectionString = ConnectionStringSource.Resolve(connectionString, connectionStringFile);
 
-		return new() { Provider = provider.Value, ConnectionString = connectionString, ScriptsRoot = scriptsRoot };
+		return new() { Provider = provider.Value, ConnectionString = resolvedConnectionString, ScriptsRoot = scriptsRoot };
 	}
 
 	private static SchemaProvider ParseProvider(string value) => value switch {

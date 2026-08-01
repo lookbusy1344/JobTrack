@@ -10,8 +10,13 @@ using TestSupport;
 ///     TC-DB-ROLES-001: PostgreSQL-only contract for the roles-and-grants
 ///     script (impl plan §6.1, §6.7 gate item "role grants prove the normal
 ///     application role cannot perform DDL, erase audit rows, or delete
-///     retained history"). No SQLite equivalent -- SQLite has no roles or
-///     GRANT concept.
+///     retained history") plus the jobtrack_domain/jobtrack_identity split and
+///     personal_access_token SECURITY DEFINER function boundary (security
+///     review remediation §2.6). No SQLite equivalent -- SQLite has no roles
+///     or GRANT concept. Function-behavior contract tests (issue/authenticate/
+///     list/revoke round trips) live in <c>PostgreSqlSecurityDefinerFunctionsTests</c>;
+///     this file covers the negative "no direct table access" half of the
+///     boundary.
 ///     Every negative assertion is exercised via <c>SET ROLE</c> on the same
 ///     admin connection used to deploy the schema, rather than a separate
 ///     authenticated connection per role: the local/CI admin account is a
@@ -32,74 +37,179 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 	public Task DisposeAsync() => database.DisposeAsync();
 
 	[Fact]
-	public async Task The_application_role_cannot_create_a_table()
+	public async Task The_domain_role_cannot_create_a_table()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 
-		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_application", "CREATE TABLE rogue_table (id integer);");
+		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "CREATE TABLE rogue_table (id integer);");
 
 		await act.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 	}
 
 	[Fact]
-	public async Task The_application_role_cannot_alter_an_existing_table()
+	public async Task The_domain_role_cannot_alter_an_existing_table()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 
-		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_application", "ALTER TABLE app_user ADD COLUMN rogue_column text;");
+		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "ALTER TABLE app_user ADD COLUMN rogue_column text;");
 
 		await act.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 	}
 
 	[Fact]
-	public async Task The_application_role_cannot_delete_audit_event_rows()
+	public async Task The_domain_role_cannot_delete_audit_event_rows()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
 		await InsertAuditEventAsync(connection, userId);
 
-		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_application", "DELETE FROM audit_event;");
+		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "DELETE FROM audit_event;");
 
 		await act.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		(await CountRowsAsync(connection, "audit_event")).Should().Be(1);
 	}
 
 	[Fact]
-	public async Task The_application_role_cannot_update_audit_event_rows()
+	public async Task The_domain_role_cannot_update_audit_event_rows()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
 		await InsertAuditEventAsync(connection, userId);
 
-		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_application", "UPDATE audit_event SET reason = 'tampered';");
+		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "UPDATE audit_event SET reason = 'tampered';");
 
 		await act.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 	}
 
 	[Fact]
-	public async Task The_application_role_cannot_delete_retained_work_session_history()
+	public async Task The_domain_role_cannot_delete_retained_work_session_history()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, leafWorkId) = await SeedUserAndLeafWorkAsync(connection, "Alice Example");
 		await InsertWorkSessionAsync(connection, leafWorkId, userId);
 
-		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_application", "DELETE FROM work_session;");
+		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "DELETE FROM work_session;");
 
 		await act.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		(await CountRowsAsync(connection, "work_session")).Should().Be(1);
 	}
 
 	[Fact]
-	public async Task The_application_role_can_still_read_and_write_ordinary_tables()
+	public async Task The_domain_role_can_still_read_and_write_ordinary_tables()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 
 		var act = async () => await ExecuteAsRoleAsync(
 			connection,
-			"jobtrack_application",
+			"jobtrack_domain",
 			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ('Bob Example', 'Europe/London');");
 
 		await act.Should().NotThrowAsync();
+	}
+
+	[Fact]
+	public async Task The_domain_role_has_no_direct_access_to_personal_access_token()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var tokenId = await InsertPersonalAccessTokenAsync(connection, userId);
+
+		var selectAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "SELECT token_hash FROM personal_access_token;");
+		var insertAct = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_domain",
+			"INSERT INTO personal_access_token (app_user_id, token_hash, label, expires_at) " +
+			$"VALUES ({userId}, 'rogue-hash', 'rogue', now() + interval '1 day');");
+		var updateAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_domain", $"UPDATE personal_access_token SET last_used_at = now() WHERE id = {tokenId};");
+
+		await selectAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await insertAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await updateAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+	}
+
+	[Fact]
+	public async Task The_domain_role_cannot_issue_authenticate_or_list_personal_access_tokens()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+
+		var issueAct = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_domain",
+			$"SELECT pat_issue({userId}, 'a-hash', 'a-label', now(), now() + interval '1 day');");
+		var listAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", $"SELECT * FROM pat_list({userId});");
+		var authenticateAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_domain", "SELECT * FROM pat_try_authenticate('a-hash', now());");
+
+		await issueAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await listAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await authenticateAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+	}
+
+	[Fact]
+	public async Task The_personal_access_token_roles_have_disjoint_function_authority()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+
+		var readonlyAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_readonly", "SELECT * FROM pat_list(1);");
+		var emergencyResetAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_emergency_reset", "SELECT * FROM pat_list(1);");
+		var identityAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_identity", "SELECT * FROM pat_list(1);");
+		var managementIssueAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_pat_management", $"SELECT pat_issue({userId}, 'managed-hash', 'managed', now(), now() + interval '1 day');");
+		var managementListAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_pat_management", $"SELECT * FROM pat_list({userId});");
+		var managementAuthenticateAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_pat_management", "SELECT * FROM pat_try_authenticate('managed-hash', now());");
+		var managementAuditAct = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_pat_management",
+			$"INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id) " +
+			$"VALUES ({userId}, 'issue-personal-access-token', 'personal_access_token', 1, gen_random_uuid());");
+		var authenticationIssueAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_pat_authentication", $"SELECT pat_issue({userId}, 'rogue-hash', 'rogue', now(), now() + interval '1 day');");
+		var authenticationAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_pat_authentication", "SELECT * FROM pat_try_authenticate('managed-hash', now());");
+
+		await readonlyAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await emergencyResetAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await identityAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await managementIssueAct.Should().NotThrowAsync();
+		await managementListAct.Should().NotThrowAsync();
+		await managementAuditAct.Should().NotThrowAsync();
+		await managementAuthenticateAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await authenticationIssueAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await authenticationAct.Should().NotThrowAsync();
+	}
+
+	[Fact]
+	public async Task The_identity_role_can_manage_identity_user_but_not_domain_tables()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var identityUserId = await InsertIdentityUserAsync(connection, userId);
+
+		var updateIdentityAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_identity", $"UPDATE identity_user SET security_stamp = 'reset' WHERE id = {identityUserId};");
+		var assignRoleAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_identity", $"INSERT INTO identity_user_role (identity_user_id, identity_role_id) VALUES ({identityUserId}, 1);");
+		var insertJobNodeAct = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_identity",
+			"INSERT INTO job_node (description, posted_by_user_id, owner_user_id, priority_id, posted_at) " +
+			$"VALUES ('Rogue', {userId}, {userId}, {PriorityMedium}, now());");
+		var selectPatAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_identity", "SELECT * FROM personal_access_token;");
+		var insertAuditAct = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_identity",
+			$"INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id) " +
+			$"VALUES ({userId}, 'Rogue', 'app_user', {userId}, gen_random_uuid());");
+
+		await updateIdentityAct.Should().NotThrowAsync();
+		await assignRoleAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await insertJobNodeAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await selectPatAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await insertAuditAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 	}
 
 	[Fact]
@@ -133,6 +243,22 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		await securityStampAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		await concurrencyStampAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		await userNameAct.Should().NotThrowAsync();
+	}
+
+	[Fact]
+	public async Task The_personal_access_token_management_role_cannot_select_identity_secrets()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		await InsertIdentityUserAsync(connection, userId);
+
+		var passwordHashAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_pat_management", "SELECT password_hash FROM identity_user;");
+		var accountStateAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_pat_management", "SELECT id, app_user_id, is_enabled, lockout_enabled, lockout_end FROM identity_user;");
+
+		await passwordHashAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await accountStateAct.Should().NotThrowAsync();
 	}
 
 	[Fact]
@@ -236,6 +362,7 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 
 		await PostgreSqlRolesAndGrants.ApplyAsync(connection, RepositoryPaths.PostgreSqlRolesAndGrantsScriptPath(), CancellationToken.None);
+		await PostgreSqlRolesAndGrants.ApplyAsync(connection, RepositoryPaths.PostgreSqlFunctionsScriptPath(), CancellationToken.None);
 
 		return connection;
 	}

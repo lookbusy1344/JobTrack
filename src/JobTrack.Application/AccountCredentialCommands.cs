@@ -43,11 +43,7 @@ internal sealed class AccountCredentialCommands : IAccountCredentialCommands
 			throw new ArgumentException("Actor user id must be specified.", nameof(request));
 		}
 
-		if (!PasswordPolicy.IsSatisfiedBy(request.NewPassword)) {
-			throw new InvariantViolationException(
-				"account-new-password-policy",
-				$"The new password must be at least {PasswordPolicy.MinimumLength} characters and contain at least one letter and one digit.");
-		}
+		PasswordPolicyGuard.EnsureAcceptable(request.NewPassword, request.Username);
 
 		return JobTrackOperation.TraceAsync(
 			"credentials.change-own-password",

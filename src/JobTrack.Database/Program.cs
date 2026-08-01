@@ -11,7 +11,10 @@ public static class Program
 	{
 		if (args is not ["deploy", .. var rest]) {
 			Console.Error.WriteLine(
-				"Usage: JobTrack.Database deploy --provider <postgresql|sqlite> --connection-string <connection-string> [--scripts-root <path>]");
+				"Usage: JobTrack.Database deploy --provider <postgresql|sqlite> " +
+				"(--connection-string <connection-string> | --connection-string-file <path>) [--scripts-root <path>]\n" +
+				"  --connection-string-file is the preferred production input -- --connection-string is visible in " +
+				"process listings and shell history.");
 			return 1;
 		}
 
@@ -32,6 +35,10 @@ public static class Program
 		var scripts = SchemaVersionScriptLoader.Load(scriptsRoot);
 		var applicationVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
 		var appliedBy = Environment.UserName;
+
+		if (options.Provider == SchemaProvider.PostgreSql) {
+			PostgreSqlTransportSecurity.Validate(options.ConnectionString);
+		}
 
 		await using DbConnection connection = options.Provider switch {
 			SchemaProvider.PostgreSql => new NpgsqlConnection(options.ConnectionString),
@@ -60,6 +67,8 @@ public static class Program
 		if (options.Provider == SchemaProvider.PostgreSql) {
 			await PostgreSqlRolesAndGrants.ApplyAsync(connection, PostgreSqlRolesAndGrantsScriptPath(scriptsRoot), cancellationToken)
 				.ConfigureAwait(false);
+			await PostgreSqlRolesAndGrants.ApplyAsync(connection, PostgreSqlFunctionsScriptPath(scriptsRoot), cancellationToken)
+				.ConfigureAwait(false);
 		}
 	}
 
@@ -82,4 +91,13 @@ public static class Program
 	/// </summary>
 	private static string PostgreSqlRolesAndGrantsScriptPath(string scriptsRoot) =>
 		Path.Combine(Directory.GetParent(scriptsRoot)!.FullName, "roles", "jobtrack-roles-and-grants.sql");
+
+	/// <summary>
+	///     The SECURITY DEFINER functions script lives as a fixed sibling of <c>schema-versions</c>
+	///     under <c>database/postgresql/</c>, applied after the roles script (its <c>GRANT EXECUTE</c>
+	///     targets <c>jobtrack_domain</c>, which the roles script must have already created) --
+	///     security review remediation §2.6.
+	/// </summary>
+	private static string PostgreSqlFunctionsScriptPath(string scriptsRoot) =>
+		Path.Combine(Directory.GetParent(scriptsRoot)!.FullName, "functions", "jobtrack-security-definer-functions.sql");
 }

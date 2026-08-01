@@ -26,7 +26,8 @@ public sealed class CreateEmployeeCommandTests
 	private const string AppliedBy = "admincli-tests";
 	private const string AdminUsername = "admin";
 	private const string DemoUsername = "demo";
-	private const string DemoPassword = "demo1234";
+	private const string DemoPassword = "demo-jobtrack-1234";
+	private const string WeakPassword = "demo1234";
 
 	[Fact]
 	public async Task Creates_a_normal_employee_with_multiple_roles_on_sqlite()
@@ -116,6 +117,27 @@ public sealed class CreateEmployeeCommandTests
 			exitCode.Should().Be(0);
 			var state = await AccountStateAsync(harness, DemoUsername);
 			state.RequiresPasswordChange.Should().BeTrue();
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	[Fact]
+	public async Task Fails_for_a_weak_password_on_sqlite()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await using var harness = await HarnessAsync(SchemaProvider.Sqlite, database.ConnectionString);
+			var options = DemoOptions(AdminCliProvider.Sqlite, database.ConnectionString) with { Password = WeakPassword };
+
+			var console = new FakeConsoleIO([], []);
+			var exitCode = await CreateEmployeeCommand.RunAsync(console, harness.UserManager, harness.Client, options, CancellationToken.None);
+
+			exitCode.Should().Be(1);
+			(await harness.UserManager.FindByNameAsync(DemoUsername)).Should().BeNull();
 		}
 		finally {
 			await database.DisposeAsync();
@@ -258,6 +280,7 @@ public sealed class CreateEmployeeCommandTests
 			ApplicationVersion,
 			AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
+		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, provider);
 	}
 
 	private sealed class Harness(

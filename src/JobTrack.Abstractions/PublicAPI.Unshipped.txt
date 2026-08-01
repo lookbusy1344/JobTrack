@@ -133,6 +133,7 @@ JobTrack.Abstractions.NodeRateOverrideId.NodeRateOverrideId() -> void
 JobTrack.Abstractions.NodeRateOverrideId.NodeRateOverrideId(long Value) -> void
 JobTrack.Abstractions.NodeRateOverrideId.Value.get -> long
 JobTrack.Abstractions.NodeRateOverrideId.Value.init -> void
+JobTrack.Abstractions.PasswordBlocklist
 JobTrack.Abstractions.PasswordPolicy
 JobTrack.Abstractions.PersonalAccessTokenId
 JobTrack.Abstractions.PersonalAccessTokenId.Deconstruct(out long Value) -> void
@@ -204,7 +205,8 @@ JobTrack.Abstractions.WorkSessionId.Value.get -> long
 JobTrack.Abstractions.WorkSessionId.Value.init -> void
 JobTrack.Abstractions.WorkSessionId.WorkSessionId() -> void
 JobTrack.Abstractions.WorkSessionId.WorkSessionId(long Value) -> void
-const JobTrack.Abstractions.PasswordPolicy.MinimumLength = 6 -> int
+const JobTrack.Abstractions.PasswordPolicy.MinimumLength = 15 -> int
+const JobTrack.Abstractions.PasswordPolicy.MaximumLength = 128 -> int
 override JobTrack.Abstractions.AppUserId.GetHashCode() -> int
 override JobTrack.Abstractions.AuditEventId.GetHashCode() -> int
 override JobTrack.Abstractions.DepartmentId.GetHashCode() -> int
@@ -261,6 +263,7 @@ static JobTrack.Abstractions.Money.operator >(JobTrack.Abstractions.Money left, 
 static JobTrack.Abstractions.Money.operator >=(JobTrack.Abstractions.Money left, JobTrack.Abstractions.Money right) -> bool
 static JobTrack.Abstractions.NodeRateOverrideId.operator !=(JobTrack.Abstractions.NodeRateOverrideId left, JobTrack.Abstractions.NodeRateOverrideId right) -> bool
 static JobTrack.Abstractions.NodeRateOverrideId.operator ==(JobTrack.Abstractions.NodeRateOverrideId left, JobTrack.Abstractions.NodeRateOverrideId right) -> bool
+static JobTrack.Abstractions.PasswordBlocklist.Contains(string? password, string? username = null) -> bool
 static JobTrack.Abstractions.PasswordPolicy.IsSatisfiedBy(string? password) -> bool
 static JobTrack.Abstractions.PersonalAccessTokenId.operator !=(JobTrack.Abstractions.PersonalAccessTokenId left, JobTrack.Abstractions.PersonalAccessTokenId right) -> bool
 static JobTrack.Abstractions.PersonalAccessTokenId.operator ==(JobTrack.Abstractions.PersonalAccessTokenId left, JobTrack.Abstractions.PersonalAccessTokenId right) -> bool

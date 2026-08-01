@@ -73,13 +73,11 @@ public static class ServiceCollectionExtensions
 		_ = services.AddDataProtection().SetApplicationName(DataProtectionApplicationName);
 
 		return services.AddIdentityCore<JobTrackIdentityUser>(options => {
-			// Relaxed on purpose (PasswordPolicy): a letter and a digit, minimum length only --
-			// no required mixed case or symbol. RequireDigit stays on IdentityOptions since it
-			// already expresses "any digit" case-insensitively; the letter half needs
-			// RequiresLetterPasswordValidator because RequireLowercase/RequireUppercase are each
-			// case-specific and there is no "either case" flag.
+			// PasswordPolicy (remediation plan §2.1, ADR 0056): length only, no character-class
+			// composition rule -- NIST SP 800-63B recommends against composition rules for a
+			// single-factor password and instead calls for a long minimum length.
 			options.Password.RequiredLength = PasswordPolicy.MinimumLength;
-			options.Password.RequireDigit = true;
+			options.Password.RequireDigit = false;
 			options.Password.RequireLowercase = false;
 			options.Password.RequireUppercase = false;
 			options.Password.RequireNonAlphanumeric = false;
@@ -87,7 +85,6 @@ public static class ServiceCollectionExtensions
 		})
 			.AddUserStore<JobTrackUserStore>()
 			.AddClaimsPrincipalFactory<JobTrackUserClaimsPrincipalFactory>()
-			.AddPasswordValidator<RequiresLetterPasswordValidator>()
 			// ADR 0037: registers AuthenticatorTokenProvider<TUser> (RFC 6238 TOTP verification) under
 			// TokenOptions.DefaultAuthenticatorProvider, the name SignInManager.TwoFactorAuthenticator-
 			// SignInAsync looks up by default -- no hand-rolled TOTP code, the framework's own

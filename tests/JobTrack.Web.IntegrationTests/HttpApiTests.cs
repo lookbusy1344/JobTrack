@@ -907,6 +907,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		_ = await seedClient.Employees.ResetPasswordAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
 			TargetUserId = viewerId,
+			TargetUserName = "api.bearer.password-reset-revokes",
 			NewPassword = "Reset-Horse-Battery-99!",
 		});
 		var response = await GetWithBearerAsync($"/api/employees/{viewerId.Value}/rates", token);

@@ -338,6 +338,7 @@ public sealed class EmployeeCommandsTests
 		var result = await sut.ResetPasswordAsync(new() {
 			Context = ContextFor(AdministratorId),
 			TargetUserId = WorkerId,
+			TargetUserName = "grace.worker",
 			NewPassword = "correct-horse-battery-staple",
 		});
 
@@ -352,6 +353,7 @@ public sealed class EmployeeCommandsTests
 		var act = () => sut.ResetPasswordAsync(new() {
 			Context = ContextFor(WorkerId),
 			TargetUserId = WorkerId,
+			TargetUserName = "grace.worker",
 			NewPassword = "correct-horse-battery-staple",
 		});
 
@@ -366,10 +368,81 @@ public sealed class EmployeeCommandsTests
 		var act = () => sut.ResetPasswordAsync(new() {
 			Context = ContextFor(AdministratorId),
 			TargetUserId = new(999),
+			TargetUserName = "grace.worker",
 			NewPassword = "correct-horse-battery-staple",
 		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	[Fact]
+	public async Task ResetPasswordAsync_rejects_a_password_shorter_than_the_minimum()
+	{
+		var sut = CreateSut(CreateSeededPort());
+
+		var act = () => sut.ResetPasswordAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			TargetUserName = "grace.worker",
+			NewPassword = "too-short",
+		});
+
+		var exception = await act.Should().ThrowAsync<InvariantViolationException>();
+		exception.Which.ConstraintId.Should().Be("account-new-password-policy");
+	}
+
+	[Fact]
+	public async Task ResetPasswordAsync_rejects_a_password_that_is_the_targets_own_username()
+	{
+		var sut = CreateSut(CreateSeededPort());
+		var username = new string('u', PasswordPolicy.MinimumLength);
+
+		var act = () => sut.ResetPasswordAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			TargetUserName = username,
+			NewPassword = username,
+		});
+
+		var exception = await act.Should().ThrowAsync<InvariantViolationException>();
+		exception.Which.ConstraintId.Should().Be("account-new-password-policy");
+	}
+
+	[Fact]
+	public async Task CreateEmployeeAsync_rejects_a_password_shorter_than_the_minimum()
+	{
+		var sut = CreateSut(CreateSeededPort());
+
+		var act = () => sut.CreateEmployeeAsync(new() {
+			Context = ContextFor(AdministratorId),
+			DisplayName = "Grace Hopper",
+			IanaTimeZone = "Etc/UTC",
+			UserName = "grace.hopper",
+			Password = "too-short",
+			Role = EmployeeRole.Worker,
+		});
+
+		var exception = await act.Should().ThrowAsync<InvariantViolationException>();
+		exception.Which.ConstraintId.Should().Be("account-new-password-policy");
+	}
+
+	[Fact]
+	public async Task CreateEmployeeAsync_rejects_a_password_that_is_the_new_accounts_own_username()
+	{
+		var sut = CreateSut(CreateSeededPort());
+		var username = new string('u', PasswordPolicy.MinimumLength);
+
+		var act = () => sut.CreateEmployeeAsync(new() {
+			Context = ContextFor(AdministratorId),
+			DisplayName = "Grace Hopper",
+			IanaTimeZone = "Etc/UTC",
+			UserName = username,
+			Password = username,
+			Role = EmployeeRole.Worker,
+		});
+
+		var exception = await act.Should().ThrowAsync<InvariantViolationException>();
+		exception.Which.ConstraintId.Should().Be("account-new-password-policy");
 	}
 
 	[Fact]

@@ -11,7 +11,6 @@ public sealed class CreateEmployeeCommandOptionsTests
 		"--connection-string", "Data Source=test.db",
 		"--actor", "admin",
 		"--username", "demo",
-		"--password", "demo1234",
 		"--display-name", "Demo User",
 		"--roles", roles,
 		.. extra,
@@ -26,7 +25,7 @@ public sealed class CreateEmployeeCommandOptionsTests
 		options.ConnectionString.Should().Be("Data Source=test.db");
 		options.ActorUsername.Should().Be("admin");
 		options.Username.Should().Be("demo");
-		options.Password.Should().Be("demo1234");
+		options.Password.Should().BeNull();
 		options.DisplayName.Should().Be("Demo User");
 		options.Roles.Should().Equal(EmployeeRole.JobManager);
 	}
@@ -39,6 +38,26 @@ public sealed class CreateEmployeeCommandOptionsTests
 		options.IanaTimeZone.Should().Be("Europe/London");
 		options.ForcePasswordChange.Should().BeTrue();
 		options.DefaultHourlyRate.Should().BeNull();
+	}
+
+	[Fact]
+	public void Rejects_the_removed_weak_password_bypass_flag()
+	{
+		var act = () => CreateEmployeeCommandOptions.Parse(new(Required("JobManager", "--allow-weak-password")));
+
+		act.Should().Throw<PicoArgsException>();
+	}
+
+	[Fact]
+	public void Rejects_an_initial_password_supplied_in_process_arguments_without_echoing_it()
+	{
+		const string secret = "argv-must-not-contain-this-secret";
+		var act = () => CreateEmployeeCommandOptions.Parse(new([
+			"--provider", "sqlite", "--connection-string", "Data Source=test.db", "--actor", "admin",
+			"--username", "demo", "--password", secret, "--display-name", "Demo User", "--roles", "JobManager",
+		]));
+
+		act.Should().Throw<AdminCliUsageException>().Which.Message.Should().NotContain(secret);
 	}
 
 	[Fact]
@@ -142,9 +161,53 @@ public sealed class CreateEmployeeCommandOptionsTests
 		var act = () => CreateEmployeeCommandOptions.Parse(
 			new([
 				"--provider", "sqlite", "--connection-string", "x", "--username", "demo",
-				"--password", "p", "--display-name", "D", "--roles", "Worker",
+				"--display-name", "D", "--roles", "Worker",
 			]));
 
 		act.Should().Throw<PicoArgsException>();
+	}
+
+	[Fact]
+	public void Leaves_password_null_when_omitted()
+	{
+		var options = CreateEmployeeCommandOptions.Parse(
+			new([
+				"--provider", "sqlite", "--connection-string", "x", "--actor", "admin", "--username", "demo",
+				"--display-name", "D", "--roles", "Worker",
+			]));
+
+		options.Password.Should().BeNull();
+		options.PasswordFromStdin.Should().BeFalse();
+	}
+
+	[Fact]
+	public void Sets_password_from_stdin_flag()
+	{
+		var options = CreateEmployeeCommandOptions.Parse(
+			new([
+				"--provider", "sqlite", "--connection-string", "x", "--actor", "admin", "--username", "demo",
+				"--display-name", "D", "--roles", "Worker", "--password-stdin",
+			]));
+
+		options.PasswordFromStdin.Should().BeTrue();
+		options.Password.Should().BeNull();
+	}
+
+	[Fact]
+	public void Rejects_password_even_when_password_stdin_is_also_present()
+	{
+		var act = () => CreateEmployeeCommandOptions.Parse(new(Required("JobManager", "--password", "secret", "--password-stdin")));
+
+		act.Should().Throw<AdminCliUsageException>().WithMessage("*not supported*");
+	}
+
+	[Fact]
+	public void Rejects_both_connection_string_and_connection_string_file()
+	{
+		var args = Required();
+		args[3] = "x";
+		var act = () => CreateEmployeeCommandOptions.Parse(new([.. args, "--connection-string-file", "/tmp/does-not-matter"]));
+
+		act.Should().Throw<AdminCliUsageException>().WithMessage("*mutually exclusive*");
 	}
 }

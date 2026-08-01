@@ -109,7 +109,7 @@ RUN RID="$(cat /rid)" \
 #      so forcing a change that immediately reverts is pointless friction.
 #   3. Create the DEMO account -- a normal (non-admin) JobManager+Worker employee whose published
 #      credential is deliberately reusable: --no-force-password-change clears the ADR 0023 default
-#      so demo/demo1234 keeps working without a forced change on first sign-in (any live change is
+#      so demo/demo-jobtrack-1234 keeps working without a forced change on first sign-in (any live change is
 #      wiped back to this seed on a Cloud Run recycle -- see docs/operations/docker-image.md).
 #   4. Create the REQUESTER account with the same reusable-demo treatment. It can submit and inspect
 #      requests but cannot be assigned work.
@@ -118,10 +118,9 @@ RUN RID="$(cat /rid)" \
 #   6. Submit six requester-owned jobs through the library requester-intake API and move them into a
 #      representative mix of open and closed states. DEMO remains their technical work actor.
 #
-# Bootstrap still prompts interactively for display name / time zone / username (only the password
-# has a --password flag), so those three lines are piped on stdin; --password removes the need for
-# the `script` pty the old single-account seed used. create-employee and import-tree are fully
-# non-interactive (all flags), so they need no stdin.
+# Bootstrap reads the password's first line from stdin, then prompts for display name / time zone /
+# username, so all four values are piped in order. create-employee also reads its initial password
+# from stdin; import-tree remains fully non-interactive.
 #
 # The known DEMO and REQUESTER credentials are tolerable solely because this image is a local demo
 # artifact (see the header comment) -- which is precisely why it must never be exposed to a network
@@ -132,10 +131,10 @@ ARG ADMIN_USERNAME=admin
 ARG ADMIN_PASSWORD=
 ARG ADMIN_DISPLAY_NAME="Administrator"
 ARG DEMO_USERNAME=demo
-ARG DEMO_PASSWORD=demo1234
+ARG DEMO_PASSWORD=demo-jobtrack-1234
 ARG DEMO_DISPLAY_NAME="Demo User"
 ARG REQUESTER_USERNAME=requester
-ARG REQUESTER_PASSWORD=requester1234
+ARG REQUESTER_PASSWORD=requester-jobtrack-1234
 ARG REQUESTER_DISPLAY_NAME="Client Requester"
 ARG SEED_TIME_ZONE=Europe/London
 RUN mkdir -p /appdata/keys \
@@ -143,18 +142,18 @@ RUN mkdir -p /appdata/keys \
     && /app/database/JobTrack.Database deploy --provider sqlite \
          --connection-string "Data Source=/appdata/jobtrack.db" \
          --scripts-root database/sqlite/schema-versions \
-    && printf '%s\n%s\n%s\n' "$ADMIN_DISPLAY_NAME" "$SEED_TIME_ZONE" "$ADMIN_USERNAME" \
+    && printf '%s\n%s\n%s\n%s\n' "$admin_password" "$ADMIN_DISPLAY_NAME" "$SEED_TIME_ZONE" "$ADMIN_USERNAME" \
        | /app/admincli/JobTrack.AdminCli bootstrap --provider sqlite \
-           --connection-string "Data Source=/appdata/jobtrack.db" --password "$admin_password" \
+           --connection-string "Data Source=/appdata/jobtrack.db" --password-stdin \
            --no-force-password-change \
-    && /app/admincli/JobTrack.AdminCli create-employee --provider sqlite \
+    && printf '%s\n' "$DEMO_PASSWORD" | /app/admincli/JobTrack.AdminCli create-employee --provider sqlite \
          --connection-string "Data Source=/appdata/jobtrack.db" \
-         --actor "$ADMIN_USERNAME" --username "$DEMO_USERNAME" --password "$DEMO_PASSWORD" \
+         --actor "$ADMIN_USERNAME" --username "$DEMO_USERNAME" --password-stdin \
          --display-name "$DEMO_DISPLAY_NAME" --iana-time-zone "$SEED_TIME_ZONE" \
          --roles JobManager,Worker --no-force-password-change \
-    && /app/admincli/JobTrack.AdminCli create-employee --provider sqlite \
+    && printf '%s\n' "$REQUESTER_PASSWORD" | /app/admincli/JobTrack.AdminCli create-employee --provider sqlite \
          --connection-string "Data Source=/appdata/jobtrack.db" \
-         --actor "$ADMIN_USERNAME" --username "$REQUESTER_USERNAME" --password "$REQUESTER_PASSWORD" \
+         --actor "$ADMIN_USERNAME" --username "$REQUESTER_USERNAME" --password-stdin \
          --display-name "$REQUESTER_DISPLAY_NAME" --iana-time-zone "$SEED_TIME_ZONE" \
          --roles Requester --no-force-password-change \
     && for tree in samples/job-tree-imports/*.json; do \

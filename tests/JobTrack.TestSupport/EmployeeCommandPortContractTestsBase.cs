@@ -417,6 +417,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var result = await sut.ResetPasswordAsync(new() {
 			Context = ContextFor(administratorId),
 			TargetUserId = workerId,
+			TargetUserName = "worker-account",
 			NewPassword = "correct-horse-battery-staple",
 		});
 
@@ -433,6 +434,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		_ = await sut.ResetPasswordAsync(new() {
 			Context = ContextFor(administratorId),
 			TargetUserId = workerId,
+			TargetUserName = "worker-account",
 			NewPassword = "correct-horse-battery-staple",
 		});
 
@@ -449,6 +451,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var act = () => sut.ResetPasswordAsync(new() {
 			Context = ContextFor(workerId),
 			TargetUserId = workerId,
+			TargetUserName = "worker-account",
 			NewPassword = "correct-horse-battery-staple",
 		});
 
@@ -464,6 +467,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var act = () => sut.ResetPasswordAsync(new() {
 			Context = ContextFor(administratorId),
 			TargetUserId = new(administratorId.Value + 999),
+			TargetUserName = "worker-account",
 			NewPassword = "correct-horse-battery-staple",
 		});
 
@@ -624,6 +628,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
+			await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 		}
 
 		var bootstrapPort = CreateBootstrapPort(database.ConnectionString);
@@ -650,6 +655,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
+			await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 		}
 
 		var bootstrapPort = CreateBootstrapPort(database.ConnectionString);

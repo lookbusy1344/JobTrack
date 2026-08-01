@@ -3,6 +3,7 @@ JobTrack.Domain.Authorization.AchievementAccessPolicy
 JobTrack.Domain.Authorization.AuditAccessPolicy
 JobTrack.Domain.Authorization.CostAccessPolicy
 JobTrack.Domain.Authorization.EmployeeAccessPolicy
+JobTrack.Domain.Authorization.JobDataAccessPolicy
 JobTrack.Domain.Authorization.JobNodeAccessPolicy
 JobTrack.Domain.Authorization.JobNodeDeletePolicy
 JobTrack.Domain.Authorization.JobPickupPolicy
@@ -353,6 +354,7 @@ static JobTrack.Domain.Authorization.CostAccessPolicy.CanViewNodeCost(System.Col
 static JobTrack.Domain.Authorization.EmployeeAccessPolicy.CanManageAccounts(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.EmployeeAccessPolicy.CanManageRoles(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.EmployeeAccessPolicy.CanViewEmployee(JobTrack.Abstractions.AppUserId actorId, JobTrack.Abstractions.AppUserId targetUserId, System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
+static JobTrack.Domain.Authorization.JobDataAccessPolicy.CanBrowseJobData(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobNodeAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorOwnsNodeOrAncestor) -> bool
 static JobTrack.Domain.Authorization.JobNodeDeletePolicy.CanForceDeleteWorkedLeaf(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobPickupPolicy.CanPickUp(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool ownerIsNull) -> bool

@@ -10,11 +10,13 @@ internal sealed class FakeConsoleIO : IConsoleIO
 {
 	private readonly Queue<string> _lineAnswers;
 	private readonly Queue<string> _passwordAnswers;
+	private readonly Queue<string> _stdinAnswers;
 
-	public FakeConsoleIO(IEnumerable<string> lineAnswers, IEnumerable<string> passwordAnswers)
+	public FakeConsoleIO(IEnumerable<string> lineAnswers, IEnumerable<string> passwordAnswers, IEnumerable<string>? stdinAnswers = null)
 	{
 		_lineAnswers = new(lineAnswers);
 		_passwordAnswers = new(passwordAnswers);
+		_stdinAnswers = new(stdinAnswers ?? []);
 	}
 
 	public List<string> Lines { get; } = [];
@@ -38,4 +40,6 @@ internal sealed class FakeConsoleIO : IConsoleIO
 		Prompts.Add(prompt);
 		return _passwordAnswers.Count > 0 ? _passwordAnswers.Dequeue() : string.Empty;
 	}
+
+	public string ReadStdinLine() => _stdinAnswers.Count > 0 ? _stdinAnswers.Dequeue() : string.Empty;
 }

@@ -111,7 +111,7 @@ All three are TDD'd in `AccountFlowTests`; each was committed separately.
 ## 5. Reproduction notes (for future reference)
 
 - Empty-body 400 on missing token:
-  `curl -s -o /dev/null -w "%{http_code} %{size_download}" -X POST $BASE/Account/Login --data "Input.UserName=demo&Input.Password=demo1234"`
+  `curl -s -o /dev/null -w "%{http_code} %{size_download}" -X POST $BASE/Account/Login --data "Input.UserName=demo&Input.Password=demo-jobtrack-1234"`
   → `400 0`.
 - Full valid-login flow: `GET /Account/Login` (save antiforgery cookie + extract
   `__RequestVerificationToken`), then POST with both → `302 location: /` + `Set-Cookie` auth cookie.

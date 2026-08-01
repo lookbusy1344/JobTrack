@@ -37,6 +37,12 @@ for speculatively.
   any external service credentials) come from an external secret store appropriate to the host
   environment — OS-protected configuration, a secrets manager, or an environment value injected at
   service start. Never in deployment scripts or configuration files committed to source control.
+- **CLI secret channels.** `JobTrack.Database` and `JobTrack.AdminCli` reject a direct
+  `--connection-string` containing `Password`/`Pwd`; supply a protected
+  `--connection-string-file`, PostgreSQL passfile, or integrated identity instead. Administrator
+  bootstrap and employee creation reject plaintext `--password`; use the masked prompt or pipe one
+  line to `--password-stdin`. Restrict any secret file to the invoking service account and remove a
+  one-use file after the command completes.
 - **`DataProtection:KeyPath`** must be an absolute path outside the deployment directory, created
   ahead of time, writable only by the service account (see `web-host-security.md`).
 - **`ForwardedHeaders:KnownProxies` / `KnownNetworks`** must list the reverse proxy's own address —
@@ -45,12 +51,26 @@ for speculatively.
   unset value and the `*` catch-all outside Development (see `web-host-security.md`).
 - **PostgreSQL login role.** The repository ships group roles only
   (`database/postgresql/roles/jobtrack-roles-and-grants.sql`: `jobtrack_owner`,
-  `jobtrack_schema_deployer`, `jobtrack_application`, `jobtrack_readonly`,
-  `jobtrack_emergency_reset`) and holds no environment credentials. Create an actual `LOGIN` role
-  per environment and grant it membership in the appropriate group role — `jobtrack_application`
-  for the running app's connection string, `jobtrack_schema_deployer` only for the deploy step, and
-  `jobtrack_readonly` for reporting/auditor access. Never run the application itself as
-  `jobtrack_owner` or a superuser.
+  `jobtrack_schema_deployer`, `jobtrack_domain`, `jobtrack_identity`, `jobtrack_pat_management`,
+  `jobtrack_pat_authentication`, `jobtrack_readonly`, `jobtrack_emergency_reset`) and holds no environment credentials. Create an actual `LOGIN` role
+  per environment and grant it membership in the appropriate group role (security review
+  remediation §2.6 split the former single `jobtrack_application` role by capability):
+  - `jobtrack_domain` for `ConnectionStrings:JobTrackDomain` — `JobTrack.Web`'s `IJobTrackClient`
+    connection for domain data and audit writes, and also the connection `JobTrack.AdminCli` and `JobTrack.Database` use for their
+    single `--connection-string`: `jobtrack_domain` is a strict superset of what those tools need
+    (it retains `identity_user` access alongside its domain grants — see the roles script's own
+    documented residual), so provisioning the CLIs' one connection string with this role covers
+    every command they run. Do **not** provision the CLIs with `jobtrack_identity` — it cannot reach
+    domain tables those commands touch.
+  - `jobtrack_identity` for `ConnectionStrings:JobTrackIdentity` — `JobTrack.Web`'s ASP.NET Core
+    Identity sign-in path only (password/TOTP verification, security-stamp validation on every
+    request). It can read role assignments for claims but cannot create or remove them.
+  - `jobtrack_pat_management` for `ConnectionStrings:JobTrackPatManagement` — self-service/admin
+    PAT issue/list/revoke operations and their audit rows.
+  - `jobtrack_pat_authentication` for `ConnectionStrings:JobTrackPatAuthentication` — bearer-token
+    authentication only. It can execute only `pat_try_authenticate` and has no table grants.
+  - `jobtrack_schema_deployer` only for the deploy step, and `jobtrack_readonly` for
+    reporting/auditor access. Never run the application itself as `jobtrack_owner` or a superuser.
 
 ## Linux
 
@@ -107,9 +127,11 @@ for speculatively.
    WantedBy=multi-user.target
    ```
 
-   `/etc/jobtrack/secrets.env` (holding `ConnectionStrings__JobTrackIdentity=...`) should be
-   `chmod 600`, owned by `jobtrack:jobtrack`, and excluded from any config management repo that
-   isn't itself a secret store. Enable and start with
+   `/etc/jobtrack/secrets.env` (holding `ConnectionStrings__JobTrackIdentity=...` and, for
+   PostgreSQL, `ConnectionStrings__JobTrackDomain=...`, `ConnectionStrings__JobTrackPatManagement=...`,
+   and `ConnectionStrings__JobTrackPatAuthentication=...` too — see the role split above) should be
+   `chmod 600`, owned by `jobtrack:jobtrack`, and
+   excluded from any config management repo that isn't itself a secret store. Enable and start with
    `sudo systemctl enable --now jobtrack.service`.
 
 5. **Reverse proxy** (nginx shown; Caddy is a reasonable simpler alternative) terminates HTTPS and
@@ -148,14 +170,32 @@ for speculatively.
    host; a directly managed separate database host instead binds to a private network address the
    application server can reach, never a public one. Scope `pg_hba.conf` entries narrowly (specific
    role, database, and address/socket), not `0.0.0.0/0` or `trust`.
+
+   **A remote (non-loopback, non-Unix-socket) connection string must set `SSL Mode=VerifyFull`
+   plus `Root Certificate=<path-to-trusted-CA>`** (security review remediation §2.9). `VerifyCA`
+   is insufficient because it authenticates the issuing CA without verifying that the certificate
+   belongs to the configured database hostname:
+
+   ```
+   Host=db.internal.example;Port=5432;Database=jobtrack;SSL Mode=VerifyFull;Root Certificate=/etc/jobtrack/pg-ca.pem
+   ```
+
+   Npgsql's own default, `SSL Mode=Prefer`, neither guarantees encryption nor authenticates the
+   server; `Trust Server Certificate=true` accepts any certificate and is not an acceptable
+   substitute here. `JobTrack.Web`, `JobTrack.AdminCli`, and `JobTrack.Database` all reject a
+   remote connection string that doesn't meet this outside Development/unconditionally
+   respectively — see `PostgreSqlTransportSecurity.Validate`. A same-host Unix-domain socket
+   (`Host=/tmp;...`, this repository's own local-development shape) or loopback TCP connection is
+   exempt, since that traffic never leaves the host.
 3. **Create the login role and database**, then deploy schema and roles as described in the
    README's "Running on a development server → PostgreSQL" section, against this server instead of
    a local one:
 
    ```sql
-   CREATE ROLE jobtrack_app_login LOGIN PASSWORD '...' IN ROLE jobtrack_application;
+   CREATE ROLE jobtrack_domain_login LOGIN PASSWORD '...' IN ROLE jobtrack_domain;
+   CREATE ROLE jobtrack_identity_login LOGIN PASSWORD '...' IN ROLE jobtrack_identity;
    CREATE DATABASE jobtrack
-       OWNER jobtrack_app_login
+       OWNER jobtrack_domain_login
        LOCALE_PROVIDER icu
        ICU_LOCALE 'en-GB'
        TEMPLATE template0;
@@ -211,9 +251,12 @@ for speculatively.
      Application Pool, or `web.config`'s `<environmentVariables>`.
    - Set `AllowedHosts` to the site's own host name(s) via the same mechanism — the IIS binding does
      not substitute for it, since ANCM forwards the client's original `Host` header through.
-   - Set `DataProtection:KeyPath` to the restricted directory from step 3, and
-     `ConnectionStrings:JobTrackIdentity` via a protected mechanism (see "secrets" below) rather than
-     a plaintext `appsettings.Production.json` committed anywhere.
+   - Set `DataProtection:KeyPath` to the restricted directory from step 3, and all four
+     `ConnectionStrings:JobTrackIdentity` (the `jobtrack_identity` role) and
+     `ConnectionStrings:JobTrackDomain` (the `jobtrack_domain` role),
+     `ConnectionStrings:JobTrackPatManagement` (the `jobtrack_pat_management` role), and
+     `ConnectionStrings:JobTrackPatAuthentication` (the `jobtrack_pat_authentication` role) via a protected mechanism (see
+     "secrets" below) rather than a plaintext `appsettings.Production.json` committed anywhere.
 5. **Alternative to IIS**: run the published app directly as a Windows Service (e.g. via NSSM, or
    by adding `Microsoft.Extensions.Hosting.WindowsServices` and calling `UseWindowsService()` in
    `Program.cs` — a code change, out of scope for this docs-only runbook, flagged above as not yet

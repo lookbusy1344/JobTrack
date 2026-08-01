@@ -35,29 +35,21 @@ post-deploy/regression smoke check, not as a replacement for the xUnit gates.
 
 ## Minting a bearer PAT for the read suite
 
-There is no HTTP endpoint or dev-only shortcut that issues a personal access token — by design
-(ADR 0029), the only issuance paths are the signed-in `/Account/PersonalAccessTokens` Razor page and
-`JobTrack.AdminCli`'s `issue-token` command, both of which call `ITokenCommands.IssueAsync`
-in-process:
-
-```bash
-dotnet run --project src/JobTrack.AdminCli -- issue-token \
-  --provider sqlite --connection-string "Data Source=src/JobTrack.Web/jobtrack-web-dev.db" \
-  --username priya.manager --label hurl-smoke --lifetime-days 1
-```
-
-This prints the plaintext token once (`Personal access token for '<username>': <token>`) — it is
-never retrievable again. `--lifetime-days` defaults to 7 if omitted; the domain policy
-(`PersonalAccessTokenPolicy.MaxLifetime`) caps it at 365.
+There is no HTTP endpoint, dev-only shortcut, or CLI command that issues a personal access token —
+by design (ADR 0029, ADR 0055), the only issuance path is the signed-in
+`/Account/PersonalAccessTokens` Razor page, which calls `ITokenCommands.IssueAsync` for the caller's
+own account. `web-login-and-csrf.hurl` mints the read suite's token itself, at the end of its own
+run, through that same page using the session its login flow already established — no separate
+step or credential-bearing command is needed.
 
 ## Running the suite
 
 `scripts/run-hurl-tests.sh` runs all four suites in the dependency order above (auth/smoke checks
-first, then the login+CSRF flow, then `issue-token`, then the bearer reads) against a host you have
-already started. It does not start the host itself or seed the database — see README's "Running on
-a development server" and "Seeding a synthetic end-user testing (UAT) scenario" for that sequence,
-which must be freshly repeated before every run (the seed and the forced password change are both
-one-time, non-idempotent transitions):
+first, then the login+CSRF flow — which now also mints the bearer PAT through the self-service page
+— then the bearer reads) against a host you have already started. It does not start the host itself
+or seed the database — see README's "Running on a development server" and "Seeding a synthetic
+end-user testing (UAT) scenario" for that sequence, which must be freshly repeated before every run
+(the seed and the forced password change are both one-time, non-idempotent transitions):
 
 ```bash
 # 1. Deploy, bootstrap, and seed a fresh SQLite dev database (README sequence).

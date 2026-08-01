@@ -131,7 +131,7 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await RotateSecurityStampAsync(context, targetIdentityUserId, cancellationToken).ConfigureAwait(false);
-		_ = await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
+		_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -165,7 +165,7 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 				new Dictionary<string, string?> { ["role"] = request.Role.ToString() });
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			await RotateSecurityStampAsync(context, targetIdentityUserId, cancellationToken).ConfigureAwait(false);
-			_ = await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
+			_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
 				.ConfigureAwait(false);
 		}
 
@@ -202,7 +202,7 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		if (!request.Enabled) {
-			_ = await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
+			_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
 				.ConfigureAwait(false);
 		}
 
@@ -273,7 +273,7 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 			request.Context.CorrelationId, null, null, null);
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-		_ = await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
+		_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -305,7 +305,7 @@ internal sealed class PostgreSqlEmployeeCommandPort : IEmployeeCommandPort
 			request.Context.CorrelationId, null, null, null);
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-		_ = await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
+		_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 

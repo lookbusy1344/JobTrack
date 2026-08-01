@@ -41,7 +41,7 @@ public static class BootstrapCommand
 		var displayName = io.ReadLine("Administrator display name: ");
 		var ianaTimeZone = ReadLineWithDefault(io, "IANA time zone", DefaultIanaTimeZone);
 		var userName = ReadLineWithDefault(io, "Username", defaultUserName);
-		password ??= ReadConfirmedPassword(io);
+		password ??= PasswordPrompt.ReadConfirmed(io);
 
 		try {
 			var result = await installationCommands.BootstrapAdministratorAsync(
@@ -75,17 +75,4 @@ public static class BootstrapCommand
 		return string.IsNullOrWhiteSpace(input) ? defaultValue : input;
 	}
 
-	private static string ReadConfirmedPassword(IConsoleIO io)
-	{
-		while (true) {
-			var password = io.ReadPassword("Password: ");
-			var confirmation = io.ReadPassword("Confirm password: ");
-
-			if (password == confirmation) {
-				return password;
-			}
-
-			io.WriteError("Passwords did not match; try again.");
-		}
-	}
 }

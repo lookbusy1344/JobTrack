@@ -3,11 +3,12 @@ namespace JobTrack.Database;
 using System.Data.Common;
 
 /// <summary>
-///     Applies the fixed, unversioned PostgreSQL roles-and-grants script (impl
-///     plan §6.1) after schema deployment. Not a <see cref="SchemaVersionScript" />:
-///     it carries no version number and is not recorded in <c>schema_version</c>
-///     (see the script's own header comment for why). SQLite has no roles or
-///     GRANT concept, so there is no equivalent for that provider.
+///     Applies a fixed, unversioned PostgreSQL script -- the roles-and-grants script (impl
+///     plan §6.1) or the SECURITY DEFINER functions script (security review remediation §2.6) --
+///     after schema deployment. Neither is a <see cref="SchemaVersionScript" />: they carry no
+///     version number and are not recorded in <c>schema_version</c> (see each script's own header
+///     comment for why). SQLite has no roles, GRANT, or SECURITY DEFINER concept, so there is no
+///     equivalent for that provider.
 /// </summary>
 public static class PostgreSqlRolesAndGrants
 {

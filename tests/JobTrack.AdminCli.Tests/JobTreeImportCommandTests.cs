@@ -463,5 +463,6 @@ public sealed class JobTreeImportCommandTests
 			ApplicationVersion,
 			AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
+		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, provider);
 	}
 }

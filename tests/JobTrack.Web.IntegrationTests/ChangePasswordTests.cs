@@ -90,12 +90,12 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task Accepts_a_new_password_using_only_lowercase_letters_and_digits_at_the_minimum_length()
+	public async Task Accepts_a_new_password_using_only_lowercase_letters_at_the_minimum_length()
 	{
 		await SeedUserAsync("frankie", KnownPassword);
 		var authCookie = await SignInAsync("frankie", KnownPassword);
 		var (antiforgeryCookie, token) = await GetChangePasswordFormAsync(authCookie);
-		const string relaxedPassword = "abc123";
+		const string relaxedPassword = "abcdefghijklmno";
 
 		using var changeRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
 		changeRequest.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -116,7 +116,7 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		await SeedUserAsync("harriet", KnownPassword);
 		var authCookie = await SignInAsync("harriet", KnownPassword);
 		var (antiforgeryCookie, token) = await GetChangePasswordFormAsync(authCookie);
-		const string tooShortPassword = "abc12";
+		const string tooShortPassword = "fourteen-chars";
 
 		using var changeRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
 		changeRequest.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -159,12 +159,12 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task Rejects_a_new_password_with_no_letters()
+	public async Task Accepts_a_new_password_containing_only_digits_at_the_minimum_length()
 	{
 		await SeedUserAsync("isolde", KnownPassword);
 		var authCookie = await SignInAsync("isolde", KnownPassword);
 		var (antiforgeryCookie, token) = await GetChangePasswordFormAsync(authCookie);
-		const string digitsOnlyPassword = "123456";
+		const string digitsOnlyPassword = "123456789012345";
 
 		using var changeRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
 		changeRequest.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -176,7 +176,30 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		});
 		var changeResponse = await client.SendAsync(changeRequest);
 
+		changeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect, "PasswordPolicy (ADR 0056) has no composition rule -- length is the only requirement");
+	}
+
+	[Fact]
+	public async Task Rejects_a_blocklisted_common_password()
+	{
+		await SeedUserAsync("beowulf", KnownPassword);
+		var authCookie = await SignInAsync("beowulf", KnownPassword);
+		var (antiforgeryCookie, token) = await GetChangePasswordFormAsync(authCookie);
+		const string blocklistedPassword = "correcthorsebatterystaple";
+
+		using var changeRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
+		changeRequest.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		changeRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.CurrentPassword"] = KnownPassword,
+			["Input.NewPassword"] = blocklistedPassword,
+			["Input.ConfirmNewPassword"] = blocklistedPassword,
+			["__RequestVerificationToken"] = token,
+		});
+		var changeResponse = await client.SendAsync(changeRequest);
+		var body = await changeResponse.Content.ReadAsStringAsync();
+
 		changeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("alert-danger");
 	}
 
 	/// <summary>

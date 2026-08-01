@@ -46,7 +46,7 @@ public sealed class ResetPasswordCommandOptionsTests
 	{
 		var act = () => ResetPasswordCommandOptions.Parse(new(["--provider", "sqlite", "--username", "ada"]));
 
-		act.Should().Throw<PicoArgsException>();
+		act.Should().Throw<AdminCliUsageException>();
 	}
 
 	[Fact]

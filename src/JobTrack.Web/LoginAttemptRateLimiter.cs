@@ -7,16 +7,20 @@ using System.Collections.Concurrent;
 ///     instance counts attempts independently -- see
 ///     docs/operations/production-deployment.md's multi-instance in-process-state table.
 /// </summary>
-public sealed class LoginAttemptRateLimiter
+/// <remarks>
+///     Backed by bounded, atomic FIFO caches (security review remediation §2.8): a full table evicts
+///     an existing state before admitting a new one instead of hard-rejecting every unseen partition.
+///     Unlike <c>MemoryCache</c>'s size-limit rejection path, an admitted key is always retained with
+///     its consumed permit; no request can proceed against an uncached zero-count fallback state.
+/// </remarks>
+public sealed class LoginAttemptRateLimiter : IDisposable
 {
 	private const int DefaultBackstopPermitMultiplier = 20;
 	private const int DefaultMaxPartitionCount = 4096;
 	private readonly int backstopPermitLimit;
-	private readonly ConcurrentDictionary<string, WindowState> backstopWindows = new(StringComparer.Ordinal);
-	private readonly int maxPartitionCount;
-
-	private readonly ConcurrentDictionary<string, WindowState> partitionWindows = new(StringComparer.Ordinal);
+	private readonly BoundedWindowCache backstopWindows;
 	private readonly int permitLimit;
+	private readonly BoundedWindowCache partitionWindows;
 	private readonly TimeProvider timeProvider;
 	private readonly TimeSpan window;
 
@@ -36,9 +40,17 @@ public sealed class LoginAttemptRateLimiter
 
 		this.permitLimit = permitLimit;
 		this.backstopPermitLimit = resolvedBackstopPermitLimit;
-		this.maxPartitionCount = maxPartitionCount;
 		this.window = window;
 		this.timeProvider = timeProvider ?? TimeProvider.System;
+
+		partitionWindows = new(maxPartitionCount);
+		backstopWindows = new(maxPartitionCount);
+	}
+
+	public void Dispose()
+	{
+		partitionWindows.Clear();
+		backstopWindows.Clear();
 	}
 
 	public bool TryAcquire(string partitionKey, string backstopKey)
@@ -47,15 +59,8 @@ public sealed class LoginAttemptRateLimiter
 		ArgumentException.ThrowIfNullOrWhiteSpace(backstopKey);
 
 		var now = timeProvider.GetUtcNow();
-		PruneExpiredPartitions(partitionWindows, now);
-		PruneExpiredPartitions(backstopWindows, now);
-
-		if (WouldExceedPartitionLimit(partitionWindows, partitionKey) || WouldExceedPartitionLimit(backstopWindows, backstopKey)) {
-			return false;
-		}
-
-		var backstopState = backstopWindows.GetOrAdd(backstopKey, static _ => new());
-		var partitionState = partitionWindows.GetOrAdd(partitionKey, static _ => new());
+		var backstopState = GetOrCreateWindow(backstopWindows, backstopKey);
+		var partitionState = GetOrCreateWindow(partitionWindows, partitionKey);
 		return TryAcquire(backstopState, backstopPermitLimit, partitionState, permitLimit, now);
 	}
 
@@ -76,19 +81,11 @@ public sealed class LoginAttemptRateLimiter
 		}
 	}
 
-	private bool WouldExceedPartitionLimit(ConcurrentDictionary<string, WindowState> states, string key) =>
-		!states.ContainsKey(key) && states.Count >= maxPartitionCount;
-
-	private void PruneExpiredPartitions(ConcurrentDictionary<string, WindowState> states, DateTimeOffset now)
-	{
-		foreach (var (key, state) in states) {
-			lock (state.Gate) {
-				if (IsExpired(state, now)) {
-					_ = states.TryRemove(key, out _);
-				}
-			}
-		}
-	}
+	/// <summary>
+	///     Atomically returns one state for a key. Capacity pressure evicts the oldest retained key;
+	///     it never returns a newly created state merely because the cache refused to store it.
+	/// </summary>
+	private static WindowState GetOrCreateWindow(BoundedWindowCache cache, string key) => cache.GetOrAdd(key);
 
 	private void ResetIfExpired(WindowState state, DateTimeOffset now)
 	{
@@ -107,5 +104,40 @@ public sealed class LoginAttemptRateLimiter
 		public DateTimeOffset WindowStartedAt { get; set; } = DateTimeOffset.UnixEpoch;
 
 		public int PermitsUsed { get; set; }
+	}
+
+	private sealed class BoundedWindowCache(int capacity)
+	{
+		private readonly ConcurrentQueue<(string Key, WindowState State)> insertionOrder = new();
+		private readonly ConcurrentDictionary<string, WindowState> windows = new(StringComparer.Ordinal);
+
+		public WindowState GetOrAdd(string key)
+		{
+			var state = windows.GetOrAdd(
+				key,
+				static (newKey, queue) => {
+					var created = new WindowState();
+					queue.Enqueue((newKey, created));
+					return created;
+				},
+				insertionOrder);
+			TrimToCapacity();
+			return state;
+		}
+
+		public void Clear()
+		{
+			windows.Clear();
+			insertionOrder.Clear();
+		}
+
+		private void TrimToCapacity()
+		{
+			while (windows.Count > capacity && insertionOrder.TryDequeue(out var candidate)) {
+				if (windows.TryGetValue(candidate.Key, out var current) && ReferenceEquals(current, candidate.State)) {
+					_ = windows.TryRemove(candidate.Key, out _);
+				}
+			}
+		}
 	}
 }

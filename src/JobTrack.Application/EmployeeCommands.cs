@@ -34,6 +34,8 @@ internal sealed class EmployeeCommands : IEmployeeCommands
 		return JobTrackOperation.TraceAsync(
 			"employees.create-employee", request.Context, null,
 			() => {
+				PasswordPolicyGuard.EnsureAcceptable(request.Password, request.UserName);
+
 				var passwordHash = _passwordHasher.HashPassword(CredentialSubject, request.Password);
 
 				return _port.CreateEmployeeAsync(
@@ -105,6 +107,8 @@ internal sealed class EmployeeCommands : IEmployeeCommands
 		return JobTrackOperation.TraceAsync(
 			"employees.reset-password", request.Context, JobTrackOperation.WithUserId(request.TargetUserId),
 			() => {
+				PasswordPolicyGuard.EnsureAcceptable(request.NewPassword, request.TargetUserName);
+
 				var passwordHash = _passwordHasher.HashPassword(CredentialSubject, request.NewPassword);
 
 				return _port.ResetPasswordAsync(

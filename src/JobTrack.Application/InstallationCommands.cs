@@ -42,6 +42,8 @@ internal sealed class InstallationCommands : IInstallationCommands
 			request.CorrelationId,
 			null,
 			async () => {
+				PasswordPolicyGuard.EnsureAcceptable(request.Password, request.UserName);
+
 				var passwordHash = _passwordHasher.HashPassword(CredentialSubject, request.Password);
 				var securityStamp = Guid.NewGuid().ToString("N");
 

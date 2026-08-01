@@ -475,6 +475,11 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		startInfo.EnvironmentVariables["ASPNETCORE_URLS"] = BaseAddress;
 		startInfo.EnvironmentVariables["Database__Provider"] = Provider.ToString();
 		startInfo.EnvironmentVariables["ConnectionStrings__JobTrackIdentity"] = database.ConnectionString;
+		if (Provider == SchemaProvider.PostgreSql) {
+			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackDomain"] = database.ConnectionString;
+			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackPatManagement"] = database.ConnectionString;
+			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackPatAuthentication"] = database.ConnectionString;
+		}
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = certPath;
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = CertificatePassword;
 

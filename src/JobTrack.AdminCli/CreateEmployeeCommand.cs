@@ -28,6 +28,7 @@ public static class CreateEmployeeCommand
 		ArgumentNullException.ThrowIfNull(userManager);
 		ArgumentNullException.ThrowIfNull(jobTrackClient);
 		ArgumentNullException.ThrowIfNull(options);
+		ArgumentException.ThrowIfNullOrWhiteSpace(options.Password);
 
 		var actor = await userManager.FindByNameAsync(options.ActorUsername).ConfigureAwait(false);
 		if (actor is null) {

@@ -124,6 +124,33 @@ public sealed class InstallationCommandsTests
 	}
 
 	[Fact]
+	public async Task BootstrapAdministratorAsync_rejects_a_password_shorter_than_the_minimum()
+	{
+		var port = new FakeInstallationBootstrapPort();
+		var sut = CreateSut(port);
+		var request = CreateRequest() with { Password = "too-short" };
+
+		var act = () => sut.BootstrapAdministratorAsync(request);
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("account-new-password-policy");
+	}
+
+	[Fact]
+	public async Task BootstrapAdministratorAsync_rejects_a_password_that_is_the_new_administrators_own_username()
+	{
+		var port = new FakeInstallationBootstrapPort();
+		var sut = CreateSut(port);
+		var username = new string('u', PasswordPolicy.MinimumLength);
+		var request = CreateRequest() with { UserName = username, Password = username };
+
+		var act = () => sut.BootstrapAdministratorAsync(request);
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("account-new-password-policy");
+	}
+
+	[Fact]
 	public void Constructor_rejects_a_null_port()
 	{
 		var act = () => new InstallationCommands(null!, new PasswordHasher<BootstrapCredentialSubject>());

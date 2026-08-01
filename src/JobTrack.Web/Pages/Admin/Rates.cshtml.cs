@@ -163,9 +163,7 @@ public sealed class RatesModel(
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
-		var directory = await jobTrackClient.Query.GetAllEmployeesAsync(
-			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } },
-			cancellationToken);
+		var directory = await LoadEmployeeDirectoryAsync(actor, cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		UserOptions = EmployeeDirectoryDisplay.BuildOptions(directory);
 
@@ -184,6 +182,26 @@ public sealed class RatesModel(
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That employee does not exist.";
+		}
+	}
+
+	/// <summary>
+	///     <see cref="IJobQueries.GetAllEmployeesAsync" /> now requires <see cref="EmployeeRole.Administrator" />
+	///     (remediation plan §2.4), but this page also admits <see cref="EmployeeRole.RateManager" /> and
+	///     <see cref="EmployeeRole.CostViewer" /> (<see cref="JobTrackPolicyNames.RateAdministration" />).
+	///     A non-administrator falls back to <see cref="IJobQueries.GetEmployeeDirectoryAsync" /> --
+	///     workflow-employee-only, but sufficient to populate the employee picker for someone who cannot
+	///     view rates outside the workflow directory anyway.
+	/// </summary>
+	private async Task<EquatableArray<EmployeeDirectoryEntry>> LoadEmployeeDirectoryAsync(AppUserId actor, CancellationToken cancellationToken)
+	{
+		try {
+			return await jobTrackClient.Query.GetAllEmployeesAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+		}
+		catch (AuthorizationDeniedException) {
+			return await jobTrackClient.Query.GetEmployeeDirectoryAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
 		}
 	}
 

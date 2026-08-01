@@ -67,6 +67,8 @@ public sealed class PersonalAccessTokensModel(
 		await LoadTokensAsync(cancellationToken);
 	}
 
+	/// <summary>ADR 0057 (§2.2): PAT issuance is the finding's own worked example of a sensitive operation.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostIssueAsync(CancellationToken cancellationToken)
 	{
 		ModelState.Clear();

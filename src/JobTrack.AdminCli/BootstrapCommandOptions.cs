@@ -10,13 +10,18 @@ public sealed record BootstrapCommandOptions
 	public required string ConnectionString { get; init; }
 
 	/// <summary>
-	///     The administrator password, when supplied non-interactively for scripted/automated
-	///     bootstrap (e.g. CI, container image build steps). <see langword="null" /> when omitted, in
-	///     which case <see cref="BootstrapCommand" /> falls back to its normal masked interactive prompt.
-	///     Deliberately opt-in: a value here is visible in the process list and shell history, an
-	///     explicit trade-off the caller accepts by passing it, not this command's default posture.
+	///     The resolved administrator password. Argument parsing always leaves this null; the host
+	///     resolves it from standard input or the masked interactive prompt before invoking the command.
 	/// </summary>
 	public string? Password { get; init; }
+
+	/// <summary>
+	///     <see langword="true" /> when <c>--password-stdin</c> is passed: the administrator password is
+	///     read as one line from standard input (security review remediation §2.7 -- the
+	///     <c>docker login --password-stdin</c> convention), for scripted/automated bootstrap that still
+	///     avoids putting the secret in <c>argv</c>/shell history.
+	/// </summary>
+	public bool PasswordFromStdin { get; init; }
 
 	/// <summary>
 	///     <see langword="false" /> when <c>--no-force-password-change</c> is passed, clearing the
@@ -28,7 +33,7 @@ public sealed record BootstrapCommandOptions
 	public bool ForcePasswordChange { get; init; } = true;
 
 	/// <summary>
-	///     Reads <c>--provider</c>/<c>--connection-string</c>/<c>--password</c>/
+	///     Reads <c>--provider</c>/<c>--connection-string</c>/<c>--password-stdin</c>/
 	///     <c>--no-force-password-change</c> from <paramref name="pico" /> and calls
 	///     <see cref="PicoArgs.Finished" /> — the caller has already consumed the leading command via
 	///     <see cref="PicoArgs.GetCommand" />.
@@ -38,15 +43,22 @@ public sealed record BootstrapCommandOptions
 		ArgumentNullException.ThrowIfNull(pico);
 
 		var provider = ParseProvider(pico.GetParam("--provider"));
-		var connectionString = pico.GetParam("--connection-string");
+		var connectionString = ConnectionStringSource.Parse(pico);
 		var password = pico.GetParamOpt("--password");
+		var passwordFromStdin = pico.Contains("--password-stdin");
 		var noForcePasswordChange = pico.Contains("--no-force-password-change");
 		pico.Finished();
+
+		if (password is not null) {
+			throw new AdminCliUsageException(
+				"'--password' is not supported because process arguments are not a safe secret channel; use '--password-stdin' or the masked interactive prompt.");
+		}
 
 		return new() {
 			Provider = provider,
 			ConnectionString = connectionString,
 			Password = password,
+			PasswordFromStdin = passwordFromStdin,
 			ForcePasswordChange = !noForcePasswordChange,
 		};
 	}

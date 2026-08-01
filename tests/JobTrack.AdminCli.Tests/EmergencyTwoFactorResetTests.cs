@@ -206,6 +206,7 @@ public sealed class EmergencyTwoFactorResetTests
 			ApplicationVersion,
 			AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
+		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, provider);
 	}
 
 	private static async Task<(long AppUserId, long IdentityUserId)> SeedEmployeeAsync(

@@ -6,6 +6,7 @@ using System.Threading.RateLimiting;
 using Application;
 using Identity;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -24,6 +25,9 @@ public sealed class Program
 {
 	private const string SqliteProviderName = "Sqlite";
 	private const string PostgreSqlProviderName = "PostgreSql";
+	private const string DomainDataSourceKey = "JobTrackDomain";
+	private const string PatManagementDataSourceKey = "JobTrackPatManagement";
+	private const string PatAuthenticationDataSourceKey = "JobTrackPatAuthentication";
 	private const string CookieOrBearerSchemeName = "JobTrackCookieOrBearer";
 	private const int LoginRateLimitPermitLimit = 20;
 	private const int LoginRateLimitWindowSeconds = 60;
@@ -48,6 +52,10 @@ public sealed class Program
 	private const string RateLimitedProblemType = "/problems/rate-limited";
 	private const int MaxFailedAccessAttempts = 5;
 	private const int LockoutMinutes = 15;
+	// ADR 0057 (§2.3): doubles as the absolute session ceiling, not only the sliding-renewal window --
+	// SlidingExpiration renews the cookie for another window this long every time it passes the
+	// halfway mark, but OnValidatePrincipal below rejects the session outright once it has run this
+	// long from its original sign-in, regardless of how recently it renewed.
 	private const int AuthenticationCookieExpirationHours = 8;
 
 	// Server-side session backs remembered per-page filter selections (FilterMemory). Idle timeout
@@ -156,8 +164,10 @@ public sealed class Program
 
 		// Add services to the container.
 		_ = builder.Services.AddRazorPages(options => {
-			_ = options.Conventions.AddFolderApplicationModelConvention("/", model =>
-				model.Filters.Add(new RequiresPasswordChangePageFilter()));
+			_ = options.Conventions.AddFolderApplicationModelConvention("/", model => {
+				model.Filters.Add(new RequiresPasswordChangePageFilter());
+				model.Filters.Add(new RequiresRecentAuthenticationPageFilter());
+			});
 
 			// Closed by default. Every page already declares its own `[Authorize(Policy = ...)]`
 			// (WebHostSecurityArchitectureTests enforces that), but an attribute is opt-in: a page
@@ -195,6 +205,15 @@ public sealed class Program
 		var identityConnectionString = builder.Configuration.GetConnectionString("JobTrackIdentity")
 									   ?? throw new InvalidOperationException("ConnectionStrings:JobTrackIdentity is not configured.");
 
+		// Security review remediation §2.9: outside Development, a remote PostgreSQL host must be
+		// reached over an authenticated encrypted channel -- Npgsql's own default (SSL Mode=Prefer)
+		// neither guarantees encryption nor authenticates the server. Loopback/Unix-socket
+		// connections (the only shape a same-host deployment or this repository's local dev setup
+		// uses) are exempt inside the validator itself.
+		if (databaseProvider == PostgreSqlProviderName && !builder.Environment.IsDevelopment()) {
+			PostgreSqlTransportSecurity.Validate(identityConnectionString);
+		}
+
 		var identityBuilder = databaseProvider switch {
 			PostgreSqlProviderName => builder.Services.AddJobTrackIdentityPostgreSql(identityConnectionString),
 			SqliteProviderName => builder.Services.AddJobTrackIdentitySqlite(identityConnectionString),
@@ -202,16 +221,40 @@ public sealed class Program
 		};
 		_ = identityBuilder.AddSignInManager<JobTrackSignInManager>();
 
-		// app_user, identity_user, and identity_role live in the same schema/database (database
-		// schema version 0002) as the rest of the domain data, so IJobTrackClient shares
-		// ConnectionStrings:JobTrackIdentity rather than needing a second connection string.
 		switch (databaseProvider) {
 			case PostgreSqlProviderName:
-				_ = builder.Services.AddSingleton(_ => new NpgsqlDataSourceBuilder(identityConnectionString).UseNodaTime().Build());
-				_ = builder.Services.AddSingleton<IJobTrackClient>(sp => JobTrackPostgreSql.Create(
-					sp.GetRequiredService<NpgsqlDataSource>(), clock: sp.GetRequiredService<IClock>()));
+				// Security review remediation §2.6: IJobTrackClient authenticates as the
+				// jobtrack_domain PostgreSQL role, a distinct credential from ConnectionStrings:
+				// JobTrackIdentity's jobtrack_identity role that ASP.NET Core Identity's own
+				// sign-in path (above) uses -- a compromised credential on one connection no
+				// longer automatically carries the other's blast radius.
+				var domainConnectionString = builder.Configuration.GetConnectionString("JobTrackDomain")
+										 ?? throw new InvalidOperationException("ConnectionStrings:JobTrackDomain is not configured.");
+				var patManagementConnectionString = builder.Configuration.GetConnectionString("JobTrackPatManagement")
+											?? throw new InvalidOperationException("ConnectionStrings:JobTrackPatManagement is not configured.");
+				var patAuthenticationConnectionString = builder.Configuration.GetConnectionString("JobTrackPatAuthentication")
+												?? throw new InvalidOperationException("ConnectionStrings:JobTrackPatAuthentication is not configured.");
+				if (!builder.Environment.IsDevelopment()) {
+					PostgreSqlTransportSecurity.Validate(domainConnectionString);
+					PostgreSqlTransportSecurity.Validate(patManagementConnectionString);
+					PostgreSqlTransportSecurity.Validate(patAuthenticationConnectionString);
+				}
+
+				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
+					DomainDataSourceKey, (_, _) => new NpgsqlDataSourceBuilder(domainConnectionString).UseNodaTime().Build());
+				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
+					PatManagementDataSourceKey, (_, _) => new NpgsqlDataSourceBuilder(patManagementConnectionString).UseNodaTime().Build());
+				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
+					PatAuthenticationDataSourceKey, (_, _) => new NpgsqlDataSourceBuilder(patAuthenticationConnectionString).UseNodaTime().Build());
+				_ = builder.Services.AddSingleton<IJobTrackClient>(sp => JobTrackPostgreSql.CreateWithPatDataSources(
+					sp.GetRequiredKeyedService<NpgsqlDataSource>(DomainDataSourceKey),
+					sp.GetRequiredKeyedService<NpgsqlDataSource>(PatManagementDataSourceKey),
+					sp.GetRequiredKeyedService<NpgsqlDataSource>(PatAuthenticationDataSourceKey),
+					clock: sp.GetRequiredService<IClock>()));
 				break;
 			case SqliteProviderName:
+				// SQLite has no roles/GRANT concept (§2.6 is PostgreSQL-only), so IJobTrackClient
+				// keeps sharing ConnectionStrings:JobTrackIdentity's single file with Identity.
 				_ = builder.Services.AddSingleton<IJobTrackClient>(sp =>
 					JobTrackSqlite.Create(identityConnectionString, clock: sp.GetRequiredService<IClock>()));
 				break;
@@ -336,6 +379,33 @@ public sealed class Program
 		// 30-minute validation interval).
 		_ = builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
 
+		// ADR 0057 (§2.3): AddIdentityCookies() above already points OnValidatePrincipal at
+		// SecurityStampValidator.ValidatePrincipalAsync for this named options instance. Configure
+		// actions for the same named CookieAuthenticationOptions apply to one shared mutable instance
+		// in registration order, so this later Configure call sees that delegate already assigned and
+		// wraps it, rather than racing or overwriting it -- run the security stamp check first, then
+		// reject the principal (and force sign-out) once the session has outlived the absolute ceiling
+		// from its original sign-in (SessionAuthenticationInstants.TryGetOrigin), regardless of how
+		// recently SlidingExpiration renewed it. A ticket with no recorded origin (issued before this
+		// change shipped) is treated as already expired -- acceptable pre-release, since nothing has
+		// shipped yet.
+		_ = builder.Services.Configure<CookieAuthenticationOptions>(IdentityConstants.ApplicationScheme, options => {
+			var validateSecurityStamp = options.Events.OnValidatePrincipal;
+			options.Events.OnValidatePrincipal = async context => {
+				await validateSecurityStamp(context);
+				if (context.Principal is null) {
+					return;
+				}
+
+				var clock = context.HttpContext.RequestServices.GetRequiredService<IClock>();
+				var origin = SessionAuthenticationInstants.TryGetOrigin(context.Properties);
+				if (origin is null || clock.GetCurrentInstant() - origin.Value > Duration.FromHours(AuthenticationCookieExpirationHours)) {
+					context.RejectPrincipal();
+					await context.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
+				}
+			};
+		});
+
 		var loginRateLimitPermitLimit =
 			builder.Configuration.GetValue(LoginRateLimitPermitLimitConfigKey, LoginRateLimitPermitLimit);
 		var loginRateLimitWindowSeconds =
@@ -343,8 +413,9 @@ public sealed class Program
 
 		// In-process limiter: the configured limit effectively multiplies under 2+ instances, since
 		// each counts attempts independently. See docs/operations/production-deployment.md's
-		// multi-instance in-process-state table.
-		_ = builder.Services.AddSingleton(new LoginAttemptRateLimiter(
+		// multi-instance in-process-state table. Registered via factory (not a pre-built instance) so
+		// the DI container is the one place responsible for disposing its MemoryCache-backed state.
+		_ = builder.Services.AddSingleton(_ => new LoginAttemptRateLimiter(
 			loginRateLimitPermitLimit,
 			TimeSpan.FromSeconds(loginRateLimitWindowSeconds)));
 

@@ -10,6 +10,10 @@ public static class JobTrackPostgreSql
 {
 	/// <summary>Creates a provider-neutral client over one shared pooled data source.</summary>
 	/// <remarks>
+	///     For production PostgreSQL role separation, prefer <see cref="CreateWithPatDataSources" />.
+	///     This convenience member is intended for SQLite-like single-credential development/test
+	///     installations and delegates all PAT operations to <paramref name="dataSource" />.
+	///
 	///     Marked not CLS-compliant because its parameter types come from dependencies that do not
 	///     declare compliance themselves (ASP.NET Core Identity's <c>IPasswordHasher{T}</c> and Npgsql). The
 	///     assembly's own surface is compliant; this is the one member that cannot be.
@@ -19,9 +23,22 @@ public static class JobTrackPostgreSql
 		NpgsqlDataSource dataSource,
 		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
 		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
+		IClock? clock = null) =>
+		CreateWithPatDataSources(dataSource, dataSource, dataSource, passwordHasher, employeePasswordHasher, clock);
+
+	/// <summary>Creates a provider-neutral client with distinct least-privilege PAT management and authentication connections.</summary>
+	[CLSCompliant(false)]
+	public static IJobTrackClient CreateWithPatDataSources(
+		NpgsqlDataSource dataSource,
+		NpgsqlDataSource personalAccessTokenManagementDataSource,
+		NpgsqlDataSource personalAccessTokenAuthenticationDataSource,
+		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
+		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
 		IClock? clock = null)
 	{
 		ArgumentNullException.ThrowIfNull(dataSource);
+		ArgumentNullException.ThrowIfNull(personalAccessTokenManagementDataSource);
+		ArgumentNullException.ThrowIfNull(personalAccessTokenAuthenticationDataSource);
 
 		clock ??= SystemClock.Instance;
 
@@ -43,7 +60,8 @@ public static class JobTrackPostgreSql
 		var rateQueries = new PostgreSqlRateQueryPort(dataSource, clock);
 		var costs = new PostgreSqlCostQueryPort(dataSource, clock);
 		var audit = new PostgreSqlAuditQueryPort(dataSource, clock);
-		var tokens = new PostgreSqlPersonalAccessTokenPort(dataSource, clock);
+		var tokens = new PostgreSqlPersonalAccessTokenPort(
+			personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource, clock);
 		var requests = new PostgreSqlJobRequestCommandPort(dataSource, clock);
 		var authenticationAudit = new PostgreSqlAuthenticationAuditPort(dataSource, clock);
 		var credentials = new PostgreSqlAccountCredentialPort(

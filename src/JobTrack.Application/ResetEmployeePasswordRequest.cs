@@ -16,6 +16,12 @@ public sealed record ResetEmployeePasswordRequest
 	/// <summary>The employee whose credential is being reset.</summary>
 	public required AppUserId TargetUserId { get; init; }
 
+	/// <summary>
+	///     The target employee's sign-in username -- checked against <see cref="PasswordBlocklist" />
+	///     so the reset credential cannot be the employee's own username (remediation plan §2.1).
+	/// </summary>
+	public required string TargetUserName { get; init; }
+
 	/// <summary>The new plaintext credential, hashed before it reaches persistence.</summary>
 	public required string NewPassword { get; init; }
 }

@@ -11,6 +11,12 @@ public sealed class ChangeOwnPasswordRequest
 	/// <summary>The signed-in account's <c>identity_user</c> row.</summary>
 	public long IdentityUserId { get; init; }
 
+	/// <summary>
+	///     The signed-in account's sign-in username -- checked against <see cref="PasswordBlocklist" />
+	///     so an account cannot set its own username as its password (remediation plan §2.1).
+	/// </summary>
+	public required string Username { get; init; }
+
 	/// <summary>The account's current password, verified against the stored hash before anything is changed.</summary>
 	public required string CurrentPassword { get; init; }
 

@@ -32,6 +32,8 @@ public sealed class AssignRoleModel(IJobTrackClient jobTrackClient, UserManager<
 
 	public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadTargetUserOptionsAsync(cancellationToken);
 
+	/// <summary>ADR 0057 (§2.2): granting or revoking a role requires recent authentication.</summary>
+	[RequiresRecentAuthentication]
 	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
 	{
 		if (!ModelState.IsValid) {

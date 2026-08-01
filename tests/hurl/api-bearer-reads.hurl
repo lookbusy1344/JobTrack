@@ -1,8 +1,8 @@
 # Exercises the read side of the external HTTP API's job-context surface with a real bearer PAT --
 # every one of these routes only requires JobTrackPolicyNames.AnyEmployee, so any employee's token
-# works regardless of role. See docs/testing/hurl-smoke-tests.md for how {{token}} is minted
-# (JobTrack.AdminCli's `issue-token` command, run against an account whose forced first-sign-in
-# password change has already completed -- see web-login-and-csrf.hurl).
+# works regardless of role. See docs/operations/hurl-smoke-tests.md for how {{token}} is minted --
+# web-login-and-csrf.hurl signs in, completes the forced first-sign-in password change, then issues
+# this token itself through the self-service /Account/PersonalAccessTokens page (ADR 0029, ADR 0055).
 #
 #   hurl --variable base_url=http://localhost:5034 --variable token=<pat> tests/hurl/api-bearer-reads.hurl
 

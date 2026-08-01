@@ -292,13 +292,43 @@ internal sealed class JobQueries : IJobQueries
 		GetEmployeeDirectoryRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-employee-directory", request.Context, null,
-			() => _employeeQueryPort.GetEmployeeDirectoryAsync(cancellationToken));
+			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
+				return await _employeeQueryPort.GetEmployeeDirectoryAsync(cancellationToken).ConfigureAwait(false);
+			});
 
 	private Task<EquatableArray<EmployeeDirectoryEntry>> GetAllEmployeesCoreAsync(
 		GetAllEmployeesRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-all-employees", request.Context, null,
-			() => _employeeQueryPort.GetAllEmployeesAsync(cancellationToken));
+			async () => {
+				var actorRoles = await _employeeQueryPort.GetActorRolesAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+				if (!EmployeeAccessPolicy.CanManageAccounts(actorRoles)) {
+					throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not list every employee.");
+				}
+
+				return await _employeeQueryPort.GetAllEmployeesAsync(cancellationToken).ConfigureAwait(false);
+			});
+
+	/// <summary>
+	///     Authenticates admission to the general job/work query surface (remediation plan §2.4):
+	///     reloads the actor's current account state and roles fresh — rejecting a nonexistent,
+	///     disabled, or locked actor exactly as <see cref="IEmployeeQueryPort.GetActorRolesAsync" />
+	///     already does for employee-profile reads — then applies
+	///     <see cref="JobDataAccessPolicy.CanBrowseJobData" />. Every currently-ungated read in this
+	///     class calls this once at the top of its composition rather than trusting the caller-supplied
+	///     <see cref="CommandContext.Actor" /> directly.
+	/// </summary>
+	private async Task<EquatableArray<EmployeeRole>> EnsureActorMayBrowseJobDataAsync(AppUserId actorId, CancellationToken cancellationToken)
+	{
+		var actorRoles = await _employeeQueryPort.GetActorRolesAsync(actorId, cancellationToken).ConfigureAwait(false);
+		if (!JobDataAccessPolicy.CanBrowseJobData(actorRoles)) {
+			throw new AuthorizationDeniedException($"Actor {actorId} may not browse job data.");
+		}
+
+		return actorRoles;
+	}
 
 	private Task<AccountStateResult> GetAccountStateCoreAsync(GetAccountStateRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
@@ -324,6 +354,8 @@ internal sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.get-readiness", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
 				var inputs = await _readinessQueryPort.GetReadinessInputsAsync(request.NodeId, cancellationToken).ConfigureAwait(false);
 
 				return ReadinessCalculator.IsReady(request.NodeId, inputs.NodesById, inputs.Prerequisites);
@@ -332,12 +364,18 @@ internal sealed class JobQueries : IJobQueries
 	private Task<JobNodeDetailResult> GetJobNodeCoreAsync(GetJobNodeRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-job-node", request.Context, request.NodeId.HasValue ? JobTrackOperation.WithNodeId(request.NodeId.Value) : null,
-			() => _browseQueryPort.GetNodeAsync(request.NodeId, cancellationToken));
+			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
+				return await _browseQueryPort.GetNodeAsync(request.NodeId, cancellationToken).ConfigureAwait(false);
+			});
 
 	private Task<EquatableArray<JobNodeSummaryResult>> GetJobChildrenCoreAsync(GetJobChildrenRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-job-children", request.Context, JobTrackOperation.WithNodeId(request.ParentId),
 			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
 				var children = await _browseQueryPort.GetChildrenAsync(
 						request.ParentId, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
 					.ConfigureAwait(false);
@@ -348,6 +386,8 @@ internal sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.search-job-nodes", request.Context, null,
 			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
 				var matches = await _browseQueryPort.SearchJobNodesAsync(
 						request.SearchText, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
 					.ConfigureAwait(false);
@@ -359,6 +399,8 @@ internal sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.get-job-summaries", request.Context, null,
 			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
 				var summaries = await _browseQueryPort.GetSummariesByIdsAsync(request.NodeIds, cancellationToken).ConfigureAwait(false);
 				return await EnrichSummariesWithCostAsync(request.Context, summaries, cancellationToken).ConfigureAwait(false);
 			});
@@ -367,6 +409,8 @@ internal sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.get-job-subtree", request.Context, JobTrackOperation.WithNodeId(request.RootId),
 			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
 				var maxDepth = request.MaxDepth ?? JobSubtreeLimits.DefaultMaxDepth;
 				var subtree = await _browseQueryPort.GetSubtreeAsync(
 					request.RootId, maxDepth, request.Ownership, request.ArchiveFilter, cancellationToken).ConfigureAwait(false);
@@ -472,13 +516,19 @@ internal sealed class JobQueries : IJobQueries
 	private Task<BranchAchievement> GetBranchAchievementCoreAsync(GetBranchAchievementRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-branch-achievement", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
-			() => _browseQueryPort.GetSubtreeAchievementAsync(request.NodeId, cancellationToken));
+			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
+				return await _browseQueryPort.GetSubtreeAchievementAsync(request.NodeId, cancellationToken).ConfigureAwait(false);
+			});
 
 	private Task<EquatableArray<AwaitingProgressEntry>> GetAwaitingProgressCoreAsync(
 		GetAwaitingProgressRequest request, int limit, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-awaiting-progress", request.Context, null,
 			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
 				// 2026-07-24 remediation plan §2.2 step 4 (still true under §2.1's request-scoped
 				// query): a subtree root with no unfinished descendant legitimately never appears in
 				// the port's own narrowed load, so existence is checked directly rather than inferred.
@@ -668,10 +718,6 @@ internal sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.get-session-manage-capabilities", request.Context, null,
 			async () => {
-				if (request.LeafWorkIds.Count == 0) {
-					return [];
-				}
-
 				var result = await _workSessionQueryPort
 					.GetManageCapabilitiesAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
 					.ConfigureAwait(false);
@@ -688,12 +734,21 @@ internal sealed class JobQueries : IJobQueries
 	private Task<LeafWorkResult> GetLeafWorkCoreAsync(GetLeafWorkRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-leaf-work", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
-			() => _leafWorkQueryPort.GetLeafWorkAsync(request.JobNodeId, cancellationToken));
+			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
+				return await _leafWorkQueryPort.GetLeafWorkAsync(request.JobNodeId, cancellationToken).ConfigureAwait(false);
+			});
 
 	private Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesCoreAsync(GetPrerequisitesRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(
 			"query.get-prerequisites", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
-			() => _prerequisiteQueryPort.GetPrerequisitesAsync(request.NodeId, request.Offset, request.Limit, cancellationToken));
+			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
+				return await _prerequisiteQueryPort
+					.GetPrerequisitesAsync(request.NodeId, request.Offset, request.Limit, cancellationToken).ConfigureAwait(false);
+			});
 
 	/// <summary>
 	///     Composes already-batched, already-fixed-cost port calls (unified-leaf-workflow plan Stage 4)
@@ -708,6 +763,8 @@ internal sealed class JobQueries : IJobQueries
 		JobTrackOperation.TraceAsync(
 			"query.get-leaf-work-page", request.Context, JobTrackOperation.WithNodeId(request.JobNodeId),
 			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
 				var node = await _browseQueryPort.GetNodeAsync(request.JobNodeId, cancellationToken).ConfigureAwait(false);
 				var leafId = request.JobNodeId;
 

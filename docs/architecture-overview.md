@@ -80,7 +80,7 @@ is the layer under public-API compatibility discipline (impl plan §7.5).
 | [`src/JobTrack.Persistence.Sqlite/`](../src/JobTrack.Persistence.Sqlite/) | SQLite implementation of the same ports via EF Core, full parity with PostgreSQL: `Sqlite*Port.cs` files plus `JobTrackSqlite.cs` entry point and `SqliteJobTrackDbContext.cs`. |
 | [`src/JobTrack.Identity/`](../src/JobTrack.Identity/) | ASP.NET Core Identity adapter (production `DbContext`s for both providers, `JobTrackUserStore`, claims-principal factory, TOTP support); composed only by Web and AdminCli, not part of the public library surface. |
 | [`src/JobTrack.Database/`](../src/JobTrack.Database/) | Standalone schema-deployment tool (`Program.cs`): applies ordered schema-version scripts with checksum validation, plus PostgreSQL roles/grants and deployment-lock strategies for both providers. |
-| [`src/JobTrack.AdminCli/`](../src/JobTrack.AdminCli/) | Narrow admin CLI host (`Program.cs`): bootstrap admin, create employee, issue token, emergency password/2FA reset, job-tree import — thin wrappers over library commands. |
+| [`src/JobTrack.AdminCli/`](../src/JobTrack.AdminCli/) | Narrow admin CLI host (`Program.cs`): bootstrap admin, create employee, emergency password/2FA reset, job-tree import — thin wrappers over library commands. No PAT-issuance path (ADR 0055): a token can only be minted by its own owner, through the self-service Razor page. |
 
 ## 3. External HTTP API
 

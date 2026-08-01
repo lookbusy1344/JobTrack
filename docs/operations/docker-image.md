@@ -12,7 +12,7 @@ runbook. Several choices below (a baked-in self-signed certificate, a placeholde
 address, an unencrypted data-protection key ring) are acceptable only because this image is a local
 demo artifact — see "What makes this demo-only" at the end, which is the list to work through if
 this ever needs to become a real deployment target. Most importantly, it ships two **known,
-published demo credentials** (`demo` / `demo1234` and `requester` / `requester1234`) baked in at
+published demo credentials** (`demo` / `demo-jobtrack-1234` and `requester` / `requester-jobtrack-1234`) baked in at
 build time, so it must never be exposed to a network with either account reachable. The privileged
 `admin` account gets a **random** password generated at build time (never a known default): unknown
 for a plain local `docker run` and, on Cloud Run, an explicit random one the deploy script generates
@@ -122,8 +122,8 @@ Open <https://localhost:8443> and sign in with either non-admin demo account:
 
 | Purpose | Username | Password |
 | --- | --- | --- |
-| Staff workflow and sample job trees | `demo` | `demo1234` |
-| Submit and track six sample requests | `requester` | `requester1234` |
+| Staff workflow and sample job trees | `demo` | `demo-jobtrack-1234` |
+| Submit and track six sample requests | `requester` | `requester-jobtrack-1234` |
 
 The image bakes in **three** accounts (see "How the accounts and trees are seeded"): the two
 published non-admin accounts above, plus a privileged `admin` account whose password is **random**
@@ -215,11 +215,14 @@ use the shipped `JobTrack.AdminCli`; the final requester scenario uses the build
    step and recorded nowhere. `--no-force-password-change` clears the ADR 0023 flag, since a forced
    change on a baked-in credential that reverts on every recycle is pointless friction.
 3. **Create the `demo` user** (`AdminCli create-employee`) — a normal, non-admin
-   `JobManager`+`Worker` employee (`demo` / `demo1234`), also `--no-force-password-change` so the
+   `JobManager`+`Worker` employee (`demo` / `demo-jobtrack-1234`), also `--no-force-password-change` so the
    published credential stays reusable. Employee id 2.
 4. **Create the `requester` user** (`AdminCli create-employee`) — `Client Requester`, holding only
-   the `Requester` role (`requester` / `requester1234`), with the same reusable-demo credential
+   the `Requester` role (`requester` / `requester-jobtrack-1234`), with the same reusable-demo credential
    treatment. It cannot be assigned work. Employee id 3.
+
+   Both fixed demo credentials satisfy `PasswordPolicy`; the production command path has no weak-
+   password bypass.
 5. **Import the seven sample trees** (`AdminCli import-tree`, once per file in
    `samples/job-tree-imports/`) as `demo`, so the demo user — not the admin — owns them. Each lands a
    subtree under the root (`--parent-id` defaults to the root, id 1).
@@ -277,7 +280,7 @@ at all:
 
 1. **The privileged `admin` account gets a random password** the script generates and prints, since
    Cloud Run is network-exposed and a known admin credential must never be reachable. The published
-   `demo` / `demo1234` and `requester` / `requester1234` accounts are deliberately left as-is —
+   `demo` / `demo-jobtrack-1234` and `requester` / `requester-jobtrack-1234` accounts are deliberately left as-is —
    both are normal, non-admin users with no account-management rights, and their whole point is to
    be shareable. Any change a visitor makes is wiped back to the seed on the next recycle (see
    below).
@@ -316,7 +319,7 @@ OrbStack's local Docker defaults to the host's `arm64`.
 **The admin password is different on every run.** The script always generates a fresh one and passes
 it via `--build-arg ADMIN_PASSWORD`; nothing pins it between deploys, and it is printed once at the
 end because it is recorded nowhere else. The two non-admin passwords remain the published
-`demo1234` and `requester1234`.
+`demo-jobtrack-1234` and `requester-jobtrack-1234`.
 
 **This deployment has no persistent volume.** Cloud Run containers are stateless and ephemeral —
 `/app/data` is just the image's writable layer, so every cold start (scale-to-zero is the default,
@@ -338,13 +341,14 @@ exactly its initial seed state.
 Two consequences that specifically catch people out:
 
 - **Changing a password to something memorable does not stick.** Sign in as `demo`, set the password
-  to `helloworld`, and it lasts only until the next recycle — then it reverts to the baked `demo1234`.
+  to `a-memorable-demo-passphrase`, and it lasts only until the next recycle — then it reverts to
+  the baked `demo-jobtrack-1234`.
   The password is not "preserved"; it is wiped like everything else and *restored to* the baked seed
-  value, which for demo happens to be the same `demo1234` as before (and for admin, the same random
+  value, which for demo happens to be the same `demo-jobtrack-1234` as before (and for admin, the same random
   build-time value the deploy script printed). To bake in a different demo password you must rebuild
   with `--build-arg DEMO_PASSWORD=...` and redeploy.
 - **Passwords only "rotate" on a rebuild, not on a recycle.** A plain scale-to-zero cold start
-  restores whatever was baked into the current image (demo → `demo1234`, admin → its build-time
+  restores whatever was baked into the current image (demo → `demo-jobtrack-1234`, admin → its build-time
   random). A fresh `deploy-cloudrun.sh` run bakes a *new* random admin password — which is why a
   previously distributed admin password stops working after you redeploy; the demo one does not
   change.
@@ -365,7 +369,7 @@ gcloud run services delete jobtrack-web --project=<project-id> --region=<region 
 Each of these is fine for a throwaway local instance and unacceptable for a real deployment. They
 are the gap list, not a backlog anyone has committed to:
 
-- **It ships a known, published credential** (`demo` / `demo1234`), seeded at build time and
+- **It ships a known, published credential** (`demo` / `demo-jobtrack-1234`), seeded at build time and
   published in this document. It is only a normal, non-admin user, but it is still a reachable
   sign-in — the strongest reason the image must never be network-exposed with that account live. (The
   privileged `admin` account is safer by construction: its password is random, never a known default,

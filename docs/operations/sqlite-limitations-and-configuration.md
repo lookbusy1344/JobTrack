@@ -62,7 +62,7 @@ have the same domain effect and the same stable public error category as Postgre
 ## Differences from PostgreSQL with no SQLite equivalent
 
 - **No roles or `GRANT`.** The five PostgreSQL roles from §6.1
-  (`jobtrack_owner`/`jobtrack_schema_deployer`/`jobtrack_application`/`jobtrack_readonly`/
+  (`jobtrack_owner`/`jobtrack_schema_deployer`/`jobtrack_domain`/`jobtrack_identity`/`jobtrack_readonly`/
   `jobtrack_emergency_reset`, `database/postgresql/roles/jobtrack-roles-and-grants.sql`) have no
   SQLite analogue — SQLite has no server process or login concept to grant against. A SQLite
   deployment's privilege separation is therefore an OS-level file-permission concern (who can open

@@ -16,7 +16,7 @@ rehearsal — plan §6.7 assigns that to the release gate, not the database gate
 3. Runs `pg_restore` of the resulting archive into a second, empty disposable database.
 4. Asserts the restored database has: the same `schema_version` row count, the same
    `achievement_status` reference data, the seeded `app_user` row, and — critically —
-   that the `jobtrack_application` role is still blocked from `CREATE TABLE` (`SQLSTATE 42501`)
+   that the `jobtrack_domain` role is still blocked from `CREATE TABLE` (`SQLSTATE 42501`)
    after restore.
 
 That last assertion is the reason this is a *schema-level* smoke test rather than a plain data
@@ -26,7 +26,7 @@ back.
 
 `CREATE ROLE` is cluster-scoped, not per-database, so a single-database `pg_dump` never carries role
 *definitions* — only the grants referencing them. The smoke test's target database is on the same
-PostgreSQL instance as the source, where `jobtrack_application` etc. already exist (every fixture in
+PostgreSQL instance as the source, where `jobtrack_domain` etc. already exist (every fixture in
 this project applies the roles-and-grants script the same way), so this is not a gap in the test;
 see the manual procedure below for provisioning roles on a cluster that does not yet have them.
 
