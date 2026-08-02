@@ -101,6 +101,12 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 			new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
 			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
 
+		if (leafWork.Achievement == Achievement.InProgress || AchievementTransitions.IsCompletedState(leafWork.Achievement)) {
+			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
+				context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+				.ConfigureAwait(false);
+		}
+
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

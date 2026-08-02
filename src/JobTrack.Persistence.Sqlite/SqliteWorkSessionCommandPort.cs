@@ -212,6 +212,10 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 				request.Context.CorrelationId, "Advanced automatically on session start",
 				new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
 				new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
+				context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+				.ConfigureAwait(false);
 		}
 
 		var session = new WorkSessionEntity {
@@ -500,6 +504,10 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 				new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
 				new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
 
+			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
+				context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+				.ConfigureAwait(false);
+
 			if (request.WriteUpChange is WriteUpChange writeUpChange) {
 				(writeUpChanged, writtenUpNode) = await WriteUpChangeApplier.ApplyAsync(
 					context, request.JobNodeId, writeUpChange.NodeVersion, writeUpChange.WriteUp, request.Context.Actor,
@@ -676,6 +684,10 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			AutoAdvanceReason,
 			new Dictionary<string, string?> { ["achievement"] = reopenedAchievement.ToString() },
 			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+		await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
+			context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+			.ConfigureAwait(false);
 
 		var session = new WorkSessionEntity {
 			Id = default,

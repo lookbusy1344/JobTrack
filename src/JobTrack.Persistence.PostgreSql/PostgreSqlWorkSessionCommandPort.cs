@@ -190,6 +190,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 				request.Context.CorrelationId, "Advanced automatically on session start",
 				new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
 				new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
+				context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+				.ConfigureAwait(false);
 		}
 
 		var session = new WorkSessionEntity {
@@ -462,6 +466,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
 			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
 
+		await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
+			context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+			.ConfigureAwait(false);
+
 		var writeUpChanged = false;
 		JobNodeEntity? writtenUpNode = null;
 		if (request.WriteUpChange is WriteUpChange writeUpChange) {
@@ -640,6 +648,10 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 			AutoAdvanceReason,
 			new Dictionary<string, string?> { ["achievement"] = reopenedAchievement.ToString() },
 			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+		await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
+			context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+			.ConfigureAwait(false);
 
 		var session = new WorkSessionEntity {
 			Id = default,
