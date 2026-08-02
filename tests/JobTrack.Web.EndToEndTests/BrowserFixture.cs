@@ -357,11 +357,11 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 
 	/// <summary>Seeds one worked leaf with the requested number of distinct active workers.</summary>
 	public async Task<(JobNodeId LeafId, IReadOnlyList<string> WorkerDisplayNames)> SeedActiveSessionsAsync(
-		string leafDescription, int workerCount)
+		string leafDescription, int workerCount, JobNodeId? parentId = null)
 	{
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workerCount);
 
-		var leafId = await SeedLeafAsync(leafDescription);
+		var leafId = await SeedLeafAsync(leafDescription, parentId);
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
 			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
 			JobNodeId = leafId,
@@ -480,6 +480,7 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackPatManagement"] = database.ConnectionString;
 			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackPatAuthentication"] = database.ConnectionString;
 		}
+
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = certPath;
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = CertificatePassword;
 
@@ -614,6 +615,7 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 					var deployer = new SchemaDeployer(
 						connection, new PostgreSqlSchemaVersionStore(), new PostgreSqlDeploymentLockStrategy(), ApplicationVersion, AppliedBy);
 					await deployer.DeployAsync(scripts, CancellationToken.None);
+					await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, SchemaProvider.PostgreSql);
 				}
 
 				break;

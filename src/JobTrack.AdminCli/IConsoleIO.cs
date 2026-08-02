@@ -19,8 +19,12 @@ public interface IConsoleIO
 	/// <summary>
 	///     Reads one line from standard input with no prompt and no echo suppression -- for
 	///     <c>--password-stdin</c> (security review remediation §2.7), where the caller has already
-	///     redirected/piped a secret in (e.g. <c>echo "$PASSWORD" | JobTrack.AdminCli bootstrap ...
-	///     --password-stdin</c>), matching the <c>docker login --password-stdin</c> convention.
+	///     redirected/piped a secret in (e.g.
+	///     <c>
+	///         echo "$PASSWORD" | JobTrack.AdminCli bootstrap ...
+	///         --password-stdin
+	///     </c>
+	///     ), matching the <c>docker login --password-stdin</c> convention.
 	/// </summary>
 	string ReadStdinLine();
 }

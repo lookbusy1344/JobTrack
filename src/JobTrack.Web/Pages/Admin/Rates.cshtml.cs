@@ -213,21 +213,29 @@ public sealed class RatesModel(
 
 	public sealed class AddUserCostRateInput
 	{
-		[Required] public string EffectiveStart { get; set; } = string.Empty;
+		[Required]
+		[Display(Name = "Effective start")]
+		public string EffectiveStart { get; set; } = string.Empty;
 
-		public string? EffectiveEnd { get; set; }
+		[Display(Name = "Effective end")] public string? EffectiveEnd { get; set; }
 
-		[Required] public decimal AmountPerHour { get; set; }
+		[Required]
+		[Display(Name = "Amount per hour")]
+		public decimal AmountPerHour { get; set; }
 	}
 
 	public sealed class AddNodeRateOverrideInput
 	{
-		[Required] public long NodeId { get; set; }
+		[Required][Display(Name = "Node")] public long NodeId { get; set; }
 
-		[Required] public string EffectiveStart { get; set; } = string.Empty;
+		[Required]
+		[Display(Name = "Effective start")]
+		public string EffectiveStart { get; set; } = string.Empty;
 
-		public string? EffectiveEnd { get; set; }
+		[Display(Name = "Effective end")] public string? EffectiveEnd { get; set; }
 
-		[Required] public decimal AmountPerHour { get; set; }
+		[Required]
+		[Display(Name = "Amount per hour")]
+		public decimal AmountPerHour { get; set; }
 	}
 }

@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages.Audit;
 
+using System.ComponentModel.DataAnnotations;
 using Abstractions;
 using Application;
 using Identity;
@@ -30,13 +31,21 @@ public sealed class IndexModel(
 	IViewerTimeZoneResolver viewerTimeZoneResolver)
 	: PageModel
 {
-	[BindProperty(SupportsGet = true)] public long? ActorId { get; init; }
+	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Actor")]
+	public long? ActorId { get; init; }
 
-	[BindProperty(SupportsGet = true)] public string? EntityType { get; init; }
+	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Entity type")]
+	public string? EntityType { get; init; }
 
-	[BindProperty(SupportsGet = true)] public long? EntityId { get; init; }
+	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Entity")]
+	public long? EntityId { get; init; }
 
-	[BindProperty(SupportsGet = true)] public Guid? CorrelationId { get; init; }
+	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Correlation ID")]
+	public Guid? CorrelationId { get; init; }
 
 	[BindProperty(SupportsGet = true)] public string? From { get; init; }
 

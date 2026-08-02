@@ -1,5 +1,6 @@
 namespace JobTrack.Persistence.PostgreSql;
 
+using System.Data;
 using System.Globalization;
 using Abstractions;
 using Application;
@@ -170,6 +171,8 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		CommandContext context, CancellationToken cancellationToken = default)
 	{
 		await using var dbContext = CreateContext();
+		await using var transaction = await dbContext.Database
+			.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken).ConfigureAwait(false);
 
 		_ = await GetActorRolesAsync(dbContext, context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 
@@ -178,14 +181,32 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 			join node in dbContext.Set<JobNodeEntity>().AsNoTracking() on jobRequest.JobNodeId equals node.Id
 			where jobRequest.RequesterUserId == context.Actor
 			orderby jobRequest.SubmittedAt descending
-			select new JobRequestSummaryResult {
+			select new
+			{
 				JobNodeId = node.Id,
-				Description = node.Description,
-				SubmittedAt = jobRequest.SubmittedAt,
+				node.Description,
+				jobRequest.SubmittedAt,
 				Version = jobRequest.RowVersion,
+				Acknowledged = jobRequest.AcknowledgedAt != null,
 			}).ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
-		return [.. rows];
+		var results = new JobRequestSummaryResult[rows.Length];
+		for (var index = 0; index < rows.Length; ++index) {
+			var row = rows[index];
+			var subtreeRows = await JobNodeHierarchyQueries.GetRequesterSubtreeAsync(
+				dbContext, row.JobNodeId.Value, cancellationToken).ConfigureAwait(false);
+			var childlessStates = ToLeafStates(subtreeRows.Where(subtreeRow => subtreeRow.IsChildless));
+			results[index] = new() {
+				JobNodeId = row.JobNodeId,
+				Description = row.Description,
+				SubmittedAt = row.SubmittedAt,
+				Status = RequesterStatusCalculator.Derive(row.Acknowledged, childlessStates),
+				Version = row.Version,
+			};
+		}
+
+		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		return [.. results];
 	}
 
 	/// <inheritdoc />
@@ -200,8 +221,12 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 			.Where(h => h.IsActive
 						&& (h.DepartmentId == null
 							|| dbContext.Set<AppUserDepartmentEntity>().Any(d => d.AppUserId == context.Actor && d.DepartmentId == h.DepartmentId)))
-			.OrderBy(h => h.Name)
-			.Select(h => new HoldingAreaSummaryResult { Id = h.Id, Name = h.Name })
+			.Select(h => new HoldingAreaSummaryResult {
+				Id = h.Id,
+				Name = h.Name,
+				JobNodeDescription = dbContext.Set<JobNodeEntity>().First(n => n.Id == h.JobNodeId).Description,
+			})
+			.OrderBy(h => h.JobNodeDescription)
 			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. rows];

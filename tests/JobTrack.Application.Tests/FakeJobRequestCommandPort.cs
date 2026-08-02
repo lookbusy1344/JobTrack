@@ -11,6 +11,8 @@ internal sealed class FakeJobRequestCommandPort : IJobRequestCommandPort
 {
 	public JobRequestDetailResult? DetailResult { get; set; }
 
+	public EquatableArray<JobRequestSummaryResult> SummaryResults { get; set; } = [];
+
 	public Exception? GetDetailException { get; set; }
 
 	public SubmitJobRequestRequest? LastSubmitRequest { get; private set; }
@@ -53,7 +55,7 @@ internal sealed class FakeJobRequestCommandPort : IJobRequestCommandPort
 
 	public Task<EquatableArray<JobRequestSummaryResult>> GetMyRequestsAsync(
 		CommandContext context, CancellationToken cancellationToken = default) =>
-		Task.FromResult<EquatableArray<JobRequestSummaryResult>>([]);
+		Task.FromResult(SummaryResults);
 
 	public Task<EquatableArray<HoldingAreaSummaryResult>> GetEligibleHoldingAreasAsync(
 		CommandContext context, CancellationToken cancellationToken = default) =>

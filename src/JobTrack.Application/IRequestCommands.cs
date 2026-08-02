@@ -44,7 +44,8 @@ public interface IRequestCommands
 	///     Lists <paramref name="context" />'s own submitted requests, most recent first (ADR 0033, plan
 	///     §8 <c>/Requests</c>). Scoped to <c>job_request.requester_user_id = context.Actor</c> — a
 	///     dedicated, narrow query, never a relaxation of <c>/Jobs/Browse</c> or another operational
-	///     query's authorization.
+	///     query's authorization. Each summary carries the public status derived from its current
+	///     subtree and prerequisite readiness composed from one batched projection.
 	/// </summary>
 	Task<EquatableArray<JobRequestSummaryResult>> GetMyRequestsAsync(CommandContext context, CancellationToken cancellationToken = default);
 

@@ -58,22 +58,26 @@
 			<div class="jt-table-block">
 				<table class="table">
 					<thead>
+					@* Two full timestamps plus three costing columns never fit a phone. What a segment cost
+					   and the rate it was costed at survive at every width, anchored by the segment's own
+					   start; the end returns at md (it is largely the next row's start until then) and the
+					   rate's provenance at lg, where the derivation is worth its column. *@
 					<tr>
-						<th>Segment start</th>
-						<th>Segment end</th>
-						<th>Rate per hour</th>
-						<th>Rate source</th>
-						<th>Contribution</th>
+						<th class="col-5 col-md-4 col-lg-3">Segment start</th>
+						<th class="col-md-3 d-none d-md-table-cell">Segment end</th>
+						<th class="col-3 col-md-2">Rate per hour</th>
+						<th class="col-lg-2 d-none d-lg-table-cell">Rate source</th>
+						<th class="col-4 col-md-3 col-lg-2">Contribution</th>
 					</tr>
 					</thead>
 					<tbody>
 					@foreach (var entry in costDetails.Trace) {
 						<tr>
-							<td>@InstantDisplay.Format(entry.Segment.Start, Model.ViewerZone)</td>
-							<td>@InstantDisplay.Format(entry.Segment.End, Model.ViewerZone)</td>
-							<td class="jt-amount">@entry.ResolvedRate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
-							<td>@entry.ResolvedRate.Source</td>
-							<td class="jt-amount">@MoneyDisplay.Format(entry.UnroundedContribution)</td>
+							<td class="col-5 col-md-4 col-lg-3">@InstantDisplay.Format(entry.Segment.Start, Model.ViewerZone)</td>
+							<td class="col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(entry.Segment.End, Model.ViewerZone)</td>
+							<td class="jt-amount col-3 col-md-2">@entry.ResolvedRate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+							<td class="col-lg-2 d-none d-lg-table-cell">@entry.ResolvedRate.Source</td>
+							<td class="jt-amount col-4 col-md-3 col-lg-2">@MoneyDisplay.Format(entry.UnroundedContribution)</td>
 						</tr>
 					}
 					</tbody>

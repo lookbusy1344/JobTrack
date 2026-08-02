@@ -26,10 +26,7 @@ public static class PasswordPolicy
 			return false;
 		}
 
-		// Unicode code points, not UTF-16 code units -- a password containing surrogate-pair
-		// characters (e.g. emoji) must count each as one, matching "15 Unicode code points" rather
-		// than counting each surrogate half separately.
-		var codePointCount = password.EnumerateRunes().Count();
+		var codePointCount = TextLength.CodePointCount(password);
 		return codePointCount is >= MinimumLength and <= MaximumLength;
 	}
 }

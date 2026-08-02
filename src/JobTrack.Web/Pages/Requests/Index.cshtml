@@ -25,9 +25,13 @@
 		<div class="form-group">
 			<label asp-for="Submit.HoldingAreaId"></label>
 			<select asp-for="Submit.HoldingAreaId" class="form-control">
-				<option value="">Choose where to send this</option>
+				@* The page model preselects a sole eligible area, so offering the placeholder here would
+				   only let the requester unselect the one value the form accepts. *@
+				@if (Model.EligibleHoldingAreas.Count > 1) {
+					<option value="">Choose where to send this</option>
+				}
 				@foreach (var holdingArea in Model.EligibleHoldingAreas) {
-					<option value="@holdingArea.Id.Value">@holdingArea.Name</option>
+					<option value="@holdingArea.Id.Value">@holdingArea.JobNodeDescription</option>
 				}
 			</select>
 			<span asp-validation-for="Submit.HoldingAreaId" class="text-danger"></span>
@@ -44,17 +48,33 @@
 		<table class="table">
 			<thead>
 			<tr>
-				<th>Description</th>
-				<th>Submitted</th>
+				<th scope="col" class="col-8 col-md-6">Description</th>
+				<th scope="col" class="col-4 col-md-3">Status</th>
+				<th scope="col" class="col-md-3 d-none d-md-table-cell">Submitted</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var request in Model.MyRequests) {
 				<tr>
-					<td><a class="jt-preserve-whitespace" asp-page="Details"
-					       asp-route-id="@request.JobNodeId.Value">@JobNodeDisplay.Title(request.Description, request.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+					<td class="col-8 col-md-6"><span class="d-inline-flex align-items-start gap-2">
+						@if (!request.IsReady) {
+								@* Same leading stop hand as a blocked Browse child: readiness is orthogonal to
+							   public status, so the status column remains present alongside it. *@
+								<svg class="jt-tree-flag jt-tree-blocked jt-tree-flag--leading" viewBox="0 0 16 16" aria-hidden="true"
+								     focusable="false">
+								<use href="#jt-icon-stop"></use>
+							</svg>
+								<span class="visually-hidden">Blocked by a prerequisite.</span>
+							}
+							<a class="jt-preserve-whitespace" asp-page="Details"
+							   asp-route-id="@request.JobNodeId.Value">@JobNodeDisplay.Title(request.Description, request.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+					</span>
 					</td>
-					<td>@InstantDisplay.Format(request.SubmittedAt, Model.ViewerZone)</td>
+					<td class="col-4 col-md-3">
+						<partial name="_RequesterStatusIcon"
+						         model="@(new RequesterStatusIconModel { Status = request.Status })"/>
+					</td>
+					<td class="col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(request.SubmittedAt, Model.ViewerZone)</td>
 				</tr>
 			}
 			</tbody>

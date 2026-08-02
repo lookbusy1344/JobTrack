@@ -74,5 +74,4 @@ public static class BootstrapCommand
 		var input = io.ReadLine($"{label} [{defaultValue}]: ");
 		return string.IsNullOrWhiteSpace(input) ? defaultValue : input;
 	}
-
 }

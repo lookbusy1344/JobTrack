@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages.Jobs;
 
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Abstractions;
 using Application;
@@ -103,6 +104,7 @@ public sealed class AwaitingProgressModel(
 	///     unlike Browse's Search flow which queries the whole tree.
 	/// </summary>
 	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Search text")]
 	public string? SearchText { get; set; }
 
 	[TempData] public string? ErrorMessage { get; set; }

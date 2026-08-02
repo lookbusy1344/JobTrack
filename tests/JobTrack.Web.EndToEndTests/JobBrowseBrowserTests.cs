@@ -1,5 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
+using System.Globalization;
 using AwesomeAssertions;
 using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
@@ -39,8 +40,12 @@ public abstract class JobBrowseBrowserTestsBase
 	private const int LargePhoneHeight = 896;
 	private const int TabletWidth = 768;
 	private const int TabletHeight = 1024;
+	private const int LaptopWidth = 1024;
+	private const int LaptopHeight = 768;
 	private const int DesktopWidth = 1280;
 	private const int DesktopHeight = 800;
+	private const int WideDesktopWidth = 1440;
+	private const int WideDesktopHeight = 900;
 	private const int ReflowWidth = 320;
 	private const int ReflowHeight = 640;
 
@@ -52,6 +57,56 @@ public abstract class JobBrowseBrowserTestsBase
 	// the edge pixel itself belongs to the border, and sub-pixel bounding-box rounding can land the
 	// sample one device pixel outside the element altogether.
 	private const double PopoverEdgeSampleInset = 4.0;
+	private const double MaximumInlineStatusGapPixels = 8.0;
+	private const float MaximumColumnAlignmentDifferencePixels = 1.0f;
+	private const double NarrowDescriptionMinimumShare = 9.0 / 12.0;
+	private const double NarrowDescriptionMaximumShare = 10.0 / 12.0;
+
+	/// <summary>
+	///     Description yields one column to Cost at the tablet breakpoint. Cost renders
+	///     "£1,234.56 / 12h 30m", whose four break opportunities made it the column auto table layout
+	///     squeezed first, collapsing it toward a character per line while Description kept its room;
+	///     it holds three columns here instead. Description still owns by far the largest share, and
+	///     the narrow and wide bands below are unchanged.
+	/// </summary>
+	private const double MediumDescriptionMinimumShare = 4.5 / 12.0;
+
+	private const double MediumDescriptionMaximumShare = 5.0 / 12.0;
+
+	/// <summary>
+	///     Description sits at its "at least 3 of 12" floor from the laptop breakpoint up: Active gained
+	///     the column it gave up (col-lg-1 -> col-lg-2, plan follow-up), so two or more simultaneous
+	///     workers' names have more than a twelfth of the row to preview in instead of wrapping to a
+	///     ladder of one-word lines.
+	/// </summary>
+	private const double LargeDescriptionMinimumShare = 2.5 / 12.0;
+
+	private const double LargeDescriptionMaximumShare = 3.0 / 12.0;
+	private const double WideDescriptionMinimumShare = 2.5 / 12.0;
+	private const double WideDescriptionMaximumShare = 3.0 / 12.0;
+
+	/// <summary>
+	///     Cost holds three columns at the tablet breakpoint and two once the laptop width returns the
+	///     secondary columns. It renders "£1,234.56 / 12h 30m", whose four break opportunities made it
+	///     the column auto table layout squeezed first — an earlier flat two-column allocation measured
+	///     correctly here while the body text still wrapped toward a character per line, which is why
+	///     the test now checks the rendered cell as well as the heading's share.
+	/// </summary>
+	private const double TabletCostMinimumShare = 2.5 / 12.0;
+
+	private const double TabletCostMaximumShare = 3.0 / 12.0;
+	private const double LaptopCostMinimumShare = 1.5 / 12.0;
+	private const double LaptopCostMaximumShare = 2.0 / 12.0;
+	private const double MinimumWideDescriptionShare = LargeDescriptionMinimumShare;
+
+	// The smallest count that has more than one worker to preview -- the plural-pill regression case.
+	private const int TwoActiveWorkerCount = 2;
+
+	private const string TwoActiveWorkerRowTitle = "Migrate the reporting warehouse's nightly ETL pipeline to the new managed cluster before renewal";
+
+	// .status-pill's own comment documents a 24px single-line box; this leaves headroom for
+	// sub-pixel rendering differences without letting a wrapped (multi-line) pill sneak past.
+	private const float MaximumSingleLinePillHeightPixels = 32.0f;
 
 	private readonly BrowserFixture fixture;
 
@@ -59,6 +114,27 @@ public abstract class JobBrowseBrowserTestsBase
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
 		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+	};
+
+	public static TheoryData<int, int> WideViewportMatrix => new() { { DesktopWidth, DesktopHeight }, { WideDesktopWidth, WideDesktopHeight } };
+
+	public static TheoryData<int, int, int, double, double> DescriptionColumnViewportMatrix => new() {
+		{ ReflowWidth, ReflowHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
+		{ SmallPhoneWidth, SmallPhoneHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
+		{ LargePhoneWidth, LargePhoneHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
+		{ TabletWidth, TabletHeight, 4, MediumDescriptionMinimumShare, MediumDescriptionMaximumShare },
+		{ LaptopWidth, LaptopHeight, 6, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
+		{ DesktopWidth, DesktopHeight, 6, WideDescriptionMinimumShare, WideDescriptionMaximumShare },
+		{ WideDesktopWidth, WideDesktopHeight, 7, WideDescriptionMinimumShare, WideDescriptionMaximumShare },
+	};
+
+	public static TheoryData<int, int, bool> BlockerColumnViewportMatrix => new() {
+		{ ReflowWidth, ReflowHeight, true }, { DesktopWidth, DesktopHeight, false },
+	};
+
+	public static TheoryData<int, int, double, double> MidWidthCostViewportMatrix => new() {
+		{ TabletWidth, TabletHeight, TabletCostMinimumShare, TabletCostMaximumShare },
+		{ LaptopWidth, LaptopHeight, LaptopCostMinimumShare, LaptopCostMaximumShare },
 	};
 
 	[Theory]
@@ -415,7 +491,10 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var phone = await phoneContext.NewPageAsync();
 		await SignInAsync(phone);
-		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
+		// Rooted at this test's own branch, not the shared fixture root: every test in this class seeds
+		// under that root, so past JobSubtreeLimits.BreadthCap children the root view would truncate this
+		// leaf away and the assertions below would read as a reflow failure.
+		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
 		(await phoneRow.Locator(".jt-tree-name-link").First.IsVisibleAsync()).Should().BeTrue("the name is the point of the row");
@@ -429,7 +508,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
 		await SignInAsync(desktop);
-		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
+		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
 		(await desktopRow.Locator(".jt-col-secondary").First.IsVisibleAsync()).Should().BeTrue("the columns come back when there is room for them");
@@ -437,15 +516,113 @@ public abstract class JobBrowseBrowserTestsBase
 			.BeTrue("Start comes back when there is room for it");
 	}
 
+	[Theory]
+	[MemberData(nameof(DescriptionColumnViewportMatrix))]
+	public async Task The_subtree_description_column_owns_the_available_width(
+		int width, int height, int expectedVisibleColumns, double minimumDescriptionShare, double maximumDescriptionShare)
+	{
+		var branchId = await fixture.SeedBranchAsync("Description width branch");
+		_ = await fixture.SeedLeafAsync("Brief title", branchId);
+
+		await using var context = await fixture.NewContextAsync(width, height);
+		var page = await context.NewPageAsync();
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+
+		var table = page.Locator(".jt-browse-children-table");
+		var headings = table.GetByRole(AriaRole.Columnheader);
+		var visibleColumnCount = await headings.EvaluateAllAsync<int>(
+			"elements => elements.filter(element => element.getClientRects().length > 0).length");
+		var tableWidth = await ColumnWidthAsync(table);
+		var descriptionWidth = await ColumnWidthAsync(
+			table.GetByRole(AriaRole.Columnheader, new() { Name = "Description", Exact = true }));
+
+		visibleColumnCount.Should().Be(expectedVisibleColumns);
+		(descriptionWidth / tableWidth).Should().BeInRange(minimumDescriptionShare, maximumDescriptionShare,
+			$"Description should follow the responsive Bootstrap column allocation when Browse shows {expectedVisibleColumns} columns at {width}px");
+	}
+
+	[Theory]
+	[MemberData(nameof(MidWidthCostViewportMatrix))]
+	public async Task The_subtree_cost_column_has_a_readable_mid_width_allocation(
+		int width, int height, double minimumCostShare, double maximumCostShare)
+	{
+		var branchId = await fixture.SeedBranchAsync($"Cost width branch {width}");
+		_ = await fixture.SeedLeafAsync($"Cost width leaf {width}", branchId);
+
+		await using var context = await fixture.NewContextAsync(width, height);
+		var page = await context.NewPageAsync();
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+
+		var table = page.Locator(".jt-browse-children-table");
+		var tableWidth = await ColumnWidthAsync(table);
+		var costWidth = await ColumnWidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Cost", Exact = true }));
+
+		(costWidth / tableWidth).Should().BeInRange(minimumCostShare, maximumCostShare,
+			$"Cost should follow its responsive Bootstrap column allocation at the {width}px mid-width viewport");
+
+		// The allocation above is necessary but not sufficient. "£1,234.56 / 12h 30m" carries four
+		// break opportunities, so under auto table layout cost is the column the browser squeezes
+		// first: it can measure its full share here and still wrap toward a character per line. The
+		// seeded costs are too short to reproduce that, so pin the mechanism that prevents it rather
+		// than a symptom this fixture cannot produce.
+		var costWhiteSpace = await table.Locator("tbody td.jt-col-cost").First.EvaluateAsync<string>(
+			"cell => getComputedStyle(cell).whiteSpace");
+		costWhiteSpace.Should().Be("nowrap",
+			$"cost and its allocated duration must stay atomic at {width}px so the column cannot be squeezed below them");
+	}
+
+	[Theory]
+	[MemberData(nameof(BlockerColumnViewportMatrix))]
+	public async Task Inherited_blocker_groups_stack_on_phones_and_share_the_row_on_desktop(int width, int height, bool expectedStacked)
+	{
+		var branchId = await fixture.SeedBranchAsync($"Inherited blocker branch {width}");
+		var leafId = await fixture.SeedLeafAsync($"Inherited blocker child {width}", branchId);
+		var requiredId = await fixture.SeedLeafAsync($"Required inherited job {width}");
+		await fixture.SeedPrerequisiteAsync(requiredId, branchId);
+
+		await using var context = await fixture.NewContextAsync(width, height);
+		var page = await context.NewPageAsync();
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+		await page.GetByText("Inherited blockers (from ancestor prerequisites)", new() { Exact = true }).ClickAsync();
+
+		var groups = page.Locator("details.jt-card .row > .col-12.col-md-6");
+		(await groups.CountAsync()).Should().Be(2);
+		var first = await groups.Nth(0).BoundingBoxAsync();
+		var second = await groups.Nth(1).BoundingBoxAsync();
+		first.Should().NotBeNull();
+		second.Should().NotBeNull();
+
+		if (expectedStacked) {
+			second!.Y.Should().BeGreaterThan(first!.Y + first.Height,
+				"Bootstrap col-12 groups should stack with a gutter at phone width");
+		} else {
+			Math.Abs(second!.Y - first!.Y).Should().BeLessThanOrEqualTo(MaximumColumnAlignmentDifferencePixels,
+				"Bootstrap col-md-6 groups should share one row at desktop width");
+			Math.Abs(second.Width - first.Width).Should().BeLessThanOrEqualTo(MaximumColumnAlignmentDifferencePixels,
+				"the inherited-blocker groups should split the row equally");
+		}
+
+		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
+		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
+		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth,
+			$"the inherited-blocker layout should not overflow horizontally at {width}x{height}");
+	}
+
 	[Fact]
 	public async Task The_active_column_reflows_off_phone_width_while_session_actions_remain_available()
 	{
-		_ = await fixture.SeedActiveSessionsAsync("Responsive active worker leaf", RequiredSimultaneousWorkerCount);
+		var branchId = await fixture.SeedBranchAsync("Responsive active worker branch");
+		_ = await fixture.SeedActiveSessionsAsync("Responsive active worker leaf", RequiredSimultaneousWorkerCount, branchId);
 
 		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var phone = await phoneContext.NewPageAsync();
 		await SignInAsync(phone);
-		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
+		// This test's own branch rather than the shared fixture root, for the JobSubtreeLimits.BreadthCap
+		// reason given on the secondary-column reflow test above.
+		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
 		(await phoneRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeFalse();
@@ -454,11 +631,107 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
 		await SignInAsync(desktop);
-		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={fixture.RootJobNodeId.Value}");
+		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
 		(await desktopRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
-		(await desktopRow.GetByText($"{RequiredSimultaneousWorkerCount} active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
+		// The table-cell pill is compact -- glyph and bare count only, per _ActiveSincePill's Compact
+		// branch -- with the full wording carried in its title tooltip rather than rendered text.
+		var activePill = desktopRow.Locator(".jt-col-active .status-pill-active");
+		(await activePill.GetAttributeAsync("title")).Should().Be($"{RequiredSimultaneousWorkerCount} active");
+		(await VisibleTextOfAsync(activePill)).Should().Be(RequiredSimultaneousWorkerCount.ToString(CultureInfo.InvariantCulture));
+	}
+
+	/// <summary>
+	///     The pill's own direct text nodes only -- not its nested visually-hidden accessible-name span,
+	///     which <c>InnerTextAsync</c> is not reliable about excluding since it is clipped rather than
+	///     <c>display: none</c>.
+	/// </summary>
+	private static async Task<string> VisibleTextOfAsync(ILocator element) =>
+		await element.EvaluateAsync<string>(
+			"el => Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('')");
+
+	[Theory]
+	[MemberData(nameof(WideViewportMatrix))]
+	/// <summary>
+	///     Two simultaneous workers was already enough to break this row (regression case): the
+	///     "N active" pill wrapped its word mid-character in the col-lg-1 the Active column used to get,
+	///     and a long node title left no slack anywhere else to absorb it. The pill is now icon plus a
+	///     bare count (data, not a word) and the column doubled to col-lg-2, funded by Description
+	///     stepping down to its documented "at least 3 of 12" floor -- proved together here at a
+	///     realistic worst case rather than the short seeded titles the other column tests use.
+	/// </summary>
+	public async Task The_subtree_active_pill_and_row_stay_intact_with_two_active_workers_and_a_long_title(int width, int height)
+	{
+		var branchId = await fixture.SeedBranchAsync($"Two-active worker robustness branch {width}");
+		_ = await fixture.SeedActiveSessionsAsync(TwoActiveWorkerRowTitle, TwoActiveWorkerCount, branchId);
+
+		await using var context = await fixture.NewContextAsync(width, height);
+		var page = await context.NewPageAsync();
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+
+		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
+		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
+		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, $"a long title with two active workers should not overflow at {width}x{height}");
+
+		var row = page.Locator("tbody tr", new() { HasTextString = TwoActiveWorkerRowTitle }).First;
+		var activePill = row.Locator(".jt-col-active .status-pill-active");
+		(await activePill.GetAttributeAsync("title")).Should().Be($"{TwoActiveWorkerCount} active");
+		(await VisibleTextOfAsync(activePill)).Should().Be(TwoActiveWorkerCount.ToString(CultureInfo.InvariantCulture));
+
+		var pillBox = await activePill.BoundingBoxAsync();
+		pillBox.Should().NotBeNull();
+		pillBox!.Height.Should().BeLessThanOrEqualTo(MaximumSingleLinePillHeightPixels,
+			$"the active-count pill must stay a single line at {width}x{height}, not wrap its glyph or digit");
+
+		var table = page.Locator(".jt-browse-children-table");
+		var tableWidth = await ColumnWidthAsync(table);
+		var descriptionWidth = await ColumnWidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Description", Exact = true }));
+		(descriptionWidth / tableWidth).Should().BeGreaterThanOrEqualTo(MinimumWideDescriptionShare,
+			$"the node title must keep at least three of twelve columns at {width}x{height}");
+	}
+
+	[Fact]
+	/// <summary>
+	/// A wrapped title whose final line is shorter than its first must not reserve the first line's
+	/// width before rendering its achievement icon.
+	/// </summary>
+	public async Task A_childs_achievement_icon_immediately_follows_its_rendered_title()
+	{
+		const string Description = "Integration test for the legacy MIS write-back adapter under representative load X";
+		var (leafId, _) = await fixture.SeedActiveSessionsAsync(Description, 1);
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await SignInAsync(page);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={fixture.RootJobNodeId.Value}");
+
+		var rowText = page.Locator($".jt-tree-name-link[href='/Jobs/Browse?nodeId={leafId.Value}']").Locator("..");
+		var measurements = await rowText.EvaluateAsync<double[]>(
+			"""
+			(element) => {
+				const link = element.querySelector(".jt-tree-name-link");
+				const icon = element.querySelector(".jt-achievement-icon");
+				const range = document.createRange();
+				range.selectNodeContents(link.firstChild);
+				const textRects = Array.from(range.getClientRects());
+				const finalTextRect = textRects.at(-1);
+				const iconRect = icon.getBoundingClientRect();
+				return [
+					iconRect.left - finalTextRect.right,
+					Math.min(iconRect.bottom, finalTextRect.bottom) - Math.max(iconRect.top, finalTextRect.top),
+					textRects.length,
+				];
+			}
+			""");
+
+		measurements[2].Should().BeGreaterThan(1, "the regression case must exercise a naturally wrapped title");
+		measurements[0].Should().BeInRange(0, MaximumInlineStatusGapPixels,
+			"the status icon should sit immediately after the title's final rendered glyph");
+		measurements[1].Should().BeGreaterThan(0,
+			"the status icon should overlap the title's final rendered line vertically");
 	}
 
 	[Fact]
@@ -541,7 +814,7 @@ public abstract class JobBrowseBrowserTestsBase
 		var scrollers = await ScrollingRegionsAsync(page);
 
 		scrollers.Should().BeEmpty($"the page should scroll as one unit at {width}x{height}, but these elements scroll on their own: " +
-			string.Join("; ", scrollers));
+								   string.Join("; ", scrollers));
 	}
 
 	[Fact]

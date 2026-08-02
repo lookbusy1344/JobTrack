@@ -13,8 +13,8 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	private readonly Dictionary<AppUserId, AccountStateResult> _accountStates = [];
 	private readonly Dictionary<AppUserId, EmployeeProfileResult> _profiles = [];
 	private readonly Dictionary<AppUserId, EquatableArray<EmployeeRole>> _roles = [];
-	private EquatableArray<EmployeeRole>? _defaultRolesForUnseededActors;
 	private EquatableArray<EmployeeDirectoryEntry> _allEmployees = [];
+	private EquatableArray<EmployeeRole>? _defaultRolesForUnseededActors;
 	private EquatableArray<EmployeeDirectoryEntry> _directory = [];
 
 	public int GetActorRolesCallCount { get; private set; }
@@ -26,20 +26,6 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	public int GetEmployeeDirectoryCallCount { get; private set; }
 
 	public int GetAllEmployeesCallCount { get; private set; }
-
-	/// <summary>
-	///     A fake pre-seeded with <see cref="EmployeeRole.Worker" /> for any actor id that a test does
-	///     not explicitly seed — the tree/readiness/session fakes below exist to test domain composition,
-	///     not the actor-admission gate itself (remediation plan §2.4), so most of their tests use
-	///     whatever <see cref="AppUserId" /> reads naturally in the scenario without also having to seed
-	///     it. Tests that exercise admission denial construct a bare <see cref="FakeEmployeeQueryPort" />
-	///     instead.
-	/// </summary>
-	public static FakeEmployeeQueryPort AllowingAnyActor()
-	{
-		var port = new FakeEmployeeQueryPort { _defaultRolesForUnseededActors = [EmployeeRole.Worker] };
-		return port;
-	}
 
 	public Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		AppUserId actorId, CancellationToken cancellationToken = default)
@@ -96,6 +82,20 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	{
 		++GetAllEmployeesCallCount;
 		return Task.FromResult(_allEmployees);
+	}
+
+	/// <summary>
+	///     A fake pre-seeded with <see cref="EmployeeRole.Worker" /> for any actor id that a test does
+	///     not explicitly seed — the tree/readiness/session fakes below exist to test domain composition,
+	///     not the actor-admission gate itself (remediation plan §2.4), so most of their tests use
+	///     whatever <see cref="AppUserId" /> reads naturally in the scenario without also having to seed
+	///     it. Tests that exercise admission denial construct a bare <see cref="FakeEmployeeQueryPort" />
+	///     instead.
+	/// </summary>
+	public static FakeEmployeeQueryPort AllowingAnyActor()
+	{
+		var port = new FakeEmployeeQueryPort { _defaultRolesForUnseededActors = [EmployeeRole.Worker] };
+		return port;
 	}
 
 	/// <summary>

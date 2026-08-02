@@ -320,14 +320,21 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 	{
 		public const decimal DefaultHourlyRateAmount = 20m;
 
-		[Required] public string DisplayName { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "Display name")]
+		public string DisplayName { get; init; } = string.Empty;
 
-		[Required] public string IanaTimeZone { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "IANA time zone")]
+		public string IanaTimeZone { get; init; } = string.Empty;
 
 		[Range(typeof(decimal), "0.01", "999999.99")]
+		[Display(Name = "Default hourly rate")]
 		public decimal DefaultHourlyRate { get; init; } = DefaultHourlyRateAmount;
 
-		[Required] public string UserName { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "User name")]
+		public string UserName { get; init; } = string.Empty;
 
 		[Required] public string Password { get; init; } = string.Empty;
 
@@ -336,33 +343,46 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 	public sealed class SetEnabledInput
 	{
-		[Required] public long TargetUserId { get; init; }
+		[Required]
+		[Display(Name = "Target user")]
+		public long TargetUserId { get; init; }
 
 		public bool Enabled { get; init; }
 	}
 
 	public sealed class SetDefaultHourlyRateInput
 	{
-		[Required] public long TargetUserId { get; init; }
+		[Required]
+		[Display(Name = "Target user")]
+		public long TargetUserId { get; init; }
 
 		[Range(typeof(decimal), "0.01", "999999.99")]
+		[Display(Name = "Default hourly rate")]
 		public decimal DefaultHourlyRate { get; init; } = CreateEmployeeInput.DefaultHourlyRateAmount;
 	}
 
 	public sealed class ResetPasswordInput
 	{
-		[Required] public long TargetUserId { get; init; }
+		[Required]
+		[Display(Name = "Target user")]
+		public long TargetUserId { get; init; }
 
-		[Required] public string NewPassword { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "New password")]
+		public string NewPassword { get; init; } = string.Empty;
 	}
 
 	public sealed class ResetTwoFactorInput
 	{
-		[Required] public long TargetUserId { get; init; }
+		[Required]
+		[Display(Name = "Target user")]
+		public long TargetUserId { get; init; }
 	}
 
 	public sealed class RevokeAllTokensInput
 	{
-		[Required] public long TargetUserId { get; init; }
+		[Required]
+		[Display(Name = "Target user")]
+		public long TargetUserId { get; init; }
 	}
 }

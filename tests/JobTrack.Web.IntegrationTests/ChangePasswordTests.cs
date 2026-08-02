@@ -176,7 +176,8 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		});
 		var changeResponse = await client.SendAsync(changeRequest);
 
-		changeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect, "PasswordPolicy (ADR 0056) has no composition rule -- length is the only requirement");
+		changeResponse.StatusCode.Should().Be(HttpStatusCode.Redirect,
+			"PasswordPolicy (ADR 0056) has no composition rule -- length is the only requirement");
 	}
 
 	[Fact]

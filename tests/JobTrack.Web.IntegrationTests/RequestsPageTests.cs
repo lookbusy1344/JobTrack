@@ -115,6 +115,125 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Printer will not turn on");
+		body.Should().Contain("<th scope=\"col\" class=\"col-4 col-md-3\">Status</th>");
+		body.Should().Contain("<span class=\"jt-achievement-icon-label\">Submitted</span>");
+		body.Should().NotContain("jt-tree-blocked", "a request with no unsatisfied prerequisite is ready");
+	}
+
+	[Fact]
+	public async Task The_new_request_form_preselects_the_only_eligible_holding_area()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		_ = await SeedEmployeeAsync("rita.one-area", EmployeeRole.Requester);
+		var authCookie = await SignInAsync("rita.one-area");
+
+		var response = await GetPageAsync(authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain(
+			$"<option value=\"{holdingAreaId.Value}\" selected=\"selected\">Holding area</option>",
+			"a sole eligible holding area is not a choice, so the form makes it for the requester");
+		body.Should().NotContain(
+			"Choose where to send this", "the placeholder would let the requester unselect the only valid value");
+	}
+
+	[Fact]
+	public async Task The_holding_area_dropdown_names_each_option_by_its_job_node_not_its_configured_label()
+	{
+		_ = await SeedHoldingAreaAsync();
+		_ = await SeedHoldingAreaAsync("Facilities Intake", "Site maintenance");
+		_ = await SeedEmployeeAsync("rita.node-titles", EmployeeRole.Requester);
+		var authCookie = await SignInAsync("rita.node-titles");
+
+		var response = await GetPageAsync(authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain(">Holding area</option>", "the requester picks the job node their request will hang under");
+		body.Should().Contain(">Site maintenance</option>");
+		body.Should().NotContain("IT Intake", "the configured holding-area label is staff-facing, not a requester's choice");
+		body.Should().NotContain("Facilities Intake");
+	}
+
+	[Fact]
+	public async Task The_new_request_form_preselects_nothing_when_several_holding_areas_are_eligible()
+	{
+		_ = await SeedHoldingAreaAsync();
+		_ = await SeedHoldingAreaAsync("Facilities Intake");
+		_ = await SeedEmployeeAsync("rita.two-areas", EmployeeRole.Requester);
+		var authCookie = await SignInAsync("rita.two-areas");
+
+		var response = await GetPageAsync(authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("Choose where to send this");
+		body.Should().NotContain("selected=\"selected\"", "with a real choice to make, the requester makes it");
+	}
+
+	[Fact]
+	public async Task The_requests_list_marks_a_blocked_request_with_the_stop_hand_before_its_title()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.list-blocked", EmployeeRole.Requester);
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Blocked list request");
+		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		var blocker = await seedClient.Jobs.AddChildAsync(new() {
+			Context = context,
+			ParentId = rootId,
+			Description = "Unfinished list prerequisite",
+			OwnerUserId = administratorId,
+			Priority = Priority.Medium,
+		});
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = blocker.Id });
+		await seedClient.Jobs.AddPrerequisiteAsync(new() { Context = context, DependentJobId = submitted.JobNodeId, RequiredJobId = blocker.Id });
+		var authCookie = await SignInAsync("rita.list-blocked");
+
+		var response = await GetPageAsync(authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("jt-tree-flag jt-tree-blocked jt-tree-flag--leading");
+		body.IndexOf("jt-tree-blocked", StringComparison.Ordinal).Should()
+			.BeLessThan(body.IndexOf("Blocked list request", StringComparison.Ordinal), "the stop hand leads the request title");
+		body.Should().Contain("Blocked by a prerequisite.");
+	}
+
+	[Fact]
+	public async Task The_requests_list_shows_status_computed_from_a_decomposed_requests_subtree()
+	{
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.list-status", EmployeeRole.Requester);
+		var workerId = await SeedEmployeeAsync("wanda.list-status", EmployeeRole.Worker);
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Repair the print room printer");
+		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = submitted.JobNodeId });
+		var decomposition = await seedClient.Jobs.DecomposeWorkedLeafAsync(new() {
+			Context = context,
+			LeafNodeId = submitted.JobNodeId,
+			Version = submitted.Version,
+			BranchDescription = "Repair the print room printer",
+			ExistingWorkDescription = "Diagnose paper feed",
+			NewChildren = [
+				new() { Description = "Replace feed roller", OwnerUserId = workerId, Priority = Priority.Medium },
+			],
+		});
+		var replacementId = decomposition.NewChildIds.Single();
+		var replacementWork = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = replacementId });
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = context,
+			JobNodeId = replacementId,
+			NewAchievement = Achievement.InProgress,
+			Reason = "Exercise requester list subtree status",
+			Version = replacementWork.Version,
+		});
+		var authCookie = await SignInAsync("rita.list-status");
+
+		var response = await GetPageAsync(authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Repair the print room printer");
+		body.Should().Contain("<span class=\"jt-achievement-icon-label\">In Progress</span>",
+			"the list status must reflect progress anywhere in the decomposed request's subtree");
 	}
 
 	[Fact]
@@ -227,6 +346,31 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			"the requester reads as one 'display name (username)' tag, as an owner does in Browse");
 		body.Should().NotContain(">Username<", "the separate username field is folded into the requester tag");
 		body.Should().Contain("<a href=\"/Requests\">&larr; Back</a>");
+	}
+
+	/// <summary>
+	///     A progress row's title is the same shared form the staff tables use — description, clipped at
+	///     the shared row budget, then the node's own id — so a long description cannot push the row's
+	///     other columns off a narrow screen and the id stays readable at the end either way.
+	/// </summary>
+	[Fact]
+	public async Task Request_detail_progress_rows_clip_a_long_description_and_keep_the_node_id()
+	{
+		const int RowTitleMaxDescriptionLength = 100;
+		var description = new string('x', RowTitleMaxDescriptionLength + 20);
+		var holdingAreaId = await SeedHoldingAreaAsync();
+		var requesterId = await SeedEmployeeAsync("rita.longtitle", EmployeeRole.Requester);
+		var submitted = await SubmitAsync(requesterId, holdingAreaId, description);
+		var authCookie = await SignInAsync("rita.longtitle");
+
+		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var clipped = new string('x', RowTitleMaxDescriptionLength);
+		body.Should().Contain(
+			$"<span class=\"jt-preserve-whitespace\">{clipped}&#x2026; (ID {submitted.JobNodeId.Value})</span>");
+		body.Should().NotContain($"<span class=\"jt-preserve-whitespace\">{description}");
 	}
 
 	/// <summary>
@@ -366,11 +510,13 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain("<th scope=\"col\" class=\"text-end\">Time worked</th>");
+		body.Should().Contain("<th scope=\"col\" class=\"col-2 text-end\">Time worked</th>");
 		body.Should().NotContain("<th scope=\"col\">Status</th>");
 		body.Should().Contain("href=\"#jt-icon-branch\"");
 		body.Should().Contain("href=\"#jt-icon-leaf\"");
-		body.Should().Contain("Diagnose paper feed");
+		// Every row names its node id, as Browse's child nodes and Awaiting Progress do: a requester
+		// quoting a job in a ticket or a phone call has the same handle staff work from.
+		body.Should().MatchRegex(@"Diagnose paper feed \(ID \d+\)");
 		body.Should().Contain("href=\"#jt-icon-achievement-in-progress\"");
 		MyRegex().IsMatch(body)
 			.Should().BeTrue("the public status icon should immediately follow the leaf name, as it does in Browse");
@@ -807,7 +953,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		return new(appUserId);
 	}
 
-	private async Task<RequestHoldingAreaId> SeedHoldingAreaAsync()
+	private async Task<RequestHoldingAreaId> SeedHoldingAreaAsync(string name = "IT Intake", string nodeDescription = "Holding area")
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
@@ -815,10 +961,11 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		await using var insertNode = connection.CreateCommand();
 		insertNode.CommandText = """
 								 INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)
-								 VALUES ($parentId, 'Holding area', $ownerId, $ownerId, $priorityId, $postedAt);
+								 VALUES ($parentId, $description, $ownerId, $ownerId, $priorityId, $postedAt);
 								 SELECT last_insert_rowid();
 								 """;
 		_ = insertNode.Parameters.AddWithValue("$parentId", rootId.Value);
+		_ = insertNode.Parameters.AddWithValue("$description", nodeDescription);
 		_ = insertNode.Parameters.AddWithValue("$ownerId", await ReadRootOwnerIdAsync(connection));
 		_ = insertNode.Parameters.AddWithValue("$priorityId", PriorityMedium);
 		_ = insertNode.Parameters.AddWithValue("$postedAt", DateTimeOffset.UtcNow.UtcTicks - DateTime.UnixEpoch.Ticks);
@@ -827,10 +974,11 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		await using var insertHoldingArea = connection.CreateCommand();
 		insertHoldingArea.CommandText = """
 										INSERT INTO request_holding_area (job_node_id, name, default_priority_id, is_active)
-										VALUES ($jobNodeId, 'IT Intake', $priorityId, 1);
+										VALUES ($jobNodeId, $name, $priorityId, 1);
 										SELECT last_insert_rowid();
 										""";
 		_ = insertHoldingArea.Parameters.AddWithValue("$jobNodeId", jobNodeId);
+		_ = insertHoldingArea.Parameters.AddWithValue("$name", name);
 		_ = insertHoldingArea.Parameters.AddWithValue("$priorityId", PriorityMedium);
 		var holdingAreaId = (long)(await insertHoldingArea.ExecuteScalarAsync())!;
 
@@ -860,7 +1008,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	}
 
 	[GeneratedRegex(
-		"""<span class="jt-preserve-whitespace">Replace feed roller</span>\s*<span class="jt-achievement-icon jt-achievement-icon--in-progress">""")]
+		"""<span class="jt-preserve-whitespace">Replace feed roller \(ID \d+\)</span>&#x2060;\s*<span class="jt-achievement-icon jt-achievement-icon--in-progress">""")]
 	private static partial Regex MyRegex();
 
 	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>

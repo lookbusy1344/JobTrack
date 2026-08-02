@@ -54,7 +54,8 @@ internal sealed class PostgreSqlAccountCredentialPort : IAccountCredentialPort
 		identityUser.SecurityStamp = Guid.NewGuid().ToString("N");
 		identityUser.ConcurrencyStamp = Guid.NewGuid().ToString("N");
 
-		_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.ActorUserId, now, cancellationToken).ConfigureAwait(false);
+		_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.ActorUserId, now, cancellationToken)
+			.ConfigureAwait(false);
 		AuditEventWriter.Add(
 			context,
 			request.ActorUserId,
@@ -98,7 +99,8 @@ internal sealed class PostgreSqlAccountCredentialPort : IAccountCredentialPort
 		identityUser.SecurityStamp = Guid.NewGuid().ToString("N");
 		identityUser.ConcurrencyStamp = Guid.NewGuid().ToString("N");
 
-		_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.ActorUserId, now, cancellationToken).ConfigureAwait(false);
+		_ = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.ActorUserId, now, cancellationToken)
+			.ConfigureAwait(false);
 		AuditEventWriter.Add(
 			context, request.ActorUserId, now, "authentication.password-change", "identity_user", identityUser.Id,
 			request.CorrelationId, null, null, null);

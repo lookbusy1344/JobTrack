@@ -192,7 +192,7 @@ public static class Program
 		var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
 		var client = CreateClient(options.Provider, options.ConnectionString);
 		var password = options.Password
-						?? (options.PasswordFromStdin ? io.ReadStdinLine() : PasswordPrompt.ReadConfirmed(io));
+					   ?? (options.PasswordFromStdin ? io.ReadStdinLine() : PasswordPrompt.ReadConfirmed(io));
 		var resolvedOptions = options with { Password = password };
 
 		return await CreateEmployeeCommand.RunAsync(io, userManager, client, resolvedOptions, CancellationToken.None).ConfigureAwait(false);

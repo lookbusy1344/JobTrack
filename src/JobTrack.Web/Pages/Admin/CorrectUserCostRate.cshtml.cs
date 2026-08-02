@@ -128,11 +128,15 @@ public sealed class CorrectUserCostRateModel(
 
 	public sealed class CorrectInput
 	{
-		[Required] public string EffectiveStart { get; set; } = string.Empty;
+		[Required]
+		[Display(Name = "Effective start")]
+		public string EffectiveStart { get; set; } = string.Empty;
 
 		public string? EffectiveEnd { get; set; }
 
-		[Required] public decimal AmountPerHour { get; set; }
+		[Required]
+		[Display(Name = "Amount per hour")]
+		public decimal AmountPerHour { get; set; }
 
 		[Required] public string Reason { get; set; } = string.Empty;
 	}

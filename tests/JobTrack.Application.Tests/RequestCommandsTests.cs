@@ -85,6 +85,32 @@ public sealed class RequestCommandsTests
 	}
 
 	[Fact]
+	public async Task GetMyRequestsAsync_adds_readiness_to_every_summary_from_one_batched_projection()
+	{
+		var readyId = new JobNodeId(100);
+		var blockedId = new JobNodeId(200);
+		var requiredId = new JobNodeId(300);
+		var requestPort = new FakeJobRequestCommandPort { SummaryResults = [Summary(readyId), Summary(blockedId)] };
+		var readinessPort = new FakeReadinessQueryPort {
+			NodesById = new() {
+				[readyId] = new(readyId, null, [], null),
+				[blockedId] = new(blockedId, null, [], null),
+				[requiredId] = new(requiredId, null, [], Achievement.Waiting),
+			},
+			Prerequisites = [new(requiredId, blockedId)],
+		};
+		var sut = new RequestCommands(
+			requestPort, new FakeRequesterDurationQueries(new Dictionary<JobNodeId, AllocatedDuration>()), readinessPort, new FixedClock(Now));
+
+		var result = await sut.GetMyRequestsAsync(ContextFor(RequesterId));
+
+		result.Single(summary => summary.JobNodeId == readyId).IsReady.Should().BeTrue();
+		result.Single(summary => summary.JobNodeId == blockedId).IsReady.Should().BeFalse();
+		readinessPort.BatchCallCount.Should().Be(1, "list readiness should be materialized once, not queried per request");
+		readinessPort.LastNodeIds.Should().BeEquivalentTo([readyId, blockedId]);
+	}
+
+	[Fact]
 	public async Task GetDetailAsync_adds_requester_visible_allocated_duration_to_every_subtree_node()
 	{
 		var rootId = new JobNodeId(100);
@@ -261,6 +287,14 @@ public sealed class RequestCommandsTests
 		Notes = [],
 	};
 
+	private static JobRequestSummaryResult Summary(JobNodeId nodeId) => new() {
+		JobNodeId = nodeId,
+		Description = $"Request {nodeId.Value}",
+		Status = RequesterStatus.Submitted,
+		SubmittedAt = Now,
+		Version = 1,
+	};
+
 	private sealed class FakeReadinessQueryPort : IReadinessQueryPort
 	{
 		public Dictionary<JobNodeId, HierarchyNode> NodesById { get; init; } = [];
@@ -269,7 +303,11 @@ public sealed class RequestCommandsTests
 
 		public int CallCount { get; private set; }
 
+		public int BatchCallCount { get; private set; }
+
 		public JobNodeId? LastNodeId { get; private set; }
+
+		public IReadOnlyCollection<JobNodeId>? LastNodeIds { get; private set; }
 
 		public Task<ReadinessQueryResult> GetReadinessInputsAsync(JobNodeId nodeId, CancellationToken cancellationToken = default)
 		{
@@ -287,8 +325,19 @@ public sealed class RequestCommandsTests
 		}
 
 		public Task<ReadinessQueryResult> GetReadinessInputsForNodesAsync(
-			IReadOnlyCollection<JobNodeId> nodeIds, CancellationToken cancellationToken = default) =>
-			throw new NotSupportedException();
+			IReadOnlyCollection<JobNodeId> nodeIds, CancellationToken cancellationToken = default)
+		{
+			++BatchCallCount;
+			LastNodeIds = nodeIds;
+			var nodes = NodesById.Count > 0
+				? NodesById
+				: nodeIds.ToDictionary(nodeId => nodeId, nodeId => new HierarchyNode(nodeId, null, [], null));
+
+			return Task.FromResult<ReadinessQueryResult>(new() {
+				NodesById = EquatableDictionaryFactory.CopyOf(nodes),
+				Prerequisites = Prerequisites,
+			});
+		}
 	}
 
 	private sealed class FakeRequesterDurationQueries(

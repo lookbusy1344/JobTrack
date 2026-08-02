@@ -51,7 +51,9 @@ public sealed class Program
 	private const string ApiRateLimitWindowSecondsConfigKey = "RateLimiting:ApiWindowSeconds";
 	private const string RateLimitedProblemType = "/problems/rate-limited";
 	private const int MaxFailedAccessAttempts = 5;
+
 	private const int LockoutMinutes = 15;
+
 	// ADR 0057 (§2.3): doubles as the absolute session ceiling, not only the sliding-renewal window --
 	// SlidingExpiration renews the cookie for another window this long every time it passes the
 	// halfway mark, but OnValidatePrincipal below rejects the session outright once it has run this
@@ -229,11 +231,13 @@ public sealed class Program
 				// sign-in path (above) uses -- a compromised credential on one connection no
 				// longer automatically carries the other's blast radius.
 				var domainConnectionString = builder.Configuration.GetConnectionString("JobTrackDomain")
-										 ?? throw new InvalidOperationException("ConnectionStrings:JobTrackDomain is not configured.");
+											 ?? throw new InvalidOperationException("ConnectionStrings:JobTrackDomain is not configured.");
 				var patManagementConnectionString = builder.Configuration.GetConnectionString("JobTrackPatManagement")
-											?? throw new InvalidOperationException("ConnectionStrings:JobTrackPatManagement is not configured.");
+													?? throw new InvalidOperationException(
+														"ConnectionStrings:JobTrackPatManagement is not configured.");
 				var patAuthenticationConnectionString = builder.Configuration.GetConnectionString("JobTrackPatAuthentication")
-												?? throw new InvalidOperationException("ConnectionStrings:JobTrackPatAuthentication is not configured.");
+														?? throw new InvalidOperationException(
+															"ConnectionStrings:JobTrackPatAuthentication is not configured.");
 				if (!builder.Environment.IsDevelopment()) {
 					PostgreSqlTransportSecurity.Validate(domainConnectionString);
 					PostgreSqlTransportSecurity.Validate(patManagementConnectionString);

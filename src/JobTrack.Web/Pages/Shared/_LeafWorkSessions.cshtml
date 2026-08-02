@@ -27,10 +27,10 @@
 		<table class="table">
 			<thead>
 			<tr>
-				<th>Worked by</th>
-				<th class="jt-session-started d-none d-md-table-cell">Started</th>
-				<th>Finished</th>
-				<th class="text-end">Actions</th>
+				<th class="col-5 col-md-3">Worked by</th>
+				<th class="jt-session-started col-md-3 d-none d-md-table-cell">Started</th>
+				<th class="col-5 col-md-4">Finished</th>
+				<th class="col-2 text-end">Actions</th>
 			</tr>
 			</thead>
 			<tbody>
@@ -47,9 +47,9 @@
 					}
 					: null;
 				<tr>
-					<td>@Model.DescribeWorker(session.WorkedByUserId)</td>
-					<td class="jt-session-started d-none d-md-table-cell">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
-					<td>
+					<td class="col-5 col-md-3">@Model.DescribeWorker(session.WorkedByUserId)</td>
+					<td class="jt-session-started col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
+					<td class="col-5 col-md-4">
 						@if (session.FinishedAt is Instant finishedAt) {
 							@InstantDisplay.Format(finishedAt, Model.ViewerZone)
 						} else {
@@ -60,7 +60,7 @@
 					   width, which is what site.css's own table comment names as the usual reason a narrow
 					   viewport overflows -- it put this table 8px past a 320px viewport. The inner toolbar's
 					   flex-nowrap is what actually keeps the buttons on one line. *@
-					<td class="text-end">
+					<td class="col-2 text-end">
 						@* On a phone (.jt-row-action-extra, site.css) exactly one button survives here: Pause
 						   for an active session, Correct for a finished one -- the backdate trigger, and
 						   Correct on an active row, are one tap away from the row's own worker/session, and

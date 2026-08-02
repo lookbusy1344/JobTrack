@@ -852,6 +852,8 @@ JobTrack.Application.HoldingAreaSummaryResult.Equals(JobTrack.Application.Holdin
 JobTrack.Application.HoldingAreaSummaryResult.HoldingAreaSummaryResult() -> void
 JobTrack.Application.HoldingAreaSummaryResult.Id.get -> JobTrack.Abstractions.RequestHoldingAreaId
 JobTrack.Application.HoldingAreaSummaryResult.Id.init -> void
+JobTrack.Application.HoldingAreaSummaryResult.JobNodeDescription.get -> string!
+JobTrack.Application.HoldingAreaSummaryResult.JobNodeDescription.init -> void
 JobTrack.Application.HoldingAreaSummaryResult.Name.get -> string!
 JobTrack.Application.HoldingAreaSummaryResult.Name.init -> void
 JobTrack.Application.IAccountCredentialCommands
@@ -1224,9 +1226,13 @@ JobTrack.Application.JobRequestSummaryResult.<Clone>$() -> JobTrack.Application.
 JobTrack.Application.JobRequestSummaryResult.Description.get -> string!
 JobTrack.Application.JobRequestSummaryResult.Description.init -> void
 JobTrack.Application.JobRequestSummaryResult.Equals(JobTrack.Application.JobRequestSummaryResult? other) -> bool
+JobTrack.Application.JobRequestSummaryResult.IsReady.get -> bool
+JobTrack.Application.JobRequestSummaryResult.IsReady.init -> void
 JobTrack.Application.JobRequestSummaryResult.JobNodeId.get -> JobTrack.Abstractions.JobNodeId
 JobTrack.Application.JobRequestSummaryResult.JobNodeId.init -> void
 JobTrack.Application.JobRequestSummaryResult.JobRequestSummaryResult() -> void
+JobTrack.Application.JobRequestSummaryResult.Status.get -> JobTrack.Abstractions.RequesterStatus
+JobTrack.Application.JobRequestSummaryResult.Status.init -> void
 JobTrack.Application.JobRequestSummaryResult.SubmittedAt.get -> NodaTime.Instant
 JobTrack.Application.JobRequestSummaryResult.SubmittedAt.init -> void
 JobTrack.Application.JobRequestSummaryResult.Version.get -> long

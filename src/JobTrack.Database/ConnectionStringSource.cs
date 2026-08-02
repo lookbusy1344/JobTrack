@@ -39,8 +39,8 @@ public static class ConnectionStringSource
 	{
 		try {
 			var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
-			return builder.Keys.Cast<string>().Any(
-				key => key.Equals("Password", StringComparison.OrdinalIgnoreCase) || key.Equals("Pwd", StringComparison.OrdinalIgnoreCase));
+			return builder.Keys.Cast<string>().Any(key =>
+				key.Equals("Password", StringComparison.OrdinalIgnoreCase) || key.Equals("Pwd", StringComparison.OrdinalIgnoreCase));
 		}
 		catch (ArgumentException) {
 			return false;

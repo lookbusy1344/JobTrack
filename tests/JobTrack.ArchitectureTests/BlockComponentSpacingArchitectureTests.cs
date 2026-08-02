@@ -88,8 +88,8 @@ internal static partial class BlockComponentSpacingGuard
 	///     markup-checked; both halves of the rule still cover them in the stylesheet.
 	/// </summary>
 	public static readonly FrozenSet<string> BlockComponents = new[] {
-		"jt-card", "jt-notice", "jt-toolbar", "jt-form-card", "jt-table-block", "jt-list", "jt-empty",
-		"jt-page-head", "jt-lede", "jt-context", "dl", "fieldset",
+		"jt-card", "jt-notice", "jt-toolbar", "jt-form-card", "jt-table-block", "jt-list", "jt-empty", "jt-page-head", "jt-lede", "jt-context", "dl",
+		"fieldset",
 	}.ToFrozenSet(StringComparer.Ordinal);
 
 	[GeneratedRegex(@"class=""(?<tokens>[^""]*)""", RegexOptions.CultureInvariant)]
@@ -125,8 +125,8 @@ internal static partial class BlockComponentSpacingGuard
 			// their utilities hide in the class attribute of a tag whose class list never mentions them --
 			// which is exactly where both <dl>s were restating `mb-4`. Read the enclosing tag name too.
 			var component = tokens.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-					.FirstOrDefault(BlockComponents.Contains)
-				?? EnclosingElement(source, attribute.Index);
+								.FirstOrDefault(BlockComponents.Contains)
+							?? EnclosingElement(source, attribute.Index);
 			if (component is null || !SpacingUtility().IsMatch(tokens)) {
 				continue;
 			}

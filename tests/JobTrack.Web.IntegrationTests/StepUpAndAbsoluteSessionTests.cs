@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -32,9 +33,9 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	private const string AuthenticatorKeyProtectionPurpose = "JobTrack.Identity.AuthenticatorKey.v1";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
 	private const int LoginRateLimitPermitLimit = 2;
+	private readonly MutableClock clock = new(Instant.FromUtc(2026, 8, 1, 9, 0, 0));
 
 	private readonly SqliteDatabaseFixture database = new();
-	private readonly MutableClock clock = new(Instant.FromUtc(2026, 8, 1, 9, 0, 0));
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
 
@@ -200,7 +201,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
 			["Issue.Label"] = label,
-			["Issue.LifetimeDays"] = lifetimeDays.ToString(System.Globalization.CultureInfo.InvariantCulture),
+			["Issue.LifetimeDays"] = lifetimeDays.ToString(CultureInfo.InvariantCulture),
 			["__RequestVerificationToken"] = token,
 		});
 
@@ -232,7 +233,8 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 		string returnUrl,
 		string? twoFactorCode = null)
 	{
-		var (antiforgeryCookie, token) = await GetAntiforgeryFormAsync(authCookie, $"/Account/ConfirmAccess?returnUrl={Uri.EscapeDataString(returnUrl)}");
+		var (antiforgeryCookie, token) =
+			await GetAntiforgeryFormAsync(authCookie, $"/Account/ConfirmAccess?returnUrl={Uri.EscapeDataString(returnUrl)}");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, $"/Account/ConfirmAccess?returnUrl={Uri.EscapeDataString(returnUrl)}");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -376,9 +378,9 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	{
 		private Instant _now = now;
 
-		public void Advance(Duration duration) => _now += duration;
-
 		public Instant GetCurrentInstant() => _now;
+
+		public void Advance(Duration duration) => _now += duration;
 	}
 
 	private sealed class TestWebApplicationFactory(string identityConnectionString, IClock clock) : WebApplicationFactory<Program>
@@ -388,7 +390,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 			_ = builder.UseEnvironment("Development");
 			_ = builder.UseSetting("Database:Provider", "Sqlite");
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-			_ = builder.UseSetting("RateLimiting:LoginPermitLimit", LoginRateLimitPermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture));
+			_ = builder.UseSetting("RateLimiting:LoginPermitLimit", LoginRateLimitPermitLimit.ToString(CultureInfo.InvariantCulture));
 			_ = builder.ConfigureTestServices(services => {
 				services.RemoveAll<IClock>();
 				_ = services.AddSingleton(clock);

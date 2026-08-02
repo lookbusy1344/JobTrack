@@ -51,27 +51,27 @@
 			   forensic detail returns as the viewport grows, and every column stays filterable from the
 			   form above regardless of whether it is currently painted. *@
 			<tr>
-				<th>Occurred at</th>
-				<th class="d-none d-md-table-cell">Actor</th>
-				<th>Operation</th>
-				<th class="d-none d-md-table-cell">Entity type</th>
-				<th class="d-none d-md-table-cell">Entity id</th>
-				<th class="d-none d-xxl-table-cell">Correlation id</th>
-				<th class="d-none d-lg-table-cell">Reason</th>
-				<th class="d-none d-xl-table-cell">Detail</th>
+				<th class="col-5 col-md-3 col-lg-3 col-xl-2">Occurred at</th>
+				<th class="col-md-1 d-none d-md-table-cell">Actor</th>
+				<th class="col-7 col-md-3 col-lg-2 col-xxl-1">Operation</th>
+				<th class="col-md-2 col-lg-1 d-none d-md-table-cell">Entity type</th>
+				<th class="col-md-3 col-lg-2 col-xl-1 d-none d-md-table-cell">Entity id</th>
+				<th class="col-xxl-2 d-none d-xxl-table-cell">Correlation id</th>
+				<th class="col-lg-3 col-xl-2 d-none d-lg-table-cell">Reason</th>
+				<th class="col-xl-3 col-xxl-2 d-none d-xl-table-cell">Detail</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var auditEvent in Model.Events) {
 				<tr>
-					<td>@InstantDisplay.Format(auditEvent.OccurredAt, Model.ViewerZone)</td>
-					<td class="jt-id d-none d-md-table-cell">@(auditEvent.ActorId?.Value.ToString() ?? "system")</td>
-					<td>@auditEvent.Operation</td>
-					<td class="d-none d-md-table-cell">@auditEvent.EntityType</td>
-					<td class="jt-id d-none d-md-table-cell">@auditEvent.EntityId</td>
-					<td class="jt-id d-none d-xxl-table-cell">@auditEvent.CorrelationId</td>
-					<td class="d-none d-lg-table-cell">@auditEvent.Reason</td>
-					<td class="d-none d-xl-table-cell">
+					<td class="col-5 col-md-3 col-lg-3 col-xl-2">@InstantDisplay.Format(auditEvent.OccurredAt, Model.ViewerZone)</td>
+					<td class="jt-id col-md-1 d-none d-md-table-cell">@(auditEvent.ActorId?.Value.ToString() ?? "system")</td>
+					<td class="col-7 col-md-3 col-lg-2 col-xxl-1">@auditEvent.Operation</td>
+					<td class="col-md-2 col-lg-1 d-none d-md-table-cell">@auditEvent.EntityType</td>
+					<td class="jt-id col-md-3 col-lg-2 col-xl-1 d-none d-md-table-cell">@auditEvent.EntityId</td>
+					<td class="jt-id col-xxl-2 d-none d-xxl-table-cell">@auditEvent.CorrelationId</td>
+					<td class="col-lg-3 col-xl-2 d-none d-lg-table-cell">@auditEvent.Reason</td>
+					<td class="col-xl-3 col-xxl-2 d-none d-xl-table-cell">
 						@if (auditEvent.IsRedacted) {
 							<span>redacted</span>
 						} else {

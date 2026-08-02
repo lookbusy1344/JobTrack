@@ -14,4 +14,19 @@ public sealed class PriorityLabelModel
 {
 	/// <summary>The priority to render.</summary>
 	public required Priority Priority { get; init; }
+
+	/// <summary>
+	///     The text this model renders: always the four-letter-or-shorter form. A priority is a
+	///     one-glance ordering fact that reads the same wherever it appears, and its widest home --
+	///     a table column sharing row width with five others -- sets the form for all of them.
+	/// </summary>
+	public string Text => AbbreviatedLabel(Priority);
+
+	private static string AbbreviatedLabel(Priority priority) => priority switch {
+		Priority.Low => "Low",
+		Priority.Medium => "Med",
+		Priority.High => "High",
+		Priority.Urgent => "Urgt",
+		_ => throw new ArgumentOutOfRangeException(nameof(priority), priority, null),
+	};
 }

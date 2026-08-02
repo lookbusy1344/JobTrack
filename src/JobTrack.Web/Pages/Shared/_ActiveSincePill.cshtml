@@ -9,10 +9,17 @@
      before starting another session" sentence this replaces never belonged in the Actions cell.
      Zero sessions on an *In Progress* leaf is the third case: paused, someone stopped part-way, and
      it gets its own pill rather than reading identically to a leaf nobody has ever started.
-   - one: the familiar compact stopwatch pill, worker named only when it is not the viewer.
-   - two or more: a prominent "N active" pill, followed by the stable preview (You first, then every
+   - one: the familiar compact stopwatch pill, icon plus the bare timestamp (data, not a word) --
+     worker named only when it is not the viewer.
+   - two or more: a prominent active-count pill, followed by the stable preview (You first, then every
      other worker by start order), capped at ActiveSessionSummaryModel.PreviewLimit only in the dense
-     per-row form -- the full collection is always still reachable via Sessions, never truly lost. *@
+     per-row form -- the full collection is always still reachable via Sessions, never truly lost.
+
+   A table cell (Compact) drops a *word* competing for room against the worker names that follow it
+   on the same line ("N active" wrapped mid-word beside its own name preview) down to the glyph plus
+   whatever data it carries -- a bare count. Closed and Paused have no such neighbour, so they keep
+   their full word at every width, just sized down (status-pill--compact) in a table cell; a record
+   display (Work's own status field, Browse's toolbar summary) never compacts at all. *@
 @if (Model.Count == 1) {
 	var entry = Model.PreviewEntries[0];
 	var since = InstantDisplay.FormatCompact(entry.Session.StartedAt, Model.ViewerZone, Model.Now);
@@ -38,12 +45,22 @@
 	}
 } else if (Model.Count > 1) {
 	<span class="d-inline-flex flex-wrap align-items-center gap-1">
-		<span class="status-pill status-pill-active">
-			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-				<use href="#jt-icon-active"></use>
-			</svg>
-			@Model.Count active
-		</span>
+		@if (Model.Compact) {
+			<span class="status-pill status-pill-active status-pill--compact" title="@Model.Count active">
+				<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-active"></use>
+				</svg>
+				<span class="visually-hidden">Active count</span>
+				@Model.Count
+			</span>
+		} else {
+			<span class="status-pill status-pill-active">
+				<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-active"></use>
+				</svg>
+				@Model.Count active
+			</span>
+		}
 		<span class="jt-muted">
 			<span class="visually-hidden">Active workers:</span>
 			@string.Join(", ", Model.PreviewEntries.Select(e => e.DisplayName))@(Model.HiddenCount > 0 ? $" +{Model.HiddenCount} more" : "")
@@ -54,5 +71,5 @@
 } else if (Model.Paused) {
 	@* Closed wins over Paused: an archived leaf can be InProgress, and "you cannot start here" is the
 	   more consequential fact of the two. *@
-	<partial name="_PausedPill"/>
+	<partial name="_PausedPill" model="Model.Compact"/>
 }

@@ -60,23 +60,23 @@
 			   what the row is (Label), what state it is in (Status), and its one action; Expires returns at
 			   md because it is the field a token is judged on, and the two audit timestamps at lg. *@
 			<tr>
-				<th>Label</th>
-				<th class="jt-col-secondary d-none d-lg-table-cell">Created</th>
-				<th class="jt-col-cost d-none d-md-table-cell">Expires</th>
-				<th class="jt-col-secondary d-none d-lg-table-cell">Last used</th>
-				<th>Status</th>
-				<th></th>
+				<th class="col-7 col-md-5 col-lg-3">Label</th>
+				<th class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">Created</th>
+				<th class="jt-col-cost col-md-3 col-lg-2 d-none d-md-table-cell">Expires</th>
+				<th class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">Last used</th>
+				<th class="col-3 col-md-2">Status</th>
+				<th class="col-2 col-md-2 col-lg-1"></th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var token in Model.Tokens) {
 				<tr>
-					<td>@token.Label</td>
-					<td class="jt-col-secondary d-none d-lg-table-cell">@InstantDisplay.Format(token.CreatedAt, Model.ViewerZone)</td>
-					<td class="jt-col-cost d-none d-md-table-cell">@InstantDisplay.Format(token.ExpiresAt, Model.ViewerZone)</td>
-					<td class="jt-col-secondary d-none d-lg-table-cell">@(token.LastUsedAt.HasValue ? InstantDisplay.Format(token.LastUsedAt.Value, Model.ViewerZone) : "Never")</td>
-					<td>@(token.RevokedAt is not null ? "Revoked" : "Active")</td>
-					<td>
+					<td class="col-7 col-md-5 col-lg-3">@token.Label</td>
+					<td class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">@InstantDisplay.Format(token.CreatedAt, Model.ViewerZone)</td>
+					<td class="jt-col-cost col-md-3 col-lg-2 d-none d-md-table-cell">@InstantDisplay.Format(token.ExpiresAt, Model.ViewerZone)</td>
+					<td class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">@(token.LastUsedAt.HasValue ? InstantDisplay.Format(token.LastUsedAt.Value, Model.ViewerZone) : "Never")</td>
+					<td class="col-3 col-md-2">@(token.RevokedAt is not null ? "Revoked" : "Active")</td>
+					<td class="col-2 col-md-2 col-lg-1">
 						@if (token.RevokedAt is null) {
 							<form method="post" asp-page-handler="Revoke" class="inline-form">
 								<input type="hidden" name="tokenId" value="@token.Id.Value"/>

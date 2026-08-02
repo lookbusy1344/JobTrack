@@ -19,8 +19,8 @@ public sealed class LoginAttemptRateLimiter : IDisposable
 	private const int DefaultMaxPartitionCount = 4096;
 	private readonly int backstopPermitLimit;
 	private readonly BoundedWindowCache backstopWindows;
-	private readonly int permitLimit;
 	private readonly BoundedWindowCache partitionWindows;
+	private readonly int permitLimit;
 	private readonly TimeProvider timeProvider;
 	private readonly TimeSpan window;
 

@@ -1,6 +1,5 @@
 namespace JobTrack.Application;
 
-using Abstractions;
 using Ports;
 
 /// <summary>Application command surface for credential-sensitive account state transitions.</summary>

@@ -79,7 +79,7 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 
 		versionBody.Should().Contain("Rota version added");
 		versionBody.Should().Contain("Europe/London");
-		versionBody.Should().Contain("<td>Thursday, 1 January 2026</td>");
+		versionBody.Should().Contain("<td class=\"col-10 col-md-5 col-lg-3\">Thursday, 1 January 2026</td>");
 
 		var (exceptionCookie, exceptionToken) = await ExtractFormAsync(versionReloaded, versionCookie);
 		var exceptionResponse = await PostAddExceptionAsync(

@@ -70,12 +70,17 @@ public sealed class ChangePasswordModel(
 
 	public sealed class ChangePasswordInput
 	{
-		[Required] public string CurrentPassword { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "Current password")]
+		public string CurrentPassword { get; init; } = string.Empty;
 
-		[Required] public string NewPassword { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "New password")]
+		public string NewPassword { get; init; } = string.Empty;
 
 		[Required]
 		[Compare(nameof(NewPassword))]
+		[Display(Name = "Confirm new password")]
 		public string ConfirmNewPassword { get; init; } = string.Empty;
 	}
 }

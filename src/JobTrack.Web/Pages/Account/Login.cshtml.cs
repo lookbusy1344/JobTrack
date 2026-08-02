@@ -121,7 +121,9 @@ public sealed class LoginModel(
 
 	public sealed class LoginInput
 	{
-		[Required] public string UserName { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "User name")]
+		public string UserName { get; init; } = string.Empty;
 
 		[Required] public string Password { get; init; } = string.Empty;
 	}

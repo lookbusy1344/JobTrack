@@ -197,6 +197,8 @@ public sealed class ManageTwoFactorModel(
 
 	public sealed class DisableInput
 	{
-		[Required] public string CurrentPassword { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "Current password")]
+		public string CurrentPassword { get; init; } = string.Empty;
 	}
 }

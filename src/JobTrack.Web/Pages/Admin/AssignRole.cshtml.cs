@@ -87,7 +87,9 @@ public sealed class AssignRoleModel(IJobTrackClient jobTrackClient, UserManager<
 
 	public sealed class AssignRoleInput
 	{
-		[Required] public long TargetUserId { get; init; }
+		[Required]
+		[Display(Name = "Target user")]
+		public long TargetUserId { get; init; }
 
 		[Required] public EmployeeRole Role { get; init; }
 

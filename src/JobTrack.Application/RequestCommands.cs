@@ -64,7 +64,24 @@ internal sealed class RequestCommands : IRequestCommands
 
 		return JobTrackOperation.TraceAsync(
 			"requests.get-mine", context, null,
-			() => _port.GetMyRequestsAsync(context, cancellationToken));
+			async () => {
+				var summaries = await _port.GetMyRequestsAsync(context, cancellationToken).ConfigureAwait(false);
+				if (summaries.Count == 0) {
+					return summaries;
+				}
+
+				// As on request detail, readiness can depend on prerequisites attached to ancestors
+				// outside the requester-safe subtree. Materialize every listed anchor in one batch so
+				// adding the blocked marker never becomes a query per request.
+				var readinessInputs = await _readinessQueryPort
+					.GetReadinessInputsForNodesAsync([.. summaries.Select(summary => summary.JobNodeId)], cancellationToken)
+					.ConfigureAwait(false);
+
+				return EquatableArray.CopyOf(summaries.Select(summary => summary with {
+					IsReady = ReadinessCalculator
+						.IsReady(summary.JobNodeId, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
+				}));
+			});
 	}
 
 	/// <inheritdoc />

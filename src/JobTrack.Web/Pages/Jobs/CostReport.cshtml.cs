@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages.Jobs;
 
+using System.ComponentModel.DataAnnotations;
 using Abstractions;
 using Application;
 using Domain.Hierarchy;
@@ -24,7 +25,9 @@ public sealed class CostReportModel(
 	IViewerTimeZoneResolver viewerTimeZoneResolver,
 	IClock clock) : PageModel
 {
-	[BindProperty(SupportsGet = true)] public long NodeId { get; init; }
+	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Node")]
+	public long NodeId { get; init; }
 
 	/// <summary>The instant to evaluate cost as of, as a <c>datetime-local</c> string; blank defaults to now (spec §10: costs are dynamic).</summary>
 	[BindProperty(SupportsGet = true)]

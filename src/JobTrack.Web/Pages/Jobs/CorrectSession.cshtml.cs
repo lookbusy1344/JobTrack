@@ -159,7 +159,9 @@ public sealed class CorrectSessionModel(
 
 	public sealed class CorrectInput
 	{
-		[Required] public string StartedAt { get; set; } = string.Empty;
+		[Required]
+		[Display(Name = "Started at")]
+		public string StartedAt { get; set; } = string.Empty;
 
 		public string? FinishedAt { get; set; }
 

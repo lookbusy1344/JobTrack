@@ -67,7 +67,7 @@ public sealed class ConfirmAccessModel(
 			return Page();
 		}
 
-		var passwordCheck = await signInManager.CheckPasswordSignInAsync(user, Input.CurrentPassword, lockoutOnFailure: true);
+		var passwordCheck = await signInManager.CheckPasswordSignInAsync(user, Input.CurrentPassword, true);
 		if (!passwordCheck.Succeeded) {
 			ErrorMessage = passwordCheck.IsLockedOut
 				? "This account is temporarily locked out after too many failed attempts."
@@ -100,7 +100,9 @@ public sealed class ConfirmAccessModel(
 
 	public sealed class ConfirmAccessInput
 	{
-		[Required] public string CurrentPassword { get; init; } = string.Empty;
+		[Required]
+		[Display(Name = "Current password")]
+		public string CurrentPassword { get; init; } = string.Empty;
 
 		public string? TwoFactorCode { get; init; }
 	}

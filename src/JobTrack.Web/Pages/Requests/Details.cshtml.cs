@@ -187,7 +187,7 @@ public sealed class DetailsModel(
 
 	public sealed class AddNoteInput
 	{
-		[Required][MaxLength(4000)] public string Content { get; init; } = string.Empty;
+		[Required][MaxCodePointLength(4000)] public string Content { get; init; } = string.Empty;
 
 		public bool VisibleToRequester { get; init; }
 	}

@@ -33,22 +33,22 @@
 					@* A rate's own figure and the date it took effect are what a phone needs; when it stops
 					   applying (usually "current") comes back on a wider viewport, and Correct shows the
 					   whole record either way. *@
-					<th>Amount per hour</th>
-					<th>Effective start</th>
-					<th class="d-none d-md-table-cell">Effective end</th>
+					<th class="col-4 col-md-3">Amount per hour</th>
+					<th class="col-6 col-md-3">Effective start</th>
+					<th class="col-md-4 d-none d-md-table-cell">Effective end</th>
 					@if (Model.CanManageRates) {
-						<th></th>
+						<th class="col-2">Actions</th>
 					}
 				</tr>
 				</thead>
 				<tbody>
 				@foreach (var rate in Model.Snapshot.UserCostRates) {
 					<tr>
-						<td>@rate.Rate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
-						<td>@InstantDisplay.Format(rate.Rate.EffectiveStart, Model.ViewerZone)</td>
-						<td class="d-none d-md-table-cell">@(rate.Rate.EffectiveEnd.HasValue ? InstantDisplay.Format(rate.Rate.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
+						<td class="col-4 col-md-3">@rate.Rate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+						<td class="col-6 col-md-3">@InstantDisplay.Format(rate.Rate.EffectiveStart, Model.ViewerZone)</td>
+						<td class="col-md-4 d-none d-md-table-cell">@(rate.Rate.EffectiveEnd.HasValue ? InstantDisplay.Format(rate.Rate.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
 						@if (Model.CanManageRates) {
-							<td>
+							<td class="col-2">
 								<a asp-page="/Admin/CorrectUserCostRate" asp-route-userId="@Model.UserId"
 								   asp-route-rateId="@rate.Id.Value">Correct</a>
 							</td>
@@ -70,24 +70,24 @@
 				<tr>
 					@* Same reflow as the user cost rates above, with the node the override applies to
 					   leading the row. *@
-					<th>Node</th>
-					<th>Amount per hour</th>
-					<th class="d-none d-md-table-cell">Effective start</th>
-					<th class="d-none d-md-table-cell">Effective end</th>
+					<th class="col-3 col-md-2">Node</th>
+					<th class="col-7 col-md-2">Amount per hour</th>
+					<th class="col-md-3 d-none d-md-table-cell">Effective start</th>
+					<th class="col-md-3 d-none d-md-table-cell">Effective end</th>
 					@if (Model.CanManageRates) {
-						<th></th>
+						<th class="col-2">Actions</th>
 					}
 				</tr>
 				</thead>
 				<tbody>
 				@foreach (var overrideResult in Model.Snapshot.NodeRateOverrides) {
 					<tr>
-						<td>@overrideResult.Override.NodeId.Value</td>
-						<td>@overrideResult.Override.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
-						<td class="d-none d-md-table-cell">@InstantDisplay.Format(overrideResult.Override.EffectiveStart, Model.ViewerZone)</td>
-						<td class="d-none d-md-table-cell">@(overrideResult.Override.EffectiveEnd.HasValue ? InstantDisplay.Format(overrideResult.Override.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
+						<td class="col-3 col-md-2">@overrideResult.Override.NodeId.Value</td>
+						<td class="col-7 col-md-2">@overrideResult.Override.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+						<td class="col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(overrideResult.Override.EffectiveStart, Model.ViewerZone)</td>
+						<td class="col-md-3 d-none d-md-table-cell">@(overrideResult.Override.EffectiveEnd.HasValue ? InstantDisplay.Format(overrideResult.Override.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
 						@if (Model.CanManageRates) {
-							<td>
+							<td class="col-2">
 								<a asp-page="/Admin/CorrectNodeRateOverride" asp-route-userId="@Model.UserId"
 								   asp-route-overrideId="@overrideResult.Id.Value">Correct</a>
 							</td>

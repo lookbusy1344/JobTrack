@@ -129,13 +129,17 @@ public sealed class CorrectNodeRateOverrideModel(
 
 	public sealed class CorrectInput
 	{
-		[Required] public long NodeId { get; set; }
+		[Required][Display(Name = "Node")] public long NodeId { get; set; }
 
-		[Required] public string EffectiveStart { get; set; } = string.Empty;
+		[Required]
+		[Display(Name = "Effective start")]
+		public string EffectiveStart { get; set; } = string.Empty;
 
-		public string? EffectiveEnd { get; set; }
+		[Display(Name = "Effective end")] public string? EffectiveEnd { get; set; }
 
-		[Required] public decimal AmountPerHour { get; set; }
+		[Required]
+		[Display(Name = "Amount per hour")]
+		public decimal AmountPerHour { get; set; }
 
 		[Required] public string Reason { get; set; } = string.Empty;
 	}

@@ -176,18 +176,19 @@ public sealed class DecomposeModel(
 	{
 		public string? Description { get; set; }
 
-		public string? WriteUp { get; set; }
+		[Display(Name = "Write-up")] public string? WriteUp { get; set; }
 
-		public long? OwnerUserId { get; set; }
+		[Display(Name = "Owner")] public long? OwnerUserId { get; set; }
 
 		public Priority Priority { get; set; } = Priority.Medium;
 
+		[Display(Name = "Expected duration (hours)")]
 		public decimal? ExpectedDurationHours { get; set; }
 
-		public decimal? ExpectedCost { get; set; }
+		[Display(Name = "Expected cost")] public decimal? ExpectedCost { get; set; }
 
-		public string? NeededStart { get; set; }
+		[Display(Name = "Needed start")] public string? NeededStart { get; set; }
 
-		public string? NeededFinish { get; set; }
+		[Display(Name = "Needed finish")] public string? NeededFinish { get; set; }
 	}
 }

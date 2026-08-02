@@ -113,9 +113,13 @@
 			<dd class="col-12 col-sm-8 mb-0">@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }
 				<partial
 					name="_PriorityLabel"
-					model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority })"/>@(priorityDeadline is Instant priorityDeadlineInstant
-							                                                                                  ? $" (deadline {InstantDisplay.FormatDate(priorityDeadlineInstant, Model.ViewerZone)})"
-							                                                                                  : null)</dd>
+					model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority })"/>
+				@if (priorityDeadline is Instant priorityDeadlineInstant) {
+					<text>(deadline <span
+							class="@(InstantDisplay.IsPast(priorityDeadlineInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatDate(priorityDeadlineInstant, Model.ViewerZone)</span>
+						)</text>
+				}
+			</dd>
 		</div>
 		@if (Model.RequestContext is not null) {
 			<div class="col row g-1">
@@ -371,16 +375,23 @@
 			<summary class="jt-disclosure-summary">Inherited blockers (from ancestor prerequisites)</summary>
 			<ul class="jt-list jt-list--wide mb-0">
 				@foreach (var blocker in Model.AncestorBlockers) {
-					<li class="d-grid align-items-center gap-3 jt-blocker-row">
-						<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
-						                                                                                   viewBox="0 0 16 16" aria-hidden="true"
-						                                                                                   focusable="false"><use
-									href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
-						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-						   asp-route-nodeId="@blocker.RequiredJobId">@JobNodeDisplay.Title(blocker.RequiredDescription, blocker.RequiredJobId, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
-						<span class="jt-muted">declared on</span>
-						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-						   asp-route-nodeId="@blocker.DeclaredOnJobId">@JobNodeDisplay.Title(blocker.DeclaredOnDescription, blocker.DeclaredOnJobId, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+					<li>
+						<div class="row g-3 align-items-center">
+							<div class="col-12 col-md-6 d-flex align-items-center gap-3">
+								<span class="status-pill status-pill--icon status-pill-blocked" role="status"><svg class="status-pill-glyph"
+								                                                                                   viewBox="0 0 16 16"
+								                                                                                   aria-hidden="true"
+								                                                                                   focusable="false"><use
+											href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocking</span></span>
+								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+								   asp-route-nodeId="@blocker.RequiredJobId">@JobNodeDisplay.Title(blocker.RequiredDescription, blocker.RequiredJobId, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+							</div>
+							<div class="col-12 col-md-6 d-flex align-items-center gap-3">
+								<span class="jt-muted">declared on</span>
+								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+								   asp-route-nodeId="@blocker.DeclaredOnJobId">@JobNodeDisplay.Title(blocker.DeclaredOnDescription, blocker.DeclaredOnJobId, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+							</div>
+						</div>
 					</li>
 				}
 			</ul>
@@ -397,13 +408,17 @@
 			<table class="table jt-browse-children-table">
 				<thead>
 				<tr>
-					<th scope="col">Description</th>
-					<th scope="col">Kind</th>
-					<th scope="col" class="jt-col-secondary jt-col-owner d-none d-lg-table-cell">Owner</th>
-					<th scope="col" class="jt-col-active d-none d-md-table-cell">Active</th>
-					<th scope="col" class="jt-col-cost text-end d-none d-md-table-cell">Cost</th>
-					<th scope="col" class="jt-col-secondary d-none d-lg-table-cell">Archived</th>
-					<th scope="col" class="text-end">Actions</th>
+					<th scope="col" class="col-8 col-md-4 col-lg-3">Description</th>
+					<th scope="col" class="col-2 col-md-1">Kind</th>
+					<th scope="col" class="jt-col-secondary jt-col-owner col-lg-1 d-none d-lg-table-cell">Owner</th>
+					@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
+					   workers' names (the preview list below the count pill) need more than a twelfth of the
+					   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
+					   the column, staying at its "at least 3 of 12" floor rather than the 4 it held before. *@
+					<th scope="col" class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">Active</th>
+					<th scope="col" class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
+					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">Archived</th>
+					<th scope="col" class="col-2 text-end">Actions</th>
 				</tr>
 				</thead>
 				<tbody>
@@ -412,7 +427,7 @@
 						? null
 						: Model.WorkRowActionsFor(child.Id, "Start", "leafNodeId", child.Achievement, child.ArchivedAt is not null);
 					<tr>
-						<td>
+						<td class="col-8 col-md-4 col-lg-3">
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 							   asp-route-nodeId="@child.Id.Value">@JobNodeDisplay.Title(child, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 							<partial name="_AchievementIcon"
@@ -421,10 +436,10 @@
 								<span class="jt-muted"> · has children</span>
 							}
 						</td>
-						<td>
+						<td class="col-2 col-md-1">
 							<partial name="_KindIcon" model="@(new KindIconModel { Kind = child.Kind, ShowLabel = false })"/>
 						</td>
-						<td class="jt-col-secondary jt-col-owner d-none d-lg-table-cell">
+						<td class="jt-col-secondary jt-col-owner col-lg-1 d-none d-lg-table-cell">
 							@if (child.OwnerUserId is AppUserId childOwnerUserId) {
 								@Model.DescribeOwner(childOwnerUserId)
 							} else {
@@ -435,7 +450,7 @@
 								</span>
 							}
 						</td>
-						<td class="jt-col-active d-none d-md-table-cell">
+						<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">
 							<partial name="_ActiveSincePill"
 							         model="@(new ActiveSessionSummaryModel {
 								                ActiveSessions = childActions?.ActiveSessions ?? [],
@@ -447,13 +462,13 @@
 								                Paused = childActions?.IsPaused ?? false,
 							                })"/>
 						</td>
-						<td class="jt-col-cost text-end d-none d-md-table-cell">
+						<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">
 							@if (child.Cost is Money cost && child.AllocatedDuration is not null) {
 								@CostDisplay.Format(cost, child.AllocatedDuration)
 							}
 						</td>
-						<td class="jt-col-secondary d-none d-lg-table-cell">@(child.ArchivedAt is not null ? "yes" : "no")</td>
-						<td>
+						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@(child.ArchivedAt is not null ? "yes" : "no")</td>
+						<td class="col-2">
 							@if (childActions is not null) {
 								<partial name="_WorkRowActions" model="childActions"/>
 							}
@@ -476,20 +491,29 @@
 				<tr>
 					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
 					   archived row is flagged in place beside its name. *@
-					<th scope="col">Description</th>
-					<th scope="col" class="jt-col-secondary d-none d-lg-table-cell">Priority</th>
-					<th scope="col" class="jt-col-secondary d-none d-lg-table-cell">Deadline</th>
-					<th scope="col" class="jt-col-active d-none d-md-table-cell">Active</th>
-					<th scope="col" class="jt-col-cost text-end d-none d-md-table-cell">Cost</th>
+					<th scope="col" class="col-10 col-md-5 col-lg-3">Description</th>
+					@* "Pri": the cells below hold an abbreviated priority label, so the word "Priority"
+					   is wider than anything in its own column and holds the column open for nothing.
+					   The full name still rides along visually hidden, so it is never announced as
+					   a bare fragment. *@
+					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell"><span aria-hidden="true">Pri</span><span
+							class="visually-hidden">Priority</span></th>
+					<th scope="col" class="jt-col-secondary col-lg-2 col-xxl-1 d-none d-lg-table-cell">Deadline</th>
+					@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
+					   workers' names (the preview list below the count pill) need more than a twelfth of the
+					   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
+					   the column, staying at its "at least 3 of 12" floor rather than the 4 it held before. *@
+					<th scope="col" class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">Active</th>
+					<th scope="col" class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
 					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
 					   the width of the bar it labels, so with it visible the column can never narrow to
 					   the bar's own size however small the bar gets. Assistive tech still gets the name.
 					   d-none/d-xxl-table-cell: the bar itself is low-value background context (site.css),
 					   so it only earns space back once the viewport is wide enough to spare it. *@
-					<th scope="col" class="jt-col-span d-none d-xxl-table-cell">
+					<th scope="col" class="jt-col-span col-xxl-1 d-none d-xxl-table-cell">
 						<span class="visually-hidden">Position</span>
 					</th>
-					<th scope="col" class="text-end">Actions</th>
+					<th scope="col" class="col-2 text-end">Actions</th>
 				</tr>
 				</thead>
 				<tbody>
@@ -499,7 +523,7 @@
 						? null
 						: Model.WorkRowActionsFor(node.Id, "Start", "leafNodeId", node.Achievement, node.ArchivedAt is not null);
 					<tr>
-						<td class="jt-tree-cell" data-jt-depth="@node.Depth">
+						<td class="jt-tree-cell col-10 col-md-5 col-lg-3" data-jt-depth="@node.Depth">
 							<span class="jt-tree-guide" aria-hidden="true">
 								@for (var railLevel = 1; railLevel < node.Depth; ++railLevel) {
 									<span class="jt-tree-rail"></span>
@@ -525,10 +549,12 @@
 								<span class="jt-tree-text">
 									<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
 									<a class="jt-tree-name-link jt-preserve-whitespace" asp-page="/Jobs/Browse"
-									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Truncate(node.Description, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Truncate(node.Description, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>&#x2060;
 									@* Trails the name rather than leading it: unlike the blocked palm, an achievement
 									   is present on most leaves in a healthy tree, so it belongs where the eye lands
-									   after reading the row, not competing with the kind glyph for the leading slot. *@
+									   after reading the row, not competing with the kind glyph for the leading slot.
+									   The zero-width word joiner above keeps the marker attached to the title's final
+									   word at every column width without adding visible spacing. *@
 									<partial name="_AchievementIcon"
 									         model="@(new AchievementIconModel { Achievement = node.Achievement, ShowLabel = false })"/>
 									@if (node.HasUnexpandedChildren) {
@@ -548,12 +574,16 @@
 								</span>
 							</span>
 						</td>
-						<td class="jt-col-secondary d-none d-lg-table-cell">
+						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">
 							<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = node.Priority })"/>
 						</td>
-						<td class="jt-col-secondary d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
-							@(needed.HasValue ? InstantDisplay.FormatCompact(needed.Value, Model.ViewerZone, Model.Now) : null)</td>
-						<td class="jt-col-active d-none d-md-table-cell">
+						<td class="jt-col-secondary col-lg-2 col-xxl-1 d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
+							@if (needed is Instant neededInstant) {
+								<span
+									class="@(InstantDisplay.IsPast(neededInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
+							}
+						</td>
+						<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">
 							<partial name="_ActiveSincePill"
 							         model="@(new ActiveSessionSummaryModel {
 								                ActiveSessions = nodeActions?.ActiveSessions ?? [],
@@ -565,12 +595,12 @@
 								                Paused = nodeActions?.IsPaused ?? false,
 							                })"/>
 						</td>
-						<td class="jt-col-cost text-end d-none d-md-table-cell">
+						<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">
 							@if (node.Cost is Money cost && node.AllocatedDuration is not null) {
 								@CostDisplay.Format(cost, node.AllocatedDuration)
 							}
 						</td>
-						<td class="jt-col-span d-none d-xxl-table-cell">
+						<td class="jt-col-span col-xxl-1 d-none d-xxl-table-cell">
 							@* Geometry as SVG presentation attributes, not a `style` attribute: the CSP is
 							   `style-src 'self'` with no `'unsafe-inline'`, so an inline style is dropped
 							   and the bar silently collapses to nothing. The viewBox is 100 wide, so the
@@ -583,7 +613,7 @@
 								</svg>
 							</span>
 						</td>
-						<td>
+						<td class="col-2">
 							@if (nodeActions is not null) {
 								<partial name="_WorkRowActions" model="nodeActions"/>
 							}

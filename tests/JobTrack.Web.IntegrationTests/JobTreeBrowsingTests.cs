@@ -286,6 +286,27 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	/// <summary>
+	///     The subtree's own Deadline column follows the same overdue rule (InstantDisplay.IsPast,
+	///     jt-overdue) as Browse's record-view deadline and AwaitingProgress's Due column.
+	/// </summary>
+	public async Task The_subtree_deadline_column_renders_red_only_once_the_deadline_has_passed()
+	{
+		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.subtree-deadline");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, workerId, "Subtree deadline branch");
+		_ = await AddChildWithDeadlineAsync(branchId, workerId, "Overdue child", Instant.FromUtc(2020, 1, 1, 12, 0));
+		_ = await AddChildWithDeadlineAsync(branchId, workerId, "Future child", Instant.FromUtc(2030, 1, 1, 12, 0));
+		var authCookie = await SignInAsync("browse.subtree-deadline");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("class=\"jt-overdue\">1 Jan</span>", "a deadline that has already passed should render red");
+		body.Should().Contain("<span>1 Jan</span>", "a deadline still to come should not render red");
+	}
+
+	[Fact]
 	public async Task Browsing_a_direct_child_of_root_shows_root_once_in_the_breadcrumb()
 	{
 		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.breadcrumb");
@@ -381,6 +402,9 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("Inherited blockers");
 		body.Should().Contain("Order materials");
 		body.Should().Contain("Kitchen renovation");
+		body.Should().Contain("class=\"row g-3 align-items-center\"");
+		body.Should().Contain("class=\"col-12 col-md-6 d-flex align-items-center gap-3\"");
+		body.Should().NotContain("jt-blocker-row");
 	}
 
 	[Fact]
@@ -524,6 +548,20 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
+		});
+
+		return result.Id;
+	}
+
+	private async Task<JobNodeId> AddChildWithDeadlineAsync(JobNodeId parentId, AppUserId ownerId, string description, Instant neededFinish)
+	{
+		var result = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = bootstrappedAdminId!.Value, CorrelationId = Guid.NewGuid() },
+			ParentId = parentId,
+			Description = description,
+			OwnerUserId = ownerId,
+			Priority = Priority.Medium,
+			NeededFinish = neededFinish,
 		});
 
 		return result.Id;

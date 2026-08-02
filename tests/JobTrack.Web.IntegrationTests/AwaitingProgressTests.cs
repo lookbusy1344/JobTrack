@@ -110,7 +110,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("Fresh leaf awaiting assignment");
-		body.Should().Contain("None");
+		// No leaf work means no achievement recorded, which draws nothing beside the name -- not a
+		// word standing in for the absence, which would mark almost every fresh row on the list.
+		body.Should().NotContain("jt-achievement-icon");
 	}
 
 	[Fact]
@@ -572,9 +574,107 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		body.Should().Contain("<th class=\"jt-col-active d-none d-md-table-cell\">Active</th>");
-		body.Should().Contain(">Priority</th>");
+		body.Should().Contain("<th class=\"col-10 col-md-5 col-lg-4\" aria-label=\"Description\">Desc</th>");
+		body.Should().Contain("<th class=\"jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell\">Active</th>");
+		// No achievement column: at one twelfth it was narrower than its own heading at every width, so
+		// the state rides after the row's name instead, exactly as it does on Browse's subtree tables.
+		body.Should().NotContain("jt-col-achievement");
+		body.Should().NotContain(">Ach</th>");
+		body.Should().Contain("aria-label=\"Priority\">Pri</th>");
+		body.Should().Contain("aria-label=\"Deadline\">Due</th>");
 		body.Should().Contain("Active since");
+	}
+
+	[Fact]
+	/// <summary>
+	/// Due used to render the full "d MMM yyyy HH:mm" stamp regardless of how far away the deadline
+	/// was -- too wide for a column that only has a twelfth of the row. It now follows the same
+	/// InstantDisplay.FormatCompact rule as Browse's own Deadline column and the "Active since" pill:
+	/// a bare date (no year, no time) once the deadline falls on a different calendar day.
+	/// </summary>
+	public async Task Due_shows_a_bare_date_for_a_deadline_on_a_different_day()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.due-compact-date");
+		var rootId = bootstrappedRootId!.Value;
+		var deadline = Instant.FromUtc(2030, 1, 1, 12, 0);
+		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Due compact date leaf", adminId, deadline);
+		var authCookie = await SignInAsync("awaiting.due-compact-date");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("1 Jan", "a deadline on a different day should show its bare date");
+		body.Should().NotContain("1 Jan 2030 12:00", "the full date-and-time stamp is too wide for the Due column");
+	}
+
+	[Fact]
+	/// <summary>
+	/// The other half of the same rule: a deadline due today shows only the time-of-day, not a date --
+	/// the calendar date is already implied by "today". Checked as the absence of the full stamp's
+	/// year rather than an exact HH:mm match, since the two clock reads (seeding "now", then rendering
+	/// the page) are not guaranteed to land in the same minute.
+	/// </summary>
+	public async Task Due_shows_a_bare_time_for_a_deadline_due_today()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.due-compact-time");
+		var rootId = bootstrappedRootId!.Value;
+		var dueToday = SystemClock.Instance.GetCurrentInstant();
+		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Due compact time leaf", adminId, dueToday);
+		var authCookie = await SignInAsync("awaiting.due-compact-time");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var bareTime = dueToday.InZone(DateTimeZone.Utc).TimeOfDay.ToString("HH:mm", CultureInfo.InvariantCulture);
+		body.Should().Contain(bareTime, "a deadline due today should show a bare time");
+		var todayYear = dueToday.InZone(DateTimeZone.Utc).Year.ToString(CultureInfo.InvariantCulture);
+		body.Should().NotContain($"{todayYear} {bareTime}",
+			"a deadline due today should not show the full date-and-time stamp");
+	}
+
+	[Fact]
+	/// <summary>
+	///     Due follows the same overdue rule (InstantDisplay.IsPast, jt-overdue) as Browse's own
+	///     Deadline column and record-view deadline.
+	/// </summary>
+	public async Task Due_renders_red_only_once_the_deadline_has_passed()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.due-overdue");
+		var rootId = bootstrappedRootId!.Value;
+		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Overdue due leaf", adminId, Instant.FromUtc(2020, 1, 1, 12, 0));
+		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Future due leaf", adminId, Instant.FromUtc(2030, 1, 1, 12, 0));
+		var authCookie = await SignInAsync("awaiting.due-overdue");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("class=\"jt-overdue\">1 Jan</span>", "a deadline that has already passed should render red");
+		body.Should().Contain("<span>1 Jan</span>", "a deadline still to come should not render red");
+	}
+
+	[Fact]
+	/// <summary>
+	/// The achievement rides after the row's name, as it does on Browse's subtree tables, and a leaf
+	/// with no achievement recorded draws nothing at all rather than a word standing in for absence.
+	/// </summary>
+	public async Task An_achievement_follows_the_row_name_and_none_draws_nothing()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.achievementinline");
+		var rootId = bootstrappedRootId!.Value;
+		var started = await AddLeafWithWorkAsync(rootId, workerId, "Started leaf", adminId);
+		await SetAchievementAsync(started.JobNodeId, Achievement.InProgress, adminId, started.Version);
+		_ = await AddChildAsync(rootId, workerId, "Untouched leaf", adminId);
+		var authCookie = await SignInAsync("awaiting.achievementinline");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var startedIndex = body.IndexOf("Started leaf", StringComparison.Ordinal);
+		var iconIndex = body.IndexOf("jt-achievement-icon--in-progress", StringComparison.Ordinal);
+		startedIndex.Should().BeGreaterThan(0);
+		iconIndex.Should().BeGreaterThan(startedIndex);
+		body.Should().Contain("Untouched leaf");
+		body.Should().NotContain(">None</span>");
 	}
 
 	[Fact]
@@ -862,6 +962,21 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
+		});
+
+		return result.Id;
+	}
+
+	private async Task<JobNodeId> AddChildWithDeadlineAsync(
+		JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId, Instant neededFinish)
+	{
+		var result = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			ParentId = parentId,
+			Description = description,
+			OwnerUserId = ownerId,
+			Priority = Priority.Medium,
+			NeededFinish = neededFinish,
 		});
 
 		return result.Id;

@@ -1250,13 +1250,6 @@ fieldset legend {
 .jt-tree-cell {
     position: relative;
 
-    /* Names are the reason to look at this table, so the column asks for room to hold one at the
-       depths that matter -- but only as much as the viewport can actually spare. `min-width` would
-       be a floor the table could not go below, forcing the page into the horizontal scroll this
-       layout no longer has anywhere to put; `width` is a preference table layout satisfies when
-       there is room and shrinks when there isn't. The two-line clamp below bounds what wrapping
-       can do to the stepped silhouette. */
-    width: 20rem;
     vertical-align: top;
 }
 
@@ -1270,8 +1263,18 @@ fieldset legend {
     gap: var(--jt-space-2);
 }
 
+/* Clamp the whole textual run, rather than making the link itself an atomic inline box. The link's
+   text can then wrap normally and every trailing marker flows directly after its final glyph; an
+   atomic two-line link reserves the width of its longest line and leaves a conspicuous hole before
+   a marker following a shorter final line. `nowrap` governs only the loose whitespace between the
+   children -- `.jt-preserve-whitespace` still lets the link's own text wrap. */
 .jt-tree-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 .jt-tree-cell[data-jt-depth="1"] {
@@ -1807,17 +1810,24 @@ nav[aria-label="breadcrumb"] li + li::before {
     overflow: visible;
 }
 
-/* Visually clamps a node's name to that same two-line budget with an ellipsis -- the character-count
-   clip `JobNodeDisplay.Title`/`Truncate` already applies is a data-hygiene bound, not a guarantee of
-   fit, since the actual fit depends on the column's rendered width. `-webkit-inline-box`, not
-   `-webkit-box`: the achievement icon that follows this link in the markup is its inline sibling, and
-   the block-level form of this box forces a line break before/after itself, dropping that icon onto
-   its own line below the name instead of right after it. */
-.jt-browse-children-table a.jt-preserve-whitespace {
+/* Flat search rows do not have `.jt-tree-text`, so their direct-child link owns the two-line clamp.
+   Subtree rows clamp the complete title-and-markers run above instead. */
+.jt-browse-children-table td > a.jt-preserve-whitespace {
     display: -webkit-inline-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+/* Flat-row links remain atomic clamped boxes; bottom alignment keeps their trailing badges level
+   with the final line. It is harmless for subtree markers, which now participate in that line. */
+.jt-browse-children-table .jt-achievement-icon,
+.jt-browse-children-table .jt-tree-more {
+    vertical-align: bottom;
+}
+
+.jt-browse-children-table .jt-tree-text .jt-tree-flag {
+    vertical-align: bottom;
 }
 
 .table tbody tr {
@@ -1845,6 +1855,21 @@ nav[aria-label="breadcrumb"] li + li::before {
 .table td.jt-col-secondary,
 .table td.jt-col-cost {
     font-size: var(--jt-font-size-sm);
+}
+
+/* A cost reads "£1,234.56 / 12h 30m" — four break opportunities, in a column that competes for width
+   with a description whose own text wraps freely. Under auto table layout the browser satisfies each
+   column's min-content width first, so the most breakable column is the one it squeezes: left to
+   wrap, cost collapses toward a character per line at mid widths while the description keeps its
+   room. Holding the pair atomic makes the whole string cost's min-content width, so the column
+   actually occupies the share its col-* allocation asks for.
+   Qualified on .d-md-table-cell rather than applied to every .jt-col-cost: that is exactly the set of
+   cost columns hidden below md, where there is room to spare. Prerequisites keeps its cost visible at
+   phone width instead, and there an unbreakable string would be wider than the whole column and push
+   the table into horizontal overflow — so that one is left free to wrap. */
+.table th.jt-col-cost.d-md-table-cell,
+.table td.jt-col-cost.d-md-table-cell {
+    white-space: nowrap;
 }
 
 /* Owner carries even less reading weight than the other secondary columns above (Archived,
@@ -1890,6 +1915,17 @@ nav[aria-label="breadcrumb"] li + li::before {
     font-weight: 700;
 }
 
+/* ---- Overdue deadline ----------------------------------------------------------------------- */
+
+/* A rendered "start by"/"finish by" deadline (InstantDisplay.IsPast) that has already passed --
+   jt-red-600, the same brighter red .jt-priority--high/--urgent use and for the same reason: against
+   this palette's warm orange saturation, the darker jt-red-700 reserved for validation/danger reads
+   too close to brown/orange at a glance. Colour only, no weight -- unlike priority this sits inline in
+   an ordinary table cell or sentence, not a label meant to be scanned for on its own. */
+.jt-overdue {
+    color: var(--jt-red-600);
+}
+
 /* ---- Page head + lede --------------------------------------------------------------------- */
 
 .jt-page-head h1 {
@@ -1930,8 +1966,7 @@ nav[aria-label="breadcrumb"] li + li::before {
     max-width: none;
 }
 
-/* Alignment/gap come from Bootstrap's align-items-center gap-3 on each <li>; layout itself is
-   per-list (flex, grid, …). */
+/* Row layout, alignment, and gaps come from Bootstrap utilities in the markup. */
 .jt-list > li {
     padding: 0.75rem 1rem;
     background: var(--jt-surface);
@@ -1939,13 +1974,6 @@ nav[aria-label="breadcrumb"] li + li::before {
     border-radius: var(--bs-border-radius-sm);
     box-shadow: var(--jt-shadow-sm);
     margin-bottom: var(--jt-space-2);
-}
-
-/* Inherited-blockers rows: icon hugs the required-node title (left-aligned), then "declared on"
-   and the declaring-node title each get their own column so every row lines up like a table,
-   without Bootstrap's justify-content-between spreading the middle content out. */
-.jt-blocker-row {
-    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 /* A single-purpose, one-action page (create/edit/move/decompose a node, change a password,

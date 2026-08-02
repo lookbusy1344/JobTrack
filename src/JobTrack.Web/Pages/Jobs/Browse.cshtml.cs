@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages.Jobs;
 
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Abstractions;
 using Application;
@@ -66,7 +67,9 @@ public sealed class BrowseModel(
 	[BindProperty(SupportsGet = true)]
 	public bool UnassignedOnly { get; init; }
 
-	[BindProperty(SupportsGet = true)] public JobArchiveFilter ArchiveFilter { get; init; } = JobArchiveFilter.ActiveOnly;
+	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Archive filter")]
+	public JobArchiveFilter ArchiveFilter { get; init; } = JobArchiveFilter.ActiveOnly;
 
 	/// <summary>
 	///     The subtree view's own "Show archived" toggle -- unlike <see cref="ArchiveFilter" /> (which
@@ -80,7 +83,9 @@ public sealed class BrowseModel(
 	[BindProperty(SupportsGet = true)]
 	public bool ShowArchived { get; set; }
 
-	[BindProperty(SupportsGet = true)] public string? SearchText { get; init; }
+	[BindProperty(SupportsGet = true)]
+	[Display(Name = "Search text")]
+	public string? SearchText { get; init; }
 
 	/// <summary>
 	///     Set by the toolbar's "Search" link to land on the blank search form

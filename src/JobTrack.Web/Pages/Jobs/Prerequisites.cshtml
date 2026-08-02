@@ -114,29 +114,33 @@
 				<div class="jt-table-block">
 					<table class="table">
 						<thead>
+						@* Five columns never fit a phone, and two of them are node names. Description and
+						   Dependency — the relationship this table exists to express — plus Cost survive at
+						   every width; Kind returns at md and Archived at lg, both of them one-glyph or
+						   one-word columns whose absence costs nothing on a narrow screen. *@
 						<tr>
-							<th>Description</th>
-							<th>Kind</th>
-							<th>Cost</th>
-							<th>Archived</th>
-							<th>Dependency</th>
+							<th class="col-7 col-md-4">Description</th>
+							<th class="col-md-1 d-none d-md-table-cell">Kind</th>
+							<th class="jt-col-cost col-2">Cost</th>
+							<th class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">Archived</th>
+							<th class="col-3 col-md-5 col-lg-4">Dependency</th>
 						</tr>
 						</thead>
 						<tbody>
 						@foreach (var node in Model.SearchResults) {
 							<tr>
-								<td>
+								<td class="col-7 col-md-4">
 									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node)</a>
 								</td>
-								<td>
+								<td class="col-md-1 d-none d-md-table-cell">
 									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, ShowLabel = false })"/>
 								</td>
-								<td>@(node.Cost is Money cost && node.AllocatedDuration is not null
+								<td class="jt-col-cost col-2">@(node.Cost is Money cost && node.AllocatedDuration is not null
 										? CostDisplay.Format(cost, node.AllocatedDuration)
 										: null)</td>
-								<td>@(node.ArchivedAt is not null ? "yes" : "no")</td>
-								<td>
+								<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@(node.ArchivedAt is not null ? "yes" : "no")</td>
+								<td class="col-3 col-md-5 col-lg-4">
 									@if (Model.ExistingRequiresIds.Contains(node.Id) || Model.ExistingRequiredByIds.Contains(node.Id)) {
 										<span class="jt-tag">Linked</span>
 									} else {

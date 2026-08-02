@@ -169,7 +169,8 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	[Fact]
 	public async Task Browsing_a_node_with_a_deadline_shows_it_next_to_priority()
 	{
-		var deadline = Instant.FromUtc(2026, 7, 26, 12, 0);
+		// Far enough in the future to stay non-overdue (no jt-overdue class) for the life of this test.
+		var deadline = Instant.FromUtc(2030, 7, 26, 12, 0);
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
 			ParentId = rootId,
@@ -183,7 +184,44 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var response = await GetAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
-		body.Should().Contain("class=\"jt-priority jt-priority--high\">High</span> (deadline 26 Jul 2026)");
+		body.Should().Contain("class=\"jt-priority jt-priority--high\">High</span> (deadline <span>26 Jul 2030</span>)");
+	}
+
+	[Fact]
+	/// <summary>
+	///     A deadline that has already passed renders red (jt-overdue, InstantDisplay.IsPast) so it
+	///     stands out from an ordinary future one -- checked both ways round on the same field.
+	/// </summary>
+	public async Task A_past_deadline_renders_red_and_a_future_one_does_not()
+	{
+		var pastDeadline = Instant.FromUtc(2020, 1, 1, 12, 0);
+		var pastBranch = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Overdue deadline branch",
+			OwnerUserId = adminId,
+			Priority = Priority.High,
+			NeededFinish = pastDeadline,
+		});
+		var futureDeadline = Instant.FromUtc(2030, 1, 1, 12, 0);
+		var futureBranch = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Future deadline branch",
+			OwnerUserId = adminId,
+			Priority = Priority.High,
+			NeededFinish = futureDeadline,
+		});
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var pastResponse = await GetAsync($"/Jobs/Browse?nodeId={pastBranch.Id.Value}", authCookie);
+		var pastBody = await ReadNormalizedBodyAsync(pastResponse);
+		pastBody.Should().Contain("class=\"jt-overdue\">1 Jan 2020</span>", "a deadline that has already passed should render red");
+
+		var futureResponse = await GetAsync($"/Jobs/Browse?nodeId={futureBranch.Id.Value}", authCookie);
+		var futureBody = await ReadNormalizedBodyAsync(futureResponse);
+		futureBody.Should().Contain("<span>1 Jan 2030</span>", "a deadline still to come should not render red");
+		futureBody.Should().NotContain("jt-overdue");
 	}
 
 	[Fact]
@@ -195,7 +233,8 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
-		body.Should().Contain("class=\"jt-priority jt-priority--medium\">Medium</span>");
+		// Priorities render in their short form everywhere, node detail included.
+		body.Should().Contain("class=\"jt-priority jt-priority--medium\">Med</span>");
 		body.Should().NotContain("(deadline");
 	}
 

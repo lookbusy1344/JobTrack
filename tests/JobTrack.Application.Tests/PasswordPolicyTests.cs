@@ -6,19 +6,14 @@ using AwesomeAssertions;
 public sealed class PasswordPolicyTests
 {
 	[Fact]
-	public void IsSatisfiedBy_rejects_a_null_password()
-	{
-		PasswordPolicy.IsSatisfiedBy(null).Should().BeFalse();
-	}
+	public void IsSatisfiedBy_rejects_a_null_password() => PasswordPolicy.IsSatisfiedBy(null).Should().BeFalse();
 
 	[Theory]
 	[InlineData("")]
 	[InlineData("short-pass1")]
 	[InlineData("fourteen-chars")]
-	public void IsSatisfiedBy_rejects_a_password_shorter_than_the_minimum(string password)
-	{
+	public void IsSatisfiedBy_rejects_a_password_shorter_than_the_minimum(string password) =>
 		PasswordPolicy.IsSatisfiedBy(password).Should().BeFalse();
-	}
 
 	[Fact]
 	public void IsSatisfiedBy_accepts_a_password_exactly_at_the_minimum_length()
@@ -45,10 +40,8 @@ public sealed class PasswordPolicyTests
 	}
 
 	[Fact]
-	public void IsSatisfiedBy_accepts_a_password_with_spaces_and_no_digit_or_letter_case_mix()
-	{
+	public void IsSatisfiedBy_accepts_a_password_with_spaces_and_no_digit_or_letter_case_mix() =>
 		PasswordPolicy.IsSatisfiedBy("a passphrase of only lowercase words").Should().BeTrue();
-	}
 
 	[Fact]
 	public void IsSatisfiedBy_counts_unicode_code_points_not_utf16_code_units()

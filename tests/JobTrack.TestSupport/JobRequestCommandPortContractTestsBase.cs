@@ -334,6 +334,35 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var mine = await port.GetMyRequestsAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
 
 		mine.Select(r => r.JobNodeId).Should().Equal(second.JobNodeId, first.JobNodeId);
+		mine.Select(r => r.Status).Should().OnlyContain(status => status == RequesterStatus.Submitted);
+	}
+
+	[Fact]
+	public async Task My_requests_derives_each_status_from_the_requests_current_subtree()
+	{
+		var (_, requesterId) = await SeedRootAndRequesterAsync();
+		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var holdingAreaId = await SeedHoldingAreaAsync(null, jobManagerId, true);
+		var requestPort = CreateCommandPort(database.ConnectionString);
+		var submitted = await requestPort.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
+		var nodeCommandPort = CreateJobNodeCommandPort(database.ConnectionString);
+		var jobManagerContext = new CommandContext { Actor = jobManagerId, CorrelationId = Guid.NewGuid() };
+		_ = await nodeCommandPort.AttachLeafWorkAsync(new() { Context = jobManagerContext, JobNodeId = submitted.JobNodeId });
+		_ = await nodeCommandPort.DecomposeWorkedLeafAsync(new() {
+			Context = jobManagerContext,
+			LeafNodeId = submitted.JobNodeId,
+			Version = submitted.Version,
+			BranchDescription = "Printer troubleshooting",
+			ExistingWorkDescription = "Diagnose the fault",
+			NewChildren = [
+				new() { Description = "Order replacement part", OwnerUserId = jobManagerId, Priority = Priority.Medium },
+			],
+		});
+
+		var mine = await requestPort.GetMyRequestsAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+
+		mine.Should().ContainSingle().Which.Status.Should().Be(RequesterStatus.Waiting,
+			"a decomposed request's public status is derived from its childless descendants, not its branch anchor");
 	}
 
 	[Fact]
@@ -360,6 +389,20 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var eligible = await port.GetEligibleHoldingAreasAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
 
 		eligible.Select(h => h.Id).Should().Equal(globalId);
+	}
+
+	[Fact]
+	public async Task An_eligible_holding_area_carries_the_description_of_the_node_it_anchors_requests_under()
+	{
+		var (_, requesterId) = await SeedRootAndRequesterAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		_ = await SeedHoldingAreaAsync(null, null, true);
+
+		var eligible = await port.GetEligibleHoldingAreasAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+
+		var holdingArea = eligible.Should().ContainSingle().Which;
+		holdingArea.JobNodeDescription.Should().Be("Holding area", "a requester chooses between job nodes, not configured labels");
+		holdingArea.Name.Should().Be("IT Intake", "the configured label stays available to staff-facing callers");
 	}
 
 	[Fact]

@@ -154,9 +154,13 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 
 	public sealed class CorrectInput
 	{
-		[Required] public string IanaTimeZone { get; set; } = "Etc/UTC";
+		[Required]
+		[Display(Name = "IANA time zone")]
+		public string IanaTimeZone { get; set; } = "Etc/UTC";
 
-		[Required] public DateOnly EffectiveStart { get; set; }
+		[Required]
+		[Display(Name = "Effective start")]
+		public DateOnly EffectiveStart { get; set; }
 
 		public DateOnly? EffectiveEnd { get; set; }
 

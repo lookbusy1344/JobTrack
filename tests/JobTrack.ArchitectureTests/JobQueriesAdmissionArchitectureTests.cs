@@ -64,7 +64,7 @@ public sealed class JobQueriesAdmissionArchitectureTests
 
 		violations.Should().BeEmpty(
 			"every public IJobQueries member must authenticate the actor before returning data (remediation plan " +
-			$"§2.4) -- add a call to EnsureActorMayBrowseJobDataAsync (or an equivalent actor-reloading port call) " +
+			"§2.4) -- add a call to EnsureActorMayBrowseJobDataAsync (or an equivalent actor-reloading port call) " +
 			$"to: {string.Join(", ", violations)}");
 	}
 

@@ -172,9 +172,10 @@ public sealed class PersonalAccessTokensModel(
 
 		private const int MaxLifetimeDaysForValidationAttribute = 365;
 
-		[Required][MaxLength(200)] public string Label { get; init; } = string.Empty;
+		[Required][MaxCodePointLength(200)] public string Label { get; init; } = string.Empty;
 
 		[Range(1, MaxLifetimeDaysForValidationAttribute)]
+		[Display(Name = "Lifetime (days)")]
 		public int LifetimeDays { get; init; } = DefaultLifetimeDays;
 	}
 }

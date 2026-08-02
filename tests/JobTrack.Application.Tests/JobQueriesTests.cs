@@ -2450,7 +2450,13 @@ public sealed class JobQueriesTests
 	///     near-identical test per every public <c>IJobQueries</c> member.
 	/// </summary>
 	public static TheoryData<string> JobDataBrowseCallNames() =>
-		new() { "GetJobNodeAsync", "GetAwaitingProgressAsync", "GetLeafWorkAsync", "GetPrerequisitesAsync", "GetEmployeeDirectoryAsync" };
+		new() {
+			"GetJobNodeAsync",
+			"GetAwaitingProgressAsync",
+			"GetLeafWorkAsync",
+			"GetPrerequisitesAsync",
+			"GetEmployeeDirectoryAsync",
+		};
 
 	private static Task InvokeJobDataBrowseCallAsync(string caseName, JobQueries sut, CommandContext context) =>
 		caseName switch {

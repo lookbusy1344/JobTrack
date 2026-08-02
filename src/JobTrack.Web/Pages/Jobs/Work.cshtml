@@ -58,7 +58,7 @@
 				<span class="status-pill status-pill-closed">Closed</span>
 			}
 			@if (isPaused && !isArchived) {
-				<partial name="_PausedPill"/>
+				<partial name="_PausedPill" model="false"/>
 			}
 			@if (isArchived) {
 				<span class="status-pill status-pill-closed">Archived</span>

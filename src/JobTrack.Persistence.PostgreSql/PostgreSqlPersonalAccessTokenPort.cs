@@ -18,8 +18,8 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPort
 {
-	private readonly IClock clock;
 	private readonly NpgsqlDataSource authenticationDataSource;
+	private readonly IClock clock;
 	private readonly NpgsqlDataSource managementDataSource;
 
 	public PostgreSqlPersonalAccessTokenPort(NpgsqlDataSource dataSource, IClock clock)
@@ -51,7 +51,7 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 		PersonalAccessTokenPolicy.EnsureValidExpiry(request.CreatedAt, request.ExpiresAt);
 
 		var tokenId = await PostgreSqlPersonalAccessTokenFunctions.IssueAsync(
-			context, request.TargetUserId, request.TokenHash, request.Label, request.CreatedAt, request.ExpiresAt, cancellationToken)
+				context, request.TargetUserId, request.TokenHash, request.Label, request.CreatedAt, request.ExpiresAt, cancellationToken)
 			.ConfigureAwait(false);
 
 		AuditEventWriter.Add(

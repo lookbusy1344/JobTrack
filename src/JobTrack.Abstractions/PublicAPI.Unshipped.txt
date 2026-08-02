@@ -83,6 +83,9 @@ JobTrack.Abstractions.HourlyRate.HourlyRate(decimal amountPerHour) -> void
 JobTrack.Abstractions.HourlyRate.ToString(string? format, System.IFormatProvider? formatProvider) -> string!
 JobTrack.Abstractions.InvariantViolationException
 JobTrack.Abstractions.InvariantViolationException.ConstraintId.get -> string!
+JobTrack.Abstractions.MaxCodePointLengthAttribute
+JobTrack.Abstractions.MaxCodePointLengthAttribute.MaxCodePointLengthAttribute(int maximumLength) -> void
+JobTrack.Abstractions.MaxCodePointLengthAttribute.MaximumLength.get -> int
 JobTrack.Abstractions.InvariantViolationException.InvariantViolationException() -> void
 JobTrack.Abstractions.InvariantViolationException.InvariantViolationException(string! constraintId, string! message) -> void
 JobTrack.Abstractions.InvariantViolationException.InvariantViolationException(string! constraintId, string! message, System.Exception! innerException) -> void
@@ -185,6 +188,7 @@ JobTrack.Abstractions.ScheduleVersionId.ScheduleVersionId() -> void
 JobTrack.Abstractions.ScheduleVersionId.ScheduleVersionId(long Value) -> void
 JobTrack.Abstractions.ScheduleVersionId.Value.get -> long
 JobTrack.Abstractions.ScheduleVersionId.Value.init -> void
+JobTrack.Abstractions.TextLength
 JobTrack.Abstractions.UnknownStoredTimeZoneException
 JobTrack.Abstractions.UnknownStoredTimeZoneException.UnknownStoredTimeZoneException() -> void
 JobTrack.Abstractions.UnknownStoredTimeZoneException.UnknownStoredTimeZoneException(string! message) -> void
@@ -218,6 +222,8 @@ override JobTrack.Abstractions.HourlyRate.GetHashCode() -> int
 override JobTrack.Abstractions.HourlyRate.ToString() -> string!
 override JobTrack.Abstractions.JobNodeId.GetHashCode() -> int
 override JobTrack.Abstractions.JobRequestNoteId.GetHashCode() -> int
+override JobTrack.Abstractions.MaxCodePointLengthAttribute.FormatErrorMessage(string! name) -> string!
+override JobTrack.Abstractions.MaxCodePointLengthAttribute.IsValid(object? value) -> bool
 override JobTrack.Abstractions.Money.GetHashCode() -> int
 override JobTrack.Abstractions.Money.ToString() -> string!
 override JobTrack.Abstractions.NodeRateOverrideId.GetHashCode() -> int
@@ -273,6 +279,7 @@ static JobTrack.Abstractions.ScheduleExceptionId.operator !=(JobTrack.Abstractio
 static JobTrack.Abstractions.ScheduleExceptionId.operator ==(JobTrack.Abstractions.ScheduleExceptionId left, JobTrack.Abstractions.ScheduleExceptionId right) -> bool
 static JobTrack.Abstractions.ScheduleVersionId.operator !=(JobTrack.Abstractions.ScheduleVersionId left, JobTrack.Abstractions.ScheduleVersionId right) -> bool
 static JobTrack.Abstractions.ScheduleVersionId.operator ==(JobTrack.Abstractions.ScheduleVersionId left, JobTrack.Abstractions.ScheduleVersionId right) -> bool
+static JobTrack.Abstractions.TextLength.CodePointCount(string? value) -> int
 static JobTrack.Abstractions.UserCostRateId.operator !=(JobTrack.Abstractions.UserCostRateId left, JobTrack.Abstractions.UserCostRateId right) -> bool
 static JobTrack.Abstractions.UserCostRateId.operator ==(JobTrack.Abstractions.UserCostRateId left, JobTrack.Abstractions.UserCostRateId right) -> bool
 static JobTrack.Abstractions.WorkSessionId.operator !=(JobTrack.Abstractions.WorkSessionId left, JobTrack.Abstractions.WorkSessionId right) -> bool

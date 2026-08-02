@@ -107,15 +107,15 @@
 		<table class="table">
 			<thead>
 			<tr>
-				<th scope="col">Description</th>
-				<th scope="col" class="text-end">Time worked</th>
-				<th scope="col">Last updated</th>
+				<th scope="col" class="col-6">Description</th>
+				<th scope="col" class="col-2 text-end">Time worked</th>
+				<th scope="col" class="col-4">Last updated</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var row in Model.OrderedSubtree) {
 				<tr>
-					<td class="jt-tree-cell" data-jt-depth="@row.Depth">
+					<td class="jt-tree-cell col-6" data-jt-depth="@row.Depth">
 						@if (row.Depth > 0) {
 							<span class="jt-tree-guide" aria-hidden="true">
 								@for (var railLevel = 1; railLevel < row.Depth; ++railLevel) {
@@ -130,14 +130,20 @@
 							</svg>
 							<span class="jt-tree-text">
 								<span class="visually-hidden">Level @row.Depth, @KindNoun(row.Kind).</span>
-								<span class="jt-preserve-whitespace">@JobNodeDisplay.Truncate(
-										row.Node.Description, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
-								<partial name="_RequesterStatusIcon" model="@row.Node.Status"/>
+								@* Description then node id, clipped at the shared row budget — the same title form
+								   Browse's child nodes and Awaiting Progress use, so a requester quoting a job in a
+								   ticket or a phone call names it exactly as staff do. *@
+								<span class="jt-preserve-whitespace">@JobNodeDisplay.Title(
+										row.Node.Description, row.Node.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>&#x2060;
+								@* Keep the requester-status marker attached to the title's final word as the
+								   Bootstrap column allocation changes across breakpoints. *@
+								<partial name="_RequesterStatusIcon"
+								         model="@(new RequesterStatusIconModel { Status = row.Node.Status, ShowLabel = false })"/>
 							</span>
 						</span>
 					</td>
-					<td class="text-end">@row.Node.AllocatedDuration</td>
-					<td>@InstantDisplay.Format(row.Node.LastUpdatedAt, Model.ViewerZone)</td>
+					<td class="col-2 text-end">@row.Node.AllocatedDuration</td>
+					<td class="col-4">@InstantDisplay.Format(row.Node.LastUpdatedAt, Model.ViewerZone)</td>
 				</tr>
 			}
 			</tbody>
