@@ -169,20 +169,6 @@ internal sealed class PostgreSqlWorkSessionQueryPort : IWorkSessionQueryPort
 		};
 	}
 
-	/// <summary>
-	///     One session's raw columns as projected by the concurrency queries. The clip to <c>asOf</c> and
-	///     the <see cref="WorkInterval" /> construction happen on materialized rows rather than in the
-	///     expression tree, so the interval type's own invariant is enforced by its constructor instead
-	///     of being pushed into SQL.
-	/// </summary>
-	private sealed record ConcurrentSessionRow(
-		WorkSessionId Id, JobNodeId NodeId, AppUserId WorkedByUserId, Instant StartedAt, Instant? FinishedAt)
-	{
-		public ConcurrentWorkSession ToSession(Instant asOf) =>
-			new(Id, NodeId, WorkedByUserId,
-				new WorkInterval(StartedAt, FinishedAt is Instant finishedAt && finishedAt < asOf ? finishedAt : asOf));
-	}
-
 	private PostgreSqlJobTrackDbContext CreateContext()
 	{
 		var optionsBuilder = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
@@ -208,5 +194,23 @@ internal sealed class PostgreSqlWorkSessionQueryPort : IWorkSessionQueryPort
 			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
+	}
+
+	/// <summary>
+	///     One session's raw columns as projected by the concurrency queries. The clip to <c>asOf</c> and
+	///     the <see cref="WorkInterval" /> construction happen on materialized rows rather than in the
+	///     expression tree, so the interval type's own invariant is enforced by its constructor instead
+	///     of being pushed into SQL.
+	/// </summary>
+	private sealed record ConcurrentSessionRow(
+		WorkSessionId Id,
+		JobNodeId NodeId,
+		AppUserId WorkedByUserId,
+		Instant StartedAt,
+		Instant? FinishedAt)
+	{
+		public ConcurrentWorkSession ToSession(Instant asOf) =>
+			new(Id, NodeId, WorkedByUserId,
+				new(StartedAt, FinishedAt is Instant finishedAt && finishedAt < asOf ? finishedAt : asOf));
 	}
 }

@@ -149,7 +149,7 @@ public sealed class JobQueriesConcurrentWorkTests
 	[Fact]
 	public async Task A_nonexistent_job_throws()
 	{
-		var sut = CreateSut(NodePortWith(SubjectId), new FakeWorkSessionQueryPort());
+		var sut = CreateSut(NodePortWith(SubjectId), new());
 
 		var act = () => sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = new(9999) });
 
@@ -159,7 +159,7 @@ public sealed class JobQueriesConcurrentWorkTests
 	[Fact]
 	public async Task A_requester_may_not_read_concurrent_work()
 	{
-		var sut = CreateSut(NodePortWith(SubjectId), new FakeWorkSessionQueryPort(), EmployeeRole.Requester);
+		var sut = CreateSut(NodePortWith(SubjectId), new(), EmployeeRole.Requester);
 
 		var act = () => sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = SubjectId });
 
@@ -169,7 +169,7 @@ public sealed class JobQueriesConcurrentWorkTests
 	[Fact]
 	public async Task A_null_request_is_rejected()
 	{
-		var sut = CreateSut(NodePortWith(SubjectId), new FakeWorkSessionQueryPort());
+		var sut = CreateSut(NodePortWith(SubjectId), new());
 
 		var act = () => sut.GetConcurrentWorkAsync(null!);
 

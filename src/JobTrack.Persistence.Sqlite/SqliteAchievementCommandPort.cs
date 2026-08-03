@@ -89,7 +89,7 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 
 		if (leafWork.Achievement == Achievement.InProgress || AchievementTransitions.IsCompletedState(leafWork.Achievement)) {
 			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
-				context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+					context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
 				.ConfigureAwait(false);
 		}
 

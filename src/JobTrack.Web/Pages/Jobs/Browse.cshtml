@@ -150,7 +150,12 @@
 				   aggregation is the future branch case. The link and its single leading space stay on the
 				   span's own line: a line break here renders as further whitespace beside the figure. *@
 				<dd class="col-12 col-sm-8 mb-0"><span class="jt-amount">@CostDisplay.FormatField(
-							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span>@if (Model.CurrentNode.Node.Kind == NodeKind.Leaf) {<text> <a class="jt-value-aside" asp-page="/Jobs/ConcurrentWork" asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Info</a></text>}</dd>
+							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span>
+					@if (Model.CurrentNode.Node.Kind == NodeKind.Leaf) {
+						<text><a class="jt-value-aside" asp-page="/Jobs/ConcurrentWork"
+						         asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Info</a></text>
+					}
+				</dd>
 			</div>
 		}
 		@if (Model.CurrentNodeAchievement is Achievement currentAchievement) {
@@ -515,7 +520,8 @@
 					@* Both spans stay on one line: a wrap inside the second tag puts a newline and tabs into
 					   the rendered attribute list, which is invisible on the page but is exactly what the
 					   markup assertion in BrowseWorkSessionTests reads. *@
-					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell"><span aria-hidden="true">Pri</span><span class="visually-hidden">Priority</span></th>
+					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell"><span aria-hidden="true">Pri</span><span
+							class="visually-hidden">Priority</span></th>
 					<th scope="col" class="jt-col-secondary col-lg-2 col-xxl-1 d-none d-lg-table-cell">Deadline</th>
 					@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
 					   workers' names (the preview list below the count pill) need more than a twelfth of the
@@ -680,7 +686,13 @@
 		   .btn's 600 weight from the design language, which read heavier than the text around it; the
 		   utility wins on !important, so this stays a class rather than a CSS override. *@
 		@if (emptyStartActions is not null && !emptyStartActions.IsStartClosed) {
-			<text>Start a work </text><form method="post" asp-page-handler="Start" class="d-inline">@foreach (var field in emptyStartActions.StartFields) {<input type="hidden" name="@field.Key" value="@field.Value"/>}<button type="submit" class="btn btn-link p-0 align-baseline fw-normal">session</button></form><text>, or create a </text>
+			<text>Start a work </text>
+			<form method="post" asp-page-handler="Start" class="d-inline">@foreach (var field in emptyStartActions.StartFields) {
+					<input type="hidden" name="@field.Key" value="@field.Value"/>
+				}
+				<button type="submit" class="btn btn-link p-0 align-baseline fw-normal">session</button>
+			</form>
+			<text>, or create a </text>
 		} else {
 			<text>Get started by creating a </text>
 		}

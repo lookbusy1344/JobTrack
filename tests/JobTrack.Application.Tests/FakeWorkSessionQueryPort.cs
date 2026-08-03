@@ -110,7 +110,7 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 	/// </summary>
 	private static ConcurrentWorkSession ToConcurrentSession(WorkSessionResult session, Instant asOf) =>
 		new(session.Id, session.LeafWorkId, session.WorkedByUserId,
-			new WorkInterval(session.StartedAt, session.FinishedAt ?? asOf));
+			new(session.StartedAt, session.FinishedAt ?? asOf));
 
 	public void SeedRoles(AppUserId actorId, params EmployeeRole[] roles) => _roles[actorId] = [.. roles];
 

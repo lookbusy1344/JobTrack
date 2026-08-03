@@ -11,4 +11,7 @@ using Intervals;
 ///     collection order.
 /// </summary>
 public sealed record ConcurrentWorkSession(
-	WorkSessionId SessionId, JobNodeId NodeId, AppUserId WorkedByUserId, WorkInterval Interval);
+	WorkSessionId SessionId,
+	JobNodeId NodeId,
+	AppUserId WorkedByUserId,
+	WorkInterval Interval);

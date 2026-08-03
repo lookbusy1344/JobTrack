@@ -468,7 +468,7 @@ public sealed class JobTrackClientUsageExampleTests
 			GetConcurrentWorkRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult(new ConcurrentWorkResult {
 				NodeId = request.NodeId,
-				AsOf = NodaTime.SystemClock.Instance.GetCurrentInstant(),
+				AsOf = SystemClock.Instance.GetCurrentInstant(),
 				Rows = [],
 				IsTruncated = false,
 			});

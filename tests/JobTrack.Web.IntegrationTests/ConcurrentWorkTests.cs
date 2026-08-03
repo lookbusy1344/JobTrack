@@ -30,6 +30,14 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 	private const string AdministratorPassword = "Bootstrap-Horse-Battery-77!";
 
 	private readonly SqliteDatabaseFixture database = new();
+
+	/// <summary>
+	///     One instant captured per test class, so two seeded sessions an hour apart really are an hour
+	///     apart: calling the clock once per boundary would shift each by the milliseconds between calls
+	///     and turn an exact hour of overlap into "59m".
+	/// </summary>
+	private readonly Instant seedNow = SystemClock.Instance.GetCurrentInstant();
+
 	private AppUserId? bootstrappedAdminId;
 	private JobNodeId? bootstrappedRootId;
 	private HttpClient client = null!;
@@ -226,13 +234,6 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
 	}
-
-	/// <summary>
-	///     One instant captured per test class, so two seeded sessions an hour apart really are an hour
-	///     apart: calling the clock once per boundary would shift each by the milliseconds between calls
-	///     and turn an exact hour of overlap into "59m".
-	/// </summary>
-	private readonly Instant seedNow = SystemClock.Instance.GetCurrentInstant();
 
 	private Instant HoursAgo(int hours) => seedNow - Duration.FromHours(hours);
 

@@ -561,7 +561,8 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		emptyBody.Should().Contain(
 			"</form>, or create a",
 			"the inline form abuts its comma: a line break either side of it renders as whitespace, which showed as \"session ,\"");
-		emptyBody.Should().Contain($"<input type=\"hidden\" name=\"leafNodeId\" value=\"{emptyId.Value}\"", "that post names this node as the leaf to start");
+		emptyBody.Should().Contain($"<input type=\"hidden\" name=\"leafNodeId\" value=\"{emptyId.Value}\"",
+			"that post names this node as the leaf to start");
 		workedBody.Should().NotContain("Start a work session</button>", "the sessions list stands in its place, empty or not");
 		parentBody.Should().NotContain("Start a work session</button>", "the subtree table stands in its place");
 	}

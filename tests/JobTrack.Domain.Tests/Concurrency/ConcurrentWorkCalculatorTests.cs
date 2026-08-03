@@ -19,7 +19,7 @@ public sealed class ConcurrentWorkCalculatorTests
 	private static WorkInterval Between(int startHour, int endHour) => new(At(startHour), At(endHour));
 
 	private static ConcurrentWorkSession Session(long id, AppUserId worker, long nodeId, int startHour, int endHour) =>
-		new(new WorkSessionId(id), new JobNodeId(nodeId), worker, Between(startHour, endHour));
+		new(new(id), new(nodeId), worker, Between(startHour, endHour));
 
 	public sealed class Overlaps
 	{
@@ -49,7 +49,7 @@ public sealed class ConcurrentWorkCalculatorTests
 				[Session(2, Alice, 200, 11, 13)]);
 
 			result.Should().ContainSingle().Which.Should().Be(new ConcurrentWorkOverlap(
-				Alice, new JobNodeId(200), Duration.FromHours(1), 1, At(11), At(12)));
+				Alice, new(200), Duration.FromHours(1), 1, At(11), At(12)));
 		}
 
 		[Fact]
@@ -80,7 +80,7 @@ public sealed class ConcurrentWorkCalculatorTests
 				[Session(3, Alice, 200, 10, 15)]);
 
 			result.Should().ContainSingle().Which.Should().Be(new ConcurrentWorkOverlap(
-				Alice, new JobNodeId(200), Duration.FromHours(2), 2, At(10), At(15)));
+				Alice, new(200), Duration.FromHours(2), 2, At(10), At(15)));
 		}
 
 		[Fact]
@@ -91,8 +91,8 @@ public sealed class ConcurrentWorkCalculatorTests
 				[Session(2, Alice, 200, 9, 12), Session(3, Alice, 300, 16, 17)]);
 
 			result.Should().Equal(
-				new ConcurrentWorkOverlap(Alice, new JobNodeId(200), Duration.FromHours(3), 1, At(9), At(12)),
-				new ConcurrentWorkOverlap(Alice, new JobNodeId(300), Duration.FromHours(1), 1, At(16), At(17)));
+				new ConcurrentWorkOverlap(Alice, new(200), Duration.FromHours(3), 1, At(9), At(12)),
+				new ConcurrentWorkOverlap(Alice, new(300), Duration.FromHours(1), 1, At(16), At(17)));
 		}
 	}
 
@@ -110,9 +110,9 @@ public sealed class ConcurrentWorkCalculatorTests
 				]);
 
 			result.Select(row => (row.WorkedByUserId, row.NodeId)).Should().Equal(
-				(Alice, new JobNodeId(300)),
-				(Alice, new JobNodeId(200)),
-				(Bob, new JobNodeId(400)));
+				(Alice, new(300)),
+				(Alice, new(200)),
+				(Bob, new(400)));
 		}
 
 		[Fact]
