@@ -286,6 +286,23 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Browsing_a_node_shows_its_full_priority_name_in_the_detail_fields_but_abbreviated_in_the_subtree_table()
+	{
+		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.priority-form");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, workerId, "Priority branch");
+		_ = await AddChildAsync(branchId, workerId, "Priority child");
+		var authCookie = await SignInAsync("browse.priority-form");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain(">Medium</span>", "the detail fields have room to spell the priority out in full");
+		body.Should().Contain(">Med<", "the subtree table column stays abbreviated");
+	}
+
+	[Fact]
 	/// <summary>
 	///     The subtree's own Deadline column follows the same overdue rule (InstantDisplay.IsPast,
 	///     jt-overdue) as Browse's record-view deadline and AwaitingProgress's Due column.
@@ -447,12 +464,54 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		body.Should().NotContain("Subtree cost");
 	}
 
+	/// <summary>
+	///     A branch's record card runs Kind, Owner, Priority, Cost. A leaf's carries Active as well,
+	///     and putting it before Cost moved Cost into a different grid cell on the two kinds of node —
+	///     the one field a reader scans between siblings jumping position as they browse. Active is the
+	///     transient fact, so it follows the standing ones rather than displacing them.
+	/// </summary>
 	[Fact]
-	public async Task Browsing_a_node_costed_at_a_zero_rate_shows_a_dash_instead_of_zero_amounts()
+	public async Task A_leafs_record_card_keeps_cost_in_the_same_position_a_branchs_does()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.fieldorder");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, adminId, "Ordered branch");
+		var leafId = await AddChildAsync(branchId, workerId, "Ordered leaf");
+		await AttachLeafWorkAsync(leafId, adminId);
+		await AddWorkingWindowAsync(workerId, adminId);
+		await AddUserCostRateAsync(workerId, adminId, 25m);
+		await AddActiveSessionAsync(workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0));
+		var authCookie = await SignInAsync("browse.fieldorder");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var costPosition = body.IndexOf("<dt class=\"col-12 col-sm-4\">Cost</dt>", StringComparison.Ordinal);
+		var achievementPosition = body.IndexOf("<dt class=\"col-12 col-sm-4\">Achievement</dt>", StringComparison.Ordinal);
+		var readinessPosition = body.IndexOf("<dt class=\"col-12 col-sm-4\">Readiness</dt>", StringComparison.Ordinal);
+		var activePosition = body.IndexOf("<dt class=\"col-12 col-sm-4\">Active</dt>", StringComparison.Ordinal);
+
+		costPosition.Should().BePositive("the leaf is costed, so its record card carries the field");
+		achievementPosition.Should().BePositive("a leaf carrying work always has an achievement");
+		readinessPosition.Should().BePositive("readiness is reported for every node, branch or leaf");
+		activePosition.Should().BePositive("the leaf has a running session, so its record card carries the field");
+		costPosition.Should().BeLessThan(achievementPosition, "Cost holds a branch's fourth field slot, so it must hold a leaf's too");
+		achievementPosition.Should().BeLessThan(readinessPosition, "the three status fields run Achievement, Readiness, Active");
+		readinessPosition.Should().BeLessThan(activePosition, "Active is leaf-only, so it comes last of the three and displaces neither");
+	}
+
+	/// <summary>
+	///     The record card states a zero cost as the figure, while the subtree table below keeps the
+	///     dash: a labelled field on one node reads unambiguously as nil, where a &#163;0.00 among a
+	///     column of real amounts reads as "nothing recorded here". Browsing the parent branch shows
+	///     both renderings of the same zero-costed leaf at once.
+	/// </summary>
+	[Fact]
+	public async Task A_zero_cost_reads_as_a_figure_in_the_record_card_and_a_dash_in_the_subtree_table()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.zero-cost");
 		var rootId = bootstrappedRootId!.Value;
-		var branchId = await AddChildAsync(rootId, adminId, "Zero-cost branch");
+		var branchId = await AddChildAsync(rootId, workerId, "Zero-cost branch");
 		var leafId = await AddChildAsync(branchId, workerId, "Zero-cost leaf");
 		await AttachLeafWorkAsync(leafId, adminId);
 		await AddWorkingWindowAsync(workerId, adminId);
@@ -460,12 +519,51 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		await AddFinishedSessionAsync(workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 17, 0));
 		var authCookie = await SignInAsync("browse.zero-cost");
 
-		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
-		var body = await response.Content.ReadAsStringAsync();
+		var leafResponse = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var leafBody = await leafResponse.Content.ReadAsStringAsync();
+		var branchResponse = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
+		var branchBody = await branchResponse.Content.ReadAsStringAsync();
 
-		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().NotContain("&#xA3;0.00");
-		body.Should().Contain(">-<");
+		leafResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		leafBody.Should().Contain(">&#xA3;0.00 /&#xA0;8.0 hrs<", "the card's Cost field states the figure, zero or not");
+		branchBody.Should().MatchRegex(ZeroCostTableCellPattern(), "the subtree table stands the same zero down to a dash");
+	}
+
+	/// <summary>
+	///     A node with neither children nor work attached rendered nothing at all below its record card
+	///     — the one place a reader is told what a job holds was silently empty, which reads as a page
+	///     that failed to load rather than as a job nothing has been done to yet. It now says what the
+	///     two ways forward are, in the same white panel the subtree table and sessions list occupy.
+	/// </summary>
+	[Fact]
+	public async Task A_node_with_neither_children_nor_work_says_what_can_be_added_to_it()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.empty-node");
+		var rootId = bootstrappedRootId!.Value;
+		var emptyId = await AddChildAsync(rootId, workerId, "Nothing here yet");
+		var workedId = await AddChildAsync(rootId, workerId, "Has sessions");
+		await AttachLeafWorkAsync(workedId, adminId);
+		var authCookie = await SignInAsync("browse.empty-node");
+
+		var emptyBody = await (await GetAsync($"/Jobs/Browse?nodeId={emptyId.Value}", authCookie)).Content.ReadAsStringAsync();
+		var workedBody = await (await GetAsync($"/Jobs/Browse?nodeId={workedId.Value}", authCookie)).Content.ReadAsStringAsync();
+		var parentBody = await (await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie)).Content.ReadAsStringAsync();
+
+		emptyBody.Should().Contain(
+			"<div class=\"jt-card text-center\">",
+			"a div, not a p: the shared p rule caps prose at its reading measure, which would leave the panel short of the full width the table it replaces occupies");
+		emptyBody.Should().Contain(
+			$"<a href=\"/Jobs/Create?parentId={emptyId.Value}\">child job</a>",
+			"both ways forward act, rather than describing an action to find elsewhere -- and /Jobs/Create defaults the new node's owner to the viewer");
+		emptyBody.Should().Contain(
+			"<button type=\"submit\" class=\"btn btn-link p-0 align-baseline fw-normal\">session</button>",
+			"only the noun is the control, and fw-normal cancels .btn's 600 weight so it doesn't read heavier than the sentence it sits in");
+		emptyBody.Should().Contain(
+			"</form>, or create a",
+			"the inline form abuts its comma: a line break either side of it renders as whitespace, which showed as \"session ,\"");
+		emptyBody.Should().Contain($"<input type=\"hidden\" name=\"leafNodeId\" value=\"{emptyId.Value}\"", "that post names this node as the leaf to start");
+		workedBody.Should().NotContain("Start a work session</button>", "the sessions list stands in its place, empty or not");
+		parentBody.Should().NotContain("Start a work session</button>", "the subtree table stands in its place");
 	}
 
 	[Fact]
@@ -653,6 +751,14 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		});
 	}
 
+	private async Task AddActiveSessionAsync(AppUserId workerId, JobNodeId leafId, Instant startedAt) =>
+		_ = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+			StartedAt = startedAt,
+		});
+
 	private async Task AddPrerequisiteAsync(JobNodeId requiredJobId, JobNodeId dependentJobId, AppUserId adminId) =>
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
 			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
@@ -712,6 +818,11 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("""jt-tree-blocked""")]
 	private static partial Regex BlockedRowPattern();
+
+	// The cost cell's own placeholder, not a stray hyphen elsewhere in the markup: the cell renders its
+	// text on its own line, so the dash arrives surrounded by the Razor block's indentation.
+	[GeneratedRegex("""jt-col-cost[^>]*>\s*-\s*<""")]
+	private static partial Regex ZeroCostTableCellPattern();
 
 	// The root renders uniquely as plain "Root" (no "(ID N)" suffix) wherever its NodeKind is known —
 	// see JobNodeDisplay.Title.

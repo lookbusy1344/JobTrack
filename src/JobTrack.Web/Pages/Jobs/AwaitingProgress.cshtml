@@ -114,7 +114,7 @@
 						                })"/>
 					</td>
 					<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">@(entry.Cost.HasValue && entry.AllocatedDuration is not null
-							? CostDisplay.Format(entry.Cost.Value, entry.AllocatedDuration)
+							? CostDisplay.FormatCell(entry.Cost.Value, entry.AllocatedDuration)
 							: null)</td>
 					<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">
 						<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = entry.Priority })"/>

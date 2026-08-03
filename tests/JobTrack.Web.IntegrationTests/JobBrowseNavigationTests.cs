@@ -233,8 +233,9 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
-		// Priorities render in their short form everywhere, node detail included.
-		body.Should().Contain("class=\"jt-priority jt-priority--medium\">Med</span>");
+		// The node detail card spells the priority out in full; the abbreviation is the table form only
+		// (b5f57e6d). This test's own subject is the absent deadline, not which form the label takes.
+		body.Should().Contain("class=\"jt-priority jt-priority--medium\">Medium</span>");
 		body.Should().NotContain("(deadline");
 	}
 

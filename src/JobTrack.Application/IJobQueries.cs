@@ -152,6 +152,24 @@ public interface IJobQueries
 		GetAwaitingProgressRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	///     Retrieves which other jobs the node's own workers were clocked on to at the same time as its
+	///     sessions, and for how long — one row per (worker, other job), grouped by worker. Overlap is
+	///     raw wall-clock intersection of recorded sessions (spec §4.4 permits one worker's sessions on
+	///     different leaves to overlap deliberately, and §10.2 makes that overlap the cost engine's
+	///     concurrency divisor), never an allocated or costed figure: no schedule, working-time
+	///     eligibility, or rate enters into it. A node with no sessions of its own — a branch, or an
+	///     unworked leaf — returns no rows rather than throwing. Carries no ownership-based
+	///     authorization gate beyond the baseline-employee admission every general job/work read shares:
+	///     recorded work is job data every employee role may read (ADR 0041).
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor holds no baseline operational role permitted to browse job data.
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The actor or the job node does not exist.</exception>
+	Task<ConcurrentWorkResult> GetConcurrentWorkAsync(
+		GetConcurrentWorkRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	///     Retrieves sessions on a leaf, most recent first (plan §8.5 slice 4). A
 	///     <see langword="null" /> <see cref="GetLeafSessionsRequest.WorkedByUserId" /> returns every
 	///     worker's sessions; setting it filters the read to that worker. Recorded work is job data that

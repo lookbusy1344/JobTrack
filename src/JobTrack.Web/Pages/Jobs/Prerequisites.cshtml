@@ -38,7 +38,7 @@
 						   asp-route-nodeId="@edge.RequiredJobId.Value">@JobNodeDisplay.Title(requiredNode)</a>
 						<partial name="_KindIcon" model="@(new KindIconModel { Kind = requiredNode.Kind })"/>
 						@if (requiredNode.Cost is Money cost && requiredNode.AllocatedDuration is not null) {
-							<span class="jt-amount">@CostDisplay.Format(cost, requiredNode.AllocatedDuration)</span>
+							<span class="jt-amount">@CostDisplay.FormatCell(cost, requiredNode.AllocatedDuration)</span>
 						}
 					} else {
 						<span class="jt-tag">Job @edge.RequiredJobId.Value</span>
@@ -72,7 +72,7 @@
 						   asp-route-nodeId="@edge.DependentJobId.Value">@JobNodeDisplay.Title(dependentNode)</a>
 						<partial name="_KindIcon" model="@(new KindIconModel { Kind = dependentNode.Kind })"/>
 						@if (dependentNode.Cost is Money cost && dependentNode.AllocatedDuration is not null) {
-							<span class="jt-amount">@CostDisplay.Format(cost, dependentNode.AllocatedDuration)</span>
+							<span class="jt-amount">@CostDisplay.FormatCell(cost, dependentNode.AllocatedDuration)</span>
 						}
 					} else {
 						<span class="jt-tag">Job @edge.DependentJobId.Value</span>
@@ -137,7 +137,7 @@
 									<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, ShowLabel = false })"/>
 								</td>
 								<td class="jt-col-cost col-2">@(node.Cost is Money cost && node.AllocatedDuration is not null
-										? CostDisplay.Format(cost, node.AllocatedDuration)
+										? CostDisplay.FormatCell(cost, node.AllocatedDuration)
 										: null)</td>
 								<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@(node.ArchivedAt is not null ? "yes" : "no")</td>
 								<td class="col-3 col-md-5 col-lg-4">

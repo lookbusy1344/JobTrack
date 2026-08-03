@@ -1,6 +1,9 @@
 namespace JobTrack.Application.Tests;
 
 using Abstractions;
+using Domain.Concurrency;
+using Domain.Intervals;
+using NodaTime;
 using Ports;
 
 /// <summary>
@@ -72,6 +75,42 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 
 		return Task.FromResult(new WorkSessionManageCapabilityQueryResult { ActorRoles = actorRoles, ControlledLeafWorkIds = [.. controlled] });
 	}
+
+	public Task<ConcurrentWorkQueryResult> GetConcurrentSessionsAsync(
+		JobNodeId nodeId, Instant asOf, int maxSubjectSessionCount, int maxConcurrentSessionCount,
+		CancellationToken cancellationToken = default)
+	{
+		var all = _sessions.SelectMany(entry => entry.Value).ToList();
+		var subject = all.Where(session => session.LeafWorkId == nodeId)
+			.OrderByDescending(session => session.StartedAt)
+			.Take(maxSubjectSessionCount)
+			.Select(session => ToConcurrentSession(session, asOf))
+			.ToList();
+		var subjectWorkers = subject.Select(session => session.WorkedByUserId).ToHashSet();
+
+		var concurrent = all.Where(session => session.LeafWorkId != nodeId && subjectWorkers.Contains(session.WorkedByUserId))
+			.Select(session => ToConcurrentSession(session, asOf))
+			.Where(candidate => subject.Any(s => s.WorkedByUserId == candidate.WorkedByUserId
+												 && IntervalAlgebra.Overlaps(s.Interval, candidate.Interval)))
+			.OrderByDescending(session => session.Interval.Start)
+			.Take(maxConcurrentSessionCount)
+			.ToList();
+
+		return Task.FromResult(new ConcurrentWorkQueryResult {
+			SubjectSessions = [.. subject],
+			ConcurrentSessions = [.. concurrent],
+			IsTruncated = subject.Count == maxSubjectSessionCount || concurrent.Count == maxConcurrentSessionCount,
+		});
+	}
+
+	/// <summary>
+	///     Clips an unfinished session at <paramref name="asOf" />, exactly as the real ports do. A
+	///     session that started at or after <paramref name="asOf" /> has no finite interval to report and
+	///     is therefore dropped by the callers above.
+	/// </summary>
+	private static ConcurrentWorkSession ToConcurrentSession(WorkSessionResult session, Instant asOf) =>
+		new(session.Id, session.LeafWorkId, session.WorkedByUserId,
+			new WorkInterval(session.StartedAt, session.FinishedAt ?? asOf));
 
 	public void SeedRoles(AppUserId actorId, params EmployeeRole[] roles) => _roles[actorId] = [.. roles];
 

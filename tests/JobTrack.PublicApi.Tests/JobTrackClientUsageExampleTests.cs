@@ -464,6 +464,15 @@ public sealed class JobTrackClientUsageExampleTests
 			GetAwaitingProgressRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult<EquatableArray<AwaitingProgressEntry>>([]);
 
+		public Task<ConcurrentWorkResult> GetConcurrentWorkAsync(
+			GetConcurrentWorkRequest request, CancellationToken cancellationToken = default) =>
+			Task.FromResult(new ConcurrentWorkResult {
+				NodeId = request.NodeId,
+				AsOf = NodaTime.SystemClock.Instance.GetCurrentInstant(),
+				Rows = [],
+				IsTruncated = false,
+			});
+
 		public Task<EquatableArray<WorkSessionResult>> GetLeafSessionsAsync(
 			GetLeafSessionsRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult<EquatableArray<WorkSessionResult>>([]);

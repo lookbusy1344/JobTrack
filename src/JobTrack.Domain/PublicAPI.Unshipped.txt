@@ -15,6 +15,37 @@ JobTrack.Domain.Authorization.RequestHoldingAreaConfigurationPolicy
 JobTrack.Domain.Authorization.RequesterAccessPolicy
 JobTrack.Domain.Authorization.ScheduleAccessPolicy
 JobTrack.Domain.Authorization.WorkSessionAccessPolicy
+JobTrack.Domain.Concurrency.ConcurrentWorkCalculator
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.<Clone>$() -> JobTrack.Domain.Concurrency.ConcurrentWorkOverlap!
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.ConcurrentWorkOverlap(JobTrack.Abstractions.AppUserId WorkedByUserId, JobTrack.Abstractions.JobNodeId NodeId, NodaTime.Duration TotalOverlap, int OverlapCount, NodaTime.Instant FirstOverlapStart, NodaTime.Instant LastOverlapEnd) -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.Deconstruct(out JobTrack.Abstractions.AppUserId WorkedByUserId, out JobTrack.Abstractions.JobNodeId NodeId, out NodaTime.Duration TotalOverlap, out int OverlapCount, out NodaTime.Instant FirstOverlapStart, out NodaTime.Instant LastOverlapEnd) -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.Equals(JobTrack.Domain.Concurrency.ConcurrentWorkOverlap? other) -> bool
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.FirstOverlapStart.get -> NodaTime.Instant
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.FirstOverlapStart.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.LastOverlapEnd.get -> NodaTime.Instant
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.LastOverlapEnd.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.NodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.NodeId.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.OverlapCount.get -> int
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.OverlapCount.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.TotalOverlap.get -> NodaTime.Duration
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.TotalOverlap.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.WorkedByUserId.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkSession
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.<Clone>$() -> JobTrack.Domain.Concurrency.ConcurrentWorkSession!
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.ConcurrentWorkSession(JobTrack.Abstractions.WorkSessionId SessionId, JobTrack.Abstractions.JobNodeId NodeId, JobTrack.Abstractions.AppUserId WorkedByUserId, JobTrack.Domain.Intervals.WorkInterval Interval) -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.Deconstruct(out JobTrack.Abstractions.WorkSessionId SessionId, out JobTrack.Abstractions.JobNodeId NodeId, out JobTrack.Abstractions.AppUserId WorkedByUserId, out JobTrack.Domain.Intervals.WorkInterval Interval) -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.Equals(JobTrack.Domain.Concurrency.ConcurrentWorkSession? other) -> bool
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.Interval.get -> JobTrack.Domain.Intervals.WorkInterval
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.Interval.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.NodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.NodeId.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.SessionId.get -> JobTrack.Abstractions.WorkSessionId
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.SessionId.init -> void
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Domain.Concurrency.ConcurrentWorkSession.WorkedByUserId.init -> void
 JobTrack.Domain.Costing.AllocatedDuration
 JobTrack.Domain.Costing.AllocatedDuration.<Clone>$() -> JobTrack.Domain.Costing.AllocatedDuration!
 JobTrack.Domain.Costing.AllocatedDuration.Add(JobTrack.Domain.Costing.AllocatedDuration! other) -> JobTrack.Domain.Costing.AllocatedDuration!
@@ -289,6 +320,12 @@ JobTrack.Domain.Schedules.WeeklyInterval.WeeklyInterval(NodaTime.IsoDayOfWeek da
 const JobTrack.Domain.Hierarchy.JobSubtreeLimits.BreadthCap = 25 -> int
 const JobTrack.Domain.Hierarchy.JobSubtreeLimits.DefaultMaxDepth = 3 -> int
 const JobTrack.Domain.Hierarchy.JobSubtreeLimits.HardMaxDepth = 5 -> int
+override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.Equals(object? obj) -> bool
+override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.GetHashCode() -> int
+override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.ToString() -> string!
+override JobTrack.Domain.Concurrency.ConcurrentWorkSession.Equals(object? obj) -> bool
+override JobTrack.Domain.Concurrency.ConcurrentWorkSession.GetHashCode() -> int
+override JobTrack.Domain.Concurrency.ConcurrentWorkSession.ToString() -> string!
 override JobTrack.Domain.Costing.AllocatedDuration.Equals(object? obj) -> bool
 override JobTrack.Domain.Costing.AllocatedDuration.GetHashCode() -> int
 override JobTrack.Domain.Costing.AllocatedDuration.ToString() -> string!
@@ -371,6 +408,11 @@ static JobTrack.Domain.Authorization.ScheduleAccessPolicy.CanManage(System.Colle
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanFinishSession(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool isOwnSession) -> bool
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode) -> bool
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanView(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
+static JobTrack.Domain.Concurrency.ConcurrentWorkCalculator.Calculate(System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Concurrency.ConcurrentWorkSession!>! subjectSessions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Concurrency.ConcurrentWorkSession!>! concurrentSessions) -> System.Collections.Generic.IReadOnlyList<JobTrack.Domain.Concurrency.ConcurrentWorkOverlap!>!
+static JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.operator !=(JobTrack.Domain.Concurrency.ConcurrentWorkOverlap? left, JobTrack.Domain.Concurrency.ConcurrentWorkOverlap? right) -> bool
+static JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.operator ==(JobTrack.Domain.Concurrency.ConcurrentWorkOverlap? left, JobTrack.Domain.Concurrency.ConcurrentWorkOverlap? right) -> bool
+static JobTrack.Domain.Concurrency.ConcurrentWorkSession.operator !=(JobTrack.Domain.Concurrency.ConcurrentWorkSession? left, JobTrack.Domain.Concurrency.ConcurrentWorkSession? right) -> bool
+static JobTrack.Domain.Concurrency.ConcurrentWorkSession.operator ==(JobTrack.Domain.Concurrency.ConcurrentWorkSession? left, JobTrack.Domain.Concurrency.ConcurrentWorkSession? right) -> bool
 static JobTrack.Domain.Costing.AllocatedDuration.FromShare(JobTrack.Domain.Costing.AllocatedShare share) -> JobTrack.Domain.Costing.AllocatedDuration!
 static JobTrack.Domain.Costing.AllocatedDuration.Zero.get -> JobTrack.Domain.Costing.AllocatedDuration!
 static JobTrack.Domain.Costing.AllocatedDuration.operator !=(JobTrack.Domain.Costing.AllocatedDuration? left, JobTrack.Domain.Costing.AllocatedDuration? right) -> bool

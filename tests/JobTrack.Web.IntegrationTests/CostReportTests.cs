@@ -163,8 +163,9 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 	/// <summary>
 	///     A leaf costed against a &#163;0/hour rate has real allocated time but an exact and displayed
 	///     cost of &#163;0.00; the report shows a dash rather than a zero amount that reads as "nothing
-	///     recorded" (this behaviour also covers the identical seam in <c>MoneyDisplay</c>/
-	///     <c>CostDisplay</c> used by Browse and Awaiting Progress).
+	///     recorded" (the same seam as <c>MoneyDisplay</c>/<c>CostDisplay.FormatCell</c> in the Browse
+	///     and Awaiting Progress tables — Browse's single-node record card states the figure instead,
+	///     via <c>CostDisplay.FormatField</c>).
 	/// </summary>
 	[Fact]
 	public async Task A_leaf_costed_at_a_zero_rate_shows_a_dash_instead_of_zero_amounts()

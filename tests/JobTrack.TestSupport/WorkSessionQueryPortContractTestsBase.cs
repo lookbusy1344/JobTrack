@@ -293,6 +293,104 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 			3, "two queries for the actor's identity/roles and one batched ancestor-ownership walk, regardless of leaf count");
 	}
 
+	/// <summary>
+	///     The concurrent-work read (ADR 0041 visibility, spec §4.4's deliberate cross-leaf overlap):
+	///     the subject leaf's own sessions plus the same worker's intersecting sessions elsewhere, which
+	///     <c>ConcurrentWorkCalculator</c> then aggregates.
+	/// </summary>
+	[Fact]
+	public async Task GetConcurrentSessionsAsync_returns_the_subject_sessions_and_the_same_workers_overlapping_session_elsewhere()
+	{
+		var (administratorId, workerId, leafId) = await SeedWorkedLeafAsync();
+		var otherLeafId = await SeedAdditionalWorkedLeafAsync(administratorId, workerId, "Fit windows");
+		await SeedCorrectedSessionAsync(administratorId, workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 12, 0));
+		await SeedCorrectedSessionAsync(administratorId, workerId, otherLeafId, Instant.FromUtc(2026, 1, 1, 11, 0),
+			Instant.FromUtc(2026, 1, 1, 13, 0));
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetConcurrentSessionsAsync(leafId, Instant.FromUtc(2026, 1, 2, 0, 0), 100, 100);
+
+		result.SubjectSessions.Select(s => s.NodeId).Should().AllBeEquivalentTo(leafId);
+		result.ConcurrentSessions.Should().ContainSingle().Which.NodeId.Should().Be(otherLeafId);
+		result.IsTruncated.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task GetConcurrentSessionsAsync_does_not_return_a_session_elsewhere_that_does_not_overlap()
+	{
+		var (administratorId, workerId, leafId) = await SeedWorkedLeafAsync();
+		var otherLeafId = await SeedAdditionalWorkedLeafAsync(administratorId, workerId, "Fit windows");
+		await SeedCorrectedSessionAsync(administratorId, workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 11, 0));
+		await SeedCorrectedSessionAsync(administratorId, workerId, otherLeafId, Instant.FromUtc(2026, 1, 1, 11, 0),
+			Instant.FromUtc(2026, 1, 1, 13, 0));
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetConcurrentSessionsAsync(leafId, Instant.FromUtc(2026, 1, 2, 0, 0), 100, 100);
+
+		result.ConcurrentSessions.Should().BeEmpty("a session that merely touches the subject's at a boundary does not overlap it");
+	}
+
+	[Fact]
+	public async Task GetConcurrentSessionsAsync_does_not_return_another_workers_session_elsewhere()
+	{
+		var (administratorId, workerId, leafId) = await SeedWorkedLeafAsync();
+		var otherLeafId = await SeedAdditionalWorkedLeafAsync(administratorId, administratorId, "Fit windows");
+		await SeedCorrectedSessionAsync(administratorId, workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 12, 0));
+		await SeedCorrectedSessionAsync(administratorId, administratorId, otherLeafId, Instant.FromUtc(2026, 1, 1, 9, 0),
+			Instant.FromUtc(2026, 1, 1, 12, 0));
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetConcurrentSessionsAsync(leafId, Instant.FromUtc(2026, 1, 2, 0, 0), 100, 100);
+
+		result.ConcurrentSessions.Should().BeEmpty("concurrency is per worker -- two people working at once share no allocation");
+	}
+
+	[Fact]
+	public async Task GetConcurrentSessionsAsync_bounds_an_unfinished_session_at_the_as_of_instant()
+	{
+		var (administratorId, workerId, leafId) = await SeedWorkedLeafAsync();
+		var otherLeafId = await SeedAdditionalWorkedLeafAsync(administratorId, workerId, "Fit windows");
+		await SeedCorrectedSessionAsync(administratorId, workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 17, 0));
+		await SeedUnfinishedSessionAsync(administratorId, workerId, otherLeafId, Instant.FromUtc(2026, 1, 1, 10, 0));
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetConcurrentSessionsAsync(leafId, Instant.FromUtc(2026, 1, 1, 12, 0), 100, 100);
+
+		result.ConcurrentSessions.Should().ContainSingle().Which.Interval.End.Should().Be(Instant.FromUtc(2026, 1, 1, 12, 0));
+	}
+
+	[Fact]
+	public async Task GetConcurrentSessionsAsync_reports_truncation_when_the_concurrent_cap_is_reached()
+	{
+		var (administratorId, workerId, leafId) = await SeedWorkedLeafAsync();
+		var firstOtherLeafId = await SeedAdditionalWorkedLeafAsync(administratorId, workerId, "Fit windows");
+		var secondOtherLeafId = await SeedAdditionalWorkedLeafAsync(administratorId, workerId, "Paint hallway");
+		await SeedCorrectedSessionAsync(administratorId, workerId, leafId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 17, 0));
+		await SeedCorrectedSessionAsync(administratorId, workerId, firstOtherLeafId, Instant.FromUtc(2026, 1, 1, 10, 0),
+			Instant.FromUtc(2026, 1, 1, 11, 0));
+		await SeedCorrectedSessionAsync(administratorId, workerId, secondOtherLeafId, Instant.FromUtc(2026, 1, 1, 12, 0),
+			Instant.FromUtc(2026, 1, 1, 13, 0));
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetConcurrentSessionsAsync(leafId, Instant.FromUtc(2026, 1, 2, 0, 0), 100, 1);
+
+		result.ConcurrentSessions.Should().ContainSingle();
+		result.IsTruncated.Should().BeTrue("a capped load reports a floor, never a total presented as complete");
+	}
+
+	[Fact]
+	public async Task GetConcurrentSessionsAsync_returns_nothing_for_a_node_with_no_sessions()
+	{
+		var (administratorId, workerId, _) = await SeedWorkedLeafAsync();
+		var unworkedLeafId = await SeedAdditionalWorkedLeafAsync(administratorId, workerId, "Untouched");
+		var port = CreateQueryPort(database.ConnectionString);
+
+		var result = await port.GetConcurrentSessionsAsync(unworkedLeafId, Instant.FromUtc(2026, 1, 2, 0, 0), 100, 100);
+
+		result.SubjectSessions.Should().BeEmpty();
+		result.ConcurrentSessions.Should().BeEmpty();
+	}
+
 	protected abstract DbConnection CreateConnection(string connectionString);
 
 	protected abstract ISchemaVersionStore CreateStore();
@@ -347,6 +445,34 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		_ = await jobCommandPort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
 
 		return (administratorId, workerId, leaf.Id);
+	}
+
+	/// <summary>Seeds a second worked leaf under the root, so cross-leaf concurrency has somewhere to happen.</summary>
+	private async Task<JobNodeId> SeedAdditionalWorkedLeafAsync(AppUserId administratorId, AppUserId ownerId, string description)
+	{
+		var jobCommandPort = CreateJobCommandPort(database.ConnectionString);
+		var leaf = await jobCommandPort.AddChildAsync(new() {
+			Context = ContextFor(administratorId),
+			ParentId = await FindRootAsync(),
+			Description = description,
+			OwnerUserId = ownerId,
+			Priority = Priority.Medium,
+		});
+		_ = await jobCommandPort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+
+		return leaf.Id;
+	}
+
+	/// <summary>Starts a session at a known past instant and leaves it running, so clipping at <c>asOf</c> is observable.</summary>
+	private async Task SeedUnfinishedSessionAsync(AppUserId administratorId, AppUserId workerId, JobNodeId leafId, Instant startedAt)
+	{
+		var sessionCommandPort = CreateSessionCommandPort(database.ConnectionString);
+		_ = await sessionCommandPort.StartSessionAsync(new() {
+			Context = ContextFor(administratorId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+			StartedAt = startedAt,
+		});
 	}
 
 	private async Task SeedCorrectedSessionAsync(

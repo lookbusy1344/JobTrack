@@ -20,6 +20,7 @@ public sealed class ApplicationPublicSurfaceTests
 	private static readonly FrozenSet<Type> ApprovedSupportingTypes = FrozenSet.ToFrozenSet([
 		typeof(AuditSearchPaging),
 		typeof(AwaitingProgressPaging),
+		typeof(ConcurrentWorkLimits),
 		typeof(BootstrapCredentialSubject),
 		typeof(EmployeeCredentialSubject),
 		typeof(JobTrackDiagnostics),

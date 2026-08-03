@@ -9,6 +9,12 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- The host's internal display helpers (DurationDisplay and friends) are unit-testable directly
+             rather than only through rendered page HTML; nothing here is a public library surface. -->
+        <InternalsVisibleTo Include="JobTrack.Web.IntegrationTests"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi"/>
         <!-- ADR 0037: offline QR image rendering for the two-factor enrolment page. -->
         <PackageReference Include="QRCoder"/>

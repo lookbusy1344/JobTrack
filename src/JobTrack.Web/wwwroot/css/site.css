@@ -773,6 +773,13 @@ dd {
     color: var(--jt-ink);
 }
 
+/* A link that qualifies the value it follows rather than being a value of its own (Browse's cost
+   figure and its concurrent-work "Info"). A size down from the field value so the figure keeps the
+   reading weight, and the aside reads as a footnote to it. */
+.jt-value-aside {
+    font-size: var(--jt-font-size-sm);
+}
+
 /* ---- Action toolbar ----------------------------------------------------------------------- */
 
 /* Pages expose a row of navigation/action buttons, grouped into a wrapping toolbar (Bootstrap's

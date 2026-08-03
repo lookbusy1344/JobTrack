@@ -315,6 +315,35 @@ JobTrack.Application.CompleteLeafResult.Version.get -> long
 JobTrack.Application.CompleteLeafResult.Version.init -> void
 JobTrack.Application.CompleteLeafResult.WriteUpChanged.get -> bool
 JobTrack.Application.CompleteLeafResult.WriteUpChanged.init -> void
+JobTrack.Application.ConcurrentWorkLimits
+JobTrack.Application.ConcurrentWorkResult
+JobTrack.Application.ConcurrentWorkResult.<Clone>$() -> JobTrack.Application.ConcurrentWorkResult!
+JobTrack.Application.ConcurrentWorkResult.AsOf.get -> NodaTime.Instant
+JobTrack.Application.ConcurrentWorkResult.AsOf.init -> void
+JobTrack.Application.ConcurrentWorkResult.ConcurrentWorkResult() -> void
+JobTrack.Application.ConcurrentWorkResult.Equals(JobTrack.Application.ConcurrentWorkResult? other) -> bool
+JobTrack.Application.ConcurrentWorkResult.IsTruncated.get -> bool
+JobTrack.Application.ConcurrentWorkResult.IsTruncated.init -> void
+JobTrack.Application.ConcurrentWorkResult.NodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.ConcurrentWorkResult.NodeId.init -> void
+JobTrack.Application.ConcurrentWorkResult.Rows.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ConcurrentWorkRow!>
+JobTrack.Application.ConcurrentWorkResult.Rows.init -> void
+JobTrack.Application.ConcurrentWorkRow
+JobTrack.Application.ConcurrentWorkRow.<Clone>$() -> JobTrack.Application.ConcurrentWorkRow!
+JobTrack.Application.ConcurrentWorkRow.ConcurrentWorkRow() -> void
+JobTrack.Application.ConcurrentWorkRow.Equals(JobTrack.Application.ConcurrentWorkRow? other) -> bool
+JobTrack.Application.ConcurrentWorkRow.FirstOverlapStart.get -> NodaTime.Instant
+JobTrack.Application.ConcurrentWorkRow.FirstOverlapStart.init -> void
+JobTrack.Application.ConcurrentWorkRow.LastOverlapEnd.get -> NodaTime.Instant
+JobTrack.Application.ConcurrentWorkRow.LastOverlapEnd.init -> void
+JobTrack.Application.ConcurrentWorkRow.Node.get -> JobTrack.Application.JobNodeSummaryResult!
+JobTrack.Application.ConcurrentWorkRow.Node.init -> void
+JobTrack.Application.ConcurrentWorkRow.OverlapCount.get -> int
+JobTrack.Application.ConcurrentWorkRow.OverlapCount.init -> void
+JobTrack.Application.ConcurrentWorkRow.TotalOverlap.get -> NodaTime.Duration
+JobTrack.Application.ConcurrentWorkRow.TotalOverlap.init -> void
+JobTrack.Application.ConcurrentWorkRow.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.ConcurrentWorkRow.WorkedByUserId.init -> void
 JobTrack.Application.CorrectNodeRateOverrideRequest
 JobTrack.Application.CorrectNodeRateOverrideRequest.<Clone>$() -> JobTrack.Application.CorrectNodeRateOverrideRequest!
 JobTrack.Application.CorrectNodeRateOverrideRequest.Context.get -> JobTrack.Application.CommandContext!
@@ -664,6 +693,16 @@ JobTrack.Application.GetBulkNodeCostsRequest.Equals(JobTrack.Application.GetBulk
 JobTrack.Application.GetBulkNodeCostsRequest.GetBulkNodeCostsRequest() -> void
 JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.JobNodeId>
 JobTrack.Application.GetBulkNodeCostsRequest.NodeIds.init -> void
+JobTrack.Application.GetConcurrentWorkRequest
+JobTrack.Application.GetConcurrentWorkRequest.<Clone>$() -> JobTrack.Application.GetConcurrentWorkRequest!
+JobTrack.Application.GetConcurrentWorkRequest.AsOf.get -> NodaTime.Instant?
+JobTrack.Application.GetConcurrentWorkRequest.AsOf.init -> void
+JobTrack.Application.GetConcurrentWorkRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.GetConcurrentWorkRequest.Context.init -> void
+JobTrack.Application.GetConcurrentWorkRequest.Equals(JobTrack.Application.GetConcurrentWorkRequest? other) -> bool
+JobTrack.Application.GetConcurrentWorkRequest.GetConcurrentWorkRequest() -> void
+JobTrack.Application.GetConcurrentWorkRequest.NodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Application.GetConcurrentWorkRequest.NodeId.init -> void
 JobTrack.Application.GetCostDetailsRequest
 JobTrack.Application.GetCostDetailsRequest.<Clone>$() -> JobTrack.Application.GetCostDetailsRequest!
 JobTrack.Application.GetCostDetailsRequest.AsOf.get -> NodaTime.Instant
@@ -897,6 +936,7 @@ JobTrack.Application.IJobQueries.GetActiveSessionsAsync(JobTrack.Application.Get
 JobTrack.Application.IJobQueries.GetAllEmployeesAsync(JobTrack.Application.GetAllEmployeesRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.EmployeeDirectoryEntry!>>!
 JobTrack.Application.IJobQueries.GetAwaitingProgressAsync(JobTrack.Application.GetAwaitingProgressRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Hierarchy.AwaitingProgressEntry!>>!
 JobTrack.Application.IJobQueries.GetBranchAchievementAsync(JobTrack.Application.GetBranchAchievementRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.BranchAchievement>!
+JobTrack.Application.IJobQueries.GetConcurrentWorkAsync(JobTrack.Application.GetConcurrentWorkRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ConcurrentWorkResult!>!
 JobTrack.Application.IJobQueries.GetEmployeeDirectoryAsync(JobTrack.Application.GetEmployeeDirectoryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.EmployeeDirectoryEntry!>>!
 JobTrack.Application.IJobQueries.GetEmployeeProfileAsync(JobTrack.Application.GetEmployeeProfileRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.EmployeeProfileResult!>!
 JobTrack.Application.IJobQueries.GetJobChildrenAsync(JobTrack.Application.GetJobChildrenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Abstractions.EquatableArray<JobTrack.Application.JobNodeSummaryResult!>>!
@@ -1806,6 +1846,8 @@ const JobTrack.Application.AuditSearchPaging.DefaultPageSize = 50 -> int
 const JobTrack.Application.AuditSearchPaging.MaxPageSize = 200 -> int
 const JobTrack.Application.AwaitingProgressPaging.DefaultPageSize = 50 -> int
 const JobTrack.Application.AwaitingProgressPaging.MaxPageSize = 200 -> int
+const JobTrack.Application.ConcurrentWorkLimits.MaxConcurrentSessionCount = 5000 -> int
+const JobTrack.Application.ConcurrentWorkLimits.MaxSubjectSessionCount = 1000 -> int
 const JobTrack.Application.JobTrackDiagnostics.ActivitySourceName = "JobTrack.Application" -> string!
 override JobTrack.Application.AccountStateResult.Equals(object? obj) -> bool
 override JobTrack.Application.AccountStateResult.GetHashCode() -> int
@@ -1876,6 +1918,12 @@ override JobTrack.Application.CompleteLeafRequest.ToString() -> string!
 override JobTrack.Application.CompleteLeafResult.Equals(object? obj) -> bool
 override JobTrack.Application.CompleteLeafResult.GetHashCode() -> int
 override JobTrack.Application.CompleteLeafResult.ToString() -> string!
+override JobTrack.Application.ConcurrentWorkResult.Equals(object? obj) -> bool
+override JobTrack.Application.ConcurrentWorkResult.GetHashCode() -> int
+override JobTrack.Application.ConcurrentWorkResult.ToString() -> string!
+override JobTrack.Application.ConcurrentWorkRow.Equals(object? obj) -> bool
+override JobTrack.Application.ConcurrentWorkRow.GetHashCode() -> int
+override JobTrack.Application.ConcurrentWorkRow.ToString() -> string!
 override JobTrack.Application.CorrectNodeRateOverrideRequest.Equals(object? obj) -> bool
 override JobTrack.Application.CorrectNodeRateOverrideRequest.GetHashCode() -> int
 override JobTrack.Application.CorrectNodeRateOverrideRequest.ToString() -> string!
@@ -1951,6 +1999,9 @@ override JobTrack.Application.GetBranchAchievementRequest.ToString() -> string!
 override JobTrack.Application.GetBulkNodeCostsRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetBulkNodeCostsRequest.GetHashCode() -> int
 override JobTrack.Application.GetBulkNodeCostsRequest.ToString() -> string!
+override JobTrack.Application.GetConcurrentWorkRequest.Equals(object? obj) -> bool
+override JobTrack.Application.GetConcurrentWorkRequest.GetHashCode() -> int
+override JobTrack.Application.GetConcurrentWorkRequest.ToString() -> string!
 override JobTrack.Application.GetCostDetailsRequest.Equals(object? obj) -> bool
 override JobTrack.Application.GetCostDetailsRequest.GetHashCode() -> int
 override JobTrack.Application.GetCostDetailsRequest.ToString() -> string!
@@ -2219,6 +2270,10 @@ static JobTrack.Application.CompleteLeafRequest.operator !=(JobTrack.Application
 static JobTrack.Application.CompleteLeafRequest.operator ==(JobTrack.Application.CompleteLeafRequest? left, JobTrack.Application.CompleteLeafRequest? right) -> bool
 static JobTrack.Application.CompleteLeafResult.operator !=(JobTrack.Application.CompleteLeafResult? left, JobTrack.Application.CompleteLeafResult? right) -> bool
 static JobTrack.Application.CompleteLeafResult.operator ==(JobTrack.Application.CompleteLeafResult? left, JobTrack.Application.CompleteLeafResult? right) -> bool
+static JobTrack.Application.ConcurrentWorkResult.operator !=(JobTrack.Application.ConcurrentWorkResult? left, JobTrack.Application.ConcurrentWorkResult? right) -> bool
+static JobTrack.Application.ConcurrentWorkResult.operator ==(JobTrack.Application.ConcurrentWorkResult? left, JobTrack.Application.ConcurrentWorkResult? right) -> bool
+static JobTrack.Application.ConcurrentWorkRow.operator !=(JobTrack.Application.ConcurrentWorkRow? left, JobTrack.Application.ConcurrentWorkRow? right) -> bool
+static JobTrack.Application.ConcurrentWorkRow.operator ==(JobTrack.Application.ConcurrentWorkRow? left, JobTrack.Application.ConcurrentWorkRow? right) -> bool
 static JobTrack.Application.CorrectNodeRateOverrideRequest.operator !=(JobTrack.Application.CorrectNodeRateOverrideRequest? left, JobTrack.Application.CorrectNodeRateOverrideRequest? right) -> bool
 static JobTrack.Application.CorrectNodeRateOverrideRequest.operator ==(JobTrack.Application.CorrectNodeRateOverrideRequest? left, JobTrack.Application.CorrectNodeRateOverrideRequest? right) -> bool
 static JobTrack.Application.CorrectScheduleExceptionRequest.operator !=(JobTrack.Application.CorrectScheduleExceptionRequest? left, JobTrack.Application.CorrectScheduleExceptionRequest? right) -> bool
@@ -2269,6 +2324,8 @@ static JobTrack.Application.GetBranchAchievementRequest.operator !=(JobTrack.App
 static JobTrack.Application.GetBranchAchievementRequest.operator ==(JobTrack.Application.GetBranchAchievementRequest? left, JobTrack.Application.GetBranchAchievementRequest? right) -> bool
 static JobTrack.Application.GetBulkNodeCostsRequest.operator !=(JobTrack.Application.GetBulkNodeCostsRequest? left, JobTrack.Application.GetBulkNodeCostsRequest? right) -> bool
 static JobTrack.Application.GetBulkNodeCostsRequest.operator ==(JobTrack.Application.GetBulkNodeCostsRequest? left, JobTrack.Application.GetBulkNodeCostsRequest? right) -> bool
+static JobTrack.Application.GetConcurrentWorkRequest.operator !=(JobTrack.Application.GetConcurrentWorkRequest? left, JobTrack.Application.GetConcurrentWorkRequest? right) -> bool
+static JobTrack.Application.GetConcurrentWorkRequest.operator ==(JobTrack.Application.GetConcurrentWorkRequest? left, JobTrack.Application.GetConcurrentWorkRequest? right) -> bool
 static JobTrack.Application.GetCostDetailsRequest.operator !=(JobTrack.Application.GetCostDetailsRequest? left, JobTrack.Application.GetCostDetailsRequest? right) -> bool
 static JobTrack.Application.GetCostDetailsRequest.operator ==(JobTrack.Application.GetCostDetailsRequest? left, JobTrack.Application.GetCostDetailsRequest? right) -> bool
 static JobTrack.Application.GetEmployeeDirectoryRequest.operator !=(JobTrack.Application.GetEmployeeDirectoryRequest? left, JobTrack.Application.GetEmployeeDirectoryRequest? right) -> bool

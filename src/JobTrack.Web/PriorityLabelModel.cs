@@ -16,11 +16,23 @@ public sealed class PriorityLabelModel
 	public required Priority Priority { get; init; }
 
 	/// <summary>
-	///     The text this model renders: always the four-letter-or-shorter form. A priority is a
-	///     one-glance ordering fact that reads the same wherever it appears, and its widest home --
-	///     a table column sharing row width with five others -- sets the form for all of them.
+	///     Whether to render the priority's full name rather than its abbreviated table form. A
+	///     table column sharing row width with five others needs the four-letter-or-shorter
+	///     abbreviation; a form/detail area (Browse's node detail <c>dl</c>) has room to spell it out
+	///     and should.
 	/// </summary>
-	public string Text => AbbreviatedLabel(Priority);
+	public bool Full { get; init; }
+
+	/// <summary>The text this model renders: the full name when <see cref="Full" />, else the abbreviation.</summary>
+	public string Text => Full ? FullLabel(Priority) : AbbreviatedLabel(Priority);
+
+	private static string FullLabel(Priority priority) => priority switch {
+		Priority.Low => "Low",
+		Priority.Medium => "Medium",
+		Priority.High => "High",
+		Priority.Urgent => "Urgent",
+		_ => throw new ArgumentOutOfRangeException(nameof(priority), priority, null),
+	};
 
 	private static string AbbreviatedLabel(Priority priority) => priority switch {
 		Priority.Low => "Low",

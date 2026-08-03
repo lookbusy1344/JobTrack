@@ -2,6 +2,7 @@ namespace JobTrack.Application;
 
 using Abstractions;
 using Domain.Authorization;
+using Domain.Concurrency;
 using Domain.Costing;
 using Domain.Hierarchy;
 using NodaTime;
@@ -163,6 +164,15 @@ internal sealed class JobQueries : IJobQueries
 			: AwaitingProgressPaging.DefaultPageSize;
 
 		return GetAwaitingProgressCoreAsync(request, limit, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task<ConcurrentWorkResult> GetConcurrentWorkAsync(
+		GetConcurrentWorkRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetConcurrentWorkCoreAsync(request, cancellationToken);
 	}
 
 	/// <inheritdoc />
@@ -553,6 +563,52 @@ internal sealed class JobQueries : IJobQueries
 				var entries = AwaitingProgressCalculator.GetAwaitingProgress(inputs.NodesById, inputs.FactsById, inputs.Prerequisites);
 
 				return await EnrichAwaitingProgressWithCostAsync(request.Context, entries, cancellationToken).ConfigureAwait(false);
+			});
+
+	private Task<ConcurrentWorkResult> GetConcurrentWorkCoreAsync(
+		GetConcurrentWorkRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-concurrent-work", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
+			async () => {
+				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+
+				// A node with no sessions of its own legitimately produces no overlap rows, so its
+				// existence is checked directly rather than inferred from an empty session load.
+				_ = await _browseQueryPort.GetNodeAsync(request.NodeId, cancellationToken).ConfigureAwait(false);
+
+				var asOf = request.AsOf ?? _clock.GetCurrentInstant();
+				var sessions = await _workSessionQueryPort.GetConcurrentSessionsAsync(
+					request.NodeId, asOf, ConcurrentWorkLimits.MaxSubjectSessionCount,
+					ConcurrentWorkLimits.MaxConcurrentSessionCount, cancellationToken).ConfigureAwait(false);
+
+				var overlaps = ConcurrentWorkCalculator.Calculate(
+					[.. sessions.SubjectSessions], [.. sessions.ConcurrentSessions]);
+
+				// The other jobs are described through the same summary projection every job list
+				// renders, so a row carries a real description/kind/achievement/owner rather than a
+				// bare id. An id that no longer resolves is dropped, matching the port's contract.
+				var summaries = await _browseQueryPort.GetSummariesByIdsAsync(
+						[.. overlaps.Select(overlap => overlap.NodeId).Distinct()], cancellationToken)
+					.ConfigureAwait(false);
+				var summariesById = summaries.ToDictionary(summary => summary.Id);
+
+				var rows = overlaps
+					.Where(overlap => summariesById.ContainsKey(overlap.NodeId))
+					.Select(overlap => new ConcurrentWorkRow {
+						WorkedByUserId = overlap.WorkedByUserId,
+						Node = summariesById[overlap.NodeId],
+						TotalOverlap = overlap.TotalOverlap,
+						OverlapCount = overlap.OverlapCount,
+						FirstOverlapStart = overlap.FirstOverlapStart,
+						LastOverlapEnd = overlap.LastOverlapEnd,
+					});
+
+				return new ConcurrentWorkResult {
+					NodeId = request.NodeId,
+					AsOf = asOf,
+					Rows = [.. rows],
+					IsTruncated = sessions.IsTruncated,
+				};
 			});
 
 	private async Task<EquatableArray<JobNodeSummaryResult>> EnrichSummariesWithCostAsync(

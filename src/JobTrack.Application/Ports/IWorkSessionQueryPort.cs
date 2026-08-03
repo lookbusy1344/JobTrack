@@ -1,6 +1,7 @@
 namespace JobTrack.Application.Ports;
 
 using Abstractions;
+using NodaTime;
 
 /// <summary>
 ///     The persistence-owned port backing <see cref="IJobQueries.GetLeafSessionsAsync" /> (plan §8.5
@@ -48,4 +49,21 @@ internal interface IWorkSessionQueryPort
 	/// <exception cref="EntityNotFoundException">The actor does not exist.</exception>
 	Task<WorkSessionManageCapabilityQueryResult> GetManageCapabilitiesAsync(
 		AppUserId actorId, EquatableArray<JobNodeId> leafWorkIds, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Loads <paramref name="nodeId" />'s own sessions and, on every <em>other</em> node, the
+	///     intersecting sessions of those same workers — the two inputs
+	///     <see cref="Domain.Concurrency.ConcurrentWorkCalculator" /> aggregates. Both sides are clipped
+	///     to <paramref name="asOf" />, so an unfinished session contributes up to that instant and never
+	///     as an unbounded range. Carries no actor and applies no authorization of its own, the same
+	///     shape as <see cref="IAwaitingProgressQueryPort" /> — <see cref="JobQueries" /> owns admission.
+	/// </summary>
+	/// <param name="nodeId">The subject job node.</param>
+	/// <param name="asOf">The instant an unfinished session is bounded by.</param>
+	/// <param name="maxSubjectSessionCount">Cap on the subject's own sessions loaded, most recent first.</param>
+	/// <param name="maxConcurrentSessionCount">Cap on intersecting sessions loaded, most recent first.</param>
+	/// <param name="cancellationToken">Propagates cancellation.</param>
+	Task<ConcurrentWorkQueryResult> GetConcurrentSessionsAsync(
+		JobNodeId nodeId, Instant asOf, int maxSubjectSessionCount, int maxConcurrentSessionCount,
+		CancellationToken cancellationToken = default);
 }

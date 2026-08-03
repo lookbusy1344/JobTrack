@@ -1,0 +1,94 @@
+@page
+@using JobTrack.Abstractions
+@model ConcurrentWorkModel
+@{
+	ViewData["Title"] = "Concurrent work";
+}
+
+<div class="jt-page-head">
+	<h1>Concurrent work</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+@if (Model.Node is not null) {
+	@* ADR 0044: a specialist page names its node as a link back to Browse rooted there. *@
+	<p class="jt-context">
+		<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+		   asp-route-nodeId="@Model.NodeId">@JobNodeDisplay.Title(Model.Node.Node)</a>
+	</p>
+}
+
+@if (Model.ConcurrentWork is not null) {
+	@* Wall-clock overlap only. Saying so here is the whole reason the page can be read without a rate
+	   gate: no figure below is a cost, and none of them is the cost engine's allocated share. *@
+	<p class="jt-lede">
+		Other jobs this job&rsquo;s own workers were clocked on to at the same time. Time recorded against both jobs at
+		once is shared between them when work is costed, so this is where a lower-than-expected cost comes from.
+	</p>
+
+	@if (Model.ConcurrentWork.IsTruncated) {
+		<p class="jt-notice">Only the most recent sessions were examined, so the totals below are a minimum rather than the full picture.</p>
+	}
+
+	@if (Model.RowsByWorker.Count == 0) {
+		<p class="jt-empty">Nobody worked another job while working this one.</p>
+	} else {
+		@foreach (var workerRows in Model.RowsByWorker) {
+			<h2>@Model.DescribeWorker(workerRows.Key)</h2>
+
+			<div class="jt-table-block">
+				<table class="table">
+					<thead>
+					@* The job and how long it shared with this one survive at every width -- that pair is the
+					   whole answer. The session count returns at md, and the owner and the window the overlaps
+					   span at lg, where a full timestamp pair finally fits. The count's heading is abbreviated
+					   because the column holds a one- or two-digit number: spelling out "Sessions" made the
+					   heading, not the data, decide the width. *@
+					<tr>
+						<th scope="col" class="col-8 col-md-7 col-lg-4">Job</th>
+						<th scope="col" class="jt-col-secondary jt-col-owner col-lg-2 d-none d-lg-table-cell">Owner</th>
+						<th scope="col" class="col-4 col-md-3 col-lg-2 text-end">Shared</th>
+						<th scope="col" class="jt-col-secondary col-md-2 col-lg-1 text-end d-none d-md-table-cell">Sess</th>
+						<th scope="col" class="jt-col-secondary col-lg-3 d-none d-lg-table-cell">Between</th>
+					</tr>
+					</thead>
+					<tbody>
+					@foreach (var row in workerRows) {
+						<tr>
+							<td class="col-8 col-md-7 col-lg-4">
+								@* Leads the name, as the kind glyph does on Browse's tree rows: it says what the
+								   row *is* before it is read, which a column of its own spent width to say worse. *@
+								<partial name="_KindIcon" model="@(new KindIconModel { Kind = row.Node.Kind, ShowLabel = false })"/>
+								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+								   asp-route-nodeId="@row.Node.Id.Value">@JobNodeDisplay.Title(row.Node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>&#x2060;
+								@* Trails the name, as on Browse's subtree tables and Awaiting Progress. *@
+								<partial name="_AchievementIcon"
+								         model="@(new AchievementIconModel { Achievement = row.Node.Achievement, ShowLabel = false })"/>
+								@if (row.Node.ArchivedAt is not null) {
+									<span class="jt-muted"> &middot; archived</span>
+								}
+							</td>
+							<td class="jt-col-secondary jt-col-owner col-lg-2 d-none d-lg-table-cell">@Model.DescribeOwner(row.Node.OwnerUserId)</td>
+							<td class="col-4 col-md-3 col-lg-2 text-end">@DurationDisplay.Format(row.TotalOverlap)</td>
+							<td class="jt-col-secondary col-md-2 col-lg-1 text-end d-none d-md-table-cell">@row.OverlapCount</td>
+							<td class="jt-col-secondary col-lg-3 d-none d-lg-table-cell">
+								@InstantDisplay.FormatCompact(row.FirstOverlapStart, Model.ViewerZone, Model.Now)
+								&ndash;
+								@* An overlap still running was clipped to the report's asOf, so its end is when the
+								   page was built rather than when anything stopped -- a timestamp there claims a
+								   closed window that goes stale as soon as it is read. *@
+								@if (Model.IsStillRunning(row)) {
+									<text>now</text>
+								} else {
+									@InstantDisplay.FormatCompact(row.LastOverlapEnd, Model.ViewerZone, Model.Now)
+								}
+							</td>
+						</tr>
+					}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
