@@ -109,9 +109,13 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		// owner/priority/deadline, and goes only at phone width.
 		body.Should().Contain("<th scope=\"col\" class=\"jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell\">Active</th>");
 		body.Should().Contain("<th scope=\"col\" class=\"jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell\">Cost</th>");
-		// The priority heading is abbreviated to "Pri" visually, with the full name for assistive tech.
-		body.Should().Contain("<span aria-hidden=\"true\">Pri</span><span class=\"visually-hidden\">Priority</span></th>");
-		body.Should().Contain(">Deadline</th>");
+		// The priority heading is abbreviated to "Pri" visually, with the full name for assistive tech,
+		// and is held back to xxl (d-none d-xxl-table-cell) so Description keeps its twelfth below that.
+		body.Should().Contain(
+			"<th scope=\"col\" class=\"jt-col-secondary col-xxl-1 d-none d-xxl-table-cell\"><span aria-hidden=\"true\">Pri</span>");
+		body.Should().Contain("visually-hidden\">Priority</span></th>");
+		// "Due", aria-labelled "Deadline": the same abbreviation AwaitingProgress uses for this field.
+		body.Should().Contain("aria-label=\"Deadline\">Due</th>");
 		body.Should().NotContain(">Owner</th>");
 	}
 

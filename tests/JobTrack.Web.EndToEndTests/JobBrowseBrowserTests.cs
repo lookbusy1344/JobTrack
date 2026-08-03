@@ -74,15 +74,23 @@ public abstract class JobBrowseBrowserTestsBase
 	private const double MediumDescriptionMaximumShare = 5.0 / 12.0;
 
 	/// <summary>
-	///     Description sits at its "at least 3 of 12" floor from the laptop breakpoint up: Active gained
-	///     the column it gave up (col-lg-1 -> col-lg-2, plan follow-up), so two or more simultaneous
-	///     workers' names have more than a twelfth of the row to preview in instead of wrapping to a
-	///     ladder of one-word lines.
+	///     From the laptop breakpoint up to xxl, Description takes the two twelfths Priority and
+	///     Deadline give up (col-lg-5): Priority is one tap away on the row's own page, and Deadline
+	///     renders "d MMM"/"HH:mm", which needs a twelfth at most. Both are worth less at a glance than
+	///     eight more characters of the node's own name.
 	/// </summary>
-	private const double LargeDescriptionMinimumShare = 2.5 / 12.0;
+	private const double LargeDescriptionMinimumShare = 4.5 / 12.0;
 
-	private const double LargeDescriptionMaximumShare = 3.0 / 12.0;
+	private const double LargeDescriptionMaximumShare = 5.0 / 12.0;
+
+	/// <summary>
+	///     Description returns to its "at least 3 of 12" floor once xxl brings Priority back beside the
+	///     span bar. Active also holds the column Description gave up at lg (col-lg-1 -> col-lg-2, plan
+	///     follow-up), so two or more simultaneous workers' names have more than a twelfth of the row to
+	///     preview in instead of wrapping to a ladder of one-word lines.
+	/// </summary>
 	private const double WideDescriptionMinimumShare = 2.5 / 12.0;
+
 	private const double WideDescriptionMaximumShare = 3.0 / 12.0;
 
 	/// <summary>
@@ -97,7 +105,9 @@ public abstract class JobBrowseBrowserTestsBase
 	private const double TabletCostMaximumShare = 3.0 / 12.0;
 	private const double LaptopCostMinimumShare = 1.5 / 12.0;
 	private const double LaptopCostMaximumShare = 2.0 / 12.0;
-	private const double MinimumWideDescriptionShare = LargeDescriptionMinimumShare;
+	// The floor that holds across the whole wide band (1280 and 1440): at 1280 Description has the
+	// twelfth Priority gives up, at 1440 it is back at its three-of-twelve floor.
+	private const double MinimumWideDescriptionShare = WideDescriptionMinimumShare;
 
 	// The smallest count that has more than one worker to preview -- the plural-pill regression case.
 	private const int TwoActiveWorkerCount = 2;
@@ -123,8 +133,8 @@ public abstract class JobBrowseBrowserTestsBase
 		{ SmallPhoneWidth, SmallPhoneHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
 		{ LargePhoneWidth, LargePhoneHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
 		{ TabletWidth, TabletHeight, 4, MediumDescriptionMinimumShare, MediumDescriptionMaximumShare },
-		{ LaptopWidth, LaptopHeight, 6, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
-		{ DesktopWidth, DesktopHeight, 6, WideDescriptionMinimumShare, WideDescriptionMaximumShare },
+		{ LaptopWidth, LaptopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
+		{ DesktopWidth, DesktopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
 		{ WideDesktopWidth, WideDesktopHeight, 7, WideDescriptionMinimumShare, WideDescriptionMaximumShare },
 	};
 
@@ -503,7 +513,7 @@ public abstract class JobBrowseBrowserTestsBase
 			.BeTrue("Sessions is the one row action that must stay reachable on a phone");
 		(await phoneRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should()
 			.BeFalse("Start is one tap away via Sessions/Browse and would crowd a phone-width row");
-		(await phoneRow.Locator(".jt-col-secondary").First.IsVisibleAsync()).Should().BeFalse("owner/priority/cost/span are secondary on a phone");
+		(await phoneRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeFalse("owner/priority/cost/span are secondary on a phone");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
@@ -511,7 +521,9 @@ public abstract class JobBrowseBrowserTestsBase
 		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
-		(await desktopRow.Locator(".jt-col-secondary").First.IsVisibleAsync()).Should().BeTrue("the columns come back when there is room for them");
+		// .Last, not .First: the first .jt-col-secondary in the row is Priority, which this table alone
+		// holds back to xxl so Description can have its twelfth. Deadline is the one that returns at lg.
+		(await desktopRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeTrue("the columns come back when there is room for them");
 		(await desktopRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should()
 			.BeTrue("Start comes back when there is room for it");
 	}

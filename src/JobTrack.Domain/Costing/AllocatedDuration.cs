@@ -14,6 +14,15 @@ public sealed record AllocatedDuration : IFormattable
 	private const int ReportingDecimalPlaces = 6;
 	private const decimal ReportingScaleDecimal = 1_000_000m;
 	private const string DefaultNumericFormat = "0.0";
+
+	/// <summary>
+	///     The hour count from which the tenth stops being rendered: three significant figures of hours
+	///     already say more than the tenth does, and dropping it keeps the figure to a width a narrow
+	///     table cell can hold.
+	/// </summary>
+	private const decimal WholeHoursThreshold = 100m;
+
+	private const string WholeHoursNumericFormat = "0";
 	private const string HoursSuffix = " hrs";
 
 	private static readonly BigInteger ReportingScale = BigInteger.Pow(10, ReportingDecimalPlaces);
@@ -34,8 +43,16 @@ public sealed record AllocatedDuration : IFormattable
 	public static AllocatedDuration Zero { get; } = new(BigInteger.Zero, BigInteger.One);
 
 	/// <inheritdoc />
-	public string ToString(string? format, IFormatProvider? formatProvider) =>
-		ToHours().ToString(format ?? DefaultNumericFormat, formatProvider ?? CultureInfo.InvariantCulture) + HoursSuffix;
+	/// <remarks>
+	///     With no explicit <paramref name="format" /> the precision follows the figure's own magnitude:
+	///     one decimal place below <see cref="WholeHoursThreshold" /> hours, whole hours at or above it.
+	///     This is a rendering rule only — <see cref="ToHours" /> keeps its six decimal places either way.
+	/// </remarks>
+	public string ToString(string? format, IFormatProvider? formatProvider)
+	{
+		var hours = ToHours();
+		return hours.ToString(format ?? DefaultNumericFormatFor(hours), formatProvider ?? CultureInfo.InvariantCulture) + HoursSuffix;
+	}
 
 	/// <summary>Creates an exact duration from one concurrency-allocated segment share.</summary>
 	/// <exception cref="ArgumentException"><paramref name="share" /> is uninitialized.</exception>
@@ -77,6 +94,12 @@ public sealed record AllocatedDuration : IFormattable
 		return (decimal)scaledHours / ReportingScaleDecimal;
 	}
 
-	/// <summary>Renders decimal hours to one decimal place, e.g. <c>3.5 hrs</c> or <c>3.0 hrs</c>.</summary>
+	/// <summary>
+	///     Renders decimal hours to one decimal place, e.g. <c>3.5 hrs</c> or <c>3.0 hrs</c> — or, from
+	///     100 hours up, as whole hours, e.g. <c>152 hrs</c>.
+	/// </summary>
 	public override string ToString() => ToString(null, null);
+
+	private static string DefaultNumericFormatFor(decimal hours) =>
+		hours >= WholeHoursThreshold ? WholeHoursNumericFormat : DefaultNumericFormat;
 }

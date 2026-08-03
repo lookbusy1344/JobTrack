@@ -1580,7 +1580,9 @@ fieldset legend {
    the handful of *visual* adjustments that ride along with it.
 
    `d-none d-lg-table-cell` (`.jt-col-secondary` cells): below lg these tables drop the columns that
-   are one tap away on the row's own page — owner, priority, kind/archived, span, deadline.
+   are one tap away on the row's own page — owner, priority, kind/archived, span, deadline. The
+   Browse subtree table cuts its priority column one tier earlier still (`d-none d-xxl-table-cell`),
+   since below the widest viewports its twelfth reads better as description.
 
    `d-none d-md-table-cell` (`.jt-col-cost`, `.jt-col-active`, `.jt-session-started` cells): cost is
    the one secondary column worth keeping at tablet width — it is what most people scanning the
@@ -1763,9 +1765,10 @@ nav[aria-label="breadcrumb"] li + li::before {
 /* Not sticky: with the page scrolling as one unit the only thing a sticky heading could stick to is
    the viewport, where `.app-header` (sticky, opaque, z-index 1030) already sits -- the headings would
    slide underneath it and be replaced by nothing. A heading row that scrolls away with its table is
-   also the one that can never paint over, or under, the rows it labels. Headings wrap, too: with no
-   horizontal scroller to absorb them, a `white-space: nowrap` heading ("Amount per hour") is a hard
-   floor on its column's width and the usual reason a narrow viewport overflows. */
+   also the one that can never paint over, or under, the rows it labels. Headings wrap by default,
+   too: with no horizontal scroller to absorb them, a `white-space: nowrap` heading ("Amount per
+   hour") is a hard floor on its column's width and the usual reason a narrow viewport overflows.
+   The nowrap carve-out below is for the columns that can never be that cause. */
 .table thead th {
     background: var(--jt-surface-2);
     border-bottom: 1px solid var(--jt-line-strong);
@@ -1862,6 +1865,20 @@ nav[aria-label="breadcrumb"] li + li::before {
 .table td.jt-col-secondary,
 .table td.jt-col-cost {
     font-size: var(--jt-font-size-sm);
+}
+
+/* These headings never wrap. A one-word label ("Deadline", "Archived") broken across two lines makes
+   the header row taller than the data it labels and reads as two labels rather than one, and where
+   the word is wider than its column the wrap buys nothing anyway — the column is no narrower for it.
+   Safe here, and only here, precisely because every column in this set is already hidden below md or
+   lg: it can never be the hard floor that pushes a narrow viewport into horizontal overflow, which
+   is why the default above stays "headings wrap". A label still too wide for its share at the widths
+   it does appear at is abbreviated in the markup instead — Browse's "Pri"/"Due", each carrying the
+   full name for assistive tech — not left to wrap. */
+.table th.jt-col-secondary,
+.table th.jt-col-active,
+.table th.jt-col-span {
+    white-space: nowrap;
 }
 
 /* A cost reads "£1,234.56 / 12h 30m" — four break opportunities, in a column that competes for width

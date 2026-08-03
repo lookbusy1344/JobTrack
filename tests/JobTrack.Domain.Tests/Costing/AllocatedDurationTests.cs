@@ -57,4 +57,19 @@ public sealed class AllocatedDurationTests
 	[Fact]
 	public void Formatting_does_not_expose_repeating_reporting_decimals() =>
 		AllocatedDuration.FromShare(new(OneHourTicks, 3)).ToString().Should().Be("0.3 hrs");
+
+	[Fact]
+	public void Formatting_keeps_the_decimal_place_just_below_a_hundred_hours() =>
+		AllocatedDuration.FromShare(new(OneHourTicks * 999, 10)).ToString().Should().Be("99.9 hrs");
+
+	[Theory]
+	[InlineData(1000, "100 hrs")]
+	[InlineData(1524, "152 hrs")]
+	[InlineData(1526, "153 hrs")]
+	public void Formatting_drops_the_decimal_place_from_a_hundred_hours_up(long tenthsOfAnHour, string expected) =>
+		AllocatedDuration.FromShare(new(OneHourTicks * tenthsOfAnHour, 10)).ToString().Should().Be(expected);
+
+	[Fact]
+	public void Formatting_honours_an_explicit_numeric_format_above_the_whole_hours_threshold() =>
+		AllocatedDuration.FromShare(new(OneHourTicks * 1524, 10)).ToString("0.0", null).Should().Be("152.4 hrs");
 }

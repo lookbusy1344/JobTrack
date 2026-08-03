@@ -24,8 +24,14 @@ public readonly record struct Money : IComparable<Money>, IFormattable
 	public int CompareTo(Money other) => Amount.CompareTo(other.Amount);
 
 	/// <inheritdoc />
+	/// <remarks>
+	///     With no explicit <paramref name="format" /> the precision follows the amount's own magnitude:
+	///     pennies below &#163;1,000, whole pounds at or above it, where the two minor-unit digits add
+	///     nothing to four significant figures of pounds. This is a rendering rule only — it never
+	///     changes the amount, and <see cref="Amount" /> keeps the full <c>numeric(19,6)</c> value.
+	/// </remarks>
 	public string ToString(string? format, IFormatProvider? formatProvider) =>
-		SterlingFormat.Format(Amount, format, formatProvider);
+		SterlingFormat.FormatByMagnitude(Amount, format, formatProvider);
 
 	/// <summary>
 	///     Rounds to the nearest penny using midpoint-to-even (banker's) rounding — the reporting
@@ -33,7 +39,7 @@ public readonly record struct Money : IComparable<Money>, IFormattable
 	/// </summary>
 	public Money RoundToPennies() => new(Math.Round(Amount, GbpMinorUnitDecimalPlaces, MidpointRounding.ToEven));
 
-	/// <summary>Renders the amount as Sterling, e.g. <c>£1,234.50</c>.</summary>
+	/// <summary>Renders the amount as Sterling, e.g. <c>£234.50</c> or, from £1,000 up, <c>£1,235</c>.</summary>
 	public override string ToString() => ToString(null, null);
 
 	/// <summary>Whether <paramref name="left" /> is less than <paramref name="right" />.</summary>

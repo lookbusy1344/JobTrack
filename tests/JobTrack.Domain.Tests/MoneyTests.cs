@@ -49,7 +49,18 @@ public sealed class MoneyTests
 		new Money((decimal)amount).RoundToPennies().Should().Be(new((decimal)expected));
 
 	[Fact]
-	public void Formatting_renders_sterling_with_two_decimal_places() => new Money(1234.5m).ToString().Should().Be("£1,234.50");
+	public void Formatting_renders_sterling_with_two_decimal_places() => new Money(234.5m).ToString().Should().Be("£234.50");
+
+	[Fact]
+	public void Formatting_keeps_the_pennies_just_below_a_thousand_pounds() =>
+		new Money(999.99m).ToString().Should().Be("£999.99");
+
+	[Theory]
+	[InlineData(1000, "£1,000")]
+	[InlineData(1055.76, "£1,056")]
+	[InlineData(2055.4, "£2,055")]
+	public void Formatting_drops_the_pennies_from_a_thousand_pounds_up(double amount, string expected) =>
+		new Money((decimal)amount).ToString().Should().Be(expected);
 
 	[Fact]
 	public void Formatting_honours_an_explicit_numeric_format() =>

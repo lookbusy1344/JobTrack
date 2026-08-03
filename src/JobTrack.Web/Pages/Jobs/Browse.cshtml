@@ -512,17 +512,26 @@
 				<tr>
 					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
 					   archived row is flagged in place beside its name. *@
-					<th scope="col" class="col-10 col-md-5 col-lg-3">Description</th>
+					<th scope="col" class="col-10 col-md-5 col-lg-5 col-xxl-3">Description</th>
 					@* "Pri": the cells below hold an abbreviated priority label, so the word "Priority"
 					   is wider than anything in its own column and holds the column open for nothing.
 					   The full name still rides along visually hidden, so it is never announced as
 					   a bare fragment. *@
-					@* Both spans stay on one line: a wrap inside the second tag puts a newline and tabs into
-					   the rendered attribute list, which is invisible on the page but is exactly what the
-					   markup assertion in BrowseWorkSessionTests reads. *@
-					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell"><span aria-hidden="true">Pri</span><span
+					@* d-none d-xxl-table-cell, not the d-lg-table-cell every other secondary column gets:
+					   a node's priority is one tap away on its own page, and below xxl the twelfth it
+					   occupies is worth more to Description, which takes it (col-lg-4) until xxl hands it
+					   back (col-xxl-3). *@
+					@* The wrap inside the second tag puts a newline and tabs into the rendered attribute
+					   list — invisible on the page, but it splits what BrowseWorkSessionTests' markup
+					   assertions can read, so they check the heading in two contiguous pieces. *@
+					<th scope="col" class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell"><span aria-hidden="true">Pri</span><span
 							class="visually-hidden">Priority</span></th>
-					<th scope="col" class="jt-col-secondary col-lg-2 col-xxl-1 d-none d-lg-table-cell">Deadline</th>
+					@* col-lg-1 at every breakpoint it appears: the cell holds "d MMM" (or "HH:mm" when the
+					   deadline is today), so a twelfth is already more than its content needs and the
+					   heading word itself is what actually sets the floor. Description takes the rest.
+					   "Due", aria-labelled "Deadline", is the same abbreviation AwaitingProgress uses for
+					   this field — "Deadline" is wider than anything in the column below it. *@
+					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell" aria-label="Deadline">Due</th>
 					@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
 					   workers' names (the preview list below the count pill) need more than a twelfth of the
 					   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
@@ -547,7 +556,7 @@
 						? null
 						: Model.WorkRowActionsFor(node.Id, "Start", "leafNodeId", node.Achievement, node.ArchivedAt is not null);
 					<tr>
-						<td class="jt-tree-cell col-10 col-md-5 col-lg-3" data-jt-depth="@node.Depth">
+						<td class="jt-tree-cell col-10 col-md-5 col-lg-5 col-xxl-3" data-jt-depth="@node.Depth">
 							<span class="jt-tree-guide" aria-hidden="true">
 								@for (var railLevel = 1; railLevel < node.Depth; ++railLevel) {
 									<span class="jt-tree-rail"></span>
@@ -598,10 +607,10 @@
 								</span>
 							</span>
 						</td>
-						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">
+						<td class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell">
 							<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = node.Priority })"/>
 						</td>
-						<td class="jt-col-secondary col-lg-2 col-xxl-1 d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
+						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
 							@if (needed is Instant neededInstant) {
 								<span
 									class="@(InstantDisplay.IsPast(neededInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
