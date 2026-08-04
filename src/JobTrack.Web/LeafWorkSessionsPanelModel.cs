@@ -3,6 +3,7 @@ namespace JobTrack.Web;
 using System.Globalization;
 using Abstractions;
 using Application;
+using Domain.Costing;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using NodaTime;
 
@@ -45,6 +46,15 @@ public sealed class LeafWorkSessionsPanelModel
 	public required bool ShowWorkerFilter { get; init; }
 
 	public required EquatableArray<WorkSessionResult> Sessions { get; init; }
+
+	/// <summary>
+	///     Each session's cost and allocated duration (<see cref="SessionCostAggregator.AggregateBySession" />),
+	///     or <see langword="null" /> when cost is unavailable for this leaf — an unauthorized viewer (ADR
+	///     0042, matching the leaf's own Cost field on Browse's record card) or a session with no
+	///     resolvable rate. Absent entirely rather than per-row, so the whole column withdraws instead of
+	///     showing a misleading partial figure.
+	/// </summary>
+	public IReadOnlyDictionary<WorkSessionId, (Money Cost, AllocatedDuration Duration)>? SessionCosts { get; init; }
 
 	public required List<SelectListItem> WorkedByOptions { get; init; }
 

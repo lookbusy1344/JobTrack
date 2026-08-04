@@ -27,9 +27,17 @@
 		<table class="table">
 			<thead>
 			<tr>
-				<th class="col-5 col-md-3">Worked by</th>
-				<th class="jt-session-started col-md-3 d-none d-md-table-cell">Started</th>
-				<th class="col-5 col-md-4">Finished</th>
+				<th class="col-5 col-md-3 col-lg-3">Worked by</th>
+				<th class="jt-session-started col-lg-2 d-none d-lg-table-cell">Started</th>
+				<th class="col-5 col-md-4 col-lg-2">Finished</th>
+				@* Cost sits beside Actions, the same corner Browse's own node table puts it in relative to
+				   its row, and surfaces at md (col-md-3) holding col-lg-3 once Started returns at lg --
+				   the figure is the widest thing in the row (a &#163; amount plus its allocated hours), so
+				   it gets the same three-twelfths share as Worked by rather than the plain jt-col-cost
+				   allocation Browse's own node table uses for a bare amount. Narrows first: Started, whose
+				   day/time is one tap away via the row's own session, then Cost -- ADR 0042 gates it and it
+				   is not needed to act on a row. *@
+				<th class="jt-col-cost col-md-3 col-lg-3 text-end d-none d-md-table-cell">Cost</th>
 				<th class="col-2 text-end">Actions</th>
 			</tr>
 			</thead>
@@ -47,13 +55,18 @@
 					}
 					: null;
 				<tr>
-					<td class="col-5 col-md-3">@Model.DescribeWorker(session.WorkedByUserId)</td>
-					<td class="jt-session-started col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
-					<td class="col-5 col-md-4">
+					<td class="col-5 col-md-3 col-lg-3">@Model.DescribeWorker(session.WorkedByUserId)</td>
+					<td class="jt-session-started col-lg-2 d-none d-lg-table-cell">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
+					<td class="col-5 col-md-4 col-lg-2">
 						@if (session.FinishedAt is Instant finishedAt) {
 							@InstantDisplay.Format(finishedAt, Model.ViewerZone)
 						} else {
 							<span class="status-pill status-pill-ready">Active</span>
+						}
+					</td>
+					<td class="jt-col-cost col-md-3 col-lg-3 text-end d-none d-md-table-cell">
+						@if (Model.SessionCosts is not null && Model.SessionCosts.TryGetValue(session.Id, out var sessionCost)) {
+							@CostDisplay.FormatCell(sessionCost.Cost, sessionCost.Duration)
 						}
 					</td>
 					@* text-end only, never text-nowrap: nowrap on a cell is a hard floor under its column's

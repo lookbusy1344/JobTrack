@@ -7,6 +7,8 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
+using Domain.Rates;
+using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -94,6 +96,58 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		var startBody = await startReloaded.Content.ReadAsStringAsync();
 		startBody.Should().Contain("Session started");
 		startBody.Should().Contain("Active");
+	}
+
+	[Fact]
+	/// <summary>
+	/// The leaf's own Sessions table (_LeafWorkSessions, shared with Browse's embedded panel) prices
+	/// each session on /Jobs/Work using the same &#163;figure / hours format as every other cost figure
+	/// in the app (CostDisplay.FormatCell, jt-col-cost).
+	/// </summary>
+	public async Task The_work_page_sessions_table_shows_each_sessions_cost_in_the_shared_cost_and_hours_format()
+	{
+		var workerId = await SeedEmployeeAsync("work.sessioncost", EmployeeRole.Worker);
+		// Administrator, not CostViewer: /Jobs/Work's JobWorkflow policy admits only
+		// Administrator/JobManager/Worker, unlike CostAccessPolicy.CanView's own Administrator-or-
+		// CostViewer-or-ownership rule -- Administrator is the one role both admit.
+		_ = await SeedEmployeeAsync("work.sessioncost-viewer", EmployeeRole.Administrator);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Costed work-page session leaf");
+
+		var sessionStart = Instant.FromUtc(2026, 1, 1, 9, 0);
+		var sessionFinish = Instant.FromUtc(2026, 1, 1, 11, 0);
+		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			UserId = workerId,
+			Entry = new(ScheduleExceptionEffect.AddWorkingTime, new(sessionStart, sessionFinish.Plus(Duration.FromHours(1))), null),
+			Reason = "Full working window for work-page session-cost test",
+		});
+		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			UserId = workerId,
+			Rate = new(new(60m), Instant.FromUtc(2000, 1, 1, 0, 0), null),
+		});
+		var session = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.CorrectSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			StartedAt = sessionStart,
+			FinishedAt = sessionFinish,
+			Reason = "Pin to a deterministic instant for work-page session-cost test",
+			Version = session.Version,
+		});
+
+		var authCookie = await SignInAsync("work.sessioncost-viewer");
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("<th class=\"jt-col-cost col-md-3 col-lg-3 text-end d-none d-md-table-cell\">Cost</th>");
+		body.Should().Contain("&#xA3;120.00");
+		body.Should().Contain("2.0 hrs");
 	}
 
 	[Fact]

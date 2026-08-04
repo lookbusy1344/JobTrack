@@ -7,11 +7,14 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
+using Domain.Rates;
+using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -117,6 +120,67 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		// "Due", aria-labelled "Deadline": the same abbreviation AwaitingProgress uses for this field.
 		body.Should().Contain("aria-label=\"Deadline\">Due</th>");
 		body.Should().NotContain(">Owner</th>");
+	}
+
+	[Fact]
+	/// <summary>
+	/// The leaf's own Sessions table (_LeafWorkSessions, embedded on Browse) prices each session using
+	/// the same &#163;figure / hours format as every other cost figure in the app (CostDisplay.FormatCell,
+	/// jt-col-cost) -- not a bespoke rendering of its own.
+	/// </summary>
+	public async Task The_sessions_table_shows_each_sessions_cost_in_the_shared_cost_and_hours_format()
+	{
+		var workerId = await SeedEmployeeAsync("browse.sessioncost", EmployeeRole.Worker);
+		_ = await SeedEmployeeAsync("browse.sessioncost-viewer", EmployeeRole.CostViewer);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Costed session leaf");
+		await SeedCostedSessionAsync(leaf.Id, workerId);
+		var authCookie = await SignInAsync("browse.sessioncost-viewer");
+
+		var response = await GetLeafDetailAsync(authCookie, leaf.Id);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("<th class=\"jt-col-cost col-md-3 col-lg-3 text-end d-none d-md-table-cell\">Cost</th>");
+		body.Should().Contain("&#xA3;120.00");
+		body.Should().Contain("2.0 hrs");
+	}
+
+	private static readonly Instant SessionCostStart = Instant.FromUtc(2026, 1, 1, 9, 0);
+	private static readonly Instant SessionCostFinish = Instant.FromUtc(2026, 1, 1, 11, 0);
+
+	/// <summary>
+	/// Seeds a full working window, a &#163;60/hour rate, and a 09:00-11:00 finished session for
+	/// <paramref name="workerId" /> on <paramref name="leafId" /> -- a &#163;120.00 / 2.0 hrs session,
+	/// mirroring <c>CostReportTests.SeedLeafWithCostedSessionAsync</c>'s own fixture shape.
+	/// </summary>
+	private async Task SeedCostedSessionAsync(JobNodeId leafId, AppUserId workerId)
+	{
+		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			UserId = workerId,
+			Entry = new(
+				ScheduleExceptionEffect.AddWorkingTime, new(SessionCostStart, SessionCostFinish.Plus(Duration.FromHours(1))), null),
+			Reason = "Full working window for browse session-cost test",
+		});
+		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			UserId = workerId,
+			Rate = new(new(60m), Instant.FromUtc(2000, 1, 1, 0, 0), null),
+		});
+
+		var session = await seedClient.Work.StartSessionAsync(new() {
+			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
+		_ = await seedClient.Work.CorrectSessionAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			SessionId = session.Id,
+			StartedAt = SessionCostStart,
+			FinishedAt = SessionCostFinish,
+			Reason = "Pin to a deterministic instant for browse session-cost test",
+			Version = session.Version,
+		});
 	}
 
 	[Fact]

@@ -784,6 +784,39 @@ public abstract class JobBrowseBrowserTestsBase
 
 	[Fact]
 	/// <summary>
+	/// The sessions table's own Cost column (jt-col-cost, mirroring Browse's node table) narrows one
+	/// step later than Started: at the tablet breakpoint Cost is visible and Started is not, and both
+	/// arrive together only once the laptop breakpoint (d-lg) is reached.
+	/// </summary>
+	public async Task The_sessions_table_cost_column_outlasts_started_while_narrowing()
+	{
+		var (leafId, _) = await fixture.SeedActiveSessionsAsync("Cost column narrowing leaf", 1);
+
+		await using var tabletContext = await fixture.NewContextAsync(TabletWidth, TabletHeight);
+		var tablet = await tabletContext.NewPageAsync();
+		await SignInAsync(tablet);
+		await tablet.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+
+		var tabletTable = tablet.Locator(".jt-table-block table");
+		(await tabletTable.GetByRole(AriaRole.Columnheader, new() { Name = "Cost", Exact = true }).IsVisibleAsync()).Should()
+			.BeTrue("Cost is visible at the tablet breakpoint");
+		(await tabletTable.GetByRole(AriaRole.Columnheader, new() { Name = "Started", Exact = true }).IsVisibleAsync()).Should()
+			.BeFalse("Started has already narrowed away at the tablet breakpoint");
+
+		await using var laptopContext = await fixture.NewContextAsync(LaptopWidth, LaptopHeight);
+		var laptop = await laptopContext.NewPageAsync();
+		await SignInAsync(laptop);
+		await laptop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+
+		var laptopTable = laptop.Locator(".jt-table-block table");
+		(await laptopTable.GetByRole(AriaRole.Columnheader, new() { Name = "Cost", Exact = true }).IsVisibleAsync()).Should()
+			.BeTrue("Cost stays visible at the laptop breakpoint");
+		(await laptopTable.GetByRole(AriaRole.Columnheader, new() { Name = "Started", Exact = true }).IsVisibleAsync()).Should()
+			.BeTrue("Started returns once the laptop breakpoint gives it room");
+	}
+
+	[Fact]
+	/// <summary>
 	/// A finished session has no Pause to fall back to, so on a phone its one surviving row action must
 	/// be Correct, not nothing -- the opposite case from the active-session row above.
 	/// </summary>

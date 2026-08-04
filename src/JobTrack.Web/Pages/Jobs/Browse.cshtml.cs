@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Abstractions;
 using Application;
+using Domain.Costing;
 using Domain.Hierarchy;
 using Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -770,10 +771,33 @@ public sealed class BrowseModel(
 				WorkedByOptions = [],
 				ShowWorkerFilter = false,
 				ExtraHiddenFields = RowStateFields,
+				SessionCosts = await LoadSessionCostsAsync(context, leafId, cancellationToken),
 			};
 		}
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "You may not view that worker's sessions on this leaf.";
+		}
+	}
+
+	/// <summary>
+	///     Each session's cost on <paramref name="leafId" />, or <see langword="null" /> when cost is
+	///     unavailable — the same optional-field treatment as the leaf's own Cost record-card field
+	///     (ADR 0039 decision 4/ADR 0040/ADR 0042): an unauthorized viewer or a session with no
+	///     resolvable rate withdraws the whole column rather than denying the page or a single row.
+	/// </summary>
+	private async Task<IReadOnlyDictionary<WorkSessionId, (Money Cost, AllocatedDuration Duration)>?> LoadSessionCostsAsync(
+		CommandContext context, JobNodeId leafId, CancellationToken cancellationToken)
+	{
+		try {
+			var details = await jobTrackClient.Costs.GetCostDetailsAsync(
+				new() { Context = context, NodeId = leafId, AsOf = Now }, cancellationToken);
+			return SessionCostAggregator.AggregateBySession(details.Trace);
+		}
+		catch (AuthorizationDeniedException) {
+			return null;
+		}
+		catch (MissingRateException) {
+			return null;
 		}
 	}
 
