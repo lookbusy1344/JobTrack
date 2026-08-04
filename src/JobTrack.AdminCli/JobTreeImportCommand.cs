@@ -48,7 +48,7 @@ public static class JobTreeImportCommand
 		ArgumentNullException.ThrowIfNull(jsonContent);
 		ArgumentNullException.ThrowIfNull(homeNodeUsernames);
 
-		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false);
+		var user = await userManager.FindByNameAsync(username);
 		if (user is null) {
 			io.WriteError($"No employee account found for username '{username}'.");
 			return 1;
@@ -94,7 +94,7 @@ public static class JobTreeImportCommand
 		if (homeLocalId.HasValue) {
 			homeNodeUsers.Add((username, user.AppUserId));
 			foreach (var homeUsername in homeNodeUsernames.Where(n => !string.Equals(n, username, StringComparison.OrdinalIgnoreCase))) {
-				var homeUser = await userManager.FindByNameAsync(homeUsername).ConfigureAwait(false);
+				var homeUser = await userManager.FindByNameAsync(homeUsername);
 				if (homeUser is null) {
 					io.WriteError($"No employee account found for username '{homeUsername}'.");
 					return 1;
@@ -108,7 +108,7 @@ public static class JobTreeImportCommand
 		try {
 			result = await jobTrackClient.Jobs.ImportSubtreeAsync(
 				new() { Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() }, ParentId = importRootId, Nodes = nodes },
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 		}
 		catch (JobTrackException ex) {
 			io.WriteError($"Import failed; nothing was created: {ex.Message}");
@@ -126,7 +126,7 @@ public static class JobTreeImportCommand
 				try {
 					_ = await jobTrackClient.Employees.SetHomeNodeAsync(
 						new() { Context = new() { Actor = homeUserId, CorrelationId = Guid.NewGuid() }, NodeId = homeNodeId },
-						cancellationToken).ConfigureAwait(false);
+						cancellationToken);
 				}
 				catch (JobTrackException ex) {
 					io.WriteError($"Imported the tree, but failed to set the home node for '{homeUsername}': {ex.Message}");

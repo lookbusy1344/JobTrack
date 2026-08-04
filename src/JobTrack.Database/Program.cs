@@ -20,7 +20,7 @@ public static class Program
 
 		try {
 			var options = DeployCommandOptions.Parse(rest);
-			await DeployAsync(options, CancellationToken.None).ConfigureAwait(false);
+			await DeployAsync(options, CancellationToken.None);
 			return 0;
 		}
 		catch (SchemaDeploymentException ex) {
@@ -46,13 +46,13 @@ public static class Program
 			_ => throw new SchemaDeploymentException($"Unknown provider '{options.Provider}'."),
 		};
 
-		await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+		await connection.OpenAsync(cancellationToken);
 
 		if (options.Provider == SchemaProvider.Sqlite) {
 			await using var pragmaCommand = connection.CreateCommand();
 			pragmaCommand.CommandText =
 				"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
-			_ = await pragmaCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+			_ = await pragmaCommand.ExecuteNonQueryAsync(cancellationToken);
 		}
 
 		(ISchemaVersionStore Store, IDeploymentLockStrategy LockStrategy) components = options.Provider switch {
@@ -62,13 +62,11 @@ public static class Program
 		};
 
 		var deployer = new SchemaDeployer(connection, components.Store, components.LockStrategy, applicationVersion, appliedBy);
-		await deployer.DeployAsync(scripts, cancellationToken).ConfigureAwait(false);
+		await deployer.DeployAsync(scripts, cancellationToken);
 
 		if (options.Provider == SchemaProvider.PostgreSql) {
-			await PostgreSqlRolesAndGrants.ApplyAsync(connection, PostgreSqlRolesAndGrantsScriptPath(scriptsRoot), cancellationToken)
-				.ConfigureAwait(false);
-			await PostgreSqlRolesAndGrants.ApplyAsync(connection, PostgreSqlFunctionsScriptPath(scriptsRoot), cancellationToken)
-				.ConfigureAwait(false);
+			await PostgreSqlRolesAndGrants.ApplyAsync(connection, PostgreSqlRolesAndGrantsScriptPath(scriptsRoot), cancellationToken);
+			await PostgreSqlRolesAndGrants.ApplyAsync(connection, PostgreSqlFunctionsScriptPath(scriptsRoot), cancellationToken);
 		}
 	}
 

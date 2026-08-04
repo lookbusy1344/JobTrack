@@ -13,7 +13,7 @@ public sealed class PostgreSqlSchemaVersionStore : ISchemaVersionStore
 		var npgsqlConnection = (NpgsqlConnection)connection;
 		var npgsqlTransaction = (NpgsqlTransaction)transaction;
 
-		if (!await TrackingTableExistsAsync(npgsqlConnection, npgsqlTransaction, cancellationToken).ConfigureAwait(false)) {
+		if (!await TrackingTableExistsAsync(npgsqlConnection, npgsqlTransaction, cancellationToken)) {
 			return [];
 		}
 
@@ -25,8 +25,8 @@ public sealed class PostgreSqlSchemaVersionStore : ISchemaVersionStore
 			"SELECT version, description, checksum, applied_by, application_version, applied_at " +
 			"FROM schema_version ORDER BY version;";
 
-		await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-		while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) {
+		await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+		while (await reader.ReadAsync(cancellationToken)) {
 			appliedVersions.Add(new() {
 				Version = reader.GetInt32(0),
 				Description = reader.GetString(1),
@@ -57,7 +57,7 @@ public sealed class PostgreSqlSchemaVersionStore : ISchemaVersionStore
 		_ = command.Parameters.AddWithValue("applicationVersion", appliedVersion.ApplicationVersion);
 		_ = command.Parameters.Add(new("appliedAt", NpgsqlDbType.TimestampTz) { Value = appliedVersion.AppliedAtUtc });
 
-		_ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+		_ = await command.ExecuteNonQueryAsync(cancellationToken);
 	}
 
 	private static async Task<bool> TrackingTableExistsAsync(
@@ -67,6 +67,6 @@ public sealed class PostgreSqlSchemaVersionStore : ISchemaVersionStore
 		command.Transaction = transaction;
 		command.CommandText = "SELECT to_regclass('public.schema_version') IS NOT NULL;";
 
-		return (bool)(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+		return (bool)(await command.ExecuteScalarAsync(cancellationToken))!;
 	}
 }

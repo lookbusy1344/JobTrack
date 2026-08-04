@@ -3,7 +3,7 @@
 # -- see docs/operations/hurl-smoke-tests.md for what each suite covers and why this needs a real
 # Kestrel process rather than the in-memory WebApplicationFactory the xUnit integration suites use.
 #
-# Preconditions (README's "Running on a development server" + "Seeding a synthetic end-user
+# Preconditions (the developer guide's "Running on a development server" + "Seeding a synthetic end-user
 # testing (UAT) scenario"): the database is deployed, bootstrapped, and freshly UAT-seeded, and
 # JobTrack.Web is already running at --base-url. This script does not start the host itself, since
 # a freshly reseeded database is required every run (the seed and the forced-password-change flow

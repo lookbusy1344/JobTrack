@@ -23,6 +23,6 @@ public sealed class PostgreSqlDeploymentLockStrategy : IDeploymentLockStrategy
 		command.CommandText = "SELECT pg_advisory_xact_lock(hashtext(@lockDomain));";
 		_ = command.Parameters.AddWithValue("lockDomain", PostgreSqlLockKeys.SchemaDeployment);
 
-		_ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+		_ = await command.ExecuteNonQueryAsync(cancellationToken);
 	}
 }

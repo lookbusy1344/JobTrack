@@ -34,20 +34,20 @@ public static class EmergencyTwoFactorReset
 		ArgumentNullException.ThrowIfNull(clock);
 		ArgumentException.ThrowIfNullOrWhiteSpace(username);
 
-		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false);
+		var user = await userManager.FindByNameAsync(username);
 		if (user is null) {
 			io.WriteError($"No employee account found for username '{username}'.");
 			return 1;
 		}
 
-		await using var transaction = await identityContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await identityContext.Database.BeginTransactionAsync(cancellationToken);
 
 		user.TwoFactorEnabled = false;
 		user.AuthenticatorKeyProtected = null;
 		user.TwoFactorEnabledAt = null;
 		user.SecurityStamp = Guid.NewGuid().ToString("N");
 
-		var updateResult = await userManager.UpdateAsync(user).ConfigureAwait(false);
+		var updateResult = await userManager.UpdateAsync(user);
 		if (!updateResult.Succeeded) {
 			io.WriteError($"Failed to update the account: {string.Join("; ", updateResult.Errors.Select(e => e.Description))}");
 			return 1;
@@ -63,25 +63,25 @@ public static class EmergencyTwoFactorReset
 				 INSERT INTO audit_event (occurred_at, actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({occurredAtTicks}, {user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
 				 """,
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 			// ADR 0029: an emergency two-factor reset is the same credential-sensitivity class as an
 			// administrator-driven reset -- it must revoke every live personal access token too.
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"UPDATE personal_access_token SET revoked_at = {occurredAtTicks} WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 		} else {
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"""
 				 INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
 				 """,
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"UPDATE personal_access_token SET revoked_at = now() WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 		}
 
-		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken);
 
 		io.WriteLine(
 			$"Two-factor authentication has been reset for '{username}'. " +

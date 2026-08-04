@@ -27,7 +27,7 @@ public static class SetHomeNodeCommand
 		ArgumentNullException.ThrowIfNull(jobTrackClient);
 		ArgumentException.ThrowIfNullOrWhiteSpace(username);
 
-		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false);
+		var user = await userManager.FindByNameAsync(username);
 		if (user is null) {
 			io.WriteError($"No employee account found for username '{username}'.");
 			return 1;
@@ -36,7 +36,7 @@ public static class SetHomeNodeCommand
 		try {
 			_ = await jobTrackClient.Employees.SetHomeNodeAsync(
 				new() { Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() }, NodeId = nodeId },
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 		}
 		catch (JobTrackException ex) {
 			io.WriteError($"Failed to set the home node for '{username}': {ex.Message}");

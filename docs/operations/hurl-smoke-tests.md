@@ -47,12 +47,12 @@ step or credential-bearing command is needed.
 `scripts/run-hurl-tests.sh` runs all four suites in the dependency order above (auth/smoke checks
 first, then the login+CSRF flow — which now also mints the bearer PAT through the self-service page
 — then the bearer reads) against a host you have already started. It does not start the host itself
-or seed the database — see README's "Running on a development server" and "Seeding a synthetic
+or seed the database — see the developer guide's "Running on a development server" and "Seeding a synthetic
 end-user testing (UAT) scenario" for that sequence, which must be freshly repeated before every run
 (the seed and the forced password change are both one-time, non-idempotent transitions):
 
 ```bash
-# 1. Deploy, bootstrap, and seed a fresh SQLite dev database (README sequence).
+# 1. Deploy, bootstrap, and seed a fresh SQLite dev database (developer-guide sequence).
 rm -f src/JobTrack.Web/jobtrack-web-dev.db*
 dotnet run --project src/JobTrack.Database -- deploy --provider sqlite --connection-string "Data Source=src/JobTrack.Web/jobtrack-web-dev.db" --scripts-root database/sqlite/schema-versions
 dotnet run --project src/JobTrack.AdminCli -- bootstrap --provider sqlite --connection-string "Data Source=src/JobTrack.Web/jobtrack-web-dev.db"

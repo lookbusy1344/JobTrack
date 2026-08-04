@@ -30,7 +30,7 @@ public static class CreateEmployeeCommand
 		ArgumentNullException.ThrowIfNull(options);
 		ArgumentException.ThrowIfNullOrWhiteSpace(options.Password);
 
-		var actor = await userManager.FindByNameAsync(options.ActorUsername).ConfigureAwait(false);
+		var actor = await userManager.FindByNameAsync(options.ActorUsername);
 		if (actor is null) {
 			io.WriteError($"No administrator account found for username '{options.ActorUsername}'.");
 			return 1;
@@ -49,15 +49,15 @@ public static class CreateEmployeeCommand
 					Password = options.Password,
 					Role = options.Roles[0],
 				},
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 
 			foreach (var role in options.Roles.Skip(1)) {
 				_ = await jobTrackClient.Employees.AssignRoleAsync(
 					new() { Context = context, TargetUserId = created.Id, Role = role },
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken);
 			}
 
-			if (!options.ForcePasswordChange && !await ForcedPasswordChange.ClearAsync(io, userManager, options.Username).ConfigureAwait(false)) {
+			if (!options.ForcePasswordChange && !await ForcedPasswordChange.ClearAsync(io, userManager, options.Username)) {
 				return 1;
 			}
 

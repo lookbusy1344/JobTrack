@@ -13,7 +13,7 @@ using UatSeed;
 /// <summary>
 ///     Proves the end-user-testing readiness synthetic seed (remediation plan §2.3) applies cleanly to a
 ///     freshly deployed, freshly bootstrapped database, matching how a UAT operator would run it after
-///     README.md's "Running on a development server" steps. Uses SQLite since it needs no separate
+///     docs/developer-guide.md's "Running on a development server" steps. Uses SQLite since it needs no separate
 ///     server; the PostgreSQL path shares the same <see cref="UatSeeder.SeedAsync" /> and
 ///     <see cref="IJobTrackClient" /> contract, so PostgreSQL-specific coverage would be duplication, not
 ///     additional evidence.

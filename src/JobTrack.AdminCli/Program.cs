@@ -43,12 +43,12 @@ public static class Program
 			var command = pico.GetCommandOpt();
 
 			return command switch {
-				"bootstrap" => await RunBootstrapAsync(BootstrapCommandOptions.Parse(pico), io).ConfigureAwait(false),
-				"reset-password" => await RunResetPasswordAsync(ResetPasswordCommandOptions.Parse(pico), io).ConfigureAwait(false),
-				"reset-2fa" => await RunResetTwoFactorAsync(ResetTwoFactorCommandOptions.Parse(pico), io).ConfigureAwait(false),
-				"import-tree" => await RunImportTreeAsync(JobTreeImportCommandOptions.Parse(pico), io).ConfigureAwait(false),
-				"set-home-node" => await RunSetHomeNodeAsync(SetHomeNodeCommandOptions.Parse(pico), io).ConfigureAwait(false),
-				"create-employee" => await RunCreateEmployeeAsync(CreateEmployeeCommandOptions.Parse(pico), io).ConfigureAwait(false),
+				"bootstrap" => await RunBootstrapAsync(BootstrapCommandOptions.Parse(pico), io),
+				"reset-password" => await RunResetPasswordAsync(ResetPasswordCommandOptions.Parse(pico), io),
+				"reset-2fa" => await RunResetTwoFactorAsync(ResetTwoFactorCommandOptions.Parse(pico), io),
+				"import-tree" => await RunImportTreeAsync(JobTreeImportCommandOptions.Parse(pico), io),
+				"set-home-node" => await RunSetHomeNodeAsync(SetHomeNodeCommandOptions.Parse(pico), io),
+				"create-employee" => await RunCreateEmployeeAsync(CreateEmployeeCommandOptions.Parse(pico), io),
 				_ => Usage(io),
 			};
 		}
@@ -76,8 +76,7 @@ public static class Program
 		// Only clearing the forced password change needs a UserManager; build it lazily so the common
 		// path keeps the same lightweight dependency footprint it had before.
 		if (options.ForcePasswordChange) {
-			return await BootstrapCommand.RunAsync(io, client.Installation, Environment.UserName, CancellationToken.None, password)
-				.ConfigureAwait(false);
+			return await BootstrapCommand.RunAsync(io, client.Installation, Environment.UserName, CancellationToken.None, password);
 		}
 
 		var services = new ServiceCollection();
@@ -94,8 +93,7 @@ public static class Program
 		var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
 
 		return await BootstrapCommand.RunAsync(
-				io, client.Installation, Environment.UserName, CancellationToken.None, password, userManager, false)
-			.ConfigureAwait(false);
+				io, client.Installation, Environment.UserName, CancellationToken.None, password, userManager, false);
 	}
 
 	private static async Task<int> RunResetPasswordAsync(ResetPasswordCommandOptions options, SystemConsoleIO io)
@@ -119,8 +117,7 @@ public static class Program
 
 		return await EmergencyPasswordReset.RunAsync(
 				io, userManager, identityContext, passwordHasher, options.Provider, options.Username, SystemClock.Instance,
-				CancellationToken.None)
-			.ConfigureAwait(false);
+				CancellationToken.None);
 	}
 
 	private static async Task<int> RunResetTwoFactorAsync(ResetTwoFactorCommandOptions options, SystemConsoleIO io)
@@ -142,15 +139,14 @@ public static class Program
 		var identityContext = scope.ServiceProvider.GetRequiredService<JobTrackIdentityDbContext>();
 
 		return await EmergencyTwoFactorReset.RunAsync(
-				io, userManager, identityContext, options.Provider, options.Username, SystemClock.Instance, CancellationToken.None)
-			.ConfigureAwait(false);
+				io, userManager, identityContext, options.Provider, options.Username, SystemClock.Instance, CancellationToken.None);
 	}
 
 	private static async Task<int> RunImportTreeAsync(JobTreeImportCommandOptions options, SystemConsoleIO io)
 	{
 		string jsonContent;
 		try {
-			jsonContent = await File.ReadAllTextAsync(options.FilePath, CancellationToken.None).ConfigureAwait(false);
+			jsonContent = await File.ReadAllTextAsync(options.FilePath, CancellationToken.None);
 		}
 		catch (IOException ex) {
 			io.WriteError($"Failed to read '{options.FilePath}': {ex.Message}");
@@ -177,8 +173,7 @@ public static class Program
 
 		return await JobTreeImportCommand.RunAsync(
 				io, userManager, client, options.Username, new(options.ParentJobNodeId), jsonContent, SystemClock.Instance,
-				options.HomeNodeUsernames, CancellationToken.None)
-			.ConfigureAwait(false);
+				options.HomeNodeUsernames, CancellationToken.None);
 	}
 
 	private static async Task<int> RunSetHomeNodeAsync(SetHomeNodeCommandOptions options, SystemConsoleIO io)
@@ -199,8 +194,7 @@ public static class Program
 
 		return await SetHomeNodeCommand.RunAsync(
 				io, userManager, client, options.Username, options.JobNodeId is long nodeId ? new JobNodeId(nodeId) : null,
-				CancellationToken.None)
-			.ConfigureAwait(false);
+				CancellationToken.None);
 	}
 
 	private static async Task<int> RunCreateEmployeeAsync(CreateEmployeeCommandOptions options, SystemConsoleIO io)
@@ -222,7 +216,7 @@ public static class Program
 					   ?? (options.PasswordFromStdin ? io.ReadStdinLine() : PasswordPrompt.ReadConfirmed(io));
 		var resolvedOptions = options with { Password = password };
 
-		return await CreateEmployeeCommand.RunAsync(io, userManager, client, resolvedOptions, CancellationToken.None).ConfigureAwait(false);
+		return await CreateEmployeeCommand.RunAsync(io, userManager, client, resolvedOptions, CancellationToken.None);
 	}
 
 	/// <summary>

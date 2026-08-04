@@ -9,7 +9,7 @@ using TestSupport;
 ///     script relative to the effective scripts root rather than the
 ///     executable's <see cref="AppContext.BaseDirectory" /> — the latter is
 ///     never populated with a copy of <c>database/</c>, so an explicit
-///     <c>--scripts-root</c> (the README's documented invocation) must still
+///     <c>--scripts-root</c> (the developer guide's documented invocation) must still
 ///     find the sibling <c>roles/</c> directory.
 /// </summary>
 public sealed class PostgreSqlDeployCommandTests : IAsyncLifetime

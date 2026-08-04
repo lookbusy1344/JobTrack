@@ -12,7 +12,7 @@ public sealed class SqliteSchemaVersionStore : ISchemaVersionStore
 		var sqliteConnection = (SqliteConnection)connection;
 		var sqliteTransaction = (SqliteTransaction)transaction;
 
-		if (!await TrackingTableExistsAsync(sqliteConnection, sqliteTransaction, cancellationToken).ConfigureAwait(false)) {
+		if (!await TrackingTableExistsAsync(sqliteConnection, sqliteTransaction, cancellationToken)) {
 			return [];
 		}
 
@@ -24,8 +24,8 @@ public sealed class SqliteSchemaVersionStore : ISchemaVersionStore
 			"SELECT version, description, checksum, applied_by, application_version, applied_at " +
 			"FROM schema_version ORDER BY version;";
 
-		await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-		while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) {
+		await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+		while (await reader.ReadAsync(cancellationToken)) {
 			appliedVersions.Add(new() {
 				Version = reader.GetInt32(0),
 				Description = reader.GetString(1),
@@ -56,7 +56,7 @@ public sealed class SqliteSchemaVersionStore : ISchemaVersionStore
 		_ = command.Parameters.AddWithValue("$applicationVersion", appliedVersion.ApplicationVersion);
 		_ = command.Parameters.AddWithValue("$appliedAt", SqliteInstantEncoding.ToUnixEpochTicks(appliedVersion.AppliedAtUtc));
 
-		_ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+		_ = await command.ExecuteNonQueryAsync(cancellationToken);
 	}
 
 	private static async Task<bool> TrackingTableExistsAsync(
@@ -66,7 +66,7 @@ public sealed class SqliteSchemaVersionStore : ISchemaVersionStore
 		command.Transaction = transaction;
 		command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'schema_version';";
 
-		var tableCount = (long)(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+		var tableCount = (long)(await command.ExecuteScalarAsync(cancellationToken))!;
 		return tableCount > 0;
 	}
 }

@@ -14,10 +14,10 @@ public static class PostgreSqlRolesAndGrants
 {
 	public static async Task ApplyAsync(DbConnection connection, string scriptPath, CancellationToken cancellationToken)
 	{
-		var sql = await File.ReadAllTextAsync(scriptPath, cancellationToken).ConfigureAwait(false);
+		var sql = await File.ReadAllTextAsync(scriptPath, cancellationToken);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = sql;
-		_ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+		_ = await command.ExecuteNonQueryAsync(cancellationToken);
 	}
 }

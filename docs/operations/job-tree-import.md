@@ -8,7 +8,7 @@ either every node and prerequisite edge is created or none is: the whole batch r
 transaction (`IJobCommands.ImportSubtreeAsync`), so a validation failure partway through a large
 import leaves nothing behind to clean up by hand.
 
-Run it against a deployed, bootstrapped database — see the README's "Running on a development
+Run it against a deployed, bootstrapped database — see the developer guide's "Running on a development
 server" for those steps and for where the connection strings below come from.
 
 ```bash

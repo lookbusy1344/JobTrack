@@ -41,7 +41,7 @@ compatibility) -- every other browser-test class uses Chromium.
 The **client-side assets** are the other one-time setup this suite depends on, and the one whose
 absence is easiest to misread. Bootstrap and the Mulish display face are pinned in
 `src/JobTrack.Web/libman.json` and restored into the git-ignored `wwwroot/lib/` (`cd
-src/JobTrack.Web && libman restore` -- see README's "Client-side assets"). `dotnet build` does not
+src/JobTrack.Web && libman restore` -- see the developer guide's "Client-side assets"). `dotnet build` does not
 restore them. Without them the host still serves every page, so the failures arrive as a pile of axe
 `color-contrast` violations and layout assertions -- unstyled text on an unstyled background, scanned
 faithfully -- rather than anything naming a missing stylesheet.

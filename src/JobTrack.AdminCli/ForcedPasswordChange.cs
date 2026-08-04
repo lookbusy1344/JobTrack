@@ -20,11 +20,11 @@ internal static class ForcedPasswordChange
 	/// </summary>
 	public static async Task<bool> ClearAsync(IConsoleIO io, UserManager<JobTrackIdentityUser> userManager, string username)
 	{
-		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false)
+		var user = await userManager.FindByNameAsync(username)
 				   ?? throw new InvalidOperationException($"Account '{username}' could not be reloaded to clear its forced password change.");
 
 		user.RequiresPasswordChange = false;
-		var result = await userManager.UpdateAsync(user).ConfigureAwait(false);
+		var result = await userManager.UpdateAsync(user);
 		if (result.Succeeded) {
 			return true;
 		}

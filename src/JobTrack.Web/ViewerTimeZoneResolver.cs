@@ -11,7 +11,7 @@ public sealed class ViewerTimeZoneResolver(IJobTrackClient jobTrackClient) : IVi
 	{
 		var profile = await jobTrackClient.Query.GetEmployeeProfileAsync(
 			new() { Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() }, TargetUserId = actorId },
-			cancellationToken).ConfigureAwait(false);
+			cancellationToken);
 
 		return DateTimeZoneProviders.Tzdb.GetZoneOrNull(profile.IanaTimeZone)
 			   ?? throw new UnknownStoredTimeZoneException(

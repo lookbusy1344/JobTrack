@@ -47,7 +47,7 @@ public sealed class SchemaDeployer
 		var orderedScripts = scripts.OrderBy(script => script.Version).ToArray();
 
 		foreach (var script in orderedScripts) {
-			await ApplyIfNeededAsync(script, orderedScripts, cancellationToken).ConfigureAwait(false);
+			await ApplyIfNeededAsync(script, orderedScripts, cancellationToken);
 		}
 	}
 
@@ -58,24 +58,23 @@ public sealed class SchemaDeployer
 		// deployment-tool run may have applied this version while this run
 		// waited for the lock (§6.6 concurrent-run race).
 		await using var transaction = await connection.BeginTransactionAsync(
-			lockStrategy.TransactionIsolationLevel, cancellationToken).ConfigureAwait(false);
+			lockStrategy.TransactionIsolationLevel, cancellationToken);
 
-		await lockStrategy.AcquireAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+		await lockStrategy.AcquireAsync(connection, transaction, cancellationToken);
 
-		var appliedVersions = await store.GetAppliedVersionsAsync(connection, transaction, cancellationToken)
-			.ConfigureAwait(false);
+		var appliedVersions = await store.GetAppliedVersionsAsync(connection, transaction, cancellationToken);
 
 		ValidateAppliedVersionsAgainstScripts(appliedVersions, allScripts);
 
 		if (appliedVersions.Any(applied => applied.Version == script.Version)) {
-			await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+			await transaction.RollbackAsync(cancellationToken);
 			return;
 		}
 
 		await using (var command = connection.CreateCommand()) {
 			command.Transaction = transaction;
 			command.CommandText = script.Sql;
-			_ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+			_ = await command.ExecuteNonQueryAsync(cancellationToken);
 		}
 
 		var appliedVersion = new AppliedSchemaVersion {
@@ -87,10 +86,9 @@ public sealed class SchemaDeployer
 			AppliedAtUtc = clock.GetCurrentInstant().ToDateTimeOffset(),
 		};
 
-		await store.RecordAppliedVersionAsync(connection, transaction, appliedVersion, cancellationToken)
-			.ConfigureAwait(false);
+		await store.RecordAppliedVersionAsync(connection, transaction, appliedVersion, cancellationToken);
 
-		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken);
 	}
 
 	private static void ValidateAppliedVersionsAgainstScripts(

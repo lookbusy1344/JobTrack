@@ -188,7 +188,7 @@ for speculatively.
    (`Host=/tmp;...`, this repository's own local-development shape) or loopback TCP connection is
    exempt, since that traffic never leaves the host.
 3. **Create the login role and database**, then deploy schema and roles as described in the
-   README's "Running on a development server → PostgreSQL" section, against this server instead of
+   the developer guide's "Running on a development server → PostgreSQL" section, against this server instead of
    a local one:
 
    ```sql

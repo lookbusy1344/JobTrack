@@ -1,8 +1,8 @@
 # Running a persistent local "live" instance
 
-The README's "Running on a development server" section documents `jobtrack_dev`/
+The developer guide's "Running on a development server" section documents `jobtrack_dev`/
 `jobtrack-web-dev.db` — explicitly disposable databases you drop and recreate between manual runs
-(README: "delete... between unrelated manual runs"). `samples/JobTrack.UatSeed` layers a
+(developer guide: "delete... between unrelated manual runs"). `samples/JobTrack.UatSeed` layers a
 synthetic, non-idempotent demo scenario on top of one of those for testing.
 
 Neither is meant to survive: if you want a single persistent PostgreSQL database for your own
@@ -37,7 +37,7 @@ creates both the administrator account and the root job node — there is no sep
 node" step.
 
 **4. Launch the web app against `jobtrack_live`.** `appsettings.Development.json` ships pointed at
-the disposable SQLite dev database (see "Running on a development server" in the README), so
+the disposable SQLite dev database (see "Running on a development server" in docs/developer-guide.md), so
 override the provider and connection string for this run via environment variables rather than
 editing that shared file — editing it in place would silently repoint the ordinary SQLite dev
 workflow too. `scripts/run-web.sh` wraps exactly this:

@@ -53,9 +53,9 @@ public static class BootstrapCommand
 					Password = password,
 					CorrelationId = Guid.NewGuid(),
 				},
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 
-			if (!forcePasswordChange && !await ForcedPasswordChange.ClearAsync(io, userManager!, userName).ConfigureAwait(false)) {
+			if (!forcePasswordChange && !await ForcedPasswordChange.ClearAsync(io, userManager!, userName)) {
 				return 1;
 			}
 

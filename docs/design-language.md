@@ -340,6 +340,35 @@ Mobile-first and verified down to phone widths:
   opaque sticky `.app-header` already sits.
 - Type and spacing scale up at the 768px breakpoint.
 
+### Hand-written `@media` rules are a defect until proven otherwise
+
+Every responsive show/hide belongs in the markup as a Bootstrap display utility — `d-none
+d-lg-table-cell`, `d-none d-md-block`, `d-sm-inline` — never as a `display: none` inside a
+hand-written breakpoint in `site.css`. A hand-written breakpoint whose value is one of Bootstrap's
+own (`575.98`/`576`, `767.98`/`768`, `991.98`/`992`, `1199.98`/`1200`, `1399.98`/`1400`)
+reimplements a utility that already exists, and re-stating those numbers as literals also breaks the
+no-magic-numbers rule. Never apply both mechanisms to one element: a custom breakpoint class *and*
+`d-none d-*-…` on the same cell is two systems fighting over one decision. A custom class may still
+carry that element's *visual* treatment (`.jt-col-owner`'s font size) or serve as a test/semantic
+hook; it just must not own the visibility.
+
+The narrow, documented exceptions currently in `site.css` are **seven** `@media` blocks, each with a
+comment saying why, and this list is the whole of them:
+
+1. Root `font-size` scaling (768px).
+2. The xxl whitespace-density token block (1400px).
+3. The phone `.form-control` 16px floor (767.98px — iOS auto-zoom).
+4. The below-lg hiding of `.jt-kind-icon-label--collapsible` (991.98px) — a visually-hidden label
+   with a breakpoint, which Bootstrap ships no variant of and which `d-none d-lg-*` cannot express,
+   because `display: none` would take the text out of the accessibility tree.
+5. The tablet-and-up scale-down of `.jt-backdate-form`'s own controls (768px) — a visual size
+   change, scoped above the 16px floor so it never fights it.
+6. The `--jt-icon-size-kind`/`.jt-tree-cell` token adjustments (991.98px).
+7. The `display: contents` toggle for `.jt-row-action-extra` (767.98px) — Bootstrap ships no
+   `d-*-contents` utility.
+
+Adding an eighth means adding it to this list too.
+
 ## Working on the UI
 
 1. Prefer a token or an existing primitive over new bespoke CSS. If a page needs something new,

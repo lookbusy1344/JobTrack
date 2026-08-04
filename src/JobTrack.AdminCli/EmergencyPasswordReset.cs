@@ -42,7 +42,7 @@ public static class EmergencyPasswordReset
 		ArgumentNullException.ThrowIfNull(clock);
 		ArgumentException.ThrowIfNullOrWhiteSpace(username);
 
-		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false);
+		var user = await userManager.FindByNameAsync(username);
 		if (user is null) {
 			io.WriteError($"No employee account found for username '{username}'.");
 			return 1;
@@ -50,13 +50,13 @@ public static class EmergencyPasswordReset
 
 		var temporaryPassword = RandomNumberGenerator.GetString(TemporaryPasswordCharset, TemporaryPasswordLength);
 
-		await using var transaction = await identityContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await identityContext.Database.BeginTransactionAsync(cancellationToken);
 
 		user.PasswordHash = passwordHasher.HashPassword(user, temporaryPassword);
 		user.SecurityStamp = Guid.NewGuid().ToString("N");
 		user.RequiresPasswordChange = true;
 
-		var updateResult = await userManager.UpdateAsync(user).ConfigureAwait(false);
+		var updateResult = await userManager.UpdateAsync(user);
 		if (!updateResult.Succeeded) {
 			io.WriteError($"Failed to update the account: {string.Join("; ", updateResult.Errors.Select(e => e.Description))}");
 			return 1;
@@ -82,25 +82,25 @@ public static class EmergencyPasswordReset
 				 INSERT INTO audit_event (occurred_at, actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({occurredAtTicks}, {user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
 				 """,
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 			// ADR 0029: emergency password reset is the same credential-sensitivity class as an
 			// administrator-driven reset -- it must revoke every live personal access token too.
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"UPDATE personal_access_token SET revoked_at = {occurredAtTicks} WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 		} else {
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"""
 				 INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
 				 """,
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
 				$"UPDATE personal_access_token SET revoked_at = now() WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
-				cancellationToken).ConfigureAwait(false);
+				cancellationToken);
 		}
 
-		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken);
 
 		io.WriteLine($"Temporary password for '{username}': {temporaryPassword}");
 		io.WriteLine("Relay this credential to the employee out-of-band now -- it will not be shown again. " +

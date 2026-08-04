@@ -16,7 +16,7 @@ public sealed class RequiresPasswordChangeEndpointFilter(UserManager<JobTrackIde
 	public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
 	{
 		if (context.HttpContext.User.Identity?.IsAuthenticated == true) {
-			var user = await userManager.GetUserAsync(context.HttpContext.User).ConfigureAwait(false);
+			var user = await userManager.GetUserAsync(context.HttpContext.User);
 			if (user is { RequiresPasswordChange: true }) {
 				return TypedResults.Problem(
 					"Choose a new password before using the API.",
@@ -26,6 +26,6 @@ public sealed class RequiresPasswordChangeEndpointFilter(UserManager<JobTrackIde
 			}
 		}
 
-		return await next(context).ConfigureAwait(false);
+		return await next(context);
 	}
 }

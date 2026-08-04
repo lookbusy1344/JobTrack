@@ -382,7 +382,7 @@ plan-shape assertions above it — index scan, no disk sort spill — are unaffe
 Revised to 200 ms, headroom above the measured contended case, following the same precedent as the
 session-overlap row's revision in §3: the query is not slower, the shared test environment is
 noisier when every PostgreSQL-backed project runs at once. This is also why the full solution suite
-is not the routine commit gate (see the project's `CLAUDE.md` and README's "Fast core suite"
+is not the routine commit gate (see the project's `CLAUDE.md` and the developer guide's "Fast core suite"
 section) — `./scripts/fast-test.sh` plus a targeted `--filter` run is. The §2.3 zero-match search
 ceiling (`Search_with_no_matches_at_combined_production_tree_scale_stays_within_ceiling`) hit the
 identical contention when the full suite ran once at the close of the 2026-07-25 scalability-

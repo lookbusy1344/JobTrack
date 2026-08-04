@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the fast core test suite: the projects with no PostgreSQL, web-host, or
-# browser dependency (see README's "Fast core suite" section). Sub-20s. Part of
+# browser dependency (see the developer guide's "Fast core suite" section). Sub-20s. Part of
 # the per-commit gate, alongside build, format, and a targeted `dotnet test
 # --filter` run against whatever the commit touches (see CLAUDE.md).
 #
@@ -80,7 +80,7 @@ report_duration() {
 	echo "${suite_name} suite took ${elapsed}s (budget: ${budget_seconds}s)."
 	if [[ "$elapsed" -gt "$budget_seconds" ]]; then
 		budget_exceeded=1
-		echo "Warning: exceeded the ${budget_seconds}s budget -- see README's \"Fast core suite\" section." >&2
+		echo "Warning: exceeded the ${budget_seconds}s budget -- see docs/developer-guide.md, \"Fast core suite\"." >&2
 	fi
 	if [[ "$exit_code" -eq 0 && "$budget_exceeded" -eq 1 && "$strict" -eq 1 ]]; then
 		echo "Failing: --strict mode treats a budget overrun as a suite failure." >&2
