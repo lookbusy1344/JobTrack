@@ -463,7 +463,7 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		var rateManagerId = await SeedEmployeeAsync("Katherine Johnson", "katherine.johnson.rate", EmployeeRole.RateManager);
+		var rateManagerId = await SeedEmployeeAsync("Katherine Jones", "katherine.jones.rate", EmployeeRole.RateManager);
 		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper.rate", EmployeeRole.Worker);
 
 		return (result.RootJobNodeId, result.AdministratorId, rateManagerId, workerId);

@@ -15,7 +15,7 @@ internal static class WorkflowEmployeeEligibility
 	public static async Task EnsureMayGrantRequesterRoleAsync(
 		DbContext context, AppUserId targetId, CancellationToken cancellationToken)
 	{
-		_ = await LockIdentityUserAsync(context, targetId, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, targetId, cancellationToken).ConfigureAwait(false);
 
 		var ownsJob = await context.Set<JobNodeEntity>().AsNoTracking()
 			.AnyAsync(node => node.OwnerUserId == targetId, cancellationToken).ConfigureAwait(false);
@@ -36,7 +36,7 @@ internal static class WorkflowEmployeeEligibility
 			return;
 		}
 
-		var identityUser = await LockIdentityUserAsync(context, targetId.Value, cancellationToken).ConfigureAwait(false);
+		var identityUser = await IdentityUserWriteLock.AcquireAsync(context, targetId.Value, cancellationToken).ConfigureAwait(false);
 
 		var isLockedOut = identityUser.LockoutEnabled
 						  && identityUser.LockoutEnd is Instant lockoutEnd
@@ -60,20 +60,4 @@ internal static class WorkflowEmployeeEligibility
 		}
 	}
 
-	private static async Task<IdentityUserEntity> LockIdentityUserAsync(
-		DbContext context, AppUserId targetId, CancellationToken cancellationToken)
-	{
-		var affected = await context.Set<IdentityUserEntity>()
-			.Where(identityUser => identityUser.AppUserId == targetId)
-			.ExecuteUpdateAsync(
-				setters => setters.SetProperty(identityUser => identityUser.ConcurrencyStamp, identityUser => identityUser.ConcurrencyStamp),
-				cancellationToken)
-			.ConfigureAwait(false);
-		if (affected == 0) {
-			throw new EntityNotFoundException($"Employee {targetId} does not exist.");
-		}
-
-		return await context.Set<IdentityUserEntity>().AsNoTracking()
-			.SingleAsync(identityUser => identityUser.AppUserId == targetId, cancellationToken).ConfigureAwait(false);
-	}
 }

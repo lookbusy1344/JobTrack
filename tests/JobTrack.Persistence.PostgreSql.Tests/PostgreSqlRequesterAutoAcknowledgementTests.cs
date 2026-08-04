@@ -3,6 +3,7 @@ namespace JobTrack.Persistence.PostgreSql.Tests;
 using System.Data.Common;
 using Application.Ports;
 using Database;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
 using TestSupport;
@@ -39,4 +40,20 @@ public sealed class PostgreSqlRequesterAutoAcknowledgementTests()
 		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value;
+
+	[Fact]
+	public Task Concurrent_first_work_on_two_leaves_under_one_request_acknowledges_it_exactly_once() =>
+		AssertConcurrentFirstWorkAcknowledgesExactlyOnceAsync();
+
+	[Fact]
+	public Task Concurrent_terminal_outcomes_on_two_leaves_under_one_request_acknowledge_it_exactly_once() =>
+		AssertConcurrentTerminalOutcomeAcknowledgesExactlyOnceAsync();
+
+	[Fact]
+	public Task Concurrent_terminal_outcomes_reach_the_request_update_before_either_proceeds() =>
+		AssertDeterministicConcurrentTerminalOutcomeAcknowledgesExactlyOnceAsync(CreateAchievementPort);
+
+	private IAchievementCommandPort CreateAchievementPort(DbCommandInterceptor interceptor) =>
+		new PostgreSqlAchievementCommandPort(
+			new NpgsqlDataSourceBuilder(ConnectionString).UseNodaTime().Build(), SystemClock.Instance, [interceptor]);
 }

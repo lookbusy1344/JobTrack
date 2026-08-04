@@ -44,4 +44,12 @@ public sealed class SqliteRequesterAutoAcknowledgementTests()
 		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;
+
+	[Fact]
+	public Task Concurrent_first_work_on_two_leaves_under_one_request_acknowledges_it_exactly_once() =>
+		AssertConcurrentFirstWorkAcknowledgesExactlyOnceAsync();
+
+	[Fact]
+	public Task Concurrent_terminal_outcomes_on_two_leaves_under_one_request_acknowledge_it_exactly_once() =>
+		AssertConcurrentTerminalOutcomeAcknowledgesExactlyOnceAsync();
 }

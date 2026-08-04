@@ -45,14 +45,14 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 
 		var result = await sut.CreateEmployeeAsync(new() {
 			Context = ContextFor(administratorId),
-			DisplayName = "Katherine Johnson",
+			DisplayName = "Katherine Jones",
 			IanaTimeZone = "Europe/London",
-			UserName = "katherine.johnson",
+			UserName = "katherine.jones",
 			Password = "correct-horse-battery-staple",
 			Role = EmployeeRole.Worker,
 		});
 
-		result.UserName.Should().Be("katherine.johnson");
+		result.UserName.Should().Be("katherine.jones");
 		result.IsEnabled.Should().BeTrue();
 		result.RequiresPasswordChange.Should().BeTrue();
 		result.Roles.Should().ContainSingle().Which.Should().Be(EmployeeRole.Worker);
@@ -66,9 +66,9 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 
 		var act = () => sut.CreateEmployeeAsync(new() {
 			Context = ContextFor(workerId),
-			DisplayName = "Katherine Johnson",
+			DisplayName = "Katherine Jones",
 			IanaTimeZone = "Europe/London",
-			UserName = "katherine.johnson",
+			UserName = "katherine.jones",
 			Password = "correct-horse-battery-staple",
 			Role = EmployeeRole.Worker,
 		});

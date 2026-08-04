@@ -26,4 +26,21 @@ public sealed record ImportSubtreeRequest
 	///     determines a valid parents-before-children creation order itself.
 	/// </summary>
 	public required EquatableArray<ImportSubtreeNodeSpec> Nodes { get; init; }
+
+	/// <summary>
+	///     The <see cref="ImportSubtreeNodeSpec.LocalId" /> of the node this import establishes as the
+	///     home node of every account in <see cref="HomeNodeUserIds" />, or <see langword="null" /> (the
+	///     default) to set nobody's home node. No caller can know the real <c>job_node</c> id in advance,
+	///     so the assignment is resolved from this import's own local-id map inside its transaction —
+	///     the tree, the home-node writes, and their audit events all commit together or not at all.
+	/// </summary>
+	public long? HomeNodeLocalId { get; init; }
+
+	/// <summary>
+	///     The accounts whose home node <see cref="HomeNodeLocalId" /> becomes. Every one of them is an
+	///     affected entity of this single operation, not its actor:
+	///     <see cref="CommandContext.Actor" /> stays the one authenticated operator throughout, and each
+	///     assignment is audited under this request's own correlation identifier. Values must be unique.
+	/// </summary>
+	public EquatableArray<AppUserId> HomeNodeUserIds { get; init; } = [];
 }

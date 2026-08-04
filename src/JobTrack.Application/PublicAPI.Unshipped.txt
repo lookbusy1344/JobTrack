@@ -1055,6 +1055,10 @@ JobTrack.Application.ImportSubtreeRequest.<Clone>$() -> JobTrack.Application.Imp
 JobTrack.Application.ImportSubtreeRequest.Context.get -> JobTrack.Application.CommandContext!
 JobTrack.Application.ImportSubtreeRequest.Context.init -> void
 JobTrack.Application.ImportSubtreeRequest.Equals(JobTrack.Application.ImportSubtreeRequest? other) -> bool
+JobTrack.Application.ImportSubtreeRequest.HomeNodeLocalId.get -> long?
+JobTrack.Application.ImportSubtreeRequest.HomeNodeLocalId.init -> void
+JobTrack.Application.ImportSubtreeRequest.HomeNodeUserIds.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Abstractions.AppUserId>
+JobTrack.Application.ImportSubtreeRequest.HomeNodeUserIds.init -> void
 JobTrack.Application.ImportSubtreeRequest.ImportSubtreeRequest() -> void
 JobTrack.Application.ImportSubtreeRequest.Nodes.get -> JobTrack.Abstractions.EquatableArray<JobTrack.Application.ImportSubtreeNodeSpec!>
 JobTrack.Application.ImportSubtreeRequest.Nodes.init -> void

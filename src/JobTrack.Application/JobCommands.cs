@@ -146,6 +146,22 @@ internal sealed class JobCommands : IJobCommands
 			ApplicationEnumValidation.ThrowIfInvalid(node.Priority, nameof(request));
 		}
 
+		// A home-node preference naming no batch row, or naming accounts with no row to point them at,
+		// is a caller mistake rather than a domain rejection, so it fails before the port opens a
+		// transaction (house style: framework exceptions for caller/usage errors).
+		if (request.HomeNodeLocalId is long homeNodeLocalId && !request.Nodes.Any(node => node.LocalId == homeNodeLocalId)) {
+			throw new ArgumentException(
+				$"HomeNodeLocalId {homeNodeLocalId} does not match any node in the batch.", nameof(request));
+		}
+
+		if (request.HomeNodeLocalId is null && request.HomeNodeUserIds.Count > 0) {
+			throw new ArgumentException("HomeNodeUserIds requires a HomeNodeLocalId.", nameof(request));
+		}
+
+		if (request.HomeNodeUserIds.Distinct().Count() != request.HomeNodeUserIds.Count) {
+			throw new ArgumentException("HomeNodeUserIds must not contain duplicate accounts.", nameof(request));
+		}
+
 		var orderedRequest = request with { Nodes = SubtreeImportPlanner.BuildCreationOrder(request.Nodes) };
 
 		return JobTrackOperation.TraceAsync(

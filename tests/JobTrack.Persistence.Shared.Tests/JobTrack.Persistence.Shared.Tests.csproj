@@ -35,6 +35,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\JobTrack.Persistence.Shared\JobTrack.Persistence.Shared.csproj"/>
+        <!-- Persistence.Shared itself may not reference Domain (ReusableLibraryDependencyTests keeps
+             its dependency boundary at Abstractions), so LeafAchievementTransition restates ADR 0058's
+             terminal-state set. This test project references both sides purely to pin the two against
+             each other. -->
+        <ProjectReference Include="..\..\src\JobTrack.Domain\JobTrack.Domain.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

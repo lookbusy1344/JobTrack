@@ -21,7 +21,12 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
+
+	/// <summary>An <c>app_user</c> id no seeded fixture can have reached, for "target account does not exist" cases.</summary>
+	private const long NonExistentUserId = 999_999;
+
 	private static readonly TimeSpan ActiveLockoutDuration = TimeSpan.FromHours(1);
+	private static readonly TimeSpan ContentionObservationTimeout = TimeSpan.FromMilliseconds(250);
 
 	private readonly IDisposableTestDatabase database;
 
@@ -1449,6 +1454,178 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			.Which.ConstraintId.Should().Be("work-session-start-in-future");
 
 		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+	}
+
+	/// <summary>
+	///     Remediation plan §3.3: the import's home-node preferences are part of the import, resolved
+	///     from its own local-id map inside the same transaction, under one actor and one correlation id
+	///     — not a post-commit loop of per-account <c>SetHomeNodeAsync</c> calls.
+	/// </summary>
+	[Fact]
+	public async Task Importing_a_subtree_sets_the_flagged_home_node_for_every_named_account()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var commandContext = ContextFor(jobManagerId);
+
+		var result = await port.ImportSubtreeAsync(new() {
+			Context = commandContext,
+			ParentId = rootId,
+			Nodes = HomeNodeImportBatch(workerId),
+			HomeNodeLocalId = 1,
+			HomeNodeUserIds = [jobManagerId, workerId],
+		});
+
+		var homeNodeId = result.Nodes.Single(n => n.LocalId == 1).JobNodeId;
+		(await ReadHomeNodeIdAsync(jobManagerId)).Should().Be(homeNodeId.Value);
+		(await ReadHomeNodeIdAsync(workerId)).Should().Be(homeNodeId.Value);
+
+		var auditPort = CreateAuditQueryPort(database.ConnectionString);
+		var audit = await auditPort.SearchAuditEventsAsync(
+			new() { CorrelationId = commandContext.CorrelationId }, null, AuditSearchTestDefaults.AllRowsLimit);
+		audit.Events.Count(e => e.Operation == "set-home-node").Should().Be(2);
+		audit.Events.Should().OnlyContain(e => e.ActorId == jobManagerId);
+	}
+
+	[Fact]
+	public async Task A_leaf_home_node_rolls_the_whole_import_back()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		var act = () => port.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = HomeNodeImportBatch(workerId),
+			// Local id 2 is a childless node, so it imports as a leaf and cannot be a home node.
+			HomeNodeLocalId = 2,
+			HomeNodeUserIds = [jobManagerId],
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("home-node-must-not-be-leaf");
+
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+		(await ReadHomeNodeIdAsync(jobManagerId)).Should().BeNull();
+	}
+
+	/// <summary>
+	///     The plan's injected-failure case: the last named account does not exist. Nothing may commit —
+	///     not the tree, not the earlier account's home node — because partial success is no longer a
+	///     valid outcome of this command.
+	/// </summary>
+	[Fact]
+	public async Task An_unknown_home_node_account_rolls_the_whole_import_back()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		var act = () => port.ImportSubtreeAsync(new() {
+			Context = ContextFor(jobManagerId),
+			ParentId = rootId,
+			Nodes = HomeNodeImportBatch(workerId),
+			HomeNodeLocalId = 1,
+			HomeNodeUserIds = [jobManagerId, new(NonExistentUserId)],
+		});
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
+
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+		(await ReadHomeNodeIdAsync(jobManagerId)).Should().BeNull();
+	}
+
+	/// <summary>
+	///     Remediation plan §3.3 step 1's target-account-state contention proof. A concurrent disable
+	///     holds the identity row until it commits; the import must then re-read the authoritative state
+	///     under its own transaction and reject every write rather than assigning a preference to an
+	///     account that can no longer act.
+	/// </summary>
+	[Fact]
+	public async Task A_target_disabled_while_home_node_import_waits_rolls_the_whole_import_back()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var transaction = await connection.BeginTransactionAsync();
+		await using (var command = connection.CreateCommand()) {
+			command.Transaction = transaction;
+			command.CommandText = "UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
+			AddParameter(command, "@isEnabled", false);
+			AddParameter(command, "@appUserId", workerId.Value);
+			_ = await command.ExecuteNonQueryAsync();
+		}
+
+		var act = async () =>
+			_ = await port.ImportSubtreeAsync(new() {
+				Context = ContextFor(jobManagerId),
+				ParentId = rootId,
+				Nodes = HomeNodeImportBatch(jobManagerId),
+				HomeNodeLocalId = 1,
+				HomeNodeUserIds = [workerId],
+			});
+		var assertion = Task.Run(() => act.Should().ThrowAsync<InvariantViolationException>());
+
+		try {
+			var observation = Task.Delay(ContentionObservationTimeout);
+			(await Task.WhenAny(assertion, observation)).Should().BeSameAs(observation,
+				"the import should wait for the concurrent target-account transition");
+		}
+		finally {
+			await transaction.CommitAsync();
+		}
+
+		(await assertion).Which.ConstraintId.Should().Be("home-node-target-not-active");
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+		(await ReadHomeNodeIdAsync(workerId)).Should().BeNull();
+	}
+
+	/// <summary>
+	///     Remediation plan §3.3 step 1's contention case: two imports contend for the same target
+	///     account's home node. Whichever order they land in, the account's <c>home_node_id</c> must name
+	///     a node one of them actually committed — never a node from a rolled-back import, and never the
+	///     null it started at.
+	/// </summary>
+	protected async Task AssertConcurrentHomeNodeImportsLeaveOneCommittedHomeNodeAsync()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+
+		var results = await Task.WhenAll(
+			ImportWithHomeNodeAsync(rootId, jobManagerId, workerId),
+			ImportWithHomeNodeAsync(rootId, jobManagerId, workerId));
+
+		var committedHomeNodeIds = results.Select(r => r.Nodes.Single(n => n.LocalId == 1).JobNodeId.Value).ToArray();
+		var homeNodeId = await ReadHomeNodeIdAsync(workerId);
+		homeNodeId.Should().NotBeNull();
+		committedHomeNodeIds.Should().Contain(homeNodeId!.Value);
+	}
+
+	private Task<ImportSubtreeResult> ImportWithHomeNodeAsync(JobNodeId rootId, AppUserId actorId, AppUserId targetId) =>
+		CreateCommandPort(database.ConnectionString).ImportSubtreeAsync(new() {
+			Context = ContextFor(actorId),
+			ParentId = rootId,
+			Nodes = HomeNodeImportBatch(targetId),
+			HomeNodeLocalId = 1,
+			HomeNodeUserIds = [targetId],
+		});
+
+	/// <summary>A two-node batch whose local id 1 is a branch (a valid home node) and local id 2 a leaf.</summary>
+	private static EquatableArray<ImportSubtreeNodeSpec> HomeNodeImportBatch(AppUserId ownerId) => [
+		new() { LocalId = 1, ParentLocalId = null, Description = "Home branch", OwnerUserId = ownerId, Priority = Priority.Medium },
+		new() { LocalId = 2, ParentLocalId = 1, Description = "Child leaf", OwnerUserId = ownerId, Priority = Priority.Medium },
+	];
+
+	private async Task<long?> ReadHomeNodeIdAsync(AppUserId userId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT home_node_id FROM app_user WHERE id = @userId;";
+		AddParameter(command, "@userId", userId.Value);
+		var value = await command.ExecuteScalarAsync();
+		return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 	}
 
 	private async Task<long> ReadAchievementIdAsync(JobNodeId leafId)

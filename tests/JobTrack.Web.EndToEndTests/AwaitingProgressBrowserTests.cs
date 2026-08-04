@@ -27,20 +27,22 @@ public abstract class AwaitingProgressBrowserTestsBase
 	private const double DescriptionMaximumShare = 5.5 / 12.0;
 
 	/// <summary>
-	///     From the lg breakpoint, Own/Pri/Due return and Description steps down to col-lg-4 (from the
-	///     col-lg-5 it held before), funding Active's own widening from col-lg-1 to col-lg-2 below.
+	///     Column allowance mirrors Browse's own child-nodes table: Description holds col-lg-5 at the
+	///     desktop width and steps down to its "at least 3 of 12" floor (col-xxl-3) once xxl brings
+	///     Priority back beside Deadline. Checked as a floor across the wide viewport matrix (1280 and
+	///     1440), same as Browse's <c>MinimumWideDescriptionShare</c>, since the two widths land on
+	///     different shares.
 	/// </summary>
-	private const double LargeDescriptionMinimumShare = 3.5 / 12.0;
-
-	private const double LargeDescriptionMaximumShare = 4.0 / 12.0;
+	private const double LargeDescriptionMinimumShare = 3.0 / 12.0;
 
 	/// <summary>
 	///     Two or more simultaneous workers' preview names need more than a twelfth of the row to avoid
-	///     wrapping to a ladder of one-word lines -- the reported defect this column width fixes.
+	///     wrapping to a ladder of one-word lines -- the reported defect this column width fixes. Checked
+	///     as a floor, not an exact range: with the Owner column gone, the browser's table layout
+	///     redistributes its freed space rather than leaving it unused, so the actual share varies by
+	///     viewport.
 	/// </summary>
 	private const double LargeActiveMinimumShare = 1.5 / 12.0;
-
-	private const double LargeActiveMaximumShare = 2.0 / 12.0;
 
 	// The smallest count that has more than one worker to preview -- the plural-pill regression case.
 	private const int TwoActiveWorkerCount = 2;
@@ -90,9 +92,8 @@ public abstract class AwaitingProgressBrowserTestsBase
 	///     Two simultaneous workers was already enough to break this row (regression case): the
 	///     "N active" pill wrapped its word mid-character in the col-lg-1 the Active column used to get,
 	///     and a long node title left no slack anywhere else to absorb it. The pill is now icon plus a
-	///     bare count (data, not a word) and the column doubled to col-lg-2, funded by Description
-	///     stepping down from col-lg-5 to col-lg-4 -- proved together here at a realistic worst case
-	///     rather than the short seeded title the test above uses.
+	///     bare count (data, not a word) and the column doubled to col-lg-2 -- proved together here at a
+	///     realistic worst case rather than the short seeded title the test above uses.
 	/// </summary>
 	public async Task The_active_column_and_row_stay_intact_with_two_active_workers_and_a_long_title(int width, int height)
 	{
@@ -126,10 +127,10 @@ public abstract class AwaitingProgressBrowserTestsBase
 		var tableWidth = await WidthAsync(table);
 		var descriptionWidth = await WidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Description", Exact = true }));
 		var activeWidth = await WidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Active", Exact = true }));
-		(descriptionWidth / tableWidth).Should().BeInRange(LargeDescriptionMinimumShare, LargeDescriptionMaximumShare,
-			$"Description should follow its responsive Bootstrap column allocation at {width}x{height}");
-		(activeWidth / tableWidth).Should().BeInRange(LargeActiveMinimumShare, LargeActiveMaximumShare,
-			$"Active should follow its responsive Bootstrap column allocation at {width}x{height}");
+		(descriptionWidth / tableWidth).Should().BeGreaterThanOrEqualTo(LargeDescriptionMinimumShare,
+			$"Description must keep at least three of twelve columns at {width}x{height}");
+		(activeWidth / tableWidth).Should().BeGreaterThanOrEqualTo(LargeActiveMinimumShare,
+			$"Active must keep at least its widened column share at {width}x{height}");
 	}
 
 	/// <summary>

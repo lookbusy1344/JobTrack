@@ -4,9 +4,10 @@
 them as a job-node subtree, all owned by one existing employee — a bulk-authoring tool for small
 trees, not a general-purpose migration path. It works against either provider, runs the same way
 inside the Docker image (`--entrypoint ./admincli/JobTrack.AdminCli`, see the Dockerfile header), and
-either every node and prerequisite edge is created or none is: the whole batch runs in one database
-transaction (`IJobCommands.ImportSubtreeAsync`), so a validation failure partway through a large
-import leaves nothing behind to clean up by hand.
+either every node, prerequisite edge, **and home-node assignment** is written or none is: the whole
+batch runs in one database transaction (`IJobCommands.ImportSubtreeAsync`), so a validation failure
+partway through a large import leaves nothing behind to clean up by hand. The command performs
+exactly one library mutation — partial success is not a possible outcome of it.
 
 Run it against a deployed, bootstrapped database — see the developer guide's "Running on a development
 server" for those steps and for where the connection strings below come from.
@@ -57,13 +58,23 @@ the bare root, whose real `job_node` id nothing can know before the import runs.
 
 - At most one row per file may set it; a second is rejected.
 - The flagged row must have children in the same file. A home node may not be a leaf
-  (`home-node-must-not-be-leaf`), and the import refuses up front rather than creating the tree and
-  then failing to apply the preference.
+  (`home-node-must-not-be-leaf`), and the import is rejected without creating anything.
 - `--home-node-for <username[,username...]>` gives the same node to further accounts — the importing
-  employee always gets it, so they need not be listed. An unknown username there fails the command
-  before anything is created.
+  employee always gets it, so they need not be listed. An unknown, disabled, or locked account there
+  fails the command without creating anything. Repeated usernames are applied and reported once,
+  using case-insensitive username equality.
 - A file that flags nothing leaves every account's existing home node exactly as it was, and
   `--home-node-for` does nothing.
+
+The assignments are part of the import, not a follow-up: the flagged row's real `job_node` id is
+resolved from the import's own local-id map and written inside its transaction
+(`ImportSubtreeRequest.HomeNodeLocalId`/`HomeNodeUserIds`). So a home node that cannot be applied —
+because the flagged row imported as a leaf, or a named account does not exist or is not active — rolls
+the whole tree back with it, and there is no state in which the tree exists but only some accounts were
+updated. The
+importing employee is the single actor for the whole operation and every named account is an affected
+entity; each assignment is audited as `set-home-node` against `app_user` under the import's one
+correlation identifier, alongside the `import-subtree` event itself.
 
 To set or clear a home node against a node that already exists, use `set-home-node` instead:
 

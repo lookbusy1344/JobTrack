@@ -161,9 +161,9 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 
 		var jobManager = await commands.CreateEmployeeAsync(new() {
 			Context = ContextFor(administratorId),
-			DisplayName = "Katherine Johnson",
+			DisplayName = "Katherine Jones",
 			IanaTimeZone = "Europe/London",
-			UserName = "katherine.johnson",
+			UserName = "katherine.jones",
 			Password = "correct-horse-battery-staple",
 			Role = EmployeeRole.JobManager,
 		});

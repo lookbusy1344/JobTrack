@@ -68,25 +68,26 @@
 			<tr>
 				@* No achievement column: at one twelfth it was narrower than the word heading it, so the
 				   state trails the row's name instead, exactly as it does on Browse's subtree tables.
-				   Its share goes to the description, the only column that can always use more. *@
-				<th class="col-10 col-md-5 col-lg-4" aria-label="Description">Desc</th>
-				<th class="jt-col-secondary jt-col-owner col-lg-1 d-none d-lg-table-cell">Own</th>
+				   Its share goes to the description, the only column that can always use more.
+				   Column allowance mirrors Browse's own child-nodes table (Description/Pri/Due/Active/
+				   Cost/Actions) so the same row reads at the same width on either page. *@
+				<th class="col-10 col-md-5 col-lg-5 col-xxl-3" aria-label="Description">Desc</th>
+				<th class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell" aria-label="Priority">Pri</th>
+				<th class="jt-col-secondary col-lg-1 d-none d-lg-table-cell" aria-label="Deadline">Due</th>
 				@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
 				   workers' names (the preview list below the count pill) need more than a twelfth of the
 				   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
 				   the column, staying at its "at least 3 of 12" floor rather than the 5 it held before. *@
 				<th class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">Active</th>
 				<th class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
-				<th class="jt-col-secondary col-lg-1 d-none d-lg-table-cell" aria-label="Priority">Pri</th>
-				<th class="jt-col-secondary col-lg-1 d-none d-lg-table-cell" aria-label="Deadline">Due</th>
-				<th class="col-2 col-lg-1 text-end">Actions</th>
+				<th class="col-2 text-end">Actions</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var entry in Model.Entries) {
 				var entryActions = Model.WorkRowActionsFor(entry.Id, entry.Achievement);
 				<tr>
-					<td class="col-10 col-md-5 col-lg-4">
+					<td class="col-10 col-md-5 col-lg-5 col-xxl-3">
 						@if (!entry.IsReady) {
 							<span class="status-pill status-pill--icon status-pill-blocked"><svg class="status-pill-glyph" viewBox="0 0 16 16"
 							                                                                     aria-hidden="true" focusable="false"><use
@@ -100,7 +101,15 @@
 						<partial name="_AchievementIcon"
 						         model="@(new AchievementIconModel { Achievement = entry.Achievement, ShowLabel = false })"/>
 					</td>
-					<td class="jt-col-secondary jt-col-owner col-lg-1 d-none d-lg-table-cell">@Model.DescribeOwner(entry.OwnerUserId)</td>
+					<td class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell">
+						<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = entry.Priority })"/>
+					</td>
+					<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = entry.NeededFinish ?? entry.NeededStart; }
+						@if (needed is Instant neededInstant) {
+							<span
+								class="@(InstantDisplay.IsPast(neededInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
+						}
+					</td>
 					<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">
 						<partial name="_ActiveSincePill"
 						         model="@(new ActiveSessionSummaryModel {
@@ -116,16 +125,7 @@
 					<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">@(entry.Cost.HasValue && entry.AllocatedDuration is not null
 							? CostDisplay.FormatCell(entry.Cost.Value, entry.AllocatedDuration)
 							: null)</td>
-					<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">
-						<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = entry.Priority })"/>
-					</td>
-					<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = entry.NeededFinish ?? entry.NeededStart; }
-						@if (needed is Instant neededInstant) {
-							<span
-								class="@(InstantDisplay.IsPast(neededInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
-						}
-					</td>
-					<td class="col-2 col-lg-1">
+					<td class="col-2">
 						<partial name="_WorkRowActions" model="entryActions"/>
 					</td>
 				</tr>

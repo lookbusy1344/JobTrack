@@ -513,6 +513,57 @@ public sealed class JobTreeImportCommandTests
 		}
 	}
 
+	[Fact]
+	public async Task Repeated_home_node_username_is_applied_and_reported_once()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var client = JobTrackSqlite.Create(database.ConnectionString);
+
+			var rootId = await BootstrapAdministratorAsync(client, "ada.duplicate-home");
+			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			var worker = await client.Employees.CreateEmployeeAsync(new() {
+				Context = context,
+				DisplayName = "Grace Worker",
+				IanaTimeZone = "Europe/London",
+				UserName = "grace.duplicate-home",
+				Password = KnownPassword,
+				Role = EmployeeRole.Worker,
+			});
+			var console = new FakeConsoleIO([], []);
+
+			const string HomeJson = """
+									[
+										{ "id": 1, "parentId": null, "title": "Build a house", "home": true },
+										{ "id": 2, "parentId": 1, "title": "Groundworks" }
+									]
+									""";
+
+			var exitCode = await JobTreeImportCommand.RunAsync(
+				console, userManager, client, "ada.duplicate-home", rootId, HomeJson, SystemClock.Instance,
+				["grace.duplicate-home", "GRACE.DUPLICATE-HOME"], CancellationToken.None);
+
+			exitCode.Should().Be(0);
+			console.Errors.Should().BeEmpty();
+			console.Lines.Count(line => line.Contains("grace.duplicate-home", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = worker.Id }))
+				.HomeNodeId.Should().NotBeNull();
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
 	/// <summary>
 	///     A home node must be a branch (<c>home-node-must-not-be-leaf</c>), so a flagged row with no
 	///     children in the file is rejected before anything is created rather than leaving an imported

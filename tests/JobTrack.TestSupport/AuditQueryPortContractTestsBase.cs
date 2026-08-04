@@ -243,7 +243,7 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		// "auditor without cost visibility" scenario.
 		var auditorId = await SeedEmployeeAsync("Rosalind Franklin", "rosalind.franklin.audit", EmployeeRole.Auditor);
 
-		var costViewerAuditorId = await SeedEmployeeAsync("Katherine Johnson", "katherine.johnson.audit", EmployeeRole.Auditor);
+		var costViewerAuditorId = await SeedEmployeeAsync("Katherine Jones", "katherine.jones.audit", EmployeeRole.Auditor);
 		await using (var connection = await OpenExistingConnectionAsync()) {
 			await AssignRoleAsync(connection, costViewerAuditorId, EmployeeRole.CostViewer);
 		}

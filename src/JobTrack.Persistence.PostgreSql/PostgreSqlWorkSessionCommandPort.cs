@@ -177,19 +177,9 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 		}
 
 		if (leafWork.Achievement == Achievement.Waiting) {
-			var previousAchievement = leafWork.Achievement;
-			leafWork.Achievement = Achievement.InProgress;
-			leafWork.ChangedAt = now;
-			leafWork.RowVersion += 1;
-
-			AuditEventWriter.Add(
-				context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value,
-				request.Context.CorrelationId, WorkAuditReasons.AutoAdvancedOnSessionStart,
-				new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
-				new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
-
-			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
-					context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+			await LeafAchievementTransition.ApplyAsync(
+					context, leafWork, Achievement.InProgress, request.Context.Actor, now, request.Context.CorrelationId,
+					WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
 				.ConfigureAwait(false);
 		}
 
@@ -449,22 +439,12 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 				new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
 		}
 
-		var previousAchievement = leafWork.Achievement;
-		leafWork.Achievement = request.FinalAchievement;
-		leafWork.ChangedAt = now;
-		leafWork.RowVersion += 1;
-
 		var completionReason = request.CompletionNote is { Length: > 0 } note
 			? $"{CompletionReason} ({note})"
 			: CompletionReason;
-		AuditEventWriter.Add(
-			context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value, request.Context.CorrelationId,
-			completionReason,
-			new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
-			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
-
-		await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
-				context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+		await LeafAchievementTransition.ApplyAsync(
+				context, leafWork, request.FinalAchievement, request.Context.Actor, now, request.Context.CorrelationId, completionReason,
+				cancellationToken)
 			.ConfigureAwait(false);
 
 		var writeUpChanged = false;
@@ -625,29 +605,13 @@ internal sealed class PostgreSqlWorkSessionCommandPort : IWorkSessionCommandPort
 				"work-session-already-active", "This worker already has an active session for this leaf.");
 		}
 
-		var previousAchievement = leafWork.Achievement;
-		leafWork.Achievement = Achievement.Waiting;
-		leafWork.ChangedAt = now;
-		leafWork.RowVersion += 1;
-
-		AuditEventWriter.Add(
-			context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value, request.Context.CorrelationId,
-			request.Reason,
-			new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
-			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
-
-		var reopenedAchievement = leafWork.Achievement;
-		leafWork.Achievement = Achievement.InProgress;
-		leafWork.RowVersion += 1;
-
-		AuditEventWriter.Add(
-			context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value, request.Context.CorrelationId,
-			WorkAuditReasons.AutoAdvancedOnSessionStart,
-			new Dictionary<string, string?> { ["achievement"] = reopenedAchievement.ToString() },
-			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
-
-		await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
-				context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+		await LeafAchievementTransition.ApplyAsync(
+				context, leafWork, Achievement.Waiting, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
+				cancellationToken)
+			.ConfigureAwait(false);
+		await LeafAchievementTransition.ApplyAsync(
+				context, leafWork, Achievement.InProgress, request.Context.Actor, now, request.Context.CorrelationId,
+				WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
 			.ConfigureAwait(false);
 
 		var session = new WorkSessionEntity {

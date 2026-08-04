@@ -128,9 +128,16 @@ public interface IJobCommands
 
 	/// <summary>
 	///     Atomically creates a whole batch of new child nodes — a subtree of any shape, plus
-	///     prerequisite edges between them — in one transaction (see <see cref="ImportSubtreeRequest" />):
-	///     either every node and edge is created, or none is.
+	///     prerequisite edges between them, and optionally the home-node assignments named by
+	///     <see cref="ImportSubtreeRequest.HomeNodeLocalId" />/<see cref="ImportSubtreeRequest.HomeNodeUserIds" />
+	///     — in one transaction (see <see cref="ImportSubtreeRequest" />): either every node, edge, and
+	///     home-node assignment is written, or none is.
 	/// </summary>
+	/// <exception cref="ArgumentException">
+	///     <see cref="ImportSubtreeRequest.HomeNodeLocalId" /> names no node in the batch, or
+	///     <see cref="ImportSubtreeRequest.HomeNodeUserIds" /> is non-empty without one or contains a
+	///     duplicate account.
+	/// </exception>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor may not manage <see cref="ImportSubtreeRequest.ParentId" />'s subtree (see
 	///     <see cref="Domain.Authorization.JobNodeAccessPolicy" />).
@@ -138,8 +145,10 @@ public interface IJobCommands
 	/// <exception cref="EntityNotFoundException"><see cref="ImportSubtreeRequest.ParentId" /> does not exist.</exception>
 	/// <exception cref="InvariantViolationException">
 	///     The batch is empty, has a duplicate local id, references an unknown parent or prerequisite
-	///     local id, its parent references form a cycle, or a prerequisite edge violates spec §6 (self-
-	///     referential, ancestor/descendant, duplicate, or would create a cycle).
+	///     local id, its parent references form a cycle, a prerequisite edge violates spec §6 (self-
+	///     referential, ancestor/descendant, duplicate, or would create a cycle), or the flagged home
+	///     node imports as a leaf (<c>ConstraintId</c> <c>"home-node-must-not-be-leaf"</c>), or a target
+	///     account is disabled or locked (<c>ConstraintId</c> <c>"home-node-target-not-active"</c>).
 	/// </exception>
 	Task<ImportSubtreeResult> ImportSubtreeAsync(ImportSubtreeRequest request, CancellationToken cancellationToken = default);
 

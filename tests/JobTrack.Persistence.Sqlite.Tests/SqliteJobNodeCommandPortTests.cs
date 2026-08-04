@@ -46,6 +46,10 @@ public sealed class SqliteJobNodeCommandPortTests()
 	///     authorization check or at the conditional update, depending on interleaving.
 	/// </summary>
 	[Fact]
+	public Task Concurrent_imports_naming_one_home_node_account_leave_a_committed_home_node() =>
+		AssertConcurrentHomeNodeImportsLeaveOneCommittedHomeNodeAsync();
+
+	[Fact]
 	public async Task Concurrent_pickups_of_the_same_unassigned_node_allow_exactly_one_to_succeed()
 	{
 		var (rootId, jobManagerId, workerA) = await SeedRootAndUsersAsync();

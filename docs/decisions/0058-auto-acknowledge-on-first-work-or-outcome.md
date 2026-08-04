@@ -35,12 +35,40 @@ to a job that is already in progress, paused, done, or cancelled.
 - Audited as `"auto-acknowledge-request"` (distinct from `"acknowledge-request"`), same shape as the
   explicit audit event, so the audit trail records *why* acknowledgement happened.
 - Finding the owning request from an arbitrary leaf walks ancestors
-  (`JobNodeHierarchyQueries.GetAncestorIdsAsync`) to the nearest `job_request` anchor, since
-  `job_request` is keyed by its anchor node and a leaf may be several decompositions below it.
-- Applies identically to both providers (PostgreSQL, SQLite) and all four command-port methods:
+  (`JobNodeHierarchyQueries.GetNearestRequestAnchorIdAsync`) to the nearest `job_request` anchor,
+  since `job_request` is keyed by its anchor node and a leaf may be several decompositions below it.
+  The walk is ordered by distance and takes the closest anchor: schema version 0020 does not forbid
+  one request anchoring inside another's subtree, so "nearest" is a decision, not an accident of row
+  order.
+- The mutation is **one conditional `UPDATE ... WHERE acknowledged_at IS NULL`** (EF
+  `ExecuteUpdateAsync` on the anchor row, inside the triggering command's own transaction), not a
+  tracked read/check/mutate. A tracked mutation carries `job_request.row_version` as an optimistic
+  concurrency token, so two transactions starting work on *different* leaves under one unacknowledged
+  request would both read the same version and the loser's `SaveChangesAsync` would raise
+  `DbUpdateConcurrencyException` — rolling back a leaf command that never conflicted and reporting it
+  to the user as a leaf/session concurrency conflict, contradicting both the "silent, idempotent
+  no-op" rule above and the Work-page rule that a concurrency message must mean the relevant version
+  actually moved. With the conditional update the loser blocks on the winner's row lock, re-evaluates
+  the predicate after that commit, matches zero rows, and continues; the audit event is queued only
+  by the transaction whose statement actually affected the row, so it can never be written twice.
+- Applies identically to both providers (PostgreSQL, SQLite) and to **every** command-port path that
+  moves a leaf into one of those states, not to an enumerated list of methods:
   `StartWorkAsync`/`ReopenAndStartWorkAsync` (`*WorkSessionCommandPort`),
   `SetAchievementAsync`/`CompleteLeafAsync` (`*AchievementCommandPort`,
-  `*WorkSessionCommandPort.CompleteLeafAsync`).
+  `*WorkSessionCommandPort.CompleteLeafAsync`), `AddChildAsync`'s create-and-begin-work composite,
+  and `ImportSubtreeAsync` replaying an imported leaf's recorded final achievement. The import keeps
+  its own single `import-leaf-work` audit event rather than gaining a `set-achievement` one; only the
+  acknowledgement is shared, because a requester must not see `Submitted` beside a job the import
+  already recorded as in progress or finished.
+- **The transition itself is the shared unit**, not the acknowledgement call.
+  `Persistence.Shared.LeafAchievementTransition.ApplyAsync` owns the mutation, the concurrency-token
+  bump, the `set-achievement` audit event, and this acknowledgement together
+  (`ApplyImportedAsync` is the import's variant, without the token bump or the audit event); no other
+  code in either provider reassigns a tracked `LeafWorkEntity.Achievement`, which
+  `LeafAchievementTransitionArchitectureTests` enforces. This replaced a per-call-site convention
+  after `AddChildAsync`'s create-and-begin-work composite reproduced the transition locally and
+  silently dropped the acknowledgement — a list of sites that must remember cannot prevent the next
+  composite doing the same.
 - **Implemented once, in `JobTrack.Persistence.Shared`**, as a single helper invoked from inside
   each of the 8 call sites' already-open `DbContext`/transaction — never duplicated per provider and
   never split into a second `SaveChangesAsync`/commit outside the triggering write. Pushing this to
@@ -70,8 +98,10 @@ to a job that is already in progress, paused, done, or cancelled.
   and for any UI that surfaces `acknowledged_at` directly rather than only the derived status).
 - New contract tests are added per provider for: auto-ack on `StartWorkAsync`, on
   `SetAchievementAsync` (the direct `Waiting -> Cancelled`/`Unsuccessful` origin), and on
-  `CompleteLeafAsync`; plus a no-op case when already acknowledged, and an audit-event assertion for
-  `"auto-acknowledge-request"`.
+  `CompleteLeafAsync`; plus a no-op case when already acknowledged, a nearest-enclosing-anchor case
+  covering nested anchors, per-provider races proving two simultaneous first-work/terminal-outcome
+  commands on different leaves under one request both succeed with exactly one acknowledgement, and
+  an audit-event assertion for `"auto-acknowledge-request"`.
 - Schema version 0020's `job_request_no_reacknowledge` trigger makes acknowledgment fully immutable
   once set — not only rejecting a second explicit `acknowledge-request`, but forbidding any change
   back to unacknowledged. Combined with `CompleteLeafAsync`/`SetAchievementAsync` already

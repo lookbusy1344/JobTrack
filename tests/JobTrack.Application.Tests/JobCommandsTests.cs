@@ -803,6 +803,25 @@ public sealed class JobCommandsTests
 	}
 
 	[Fact]
+	public async Task Importing_with_a_duplicate_home_node_target_throws_an_argument_exception()
+	{
+		var sut = new JobCommands(CreateSeededPort());
+
+		var act = () => sut.ImportSubtreeAsync(new() {
+			Context = ContextFor(JobManagerId),
+			ParentId = RootId,
+			Nodes = [
+				new() { LocalId = 1, Description = "Home branch", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
+				new() { LocalId = 2, ParentLocalId = 1, Description = "Child", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
+			],
+			HomeNodeLocalId = 1,
+			HomeNodeUserIds = [OwnerWorkerId, OwnerWorkerId],
+		});
+
+		(await act.Should().ThrowAsync<ArgumentException>()).Which.ParamName.Should().Be("request");
+	}
+
+	[Fact]
 	public async Task Importing_a_batch_with_a_parent_reference_cycle_throws_an_invariant_violation()
 	{
 		var sut = new JobCommands(CreateSeededPort());

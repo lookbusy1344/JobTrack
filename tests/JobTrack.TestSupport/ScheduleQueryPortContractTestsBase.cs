@@ -93,7 +93,7 @@ public abstract class ScheduleQueryPortContractTestsBase : IAsyncLifetime
 	public async Task A_whole_second_weekly_interval_round_trips_exactly()
 	{
 		var (administratorId, _) = await SeedScheduleAsync();
-		var workerId = await SeedEmployeeAsync("Katherine Johnson", "katherine.johnson.schedule-query", EmployeeRole.Worker);
+		var workerId = await SeedEmployeeAsync("Katherine Jones", "katherine.jones.schedule-query", EmployeeRole.Worker);
 		var commandPort = CreateCommandPort(database.ConnectionString);
 		_ = await commandPort.AddScheduleVersionAsync(new() {
 			Context = ContextFor(administratorId),

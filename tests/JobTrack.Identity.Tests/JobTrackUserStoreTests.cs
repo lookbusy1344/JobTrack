@@ -71,7 +71,7 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 	[Fact]
 	public async Task Security_stamp_round_trips_through_persistence()
 	{
-		var appUserId = await InsertAppUserAsync("Katherine Johnson");
+		var appUserId = await InsertAppUserAsync("Katherine Jones");
 		var user = await WithStoreAsync(store => CreatePersistedUserAsync(store, appUserId, "katherine"));
 
 		await WithStoreAsync(async store => {
@@ -272,7 +272,7 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 	[Fact]
 	public async Task Removing_a_role_removes_it_from_get_roles()
 	{
-		var appUserId = await InsertAppUserAsync("Katherine Johnson (roles)");
+		var appUserId = await InsertAppUserAsync("Katherine Jones (roles)");
 		var user = await WithStoreAsync(store => CreatePersistedUserAsync(store, appUserId, "katherine.roles"));
 
 		await WithStoreAsync(async store => {

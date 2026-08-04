@@ -72,6 +72,7 @@ public sealed class InlineDmlArchitectureTests
 	private static readonly IReadOnlyList<AllowedRawSqlCall> AllowedRawSqlReadCalls = [
 		new(HierarchyQueries, "GetAncestorOwnerIdsAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetAncestorIdsAsync", "SqlQuery", "WITH RECURSIVE"),
+		new(HierarchyQueries, "GetNearestRequestAnchorIdAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "PrerequisiteWouldCreateCycleAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetAncestorChainAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetSubtreeAchievementsAsync", "SqlQuery", "WITH RECURSIVE"),

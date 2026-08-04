@@ -86,6 +86,33 @@ internal static class JobNodeHierarchyQueries
 			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 	/// <summary>
+	///     Returns the <c>job_node_id</c> of the <em>nearest</em> <c>job_request</c> anchor at or above
+	///     <paramref name="nodeId" />, or <see langword="null" /> when no request anchors it (ADR 0058).
+	///     Nothing in schema version 0020 forbids one request anchor inside another's subtree, so the
+	///     walk orders by distance from <paramref name="nodeId" /> and takes the closest rather than
+	///     letting an unordered ancestor-set match pick arbitrarily.
+	/// </summary>
+	public static async Task<long?> GetNearestRequestAnchorIdAsync(
+		DbContext context, long nodeId, CancellationToken cancellationToken)
+	{
+		var anchorIds = await context.Database.SqlQuery<long>(
+			$"""
+			 WITH RECURSIVE ancestors(id, parent_id, depth) AS (
+			     SELECT id, parent_id, 0 FROM job_node WHERE id = {nodeId}
+			     UNION ALL
+			     SELECT jn.id, jn.parent_id, a.depth + 1
+			     FROM job_node jn JOIN ancestors a ON jn.id = a.parent_id
+			 )
+			 SELECT a.id
+			 FROM ancestors a JOIN job_request jr ON jr.job_node_id = a.id
+			 ORDER BY a.depth
+			 LIMIT 1
+			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+		return anchorIds.Count == 0 ? null : anchorIds[0];
+	}
+
+	/// <summary>
 	///     Whether adding a <c>job_prerequisite</c> edge <paramref name="requiredJobId" /> -&gt;
 	///     <paramref name="dependentJobId" /> would close a cycle in the existing prerequisite graph:
 	///     walks forward from <paramref name="dependentJobId" /> along existing edges and checks whether

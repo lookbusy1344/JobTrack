@@ -76,22 +76,10 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 			}
 		}
 
-		var previousAchievement = leafWork.Achievement;
-		leafWork.Achievement = request.NewAchievement;
-		leafWork.ChangedAt = now;
-		leafWork.RowVersion += 1;
-
-		AuditEventWriter.Add(
-			context, request.Context.Actor, leafWork.ChangedAt, "set-achievement", "leaf_work", leafWork.JobNodeId.Value,
-			request.Context.CorrelationId, request.Reason,
-			new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
-			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
-
-		if (leafWork.Achievement == Achievement.InProgress || AchievementTransitions.IsCompletedState(leafWork.Achievement)) {
-			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
-					context, request.JobNodeId, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
-				.ConfigureAwait(false);
-		}
+		await LeafAchievementTransition.ApplyAsync(
+				context, leafWork, request.NewAchievement, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
+				cancellationToken)
+			.ConfigureAwait(false);
 
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

@@ -27,27 +27,45 @@ internal static class RequesterRequestAutoAcknowledgement
 	///     and queues an <see cref="AuditEventWriter" /> entry. A silent no-op when no request anchors
 	///     this leaf, or when it is already acknowledged -- this is a side effect of the triggering
 	///     write, not the requester of the action, so it never throws.
+	///     <para>
+	///         Deliberately <em>not</em> a tracked read/check/mutate: two transactions starting work on
+	///         different leaves under one unacknowledged request would both read the old
+	///         <see cref="JobRequestEntity.RowVersion" />, and the loser's <c>SaveChangesAsync</c> would
+	///         raise <see cref="DbUpdateConcurrencyException" /> and roll back a leaf command that never
+	///         actually conflicted. The single conditional <c>UPDATE ... WHERE acknowledged_at IS NULL</c>
+	///         below makes the race a genuine no-op instead: on both providers the loser's statement
+	///         blocks on the winner's row lock, re-evaluates the predicate after that commit, and matches
+	///         zero rows -- so the audit event is queued only by whichever transaction actually performed
+	///         the acknowledgement, and never twice.
+	///     </para>
 	/// </summary>
 	public static async Task AcknowledgeIfNeededAsync(
 		DbContext context, JobNodeId leafNodeId, AppUserId actorId, Instant now, Guid correlationId, CancellationToken cancellationToken)
 	{
-		var ancestorIds = await JobNodeHierarchyQueries.GetAncestorIdsAsync(context, leafNodeId.Value, cancellationToken)
+		var anchorId = await JobNodeHierarchyQueries.GetNearestRequestAnchorIdAsync(context, leafNodeId.Value, cancellationToken)
 			.ConfigureAwait(false);
-		var ancestorNodeIds = ancestorIds.Select(id => new JobNodeId(id)).ToArray();
 
-		var jobRequest = await context.Set<JobRequestEntity>()
-			.FirstOrDefaultAsync(r => ancestorNodeIds.Contains(r.JobNodeId), cancellationToken).ConfigureAwait(false);
-
-		if (jobRequest is null || jobRequest.AcknowledgedAt is not null) {
+		if (anchorId is not long anchorNodeId) {
 			return;
 		}
 
-		jobRequest.AcknowledgedAt = now;
-		jobRequest.AcknowledgedByUserId = actorId;
-		jobRequest.RowVersion += 1;
+		var anchor = new JobNodeId(anchorNodeId);
+		var acknowledged = await context.Set<JobRequestEntity>()
+			.Where(r => r.JobNodeId == anchor && r.AcknowledgedAt == null)
+			.ExecuteUpdateAsync(
+				setters => setters
+					.SetProperty(r => r.AcknowledgedAt, now)
+					.SetProperty(r => r.AcknowledgedByUserId, actorId)
+					.SetProperty(r => r.RowVersion, r => r.RowVersion + 1),
+				cancellationToken)
+			.ConfigureAwait(false);
+
+		if (acknowledged == 0) {
+			return;
+		}
 
 		AuditEventWriter.Add(
-			context, actorId, now, Operation, "job_request", jobRequest.JobNodeId.Value, correlationId, null, null,
+			context, actorId, now, Operation, "job_request", anchorNodeId, correlationId, null, null,
 			new Dictionary<string, string?> { ["acknowledged_by_user_id"] = actorId.Value.ToString(CultureInfo.InvariantCulture) });
 	}
 }

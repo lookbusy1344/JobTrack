@@ -574,7 +574,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		body.Should().Contain("<th class=\"col-10 col-md-5 col-lg-4\" aria-label=\"Description\">Desc</th>");
+		body.Should().Contain("<th class=\"col-10 col-md-5 col-lg-5 col-xxl-3\" aria-label=\"Description\">Desc</th>");
 		body.Should().Contain("<th class=\"jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell\">Active</th>");
 		// No achievement column: at one twelfth it was narrower than its own heading at every width, so
 		// the state rides after the row's name instead, exactly as it does on Browse's subtree tables.

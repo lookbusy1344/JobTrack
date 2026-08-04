@@ -502,7 +502,10 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 		var assignees = ownerAssignees.Concat(sessionAssignees)
 			.GroupBy(assignee => assignee.UserId)
 			.Select(group => group.First())
-			.OrderBy(assignee => assignee.UserId.Value);
+			.OrderBy(assignee => assignee.UserId.Value)
+			.ToList();
+		await IdentityUserWriteLock.AcquireManyAsync(
+			context, assignees.Select(assignee => assignee.UserId).Concat(request.HomeNodeUserIds), cancellationToken).ConfigureAwait(false);
 		foreach (var assignee in assignees) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
 				context, assignee.UserId, now, assignee.ConstraintId, cancellationToken).ConfigureAwait(false);
@@ -582,6 +585,13 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 
 		await ImportRecordedWorkAsync(context, request, createdByLocalId, now, cancellationToken).ConfigureAwait(false);
 
+		if (request.HomeNodeLocalId is long homeNodeLocalId) {
+			await ImportHomeNodeAssignment.ApplyAsync(
+					context, createdByLocalId[homeNodeLocalId].Id, request.HomeNodeUserIds, request.Context.Actor, now,
+					request.Context.CorrelationId, cancellationToken)
+				.ConfigureAwait(false);
+		}
+
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "import-subtree", "job_node", request.ParentId.Value, request.Context.CorrelationId,
 			null, null,
@@ -615,7 +625,9 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 	///         session is always recorded, the leaf necessarily passes <c>Waiting -&gt; InProgress</c>,
 	///         from which every achievement the planner admits (<c>InProgress</c>, <c>Success</c>,
 	///         <c>Cancelled</c>, <c>Unsuccessful</c>) is a permitted next state under ADR 0001. Writing
-	///         the end state is therefore equivalent to replaying those transitions.
+	///         the end state is therefore equivalent to replaying those transitions -- which is why it
+	///         goes through <c>LeafAchievementTransition.ApplyImportedAsync</c> and so carries ADR 0058's
+	///         requester auto-acknowledgement, exactly as the equivalent replayed commands would.
 	///     </para>
 	/// </summary>
 	private static async Task ImportRecordedWorkAsync(
@@ -663,8 +675,9 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 				});
 			}
 
-			leafWork.Achievement = work.Achievement;
-			leafWork.ChangedAt = now;
+			await LeafAchievementTransition.ApplyImportedAsync(
+					context, leafWork, work.Achievement, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+				.ConfigureAwait(false);
 
 			// Flush before the recheck so this leaf's own rows, and every earlier leaf's achievement,
 			// are visible to the readiness query.
@@ -932,15 +945,10 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 
 		var leafWork = await LeafWorkAttachSupport.CreateAsync(
 			context, node, now, commandContext, null, null, cancellationToken).ConfigureAwait(false);
-		var attachedAchievement = leafWork.Achievement;
-		leafWork.Achievement = Achievement.InProgress;
-		leafWork.RowVersion += 1;
-
-		AuditEventWriter.Add(
-			context, commandContext.Actor, now, "set-achievement", "leaf_work", node.Id.Value,
-			commandContext.CorrelationId, WorkAuditReasons.AutoAdvancedOnSessionStart,
-			new Dictionary<string, string?> { ["achievement"] = attachedAchievement.ToString() },
-			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+		await LeafAchievementTransition.ApplyAsync(
+				context, leafWork, Achievement.InProgress, commandContext.Actor, now, commandContext.CorrelationId,
+				WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
+			.ConfigureAwait(false);
 
 		var session = new WorkSessionEntity {
 			Id = default,

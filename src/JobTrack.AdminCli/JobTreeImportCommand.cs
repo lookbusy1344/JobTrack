@@ -16,13 +16,15 @@ using NodaTime;
 ///     small trees, not a multi-owner import, so there is deliberately no separate actor/owner
 ///     distinction.
 ///     <para>
-///         A file may flag one row (<c>"home": true</c>) as the home node the import establishes: once
-///         the subtree exists, that node becomes the post-login landing node of the importing employee
-///         and of every account named in <c>--home-node-for</c>, whose real <c>job_node</c> id no
-///         caller can know in advance. Those writes follow the import transaction rather than joining
-///         it (<see cref="IEmployeeCommands.SetHomeNodeAsync" /> is self-service, one account at a
-///         time), so both the flagged row's branch-ness and every named account are validated up
-///         front — a preference that cannot be applied must not leave a half-imported tree behind.
+///         A file may flag one row (<c>"home": true</c>) as the home node the import establishes: that
+///         node becomes the post-login landing node of the importing employee and of every account
+///         named in <c>--home-node-for</c>, whose real <c>job_node</c> id no caller can know in
+///         advance. Those assignments are carried <em>into</em> the import request
+///         (<see cref="ImportSubtreeRequest.HomeNodeLocalId" />/
+///         <see cref="ImportSubtreeRequest.HomeNodeUserIds" />) and written inside its transaction, so
+///         this command performs exactly one <see cref="IJobTrackClient" /> mutation and partial
+///         success is not a possible outcome. The importing employee stays the single actor throughout;
+///         the named accounts are affected entities, not actors of their own.
 ///     </para>
 /// </summary>
 public static class JobTreeImportCommand
@@ -87,13 +89,15 @@ public static class JobTreeImportCommand
 			return 1;
 		}
 
-		// Resolved before the import runs: an unknown account here is a command-line mistake, and
-		// discovering it after the transaction committed would leave a tree behind that the caller
-		// has to unpick by hand.
+		// Resolved before the import runs so an unknown account is reported as the command-line mistake
+		// it is, rather than as a domain rejection from inside the transaction. The transaction rejects
+		// it too, so this is a better message, not the guarantee — that comes from the single mutation.
 		var homeNodeUsers = new List<(string Username, AppUserId Id)>();
 		if (homeLocalId.HasValue) {
 			homeNodeUsers.Add((username, user.AppUserId));
-			foreach (var homeUsername in homeNodeUsernames.Where(n => !string.Equals(n, username, StringComparison.OrdinalIgnoreCase))) {
+			foreach (var homeUsername in homeNodeUsernames
+						 .Distinct(StringComparer.OrdinalIgnoreCase)
+						 .Where(n => !string.Equals(n, username, StringComparison.OrdinalIgnoreCase))) {
 				var homeUser = await userManager.FindByNameAsync(homeUsername);
 				if (homeUser is null) {
 					io.WriteError($"No employee account found for username '{homeUsername}'.");
@@ -107,7 +111,13 @@ public static class JobTreeImportCommand
 		ImportSubtreeResult result;
 		try {
 			result = await jobTrackClient.Jobs.ImportSubtreeAsync(
-				new() { Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() }, ParentId = importRootId, Nodes = nodes },
+				new() {
+					Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() },
+					ParentId = importRootId,
+					Nodes = nodes,
+					HomeNodeLocalId = homeLocalId,
+					HomeNodeUserIds = [.. homeNodeUsers.Select(u => u.Id)],
+				},
 				cancellationToken);
 		}
 		catch (JobTrackException ex) {
@@ -122,17 +132,7 @@ public static class JobTreeImportCommand
 
 		if (homeLocalId.HasValue) {
 			var homeNodeId = result.Nodes.Single(n => n.LocalId == homeLocalId.Value).JobNodeId;
-			foreach (var (homeUsername, homeUserId) in homeNodeUsers) {
-				try {
-					_ = await jobTrackClient.Employees.SetHomeNodeAsync(
-						new() { Context = new() { Actor = homeUserId, CorrelationId = Guid.NewGuid() }, NodeId = homeNodeId },
-						cancellationToken);
-				}
-				catch (JobTrackException ex) {
-					io.WriteError($"Imported the tree, but failed to set the home node for '{homeUsername}': {ex.Message}");
-					return 1;
-				}
-
+			foreach (var (homeUsername, _) in homeNodeUsers) {
 				io.WriteLine($"Set job node {homeNodeId.Value} as the home node for '{homeUsername}'.");
 			}
 		}
