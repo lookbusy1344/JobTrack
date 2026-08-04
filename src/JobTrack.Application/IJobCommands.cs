@@ -9,11 +9,29 @@ using Abstractions;
 /// </summary>
 public interface IJobCommands
 {
-	/// <summary>Creates a new child node under an existing parent.</summary>
+	/// <summary>
+	///     Creates a new child node under an existing parent. A supplied
+	///     <see cref="CreateJobNodeRequest.BeginWork" /> additionally attaches <c>LeafWork</c>, advances it
+	///     to <see cref="Achievement.InProgress" />, and opens the named worker's session -- all in the
+	///     same transaction, so a node is never created and left half-started.
+	/// </summary>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor may not manage the parent node's subtree (see <see cref="Domain.Authorization.JobNodeAccessPolicy" />).
 	/// </exception>
 	/// <exception cref="EntityNotFoundException">The parent node does not exist.</exception>
+	/// <exception cref="InvariantViolationException">
+	///     <see cref="CreateJobNodeRequest.OwnerUserId" /> names an owner who is disabled, locked, or holds
+	///     no eligible workflow role (<c>ConstraintId</c> <c>"job-node-owner-not-eligible"</c>); or, with a
+	///     supplied <see cref="CreateJobNodeRequest.BeginWork" />, its <c>WorkedByUserId</c> names such a
+	///     worker (<c>ConstraintId</c> <c>"work-session-target-not-eligible"</c>, ADR 0044 Stage 6) or the
+	///     parent already holds <c>LeafWork</c> of its own (<c>ConstraintId</c>
+	///     <c>"job-node-parent-has-no-leaf-work"</c>).
+	/// </exception>
+	/// <exception cref="PrerequisiteBlockedException">
+	///     <see cref="CreateJobNodeRequest.BeginWork" /> was supplied and the new node's inherited
+	///     prerequisites are not satisfied (spec §6) -- work cannot begin on a leaf that is blocked the
+	///     instant it exists.
+	/// </exception>
 	Task<JobNodeResult> AddChildAsync(CreateJobNodeRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>Replaces a node's editable fields.</summary>

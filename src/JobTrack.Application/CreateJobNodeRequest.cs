@@ -41,4 +41,11 @@ public sealed record CreateJobNodeRequest
 
 	/// <summary>The new node's priority.</summary>
 	public required Priority Priority { get; init; }
+
+	/// <summary>
+	///     Work to begin on the new node in the same transaction that creates it, or
+	///     <see langword="null" /> (the default) to create a node nobody is working yet -- a branch-to-be,
+	///     or a leaf whose sessions start later.
+	/// </summary>
+	public CreateJobNodeWorkSpec? BeginWork { get; init; }
 }

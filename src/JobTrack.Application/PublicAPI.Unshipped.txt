@@ -462,6 +462,8 @@ JobTrack.Application.CreateEmployeeRequest.UserName.get -> string!
 JobTrack.Application.CreateEmployeeRequest.UserName.init -> void
 JobTrack.Application.CreateJobNodeRequest
 JobTrack.Application.CreateJobNodeRequest.<Clone>$() -> JobTrack.Application.CreateJobNodeRequest!
+JobTrack.Application.CreateJobNodeRequest.BeginWork.get -> JobTrack.Application.CreateJobNodeWorkSpec?
+JobTrack.Application.CreateJobNodeRequest.BeginWork.init -> void
 JobTrack.Application.CreateJobNodeRequest.Context.get -> JobTrack.Application.CommandContext!
 JobTrack.Application.CreateJobNodeRequest.Context.init -> void
 JobTrack.Application.CreateJobNodeRequest.CreateJobNodeRequest() -> void
@@ -484,6 +486,12 @@ JobTrack.Application.CreateJobNodeRequest.Priority.get -> JobTrack.Abstractions.
 JobTrack.Application.CreateJobNodeRequest.Priority.init -> void
 JobTrack.Application.CreateJobNodeRequest.WriteUp.get -> string?
 JobTrack.Application.CreateJobNodeRequest.WriteUp.init -> void
+JobTrack.Application.CreateJobNodeWorkSpec
+JobTrack.Application.CreateJobNodeWorkSpec.<Clone>$() -> JobTrack.Application.CreateJobNodeWorkSpec!
+JobTrack.Application.CreateJobNodeWorkSpec.CreateJobNodeWorkSpec() -> void
+JobTrack.Application.CreateJobNodeWorkSpec.Equals(JobTrack.Application.CreateJobNodeWorkSpec? other) -> bool
+JobTrack.Application.CreateJobNodeWorkSpec.WorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.CreateJobNodeWorkSpec.WorkedByUserId.init -> void
 JobTrack.Application.DecomposeWorkedLeafRequest
 JobTrack.Application.DecomposeWorkedLeafRequest.<Clone>$() -> JobTrack.Application.DecomposeWorkedLeafRequest!
 JobTrack.Application.DecomposeWorkedLeafRequest.BranchDescription.get -> string!
@@ -1948,6 +1956,9 @@ override JobTrack.Application.CreateEmployeeRequest.ToString() -> string!
 override JobTrack.Application.CreateJobNodeRequest.Equals(object? obj) -> bool
 override JobTrack.Application.CreateJobNodeRequest.GetHashCode() -> int
 override JobTrack.Application.CreateJobNodeRequest.ToString() -> string!
+override JobTrack.Application.CreateJobNodeWorkSpec.Equals(object? obj) -> bool
+override JobTrack.Application.CreateJobNodeWorkSpec.GetHashCode() -> int
+override JobTrack.Application.CreateJobNodeWorkSpec.ToString() -> string!
 override JobTrack.Application.DecomposeWorkedLeafRequest.Equals(object? obj) -> bool
 override JobTrack.Application.DecomposeWorkedLeafRequest.GetHashCode() -> int
 override JobTrack.Application.DecomposeWorkedLeafRequest.ToString() -> string!
@@ -2290,6 +2301,8 @@ static JobTrack.Application.CreateEmployeeRequest.operator !=(JobTrack.Applicati
 static JobTrack.Application.CreateEmployeeRequest.operator ==(JobTrack.Application.CreateEmployeeRequest? left, JobTrack.Application.CreateEmployeeRequest? right) -> bool
 static JobTrack.Application.CreateJobNodeRequest.operator !=(JobTrack.Application.CreateJobNodeRequest? left, JobTrack.Application.CreateJobNodeRequest? right) -> bool
 static JobTrack.Application.CreateJobNodeRequest.operator ==(JobTrack.Application.CreateJobNodeRequest? left, JobTrack.Application.CreateJobNodeRequest? right) -> bool
+static JobTrack.Application.CreateJobNodeWorkSpec.operator !=(JobTrack.Application.CreateJobNodeWorkSpec? left, JobTrack.Application.CreateJobNodeWorkSpec? right) -> bool
+static JobTrack.Application.CreateJobNodeWorkSpec.operator ==(JobTrack.Application.CreateJobNodeWorkSpec? left, JobTrack.Application.CreateJobNodeWorkSpec? right) -> bool
 static JobTrack.Application.DecomposeWorkedLeafRequest.operator !=(JobTrack.Application.DecomposeWorkedLeafRequest? left, JobTrack.Application.DecomposeWorkedLeafRequest? right) -> bool
 static JobTrack.Application.DecomposeWorkedLeafRequest.operator ==(JobTrack.Application.DecomposeWorkedLeafRequest? left, JobTrack.Application.DecomposeWorkedLeafRequest? right) -> bool
 static JobTrack.Application.DecomposeWorkedLeafResult.operator !=(JobTrack.Application.DecomposeWorkedLeafResult? left, JobTrack.Application.DecomposeWorkedLeafResult? right) -> bool

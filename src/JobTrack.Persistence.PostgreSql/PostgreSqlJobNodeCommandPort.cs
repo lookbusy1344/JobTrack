@@ -866,6 +866,11 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.ParentId, now, cancellationToken).ConfigureAwait(false);
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
 			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+		if (request.BeginWork is CreateJobNodeWorkSpec eligibilityCheck) {
+			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
+					context, eligibilityCheck.WorkedByUserId, now, "work-session-target-not-eligible", cancellationToken)
+				.ConfigureAwait(false);
+		}
 
 		var node = new JobNodeEntity {
 			Id = default,
@@ -873,7 +878,11 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			Description = request.Description,
 			WriteUp = request.WriteUp,
 			PostedByUserId = request.Context.Actor,
-			OwnerUserId = request.OwnerUserId,
+			// ADR 0048's session-start auto-claim, at create time: a node created into the unassigned
+			// pool while someone begins work on it belongs to that worker, not to nobody. No conditional
+			// claim is needed here the way PickUpAsync needs one -- the row does not exist yet, so no
+			// concurrent claimant can be racing it.
+			OwnerUserId = request.OwnerUserId ?? request.BeginWork?.WorkedByUserId,
 			ExpectedDurationHours = request.ExpectedDurationHours,
 			ExpectedCost = request.ExpectedCost,
 			NeededStart = request.NeededStart,
@@ -884,14 +893,83 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		};
 		_ = context.Add(node);
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken, ct => {
-			AuditEventWriter.Add(
-				context, request.Context.Actor, node.PostedAt, "create-job-node", "job_node",
-				node.Id.Value, request.Context.CorrelationId, null, null, SnapshotJobNode(node));
-			return Task.CompletedTask;
-		}).ConfigureAwait(false);
+		return await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
+			transaction,
+			async ct => {
+				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
 
-		return JobNodeStructuralProjection.ToResult(node, false, false);
+				AuditEventWriter.Add(
+					context, request.Context.Actor, node.PostedAt, "create-job-node", "job_node",
+					node.Id.Value, request.Context.CorrelationId, null, null, SnapshotJobNode(node));
+
+				if (request.BeginWork is CreateJobNodeWorkSpec beginWork) {
+					await BeginWorkOnNewNodeAsync(context, node, beginWork, request.Context, now, ct).ConfigureAwait(false);
+				}
+
+				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
+
+				return JobNodeStructuralProjection.ToResult(node, false, request.BeginWork is not null);
+			},
+			cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	///     Begins <paramref name="beginWork" />'s session on the just-created <paramref name="node" />,
+	///     inside the create's own transaction: attach <c>LeafWork</c>, apply ADR 0038's
+	///     <see cref="Achievement.Waiting" /> -&gt; <see cref="Achievement.InProgress" /> auto-advance, and
+	///     open the session at the create instant. The row state and audit trail this leaves are exactly
+	///     what <c>StartWorkAsync</c> against the freshly created node would leave -- same three events,
+	///     same auto-advance reason, same <c>leaf_work</c> version -- so "create it and start it" is one
+	///     transaction rather than two, without becoming a second, subtly different start path.
+	///     <para>
+	///         The prerequisite recheck is not redundant with the new node having no edges of its own: a
+	///         leaf inherits every prerequisite attached to its ancestors, so it can be blocked the instant
+	///         it exists, and spec §6 requires that recheck inside the write transaction.
+	///     </para>
+	/// </summary>
+	private static async Task BeginWorkOnNewNodeAsync(
+		PostgreSqlJobTrackDbContext context, JobNodeEntity node, CreateJobNodeWorkSpec beginWork,
+		CommandContext commandContext, Instant now, CancellationToken cancellationToken)
+	{
+		if (!await LeafReadiness.IsReadyAsync(context, node.Id, cancellationToken).ConfigureAwait(false)) {
+			throw new PrerequisiteBlockedException($"Job node {node.Id}'s prerequisites are not satisfied.");
+		}
+
+		var leafWork = await LeafWorkAttachSupport.CreateAsync(
+			context, node, now, commandContext, null, null, cancellationToken).ConfigureAwait(false);
+		var attachedAchievement = leafWork.Achievement;
+		leafWork.Achievement = Achievement.InProgress;
+		leafWork.RowVersion += 1;
+
+		AuditEventWriter.Add(
+			context, commandContext.Actor, now, "set-achievement", "leaf_work", node.Id.Value,
+			commandContext.CorrelationId, WorkAuditReasons.AutoAdvancedOnSessionStart,
+			new Dictionary<string, string?> { ["achievement"] = attachedAchievement.ToString() },
+			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
+
+		var session = new WorkSessionEntity {
+			Id = default,
+			LeafWorkId = node.Id,
+			WorkedByUserId = beginWork.WorkedByUserId,
+			StartedAt = now,
+			FinishedAt = null,
+			ChangedAt = now,
+			RowVersion = 1,
+		};
+		_ = context.Add(session);
+
+		// The session's own audit event names its database-generated identifier, so it can only be
+		// queued once this save has produced one.
+		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+		AuditEventWriter.Add(
+			context, commandContext.Actor, now, "start-work-session", "work_session", session.Id.Value,
+			commandContext.CorrelationId, null, null,
+			new Dictionary<string, string?> {
+				["leaf_work_id"] = session.LeafWorkId.Value.ToString(CultureInfo.InvariantCulture),
+				["worked_by_user_id"] = session.WorkedByUserId.Value.ToString(CultureInfo.InvariantCulture),
+				["started_at"] = session.StartedAt.ToString(),
+			});
 	}
 
 	private PostgreSqlJobTrackDbContext CreateContext()

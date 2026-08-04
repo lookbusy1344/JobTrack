@@ -888,10 +888,15 @@ fieldset {
     border-radius: var(--bs-border-radius);
 }
 
+/* No horizontal padding: this legend sits *inside* the fieldset as a block caption (Bootstrap's
+   reboot floats it and `legend + *` clears it) rather than straddling the top border the way a
+   default legend does, so the padding bought nothing and cost alignment — it pushed the caption a
+   token to the right of the labels beneath it, leaving every fieldset with a visibly ragged left
+   edge. `margin-bottom` replaces the caption/first-label gap the old `0` left cramped. */
 fieldset legend {
     width: auto;
-    padding: 0 var(--jt-space-2);
-    margin-bottom: 0;
+    padding: 0;
+    margin-bottom: var(--jt-space-2);
     font-size: var(--jt-font-size-xxs);
     font-weight: 700;
     letter-spacing: 0.1em;

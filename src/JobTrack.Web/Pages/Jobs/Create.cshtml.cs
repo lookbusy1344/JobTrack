@@ -26,6 +26,17 @@ public sealed class CreateModel(
 	private const string ParentHasLeafWorkMessage =
 		"This parent already has work attached. Create children only under a node without leaf work.";
 
+	private const string BlockedMessage =
+		"This job's prerequisites are not satisfied, so work cannot begin on it yet. Create it without a worker "
+		+ "and start the session once it is ready.";
+
+	/// <summary>
+	///     The structural rejection <c>IJobCommands.AddChildAsync</c> reports for a parent that already
+	///     holds leaf work; every other constraint it can raise is about the chosen owner or worker, and
+	///     <see cref="WorkSessionFailureDisplay" /> already has the sentence for those.
+	/// </summary>
+	private const string WriteRejectedConstraintId = "job-node-write-rejected";
+
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
 
@@ -38,6 +49,12 @@ public sealed class CreateModel(
 	public string? ErrorMessage { get; private set; }
 
 	public List<SelectListItem> OwnerOptions { get; private set; } = [];
+
+	/// <summary>
+	///     The same workflow-employee directory as <see cref="OwnerOptions" />, headed by "None" — the
+	///     default, since a new node is just as often a branch-to-be or a leaf whose sessions start later.
+	/// </summary>
+	public List<SelectListItem> BeginWorkOptions { get; private set; } = [];
 
 	/// <summary>
 	///     Formats an owner id for display: display name and username when it resolves in
@@ -94,6 +111,9 @@ public sealed class CreateModel(
 			NeededStart = neededStart,
 			NeededFinish = neededFinish,
 			Priority = Input.Priority,
+			BeginWork = Input.BeginWorkForUserId.HasValue
+				? new CreateJobNodeWorkSpec { WorkedByUserId = new AppUserId(Input.BeginWorkForUserId.Value) }
+				: null,
 		};
 
 		try {
@@ -110,8 +130,16 @@ public sealed class CreateModel(
 			await LoadOwnerOptionsAsync(context.Actor, cancellationToken);
 			return Page();
 		}
-		catch (InvariantViolationException) {
-			ErrorMessage = ParentHasLeafWorkMessage;
+		catch (InvariantViolationException ex) {
+			ErrorMessage = ex.ConstraintId == WriteRejectedConstraintId
+				? ParentHasLeafWorkMessage
+				: WorkSessionFailureDisplay.Describe(ex);
+			await LoadParentAsync(context.Actor, cancellationToken);
+			await LoadOwnerOptionsAsync(context.Actor, cancellationToken);
+			return Page();
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = BlockedMessage;
 			await LoadParentAsync(context.Actor, cancellationToken);
 			await LoadOwnerOptionsAsync(context.Actor, cancellationToken);
 			return Page();
@@ -140,6 +168,7 @@ public sealed class CreateModel(
 			cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Unassigned", string.Empty));
+		BeginWorkOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("None", string.Empty));
 	}
 
 	private async Task<AppUserId?> ResolveActorAsync()
@@ -155,6 +184,13 @@ public sealed class CreateModel(
 		[Display(Name = "Write-up")] public string? WriteUp { get; set; }
 
 		[Display(Name = "Owner")] public long? OwnerUserId { get; set; }
+
+		/// <summary>
+		///     The employee whose session opens on the new node as it is created, or <see langword="null" />
+		///     ("None", the default) to create it with no work under way.
+		/// </summary>
+		[Display(Name = "Begin work for")]
+		public long? BeginWorkForUserId { get; set; }
 
 		[Display(Name = "Expected duration (hours)")]
 		public decimal? ExpectedDurationHours { get; set; }

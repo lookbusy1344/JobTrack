@@ -57,9 +57,6 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 	/// <summary>ADR 0045 §4: the fixed structured reason recorded for every <see cref="CompleteLeafAsync" /> completion.</summary>
 	private const string CompletionReason = "Completed from the leaf work page";
 
-	/// <summary>ADR 0038's existing fixed auto-advance audit reason, reused verbatim by <see cref="ReopenAndStartWorkAsync" />.</summary>
-	private const string AutoAdvanceReason = "Advanced automatically on session start";
-
 	/// <summary>ADR 0048's fixed audit reason for a session-start-triggered pickup, distinguishing it from an explicit one.</summary>
 	private const string AutoClaimReason = "Automatically claimed on session start";
 
@@ -209,7 +206,7 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value,
-				request.Context.CorrelationId, "Advanced automatically on session start",
+				request.Context.CorrelationId, WorkAuditReasons.AutoAdvancedOnSessionStart,
 				new Dictionary<string, string?> { ["achievement"] = previousAchievement.ToString() },
 				new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
 
@@ -681,7 +678,7 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "set-achievement", "leaf_work", leafWork.JobNodeId.Value, request.Context.CorrelationId,
-			AutoAdvanceReason,
+			WorkAuditReasons.AutoAdvancedOnSessionStart,
 			new Dictionary<string, string?> { ["achievement"] = reopenedAchievement.ToString() },
 			new Dictionary<string, string?> { ["achievement"] = leafWork.Achievement.ToString() });
 

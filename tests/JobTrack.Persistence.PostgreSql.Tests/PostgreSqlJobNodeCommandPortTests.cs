@@ -188,6 +188,68 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 	}
 
 	/// <summary>
+	///     The begin-work target's eligibility is checked in the create's own transaction, so a role grant
+	///     that would disqualify the worker cannot slip between the check and the write: the create blocks
+	///     on the target account's row lock, then fails once the concurrent grant commits — and, because
+	///     the node and its session share one transaction, leaves no half-created node behind.
+	/// </summary>
+	[Fact]
+	public async Task Beginning_work_on_a_new_node_serializes_with_a_concurrent_requester_role_grant()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(ConnectionString);
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		await using var roleConnection = new NpgsqlConnection(ConnectionString);
+		await roleConnection.OpenAsync();
+		await using var roleTransaction = await roleConnection.BeginTransactionAsync();
+		await using (var lockCommand = roleConnection.CreateCommand()) {
+			lockCommand.Transaction = roleTransaction;
+			lockCommand.CommandText = "SELECT id FROM identity_user WHERE app_user_id = @appUserId FOR UPDATE;";
+			lockCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			_ = await lockCommand.ExecuteScalarAsync();
+		}
+
+		var creation = port.AddChildAsync(CreateRequest(jobManagerId, rootId) with {
+			BeginWork = new() { WorkedByUserId = workerId },
+		});
+
+		var firstCompleted = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
+		firstCompleted.Should().NotBe(creation, "begin-work eligibility must wait for the target account's role lock");
+
+		await using (var grantCommand = roleConnection.CreateCommand()) {
+			grantCommand.Transaction = roleTransaction;
+			grantCommand.CommandText = """
+									   INSERT INTO identity_user_role (identity_user_id, identity_role_id)
+									   SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
+									   """;
+			grantCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			grantCommand.Parameters.AddWithValue("roleId", (short)EmployeeRole.Requester);
+			_ = await grantCommand.ExecuteNonQueryAsync();
+		}
+
+		await roleTransaction.CommitAsync();
+
+		var completed = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
+		completed.Should().Be(creation);
+		creation.IsFaulted.Should().BeTrue();
+		creation.Exception!.InnerExceptions.Should().ContainSingle()
+			.Which.Should().BeOfType<InvariantViolationException>()
+			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+	}
+
+	private async Task<long> CountChildrenAsync(JobNodeId parentId)
+	{
+		await using var connection = new NpgsqlConnection(ConnectionString);
+		await connection.OpenAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT COUNT(*) FROM job_node WHERE parent_id = @parentId;";
+		command.Parameters.AddWithValue("parentId", parentId.Value);
+		return (long)(await command.ExecuteScalarAsync())!;
+	}
+
+	/// <summary>
 	///     The loser of the race can surface either exception depending on interleaving: the conditional
 	///     <c>WHERE owner_user_id IS NULL</c> update losing after passing a stale authorization check
 	///     (<see cref="InvariantViolationException" />, "job-node-already-claimed"), or a fresh

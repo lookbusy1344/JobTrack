@@ -159,6 +159,135 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task Creating_a_child_with_begin_work_opens_a_session_on_an_in_progress_leaf()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
+			BeginWork = new() { WorkedByUserId = workerId },
+		});
+
+		leaf.HasLeafWork.Should().BeTrue();
+		(await ReadAchievementIdAsync(leaf.Id)).Should().Be((long)Achievement.InProgress);
+		(await CountSessionsAsync(leaf.Id, false)).Should().Be(1);
+		(await CountSessionsAsync(leaf.Id, true)).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Creating_a_child_with_begin_work_correlates_the_create_attach_advance_and_session_audit_events()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var correlationId = Guid.NewGuid();
+
+		var leaf = await port.AddChildAsync(new() {
+			Context = new() { Actor = jobManagerId, CorrelationId = correlationId },
+			ParentId = rootId,
+			Description = "Started on creation",
+			OwnerUserId = workerId,
+			Priority = Priority.Medium,
+			BeginWork = new() { WorkedByUserId = workerId },
+		});
+
+		var auditPort = CreateAuditQueryPort(database.ConnectionString);
+		var audit = await auditPort.SearchAuditEventsAsync(
+			new() { CorrelationId = correlationId }, null, AuditSearchTestDefaults.AllRowsLimit);
+
+		audit.Events.Select(e => e.Operation).Should()
+			.BeEquivalentTo(["create-job-node", "attach-leaf-work", "set-achievement", "start-work-session"]);
+		audit.Events.Should().OnlyContain(e => e.ActorId == jobManagerId);
+		audit.Events.Single(e => e.Operation == "attach-leaf-work").EntityId.Should().Be(leaf.Id.Value);
+	}
+
+	/// <summary>
+	///     ADR 0048's session-start auto-claim in its create-time form: a node created into the
+	///     unassigned pool while someone begins work on it is never left unowned.
+	/// </summary>
+	[Fact]
+	public async Task Creating_an_unassigned_child_with_begin_work_makes_the_worker_its_owner()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, null, rootId) with {
+			BeginWork = new() { WorkedByUserId = workerId },
+		});
+
+		leaf.OwnerUserId.Should().Be(workerId);
+		(await ReadOwnerUserIdAsync(leaf.Id)).Should().Be(workerId.Value);
+	}
+
+	[Fact]
+	public async Task Creating_a_child_with_begin_work_leaves_an_explicit_owner_alone()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.begin-work", EmployeeRole.Worker);
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
+			BeginWork = new() { WorkedByUserId = otherWorkerId },
+		});
+
+		leaf.OwnerUserId.Should().Be(workerId);
+		(await ReadOwnerUserIdAsync(leaf.Id)).Should().Be(workerId.Value);
+	}
+
+	[Fact]
+	public async Task Creating_a_child_with_begin_work_for_an_ineligible_worker_creates_nothing()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Requesting User", "requesting.user.begin-work", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId) with {
+			BeginWork = new() { WorkedByUserId = requesterId },
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+	}
+
+	/// <summary>
+	///     The new node has no prerequisite edges of its own, but it inherits its ancestors' — so work
+	///     cannot begin on a leaf that is blocked the instant it exists, and the rejected create leaves
+	///     no node behind.
+	/// </summary>
+	[Fact]
+	public async Task Creating_a_blocked_child_with_begin_work_creates_nothing()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var required = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+		var anchor = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = anchor.Id });
+
+		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, workerId, anchor.Id) with {
+			BeginWork = new() { WorkedByUserId = workerId },
+		});
+
+		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
+		(await CountChildrenAsync(anchor.Id)).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Creating_a_child_with_begin_work_under_a_parent_the_actor_cannot_manage_creates_nothing()
+	{
+		var (rootId, _, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		var act = () => port.AddChildAsync(CreateRequest(workerId, workerId, rootId) with {
+			BeginWork = new() { WorkedByUserId = workerId },
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+	}
+
+	[Fact]
 	public async Task Editing_a_node_replaces_its_editable_fields_and_bumps_the_version()
 	{
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
@@ -765,6 +894,50 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		afterDecompose.Should().BeEquivalentTo(beforeDecompose);
 	}
 
+	/// <summary>
+	///     Spec §4.5 for a leaf someone is clocked onto <em>right now</em> — the state
+	///     <see cref="CreateJobNodeRequest.BeginWork" /> produces, and the one every other decompose test
+	///     misses by seeding only finished sessions. The open session is repointed onto the inherited
+	///     child rather than being finished, rejected, or orphaned: the worker's clock keeps running
+	///     across the decomposition, now against the child. This is also the only decompose path that
+	///     exercises ADR 0044's <c>WHEN (NEW.finished_at IS NULL)</c> session-repoint closure trigger,
+	///     which an already-finished session never fires.
+	/// </summary>
+	[Fact]
+	public async Task Decomposing_a_leaf_that_is_being_worked_right_now_keeps_the_open_session_running_on_the_inherited_child()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
+			BeginWork = new() { WorkedByUserId = workerId },
+		});
+		var sessionId = await ReadActiveSessionIdAsync(leaf.Id);
+		var beforeDecompose = await ReadWorkSessionPreservedFieldsAsync(sessionId);
+
+		var result = await port.DecomposeWorkedLeafAsync(new() {
+			Context = ContextFor(jobManagerId),
+			LeafNodeId = leaf.Id,
+			Version = leaf.Version,
+			BranchDescription = "Umbrella job",
+			ExistingWorkDescription = "The work already under way",
+			NewChildren = [
+				new() { Description = "Newly identified sub-job", OwnerUserId = workerId, Priority = Priority.Medium },
+			],
+		});
+
+		// The session is still open, and now belongs to the inherited child, not the new branch.
+		(await ReadWorkSessionLeafWorkAsync(sessionId)).LeafWorkId.Should().Be(result.ExistingWorkChildId);
+		(await CountSessionsAsync(result.ExistingWorkChildId, false)).Should().Be(1);
+		(await CountSessionsAsync(result.ExistingWorkChildId, true)).Should().Be(0);
+		(await ReadWorkSessionPreservedFieldsAsync(sessionId)).Should().BeEquivalentTo(beforeDecompose);
+
+		// The work moved wholesale: the child carries the in-progress achievement, and the node that
+		// became a branch holds no LeafWork of its own.
+		(await ReadAchievementIdAsync(result.ExistingWorkChildId)).Should().Be((long)Achievement.InProgress);
+		(await CountLeafWorkAsync(result.BranchId)).Should().Be(0);
+		(await CountSessionsAsync(result.BranchId, false)).Should().Be(0);
+	}
+
 	[Fact]
 	public async Task A_requester_cannot_be_assigned_as_the_owner_of_a_decomposed_child()
 	{
@@ -1287,6 +1460,41 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
+	/// <summary>The single still-open session on <paramref name="leafId" />; fails the test if there isn't exactly one.</summary>
+	private async Task<WorkSessionId> ReadActiveSessionIdAsync(JobNodeId leafId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT id FROM work_session WHERE leaf_work_id = @leafId AND finished_at IS NULL;";
+		AddParameter(command, "@leafId", leafId.Value);
+
+		await using var reader = await command.ExecuteReaderAsync();
+		(await reader.ReadAsync()).Should().BeTrue("the leaf should have an open session");
+		var sessionId = new WorkSessionId(reader.GetInt64(0));
+		(await reader.ReadAsync()).Should().BeFalse("the leaf should have exactly one open session");
+
+		return sessionId;
+	}
+
+	private async Task<long> CountLeafWorkAsync(JobNodeId nodeId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT COUNT(*) FROM leaf_work WHERE job_node_id = @nodeId;";
+		AddParameter(command, "@nodeId", nodeId.Value);
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
+	private async Task<long?> ReadOwnerUserIdAsync(JobNodeId nodeId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT owner_user_id FROM job_node WHERE id = @nodeId;";
+		AddParameter(command, "@nodeId", nodeId.Value);
+		var value = await command.ExecuteScalarAsync();
+		return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+	}
+
 	private async Task<long> ReadNodeVersionAsync(JobNodeId nodeId)
 	{
 		await using var connection = await OpenExistingConnectionAsync();
@@ -1641,7 +1849,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
 
-	private static CreateJobNodeRequest CreateRequest(AppUserId actor, AppUserId owner, JobNodeId parentId) => new() {
+	private static CreateJobNodeRequest CreateRequest(AppUserId actor, AppUserId? owner, JobNodeId parentId) => new() {
 		Context = ContextFor(actor),
 		ParentId = parentId,
 		Description = "Do the thing",

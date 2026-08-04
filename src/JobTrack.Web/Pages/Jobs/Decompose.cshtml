@@ -3,6 +3,9 @@
 @model DecomposeModel
 @{
 	ViewData["Title"] = "Decompose worked leaf";
+	var workPage = Model.WorkPage;
+	var activeSessionCount = workPage?.ActiveSessions.Count ?? 0;
+	var isPaused = LeafActivity.IsPaused(workPage?.Achievement, activeSessionCount);
 }
 
 <div class="jt-page-narrow">
@@ -18,43 +21,84 @@
 				asp-route-nodeId="@Model.LeafNodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a>
 		</p>
 
-		<form method="post" class="jt-form-card">
-			<input type="hidden" asp-for="LeafNodeId"/>
-			<input type="hidden" asp-for="OriginalVersion"/>
-			<div class="form-group">
-				<label asp-for="Input.BranchDescription">New branch description (what this node becomes)</label>
-				<input asp-for="Input.BranchDescription" class="form-control"/>
-				<span asp-validation-for="Input.BranchDescription" class="text-danger"></span>
-			</div>
-			<div class="form-group">
-				<label asp-for="Input.ExistingWorkDescription">Existing-work child description (inherits the current work unchanged)</label>
-				<input asp-for="Input.ExistingWorkDescription" class="form-control"/>
-				<span asp-validation-for="Input.ExistingWorkDescription" class="text-danger"></span>
+		@if (Model.CanDecompose) {
+			<p class="jt-lede">
+				This job keeps its own identity and becomes a branch. Its existing work does not stay on it:
+				a <strong>new child</strong> is created to inherit that work, and the jobs you name below are
+				created as that child's siblings.
+			</p>
+
+			<div class="jt-card">
+				<p><strong>What moves onto the new child</strong></p>
+				<p>
+					The achievement — currently
+					<strong>@(workPage?.Achievement is Achievement achievement ? EnumDisplay.Label(achievement) : "none")</strong>@(isPaused ? " (paused)" : string.Empty)
+					— and its completion criteria, unchanged.
+				</p>
+				<p>
+					@if (activeSessionCount == 0) {
+						<text>Every recorded work session. None is running right now.</text>
+					} else {
+						<text>
+							Every recorded work session, including the
+							<strong>@(activeSessionCount == 1 ? "one still running" : $"{activeSessionCount} still running")</strong>.
+							Nobody is clocked off — those clocks keep running, against the new child.
+						</text>
+					}
+				</p>
+				<p class="mb-0">
+					This job's own id, links, and dependencies stay where they are: only its work moves down a level.
+				</p>
 			</div>
 
-			<h2>Newly identified children (leave a slot's description blank to skip it)</h2>
-			@for (var i = 0; i < Model.Input.NewChildren.Count; ++i) {
+			<form method="post" class="jt-form-card">
+				<input type="hidden" asp-for="LeafNodeId"/>
+				<input type="hidden" asp-for="OriginalVersion"/>
+
 				<fieldset>
-					<legend>New child @(i + 1)</legend>
+					<legend>The split</legend>
 					<div class="form-group">
-						<label asp-for="Input.NewChildren[i].Description"></label>
-						<input asp-for="Input.NewChildren[i].Description" class="form-control"/>
+						<label asp-for="Input.BranchDescription">This job's new description, as a branch</label>
+						<input asp-for="Input.BranchDescription" class="form-control"/>
+						<span asp-validation-for="Input.BranchDescription" class="text-danger"></span>
 					</div>
 					<div class="form-group">
-						<label asp-for="Input.NewChildren[i].OwnerUserId"></label>
-						<select asp-for="Input.NewChildren[i].OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
-					</div>
-					<div class="form-group">
-						<label asp-for="Input.NewChildren[i].Priority"></label>
-						<select asp-for="Input.NewChildren[i].Priority" class="form-control"
-						        asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
+						<label asp-for="Input.ExistingWorkDescription">New child that inherits the work above</label>
+						<input asp-for="Input.ExistingWorkDescription" class="form-control"/>
+						<span asp-validation-for="Input.ExistingWorkDescription" class="text-danger"></span>
 					</div>
 				</fieldset>
-			}
-			<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
-				<button type="submit" class="btn btn-primary">Save</button>
-				<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Cancel</a>
-			</div>
-		</form>
+
+				<h2>Newly identified children</h2>
+				<p class="jt-lede">
+					The other jobs this one turns out to need. Leave a slot's description blank to skip it — you
+					can add more later from the branch itself.
+				</p>
+				@for (var i = 0; i < Model.Input.NewChildren.Count; ++i) {
+					<fieldset>
+						<legend>New child @(i + 1)</legend>
+						<div class="row g-3">
+							<div class="col-12 col-md-6">
+								<label class="form-label" asp-for="Input.NewChildren[i].Description"></label>
+								<input asp-for="Input.NewChildren[i].Description" class="form-control"/>
+							</div>
+							<div class="col-12 col-sm-6 col-md-3">
+								<label class="form-label" asp-for="Input.NewChildren[i].OwnerUserId"></label>
+								<select asp-for="Input.NewChildren[i].OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
+							</div>
+							<div class="col-12 col-sm-6 col-md-3">
+								<label class="form-label" asp-for="Input.NewChildren[i].Priority"></label>
+								<select asp-for="Input.NewChildren[i].Priority" class="form-control"
+								        asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
+							</div>
+						</div>
+					</fieldset>
+				}
+				<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+					<button type="submit" class="btn btn-primary">Save</button>
+					<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.LeafNodeId">Cancel</a>
+				</div>
+			</form>
+		}
 	}
 </div>

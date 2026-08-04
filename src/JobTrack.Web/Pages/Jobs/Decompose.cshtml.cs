@@ -34,6 +34,20 @@ public sealed class DecomposeModel(
 
 	public JobNodeDetailResult? CurrentNode { get; private set; }
 
+	/// <summary>
+	///     The leaf's current work state — achievement and the sessions still running — so the form can
+	///     say exactly what the existing-work child is about to inherit, rather than leaving the reader
+	///     to discover after the fact that a running clock moved onto a node they did not know would be
+	///     created.
+	/// </summary>
+	public LeafWorkPageResult? WorkPage { get; private set; }
+
+	/// <summary>
+	///     Whether to offer the form at all. False withdraws it while leaving the node's name and its
+	///     link back to Browse in place, so a refusal still tells the reader which job it is about.
+	/// </summary>
+	public bool CanDecompose { get; private set; } = true;
+
 	public string? ErrorMessage { get; private set; }
 
 	public List<SelectListItem> OwnerOptions { get; private set; } = [];
@@ -53,11 +67,27 @@ public sealed class DecomposeModel(
 			if (node.Node.HasChildren) {
 				ErrorMessage = "Only a leaf holding existing work can be decomposed.";
 				CurrentNode = null;
+			} else if (!node.Node.HasLeafWork) {
+				// The command refuses this outright ("leaf-work-not-attached"), so withdraw the form
+				// rather than collecting the exception at save time: there is no work here for the
+				// existing-work child to inherit, and creating children is the plain Create page's job.
+				// Only the form goes -- the node keeps its name and its link back to Browse (ADR 0044),
+				// which is exactly what a reader sent here by mistake needs next.
+				ErrorMessage = "This job has no recorded work to carry over, so there is nothing to decompose. "
+							   + "Add children to it directly instead.";
+				CanDecompose = false;
 			}
 		}
 
+		// Every new child defaults to the decomposed node's own owner, matching the existing-work child,
+		// which inherits that owner in the command itself: a decomposition splits one person's job into
+		// the pieces it turned out to need, so leaving the pieces in the unassigned pool is the rarer
+		// intent, not the default one. Still just a default -- each slot can be reassigned, or set back
+		// to Unassigned, before saving. A node that is itself unassigned defaults its children the same
+		// way it is: unassigned.
+		var defaultOwnerUserId = CurrentNode?.Node.OwnerUserId?.Value;
 		for (var i = Input.NewChildren.Count; i < MaxNewChildSlots; ++i) {
-			Input.NewChildren.Add(new());
+			Input.NewChildren.Add(new() { OwnerUserId = defaultOwnerUserId });
 		}
 
 		return Page();
@@ -143,6 +173,8 @@ public sealed class DecomposeModel(
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
 				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(LeafNodeId) }, cancellationToken);
+			WorkPage = await jobTrackClient.Query.GetLeafWorkPageAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, JobNodeId = new JobNodeId(LeafNodeId) }, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node no longer exists.";

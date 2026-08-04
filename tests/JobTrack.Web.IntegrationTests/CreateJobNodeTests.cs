@@ -217,6 +217,123 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("already has work attached");
 	}
 
+	[Fact]
+	public async Task The_create_page_offers_a_begin_work_selector_defaulting_to_none()
+	{
+		_ = await SeedEmployeeAsync("create.begin-work-form", EmployeeRole.JobManager);
+		var authCookie = await SignInAsync("create.begin-work-form");
+
+		var response = await GetAsync($"/Jobs/Create?parentId={rootId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("Begin work for");
+		// Nothing in this select is pre-selected — unlike Owner and Priority, which default to the actor
+		// and Medium — so the browser falls back to its first option, which must be "None".
+		body.Should().Contain("name=\"Input.BeginWorkForUserId\"><option value=\"\">None</option>");
+		BeginWorkSelectPattern().Match(body).Groups["options"].Value.Should().NotContain("selected");
+	}
+
+	[Fact]
+	public async Task Choosing_a_worker_in_begin_work_for_creates_the_child_already_in_progress_with_an_open_session()
+	{
+		var managerId = await SeedEmployeeAsync("create.begin-work-manager", EmployeeRole.JobManager);
+		var authCookie = await SignInAsync("create.begin-work-manager");
+
+		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, rootId, "Started on creation", managerId, beginWorkForUserId: managerId);
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var created = await FindChildNodeAsync(rootId, "Started on creation");
+		var page = await GetLeafWorkPageAsync(created.Id);
+
+		page.HasLeafWork.Should().BeTrue();
+		page.Achievement.Should().Be(Achievement.InProgress);
+		page.ActiveSessions.Should().ContainSingle().Which.WorkedByUserId.Should().Be(managerId);
+	}
+
+	[Fact]
+	public async Task Leaving_begin_work_for_at_none_creates_a_child_with_no_leaf_work()
+	{
+		var managerId = await SeedEmployeeAsync("create.begin-work-none", EmployeeRole.JobManager);
+		var authCookie = await SignInAsync("create.begin-work-none");
+
+		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
+		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, rootId, "Nobody started this", managerId);
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var created = await FindChildNodeAsync(rootId, "Nobody started this");
+		var page = await GetLeafWorkPageAsync(created.Id);
+
+		page.HasLeafWork.Should().BeFalse();
+		page.ActiveSessions.Should().BeEmpty();
+	}
+
+	/// <summary>
+	///     The new node inherits its parent's unsatisfied prerequisite, so the whole create is refused —
+	///     the page must say why rather than leaving a half-created node behind.
+	/// </summary>
+	[Fact]
+	public async Task Beginning_work_on_a_child_of_a_blocked_parent_shows_an_error_and_creates_nothing()
+	{
+		var managerId = await SeedEmployeeAsync("create.begin-work-blocked", EmployeeRole.JobManager);
+		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		var required = await seedClient.Jobs.AddChildAsync(new() {
+			Context = context,
+			ParentId = rootId,
+			Description = "Unfinished prerequisite",
+			OwnerUserId = managerId,
+			Priority = Priority.Medium,
+		});
+		var anchor = await seedClient.Jobs.AddChildAsync(new() {
+			Context = context,
+			ParentId = rootId,
+			Description = "Blocked branch",
+			OwnerUserId = managerId,
+			Priority = Priority.Medium,
+		});
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			RequiredJobId = required.Id,
+			DependentJobId = anchor.Id,
+		});
+		var authCookie = await SignInAsync("create.begin-work-blocked");
+
+		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, anchor.Id);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, anchor.Id, "Blocked child", managerId, beginWorkForUserId: managerId);
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("prerequisites are not satisfied");
+
+		var children = await seedClient.Query.GetJobChildrenAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, ParentId = anchor.Id },
+			CancellationToken.None);
+		children.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task Beginning_work_for_an_ineligible_employee_shows_an_error_and_creates_nothing()
+	{
+		var managerId = await SeedEmployeeAsync("create.begin-work-ineligible-manager", EmployeeRole.JobManager);
+		var requesterId = await SeedEmployeeAsync("create.begin-work-requester", EmployeeRole.Requester);
+		var authCookie = await SignInAsync("create.begin-work-ineligible-manager");
+
+		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
+		var saveResponse = await PostAsync(
+			authCookie, antiforgeryCookie, token, rootId, "Ineligible worker child", managerId, beginWorkForUserId: requesterId);
+
+		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("no longer eligible");
+		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		(await afterSave.Content.ReadAsStringAsync()).Should().NotContain("Ineligible worker child");
+	}
+
+	private async Task<LeafWorkPageResult> GetLeafWorkPageAsync(JobNodeId nodeId) =>
+		await seedClient.Query.GetLeafWorkPageAsync(
+			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = nodeId },
+			CancellationToken.None);
+
 	/// <summary>
 	///     §2.4: a malformed <c>NeededStart</c> must be rejected before the command runs, not silently
 	///     reinterpreted or dropped.
@@ -299,7 +416,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 	private async Task<HttpResponseMessage> PostAsync(
 		string authCookie, string antiforgeryCookie, string token,
-		JobNodeId parentId, string description, AppUserId? ownerId, string? neededStart = null)
+		JobNodeId parentId, string description, AppUserId? ownerId, string? neededStart = null, AppUserId? beginWorkForUserId = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Create");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -307,6 +424,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 			["ParentId"] = parentId.Value.ToString(CultureInfo.InvariantCulture),
 			["Input.Description"] = description,
 			["Input.OwnerUserId"] = ownerId?.Value.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+			["Input.BeginWorkForUserId"] = beginWorkForUserId?.Value.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
 			["Input.Priority"] = nameof(Priority.Medium),
 			["__RequestVerificationToken"] = token,
 		};
@@ -384,6 +502,9 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
+
+	[GeneratedRegex("name=\"Input.BeginWorkForUserId\">(?<options>.*?)</select>", RegexOptions.Singleline)]
+	private static partial Regex BeginWorkSelectPattern();
 
 	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
 	{

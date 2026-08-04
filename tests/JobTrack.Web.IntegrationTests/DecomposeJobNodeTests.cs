@@ -142,20 +142,39 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		saveResponse.Headers.Location!.OriginalString.Should().Contain("/Account/AccessDenied");
 	}
 
+	/// <summary>
+	///     The command refuses a leaf with no <c>LeafWork</c> ("leaf-work-not-attached"), so the page
+	///     withdraws the form rather than collecting that exception at save time — there is no work for
+	///     the existing-work child to inherit. <see cref="Decomposing_a_bare_leaf_with_no_leaf_work_is_rejected" />
+	///     covers the server side that this page-level withdrawal sits in front of.
+	/// </summary>
+	[Fact]
+	public async Task The_decompose_page_refuses_a_bare_leaf_with_no_leaf_work_before_offering_a_form()
+	{
+		var managerId = await SeedEmployeeAsync("decompose.bare-form-manager", EmployeeRole.JobManager);
+		var bareLeaf = await AddBareLeafAsync(managerId, "Bare leaf, no work attached");
+		var authCookie = await SignInAsync("decompose.bare-form-manager");
+
+		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={bareLeaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("no recorded work to carry over");
+		body.Should().NotContain(">Save<");
+		body.Should().NotContain("name=\"Input.BranchDescription\"");
+	}
+
 	[Fact]
 	public async Task Decomposing_a_bare_leaf_with_no_leaf_work_is_rejected()
 	{
 		var managerId = await SeedEmployeeAsync("decompose.bare-manager", EmployeeRole.JobManager);
-		var bareLeaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
-			ParentId = rootId,
-			Description = "Bare leaf, no work attached",
-			OwnerUserId = managerId,
-			Priority = Priority.Medium,
-		});
+		var bareLeaf = await AddBareLeafAsync(managerId, "Bare leaf posted anyway");
+		// The bare leaf's own page offers no form (and so no token), which is the point of the test
+		// above; take a valid token from a worked leaf's form so this one still proves the *server*
+		// refuses the write when a post arrives without that page-level guard in front of it.
+		var workedLeaf = await AddWorkedLeafAsync(rootId, managerId, "Token source leaf");
 		var authCookie = await SignInAsync("decompose.bare-manager");
 
-		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, bareLeaf.Id);
+		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, workedLeaf.Id);
 		var saveResponse = await PostAsync(
 			authCookie, antiforgeryCookie, token, bareLeaf.Id, bareLeaf.Version, managerId,
 			"Branch", "Existing work", "");
@@ -164,6 +183,89 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		saveBody.Should().Contain("cannot be decomposed");
 	}
+
+	/// <summary>
+	///     The page's whole reason for existing beyond the two description fields: a reader must be able
+	///     to see, before saving, that the work does not stay put — a new child is created to inherit the
+	///     achievement and every session, running clocks included.
+	/// </summary>
+	[Fact]
+	public async Task The_decompose_page_says_a_new_child_inherits_the_work_and_names_the_running_session()
+	{
+		var managerId = await SeedEmployeeAsync("decompose.explains-manager", EmployeeRole.JobManager);
+		var leaf = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Leaf under way",
+			OwnerUserId = managerId,
+			Priority = Priority.Medium,
+			BeginWork = new() { WorkedByUserId = managerId },
+		});
+		var authCookie = await SignInAsync("decompose.explains-manager");
+
+		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("What moves onto the new child");
+		body.Should().Contain("becomes a branch");
+		body.Should().Contain("<strong>In Progress</strong>");
+		body.Should().Contain("<strong>one still running</strong>");
+	}
+
+	/// <summary>
+	///     A decomposition splits one person's job into the pieces it turned out to need, so every new
+	///     child slot starts on that person — the same owner the existing-work child inherits in the
+	///     command — rather than dropping the pieces into the unassigned pool by default.
+	/// </summary>
+	[Fact]
+	public async Task Every_new_child_slot_defaults_its_owner_to_the_decomposed_nodes_owner()
+	{
+		var managerId = await SeedEmployeeAsync("decompose.default-owner-manager", EmployeeRole.JobManager);
+		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Owned work to split");
+		var authCookie = await SignInAsync("decompose.default-owner-manager");
+
+		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var selectedOwner = $"<option selected=\"selected\" value=\"{managerId.Value.ToString(CultureInfo.InvariantCulture)}\">";
+		CountOccurrences(body, selectedOwner).Should().Be(NewChildSlotCount);
+	}
+
+	[Fact]
+	public async Task An_unassigned_nodes_new_child_slots_stay_unassigned()
+	{
+		var managerId = await SeedEmployeeAsync("decompose.pool-owner-manager", EmployeeRole.JobManager);
+		var leaf = await AddWorkedLeafAsync(rootId, null, "Pool work to split");
+		var authCookie = await SignInAsync("decompose.pool-owner-manager");
+
+		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// Nothing is pre-selected, so each owner select falls back to its first option — "Unassigned".
+		CountOccurrences(body, ".OwnerUserId\"><option value=\"\">Unassigned</option>").Should().Be(NewChildSlotCount);
+		CountOccurrences(body, $"<option selected=\"selected\" value=\"{managerId.Value.ToString(CultureInfo.InvariantCulture)}\">")
+			.Should().Be(0);
+	}
+
+	private static int CountOccurrences(string body, string value)
+	{
+		var count = 0;
+		for (var index = body.IndexOf(value, StringComparison.Ordinal); index >= 0;
+			 index = body.IndexOf(value, index + value.Length, StringComparison.Ordinal)) {
+			++count;
+		}
+
+		return count;
+	}
+
+	private async Task<JobNodeResult> AddBareLeafAsync(AppUserId ownerId, string description) =>
+		await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = description,
+			OwnerUserId = ownerId,
+			Priority = Priority.Medium,
+		});
 
 	[Fact]
 	public async Task A_stale_version_on_save_is_reported_as_a_conflict()
@@ -219,7 +321,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		current.Node.HasChildren.Should().BeFalse("the decompose must not have run");
 	}
 
-	private async Task<JobNodeResult> AddWorkedLeafAsync(JobNodeId parentId, AppUserId ownerId, string description)
+	private async Task<JobNodeResult> AddWorkedLeafAsync(JobNodeId parentId, AppUserId? ownerId, string description)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
