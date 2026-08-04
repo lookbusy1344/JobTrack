@@ -57,7 +57,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.import", rootId, TreeJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.import", rootId, TreeJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
@@ -90,7 +90,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.import", rootId, TreeJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.import", rootId, TreeJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
@@ -132,7 +132,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.branch", branch.Id, SingleNodeJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.branch", branch.Id, SingleNodeJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			var branchChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = branch.Id });
@@ -166,7 +166,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "no.such.user", rootId, TreeJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "no.such.user", rootId, TreeJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle(error => error.Contains("no.such.user", StringComparison.Ordinal));
@@ -198,7 +198,7 @@ public sealed class JobTreeImportCommandTests
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.badjson", rootId, "not valid json", SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.badjson", rootId, "not valid json", SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle();
@@ -244,7 +244,7 @@ public sealed class JobTreeImportCommandTests
 									   """;
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.rollback", rootId, InvalidJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.rollback", rootId, InvalidJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle();
@@ -291,7 +291,7 @@ public sealed class JobTreeImportCommandTests
 
 			var before = SystemClock.Instance.GetCurrentInstant();
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.work", rootId, WorkJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.work", rootId, WorkJson, SystemClock.Instance, [], CancellationToken.None);
 			var after = SystemClock.Instance.GetCurrentInstant();
 
 			exitCode.Should().Be(0);
@@ -353,7 +353,7 @@ public sealed class JobTreeImportCommandTests
 										  """;
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.chrono", rootId, ImpossibleJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.chrono", rootId, ImpossibleJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle();
@@ -391,7 +391,7 @@ public sealed class JobTreeImportCommandTests
 			const string BadWorkJson = """[ { "id": 1, "title": "Vague", "open": "a little while" } ]""";
 
 			var exitCode = await JobTreeImportCommand.RunAsync(
-				console, userManager, client, "ada.badwork", rootId, BadWorkJson, SystemClock.Instance, CancellationToken.None);
+				console, userManager, client, "ada.badwork", rootId, BadWorkJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(1);
 			console.Errors.Should().ContainSingle(error => error.Contains("open", StringComparison.Ordinal));
@@ -400,6 +400,279 @@ public sealed class JobTreeImportCommandTests
 			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
 			var rootChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
 			rootChildren.Should().BeEmpty();
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	/// <summary>
+	///     A file may flag one node as the home node the import establishes — the Docker demo's whole
+	///     reason for the flag, so a fresh sign-in lands inside the imported tree rather than at the root.
+	/// </summary>
+	[Fact]
+	public async Task Sets_the_flagged_node_as_the_importing_employees_home_node()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var client = JobTrackSqlite.Create(database.ConnectionString);
+
+			var rootId = await BootstrapAdministratorAsync(client, "ada.home");
+			var console = new FakeConsoleIO([], []);
+
+			const string HomeJson = """
+									[
+										{ "id": 1, "parentId": null, "title": "Build a house", "home": true },
+										{ "id": 2, "parentId": 1, "title": "Groundworks" }
+									]
+									""";
+
+			var exitCode = await JobTreeImportCommand.RunAsync(
+				console, userManager, client, "ada.home", rootId, HomeJson, SystemClock.Instance, [], CancellationToken.None);
+
+			exitCode.Should().Be(0);
+			console.Errors.Should().BeEmpty();
+
+			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			var house = (await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId }))
+				.Single(n => n.Description == "Build a house");
+			var profile = await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new AppUserId(1) });
+			profile.HomeNodeId.Should().Be(house.Id);
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	/// <summary>
+	///     The Docker seed imports as the demo account but wants the same landing node for the
+	///     administrator, whose real <c>job_node</c> id is not known until the import has run.
+	/// </summary>
+	[Fact]
+	public async Task Sets_the_flagged_node_as_the_home_node_of_additional_named_employees()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var client = JobTrackSqlite.Create(database.ConnectionString);
+
+			var rootId = await BootstrapAdministratorAsync(client, "ada.admin");
+			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			var worker = await client.Employees.CreateEmployeeAsync(new() {
+				Context = context,
+				DisplayName = "Grace Worker",
+				IanaTimeZone = "Europe/London",
+				UserName = "grace.worker",
+				Password = KnownPassword,
+				Role = EmployeeRole.Worker,
+			});
+			var console = new FakeConsoleIO([], []);
+
+			const string HomeJson = """
+									[
+										{ "id": 1, "parentId": null, "title": "Build a house", "home": true },
+										{ "id": 2, "parentId": 1, "title": "Groundworks" }
+									]
+									""";
+
+			var exitCode = await JobTreeImportCommand.RunAsync(
+				console, userManager, client, "ada.admin", rootId, HomeJson, SystemClock.Instance, ["grace.worker"],
+				CancellationToken.None);
+
+			exitCode.Should().Be(0);
+			console.Errors.Should().BeEmpty();
+
+			var house = (await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId }))
+				.Single(n => n.Description == "Build a house");
+			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new AppUserId(1) }))
+				.HomeNodeId.Should().Be(house.Id);
+			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = worker.Id }))
+				.HomeNodeId.Should().Be(house.Id);
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	/// <summary>
+	///     A home node must be a branch (<c>home-node-must-not-be-leaf</c>), so a flagged row with no
+	///     children in the file is rejected before anything is created rather than leaving an imported
+	///     tree with the flag silently ignored.
+	/// </summary>
+	[Fact]
+	public async Task Fails_without_creating_anything_when_the_flagged_node_would_be_a_leaf()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var client = JobTrackSqlite.Create(database.ConnectionString);
+
+			var rootId = await BootstrapAdministratorAsync(client, "ada.leafhome");
+			var console = new FakeConsoleIO([], []);
+
+			const string LeafHomeJson = """[ { "id": 1, "parentId": null, "title": "Lonely leaf", "home": true } ]""";
+
+			var exitCode = await JobTreeImportCommand.RunAsync(
+				console, userManager, client, "ada.leafhome", rootId, LeafHomeJson, SystemClock.Instance, [], CancellationToken.None);
+
+			exitCode.Should().Be(1);
+			console.Errors.Should().ContainSingle();
+			console.Lines.Should().BeEmpty();
+
+			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			(await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId })).Should().BeEmpty();
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	[Fact]
+	public async Task Fails_without_creating_anything_when_more_than_one_node_is_flagged_as_home()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var client = JobTrackSqlite.Create(database.ConnectionString);
+
+			var rootId = await BootstrapAdministratorAsync(client, "ada.twohomes");
+			var console = new FakeConsoleIO([], []);
+
+			const string TwoHomesJson = """
+										[
+											{ "id": 1, "parentId": null, "title": "First", "home": true },
+											{ "id": 2, "parentId": 1, "title": "First child" },
+											{ "id": 3, "parentId": null, "title": "Second", "home": true },
+											{ "id": 4, "parentId": 3, "title": "Second child" }
+										]
+										""";
+
+			var exitCode = await JobTreeImportCommand.RunAsync(
+				console, userManager, client, "ada.twohomes", rootId, TwoHomesJson, SystemClock.Instance, [], CancellationToken.None);
+
+			exitCode.Should().Be(1);
+			console.Errors.Should().ContainSingle();
+			console.Lines.Should().BeEmpty();
+
+			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			(await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId })).Should().BeEmpty();
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	[Fact]
+	public async Task Fails_without_creating_anything_for_an_unknown_home_node_employee()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var client = JobTrackSqlite.Create(database.ConnectionString);
+
+			var rootId = await BootstrapAdministratorAsync(client, "ada.unknownhome");
+			var console = new FakeConsoleIO([], []);
+
+			const string HomeJson = """
+									[
+										{ "id": 1, "parentId": null, "title": "Build a house", "home": true },
+										{ "id": 2, "parentId": 1, "title": "Groundworks" }
+									]
+									""";
+
+			var exitCode = await JobTreeImportCommand.RunAsync(
+				console, userManager, client, "ada.unknownhome", rootId, HomeJson, SystemClock.Instance, ["no.such.user"],
+				CancellationToken.None);
+
+			exitCode.Should().Be(1);
+			console.Errors.Should().ContainSingle(error => error.Contains("no.such.user", StringComparison.Ordinal));
+			console.Lines.Should().BeEmpty();
+
+			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			(await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId })).Should().BeEmpty();
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	/// <summary>
+	///     Every sample tree ships importable: a file that flags no home node leaves the importing
+	///     employee's own preference exactly as it was.
+	/// </summary>
+	[Fact]
+	public async Task Leaves_the_home_node_untouched_when_no_node_is_flagged()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var client = JobTrackSqlite.Create(database.ConnectionString);
+
+			var rootId = await BootstrapAdministratorAsync(client, "ada.nohome");
+			var console = new FakeConsoleIO([], []);
+
+			var exitCode = await JobTreeImportCommand.RunAsync(
+				console, userManager, client, "ada.nohome", rootId, TreeJson, SystemClock.Instance, [], CancellationToken.None);
+
+			exitCode.Should().Be(0);
+			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new AppUserId(1) }))
+				.HomeNodeId.Should().BeNull();
 		}
 		finally {
 			await database.DisposeAsync();

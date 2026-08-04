@@ -226,6 +226,11 @@ use the shipped `JobTrack.AdminCli`; the final requester scenario uses the build
 5. **Import the seven sample trees** (`AdminCli import-tree`, once per file in
    `samples/job-tree-imports/`) as `demo`, so the demo user — not the admin — owns them. Each lands a
    subtree under the root (`--parent-id` defaults to the root, id 1).
+   `building-a-house.json` flags its top node `"home": true`, so "Build a house" becomes the **home
+   node** of `demo` (the importing account) and, via `--home-node-for admin`, of `admin` too: both
+   sign in onto that subtree rather than the bare root, and the header's Jobs and Awaiting-progress
+   links default to it. The remaining six files flag nothing and are unaffected. `requester` is
+   deliberately left without one — the requester UI has no job-tree browser.
 6. **Seed six requester jobs** through `IJobTrackClient`'s requester-intake and work commands.
    `requester` is the recorded requester, while `demo` remains the technical work actor; the jobs
    span Submitted, Accepted, Waiting, In progress, Completed, and Cancelled public states.

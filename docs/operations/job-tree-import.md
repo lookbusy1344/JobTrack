@@ -22,7 +22,8 @@ dotnet run --project src/JobTrack.AdminCli -- import-tree --provider sqlite --co
 `--username` names the employee every created node is owned by *and* the actor the command runs as
 (there is deliberately no separate actor/owner split — see `JobTreeImportCommand`'s own doc comment).
 `--parent-id <job-node-id>` anchors the import under an existing node; omit it and the import attaches
-under the tree root (`job_node` id `1`).
+under the tree root (`job_node` id `1`). `--home-node-for <username[,username...]>` names further
+accounts that adopt the file's flagged home node — see "Flagging the home node" below.
 
 ## The file format
 
@@ -40,6 +41,40 @@ Each row in the JSON file is:
   nodes in the file that are not ancestor/descendant of each other — leaf-leaf, leaf-branch,
   branch-leaf, and branch-branch are all valid, as long as the edge isn't a hierarchy edge in
   disguise.
+
+## Flagging the home node
+
+One row per file may carry `"home": true`. Once the subtree exists, that node becomes the *home node*
+of the importing employee: the node they land on after login, and the default scope of `/Jobs/Browse`
+and `/Jobs/AwaitingProgress` when the header links are followed with no node of their own. It is the
+same preference the "Set as home node" button on Browse writes — the flag exists so a freshly seeded
+deployment (notably the Docker demo image) lands its accounts inside a populated tree instead of at
+the bare root, whose real `job_node` id nothing can know before the import runs.
+
+```jsonc
+{ "id": 1, "parentId": null, "title": "Build a house", "home": true }
+```
+
+- At most one row per file may set it; a second is rejected.
+- The flagged row must have children in the same file. A home node may not be a leaf
+  (`home-node-must-not-be-leaf`), and the import refuses up front rather than creating the tree and
+  then failing to apply the preference.
+- `--home-node-for <username[,username...]>` gives the same node to further accounts — the importing
+  employee always gets it, so they need not be listed. An unknown username there fails the command
+  before anything is created.
+- A file that flags nothing leaves every account's existing home node exactly as it was, and
+  `--home-node-for` does nothing.
+
+To set or clear a home node against a node that already exists, use `set-home-node` instead:
+
+```bash
+dotnet run --project src/JobTrack.AdminCli -- set-home-node --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --username <username> --node-id 42
+dotnet run --project src/JobTrack.AdminCli -- set-home-node --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --username <username> --clear
+```
+
+`--clear` resets the account back to the tree root. The home node is self-service (there is no
+administrator path to another employee's preference in the application layer), so the command runs
+*as* the named employee rather than under a separate `--actor`.
 
 ## Importing work that has already happened
 
@@ -93,7 +128,7 @@ against real database state inside the import transaction.
 | `experimental-work.json` | 5 | 2 levels; one dependent leaf with two prerequisites. |
 | `kitchen-refit-in-progress.json` | 10 | The only example carrying work history: closed leaves, one still open, one `unsuccessful`, one dated absolutely, three not started. |
 | `farming-a-field.json` | 16 | 4 levels, mostly a linear branch-dependency chain rather than fan-out. |
-| `building-a-house.json` | 17 | 4 levels; every leaf/branch prerequisite-edge combination plus two double-prerequisite nodes. |
+| `building-a-house.json` | 17 | 4 levels; every leaf/branch prerequisite-edge combination plus two double-prerequisite nodes. The only example flagging a home node (`"home": true` on its top node) — the Docker image's landing node for `admin` and `demo`. |
 | `organising-a-fun-run.json` | 25 | 4 levels; dependencies crossing freely between sibling branches, and one leaf ("Set up start/finish line and timing") decomposed into children of its own. |
 | `organising-a-college-election.json` | 30 | 4 levels, the largest: a mostly sequential spine with fan-in (briefing candidates requires both the published candidate list and the approved rules), and a branch — "Verify candidate eligibility", itself two leaves — standing as a prerequisite for a later step. |
 | `implementing-ai-enrolment-system.json` | 22 | 4 levels; a complete finished project (every leaf carries absolute `start`/`end` history, all reaching `success`) across three parallel sub-sections — logic engine, MIS write-back, and load testing under 100 simultaneous users — over roughly three working months, every session bounded to weekday 09:00-17:00. Demonstrates costing over a realistically-shaped completed subtree. |

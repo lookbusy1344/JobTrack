@@ -15,6 +15,15 @@ using NodaTime;
 ///     <see cref="CommandContext.Actor" /> are that same employee — this is a bulk-authoring tool for
 ///     small trees, not a multi-owner import, so there is deliberately no separate actor/owner
 ///     distinction.
+///     <para>
+///         A file may flag one row (<c>"home": true</c>) as the home node the import establishes: once
+///         the subtree exists, that node becomes the post-login landing node of the importing employee
+///         and of every account named in <c>--home-node-for</c>, whose real <c>job_node</c> id no
+///         caller can know in advance. Those writes follow the import transaction rather than joining
+///         it (<see cref="IEmployeeCommands.SetHomeNodeAsync" /> is self-service, one account at a
+///         time), so both the flagged row's branch-ness and every named account are validated up
+///         front — a preference that cannot be applied must not leave a half-imported tree behind.
+///     </para>
 /// </summary>
 public static class JobTreeImportCommand
 {
@@ -28,6 +37,7 @@ public static class JobTreeImportCommand
 		JobNodeId importRootId,
 		string jsonContent,
 		IClock clock,
+		IReadOnlyList<string> homeNodeUsernames,
 		CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(io);
@@ -36,6 +46,7 @@ public static class JobTreeImportCommand
 		ArgumentNullException.ThrowIfNull(clock);
 		ArgumentException.ThrowIfNullOrWhiteSpace(username);
 		ArgumentNullException.ThrowIfNull(jsonContent);
+		ArgumentNullException.ThrowIfNull(homeNodeUsernames);
 
 		var user = await userManager.FindByNameAsync(username).ConfigureAwait(false);
 		if (user is null) {
@@ -48,9 +59,11 @@ public static class JobTreeImportCommand
 		var importedAt = clock.GetCurrentInstant();
 
 		EquatableArray<ImportSubtreeNodeSpec> nodes;
+		long? homeLocalId;
 		try {
 			var rawNodes = JsonSerializer.Deserialize<List<JobTreeImportNodeJson>>(jsonContent, SerializerOptions)
 						   ?? throw new AdminCliUsageException("The import file's top level must be a JSON array of nodes.");
+			homeLocalId = ResolveHomeLocalId(rawNodes);
 			nodes = [
 				.. rawNodes.Select(raw => new ImportSubtreeNodeSpec {
 					LocalId = raw.Id,
@@ -74,6 +87,23 @@ public static class JobTreeImportCommand
 			return 1;
 		}
 
+		// Resolved before the import runs: an unknown account here is a command-line mistake, and
+		// discovering it after the transaction committed would leave a tree behind that the caller
+		// has to unpick by hand.
+		var homeNodeUsers = new List<(string Username, AppUserId Id)>();
+		if (homeLocalId.HasValue) {
+			homeNodeUsers.Add((username, user.AppUserId));
+			foreach (var homeUsername in homeNodeUsernames.Where(n => !string.Equals(n, username, StringComparison.OrdinalIgnoreCase))) {
+				var homeUser = await userManager.FindByNameAsync(homeUsername).ConfigureAwait(false);
+				if (homeUser is null) {
+					io.WriteError($"No employee account found for username '{homeUsername}'.");
+					return 1;
+				}
+
+				homeNodeUsers.Add((homeUsername, homeUser.AppUserId));
+			}
+		}
+
 		ImportSubtreeResult result;
 		try {
 			result = await jobTrackClient.Jobs.ImportSubtreeAsync(
@@ -90,7 +120,49 @@ public static class JobTreeImportCommand
 			io.WriteLine($"Created node {node.LocalId} ('{descriptionsByLocalId[node.LocalId]}') as job node {node.JobNodeId.Value}.");
 		}
 
+		if (homeLocalId.HasValue) {
+			var homeNodeId = result.Nodes.Single(n => n.LocalId == homeLocalId.Value).JobNodeId;
+			foreach (var (homeUsername, homeUserId) in homeNodeUsers) {
+				try {
+					_ = await jobTrackClient.Employees.SetHomeNodeAsync(
+						new() { Context = new() { Actor = homeUserId, CorrelationId = Guid.NewGuid() }, NodeId = homeNodeId },
+						cancellationToken).ConfigureAwait(false);
+				}
+				catch (JobTrackException ex) {
+					io.WriteError($"Imported the tree, but failed to set the home node for '{homeUsername}': {ex.Message}");
+					return 1;
+				}
+
+				io.WriteLine($"Set job node {homeNodeId.Value} as the home node for '{homeUsername}'.");
+			}
+		}
+
 		io.WriteLine($"Import complete: {result.Nodes.Count} node(s) created for '{username}'.");
 		return 0;
+	}
+
+	/// <summary>
+	///     The file-local id of the row flagged <c>"home": true</c>, or <see langword="null" /> when no
+	///     row is. Rejects both a second flagged row and a flagged row with no children of its own — the
+	///     latter would import as a leaf, which <see cref="IEmployeeCommands.SetHomeNodeAsync" /> refuses
+	///     (<c>home-node-must-not-be-leaf</c>), so it is caught here rather than after the tree exists.
+	/// </summary>
+	private static long? ResolveHomeLocalId(List<JobTreeImportNodeJson> rawNodes)
+	{
+		var flagged = rawNodes.Where(n => n.Home).ToArray();
+		if (flagged.Length == 0) {
+			return null;
+		}
+
+		if (flagged.Length > 1) {
+			throw new AdminCliUsageException(
+				$"Only one node may be flagged \"home\": true; found {flagged.Length} (ids {string.Join(", ", flagged.Select(n => n.Id))}).");
+		}
+
+		var home = flagged[0];
+		return rawNodes.Any(n => n.ParentId == home.Id)
+			? home.Id
+			: throw new AdminCliUsageException(
+				$"Node {home.Id} ('{home.Title}') is flagged \"home\": true but has no children, and a home node may not be a leaf.");
 	}
 }

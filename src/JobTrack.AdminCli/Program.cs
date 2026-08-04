@@ -1,5 +1,6 @@
 namespace JobTrack.AdminCli;
 
+using Abstractions;
 using Application;
 using Identity;
 using Microsoft.AspNetCore.Identity;
@@ -22,7 +23,10 @@ public static class Program
 		"(--connection-string <connection-string> | --connection-string-file <path>) --username <username>\n" +
 		"       JobTrack.AdminCli import-tree --provider <postgresql|sqlite> " +
 		"(--connection-string <connection-string> | --connection-string-file <path>) --username <username> " +
-		"--file <path-to-json> [--parent-id <job-node-id>]\n" +
+		"--file <path-to-json> [--parent-id <job-node-id>] [--home-node-for <username[,username...]>]\n" +
+		"       JobTrack.AdminCli set-home-node --provider <postgresql|sqlite> " +
+		"(--connection-string <connection-string> | --connection-string-file <path>) --username <username> " +
+		"(--node-id <job-node-id> | --clear)\n" +
 		"       JobTrack.AdminCli create-employee --provider <postgresql|sqlite> " +
 		"(--connection-string <connection-string> | --connection-string-file <path>) " +
 		"--actor <admin-username> --username <username> [--password-stdin] --display-name <name> " +
@@ -43,6 +47,7 @@ public static class Program
 				"reset-password" => await RunResetPasswordAsync(ResetPasswordCommandOptions.Parse(pico), io).ConfigureAwait(false),
 				"reset-2fa" => await RunResetTwoFactorAsync(ResetTwoFactorCommandOptions.Parse(pico), io).ConfigureAwait(false),
 				"import-tree" => await RunImportTreeAsync(JobTreeImportCommandOptions.Parse(pico), io).ConfigureAwait(false),
+				"set-home-node" => await RunSetHomeNodeAsync(SetHomeNodeCommandOptions.Parse(pico), io).ConfigureAwait(false),
 				"create-employee" => await RunCreateEmployeeAsync(CreateEmployeeCommandOptions.Parse(pico), io).ConfigureAwait(false),
 				_ => Usage(io),
 			};
@@ -172,6 +177,28 @@ public static class Program
 
 		return await JobTreeImportCommand.RunAsync(
 				io, userManager, client, options.Username, new(options.ParentJobNodeId), jsonContent, SystemClock.Instance,
+				options.HomeNodeUsernames, CancellationToken.None)
+			.ConfigureAwait(false);
+	}
+
+	private static async Task<int> RunSetHomeNodeAsync(SetHomeNodeCommandOptions options, SystemConsoleIO io)
+	{
+		var services = new ServiceCollection();
+		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
+		_ = options.Provider switch {
+			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
+			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
+			_ => throw new AdminCliUsageException($"Unknown provider '{options.Provider}'."),
+		};
+
+		await using var provider = services.BuildServiceProvider();
+		using var scope = provider.CreateScope();
+		var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+		var client = CreateClient(options.Provider, options.ConnectionString);
+
+		return await SetHomeNodeCommand.RunAsync(
+				io, userManager, client, options.Username, options.JobNodeId is long nodeId ? new JobNodeId(nodeId) : null,
 				CancellationToken.None)
 			.ConfigureAwait(false);
 	}

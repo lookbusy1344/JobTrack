@@ -145,6 +145,97 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 		location.Should().NotContain("NodeId=");
 	}
 
+	/// <summary>
+	///     The header's "Jobs" link carries no node id, so a bare <c>/Jobs/Browse</c> must root itself at
+	///     the actor's own home node — mirroring <c>/Jobs/AwaitingProgress</c>'s own home-node default.
+	/// </summary>
+	[Fact]
+	public async Task Browse_with_no_node_specified_roots_at_the_actors_home_node()
+	{
+		var homeBranchId = await AddChildAsync(rootId, "Kitchen renovation");
+		_ = await AddChildAsync(homeBranchId, "Fit cabinets");
+		var otherBranchId = await AddChildAsync(rootId, "Garden landscaping");
+		_ = await AddChildAsync(otherBranchId, "Lay turf");
+		var workerId = await SeedEmployeeAsync("home-node.browse-default");
+		await SetHomeNodeAsync(workerId, homeBranchId);
+		var authCookie = await SignInAsync("home-node.browse-default");
+
+		var response = await GetAsync("/Jobs/Browse", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Fit cabinets");
+		body.Should().NotContain("Lay turf", "the home node's subtree excludes a sibling branch");
+	}
+
+	[Fact]
+	public async Task Browse_with_no_node_specified_and_no_home_node_roots_at_the_tree_root()
+	{
+		var homeBranchId = await AddChildAsync(rootId, "Kitchen renovation");
+		_ = await AddChildAsync(homeBranchId, "Fit cabinets");
+		var otherBranchId = await AddChildAsync(rootId, "Garden landscaping");
+		_ = await AddChildAsync(otherBranchId, "Lay turf");
+		_ = await SeedEmployeeAsync("home-node.browse-root");
+		var authCookie = await SignInAsync("home-node.browse-root");
+
+		var response = await GetAsync("/Jobs/Browse", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Fit cabinets");
+		body.Should().Contain("Lay turf");
+	}
+
+	/// <summary>
+	///     The home-node default applies only when no node was asked for: an explicit node id (the root's
+	///     own included, which is what the breadcrumb's root link carries) always wins.
+	/// </summary>
+	[Fact]
+	public async Task Browse_at_an_explicit_root_node_id_overrides_the_home_node_default()
+	{
+		var homeBranchId = await AddChildAsync(rootId, "Kitchen renovation");
+		_ = await AddChildAsync(homeBranchId, "Fit cabinets");
+		var otherBranchId = await AddChildAsync(rootId, "Garden landscaping");
+		_ = await AddChildAsync(otherBranchId, "Lay turf");
+		var workerId = await SeedEmployeeAsync("home-node.browse-override");
+		await SetHomeNodeAsync(workerId, homeBranchId);
+		var authCookie = await SignInAsync("home-node.browse-override");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Fit cabinets");
+		body.Should().Contain("Lay turf");
+	}
+
+	/// <summary>
+	///     The breadcrumb's root entry must name the root explicitly rather than linking to a bare
+	///     <c>/Jobs/Browse</c>, which now means "my home node" — otherwise there is no way up past it.
+	/// </summary>
+	[Fact]
+	public async Task The_breadcrumb_root_link_carries_the_root_node_id()
+	{
+		var homeBranchId = await AddChildAsync(rootId, "Kitchen renovation");
+		var leafId = await AddChildAsync(homeBranchId, "Fit cabinets");
+		_ = await SeedEmployeeAsync("home-node.breadcrumb");
+		var authCookie = await SignInAsync("home-node.breadcrumb");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var breadcrumb = BreadcrumbPattern().Match(body);
+		breadcrumb.Success.Should().BeTrue();
+		breadcrumb.Value.Should().Contain($"/Jobs/Browse?nodeId={rootId.Value}");
+	}
+
+	private async Task SetHomeNodeAsync(AppUserId actor, JobNodeId nodeId) =>
+		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
+			Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+			NodeId = nodeId,
+		});
+
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
@@ -262,6 +353,9 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
+
+	[GeneratedRegex("<nav aria-label=\"breadcrumb\">.*?</nav>", RegexOptions.Singleline)]
+	private static partial Regex BreadcrumbPattern();
 
 	private async Task DeploySchemaAsync()
 	{

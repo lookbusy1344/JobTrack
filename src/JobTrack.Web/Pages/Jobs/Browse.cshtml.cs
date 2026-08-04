@@ -53,7 +53,14 @@ public sealed class BrowseModel(
 	/// <summary>Captured once per request, per ADR 0016's "one captured instant per operation".</summary>
 	public Instant Now { get; } = clock.GetCurrentInstant();
 
-	[BindProperty(SupportsGet = true)] public long? NodeId { get; init; }
+	/// <summary>
+	///     The node to root the browser at. Settable so <see cref="LoadAsync" /> can substitute
+	///     <see cref="HomeNodeId" /> when the request named no node at all (the header's "Jobs" link);
+	///     an explicit id — the root's own included, which the breadcrumb's root link carries — always
+	///     wins, and <see langword="null" /> after that resolution means the tree root.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public long? NodeId { get; set; }
 
 	// Settable so LoadAsync can replace an omitted value with the remembered choice (browse-sessions
 	// filter memory); the owner <select> (asp-for) and every replayed filter/route value then reflect it.
@@ -565,6 +572,14 @@ public sealed class BrowseModel(
 
 		await LoadEmployeeDirectoryAsync(context, cancellationToken);
 		await LoadHomeNodeAsync(context, actor, cancellationToken);
+
+		// A bare visit that named no node at all -- the header's "Jobs" link -- roots at the actor's own
+		// home node rather than the tree root, matching AwaitingProgressModel's own home-node default.
+		// The query string, not the bound value, is what decides: an explicit nodeId (the root's own
+		// included, which the breadcrumb's root link carries) always wins.
+		if (!Request.Query.ContainsKey(nameof(NodeId))) {
+			NodeId = HomeNodeId?.Value;
+		}
 
 		if (IsSearch || ShowSearchEntry) {
 			SearchOriginNodeId = ResolveSearchOrigin();

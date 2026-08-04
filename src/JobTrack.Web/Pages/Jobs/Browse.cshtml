@@ -41,13 +41,12 @@
 			<nav aria-label="breadcrumb">
 				<ol>
 					@foreach (var ancestor in Model.CurrentNode.Ancestors) {
+						@* Every breadcrumb entry names its node explicitly, the root included: a bare
+						   /Jobs/Browse means "my home node" (BrowseModel.LoadAsync), so the root link
+						   has to carry the root's own id or there would be no way up past a home node. *@
 						<li>
-							@if (ancestor.Kind == NodeKind.Root) {
-								<a asp-page="/Jobs/Browse">@JobNodeDisplay.Title(ancestor, JobNodeDisplay.BreadcrumbMaxDescriptionLength)</a>
-							} else {
-								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
-								   asp-route-nodeId="@ancestor.Id.Value">@JobNodeDisplay.Title(ancestor, JobNodeDisplay.BreadcrumbMaxDescriptionLength)</a>
-							}
+							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+							   asp-route-nodeId="@ancestor.Id.Value">@JobNodeDisplay.Title(ancestor, JobNodeDisplay.BreadcrumbMaxDescriptionLength)</a>
 						</li>
 					}
 					<li class="jt-preserve-whitespace">@JobNodeDisplay.Title(Model.CurrentNode.Node, JobNodeDisplay.BreadcrumbMaxDescriptionLength)</li>
@@ -150,12 +149,8 @@
 				   aggregation is the future branch case. The link and its single leading space stay on the
 				   span's own line: a line break here renders as further whitespace beside the figure. *@
 				<dd class="col-12 col-sm-8 mb-0"><span class="jt-amount">@CostDisplay.FormatField(
-							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span>
-					@if (Model.CurrentNode.Node.Kind == NodeKind.Leaf) {
-						<text><a class="jt-value-aside" asp-page="/Jobs/ConcurrentWork"
-						         asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Info</a></text>
-					}
-				</dd>
+							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span>@if (Model.CurrentNode.Node.Kind == NodeKind.Leaf) {<text> <a class="jt-value-aside" asp-page="/Jobs/ConcurrentWork"
+						         asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Info</a></text>}</dd>
 			</div>
 		}
 		@if (Model.CurrentNodeAchievement is Achievement currentAchievement) {
@@ -700,8 +695,7 @@
 					<input type="hidden" name="@field.Key" value="@field.Value"/>
 				}
 				<button type="submit" class="btn btn-link p-0 align-baseline fw-normal">session</button>
-			</form>
-			<text>, or create a </text>
+			</form><text>, or create a </text>
 		} else {
 			<text>Get started by creating a </text>
 		}

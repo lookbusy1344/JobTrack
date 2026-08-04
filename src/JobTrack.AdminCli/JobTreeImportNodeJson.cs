@@ -17,6 +17,14 @@ public sealed class JobTreeImportNodeJson
 
 	public List<long>? PrerequisiteIds { get; init; }
 
+	/// <summary>
+	///     Flags this row as the home node the import establishes — the node the importing employee
+	///     (and any account named by <c>--home-node-for</c>) lands on after login instead of the tree
+	///     root. At most one row per file may set it, and it must be a row with children of its own,
+	///     since a home node may not be a leaf (<c>home-node-must-not-be-leaf</c>).
+	/// </summary>
+	public bool Home { get; init; }
+
 	/// <summary>How long before the import this leaf's work started, e.g. <c>"2 days"</c>.</summary>
 	public string? Open { get; init; }
 

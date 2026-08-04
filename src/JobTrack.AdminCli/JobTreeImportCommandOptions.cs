@@ -1,6 +1,7 @@
 namespace JobTrack.AdminCli;
 
 using System.Globalization;
+using Abstractions;
 using PicoArgs_dotnet;
 
 /// <summary>Parsed arguments for the <c>import-tree</c> CLI command.</summary>
@@ -24,9 +25,17 @@ public sealed record JobTreeImportCommandOptions
 	public required long ParentJobNodeId { get; init; }
 
 	/// <summary>
+	///     Further employees — beyond <see cref="Username" />, who always gets it — whose home node the
+	///     file's <c>"home": true</c> row becomes. Empty unless <c>--home-node-for</c> was passed, and
+	///     ignored outright by a file that flags no node.
+	/// </summary>
+	public required EquatableArray<string> HomeNodeUsernames { get; init; }
+
+	/// <summary>
 	///     Reads <c>--provider</c>/<c>--connection-string</c>/<c>--username</c>/<c>--file</c>/
-	///     <c>--parent-id</c> from <paramref name="pico" /> and calls <see cref="PicoArgs.Finished" /> — the
-	///     caller has already consumed the leading command via <see cref="PicoArgs.GetCommand" />.
+	///     <c>--parent-id</c>/<c>--home-node-for</c> from <paramref name="pico" /> and calls
+	///     <see cref="PicoArgs.Finished" /> — the caller has already consumed the leading command via
+	///     <see cref="PicoArgs.GetCommand" />.
 	/// </summary>
 	public static JobTreeImportCommandOptions Parse(PicoArgs pico)
 	{
@@ -37,6 +46,7 @@ public sealed record JobTreeImportCommandOptions
 		var username = pico.GetParam("--username");
 		var filePath = pico.GetParam("--file");
 		var parentIdRaw = pico.GetParamOpt("--parent-id") ?? DefaultParentJobNodeId.ToString(CultureInfo.InvariantCulture);
+		var homeNodeForRaw = pico.GetParamOpt("--home-node-for");
 		pico.Finished();
 
 		if (!long.TryParse(parentIdRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentId) || parentId <= 0) {
@@ -49,6 +59,8 @@ public sealed record JobTreeImportCommandOptions
 			Username = username,
 			FilePath = filePath,
 			ParentJobNodeId = parentId,
+			HomeNodeUsernames = EquatableArray.CopyOf(
+				homeNodeForRaw?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) ?? []),
 		};
 	}
 }
