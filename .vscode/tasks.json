@@ -1,0 +1,75 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"build",
+				"${workspaceFolder}/JobTrack.slnx"
+			],
+			"problemMatcher": "$msCompile",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "build web",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"build",
+				"${workspaceFolder}/src/JobTrack.Web/JobTrack.Web.csproj"
+			],
+			"problemMatcher": "$msCompile",
+			"group": "build"
+		},
+		{
+			"label": "deploy schema (sqlite, dev)",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"run",
+				"--project",
+				"${workspaceFolder}/src/JobTrack.Database",
+				"--",
+				"deploy",
+				"--provider",
+				"sqlite",
+				"--connection-string",
+				"Data Source=jobtrack-web-dev.db",
+				"--scripts-root",
+				"database/sqlite/schema-versions"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "bootstrap admin (sqlite, dev)",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"run",
+				"--project",
+				"${workspaceFolder}/src/JobTrack.AdminCli",
+				"--",
+				"bootstrap",
+				"--provider",
+				"sqlite",
+				"--connection-string",
+				"Data Source=jobtrack-web-dev.db"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"group": "none",
+			"isBackground": false
+		}
+	]
+}

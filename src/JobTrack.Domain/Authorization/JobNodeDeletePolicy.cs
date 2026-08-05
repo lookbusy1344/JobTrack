@@ -21,4 +21,17 @@ public static class JobNodeDeletePolicy
 
 		return actorRoles.Contains(EmployeeRole.Administrator);
 	}
+
+	/// <summary>
+	///     An actor may recursively delete or archive a whole subtree only if they hold
+	///     <see cref="EmployeeRole.Administrator" /> (ADR 0061, superseding ADR 0036's blanket
+	///     prohibition on subtree deletion). Structural refusals — the permanent root, an anchored
+	///     request holding area — are invariants checked separately, not an authorization question.
+	/// </summary>
+	public static bool CanDeleteSubtree(IReadOnlyCollection<EmployeeRole> actorRoles)
+	{
+		ArgumentNullException.ThrowIfNull(actorRoles);
+
+		return actorRoles.Contains(EmployeeRole.Administrator);
+	}
 }

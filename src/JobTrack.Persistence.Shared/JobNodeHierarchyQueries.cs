@@ -244,6 +244,40 @@ internal static class JobNodeHierarchyQueries
 			     (s.depth < {maxDepth} AND (s.depth = 0 OR s.rn <= {breadthCap})) AS WasExpanded
 			 FROM subtree s
 			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+	/// <summary>
+	///     Returns <paramref name="rootId" /> and its <em>complete</em> descendant subtree with the
+	///     structural facts a deletion manifest needs (ADR 0061). Deliberately unbounded, unlike
+	///     <see cref="GetBoundedSubtreeAsync" />, whose ADR 0039 depth and breadth caps would make a
+	///     "here is everything that will be destroyed" list silently under-report; termination relies on
+	///     the DB-enforced cycle-free invariant (schema version 0005), matching every other recursive
+	///     query here. Selects <c>archived_at IS NOT NULL</c> rather than the instant itself for the
+	///     reason given on <see cref="GetRequesterSubtreeAsync" /> -- an ad-hoc <c>SqlQuery&lt;T&gt;</c>
+	///     row type has no access to either provider's <c>Instant</c> value converters. Session counts
+	///     and worked totals are therefore summed by the caller over the typed entity sets.
+	/// </summary>
+	public static async Task<IReadOnlyList<SubtreeImpactRow>> GetSubtreeImpactRowsAsync(
+		DbContext context, long rootId, CancellationToken cancellationToken) =>
+		await context.Database.SqlQuery<SubtreeImpactRow>(
+			$"""
+			 WITH RECURSIVE subtree(id, parent_id, depth) AS (
+			     SELECT id, parent_id, 0 FROM job_node WHERE id = {rootId}
+			     UNION ALL
+			     SELECT c.id, c.parent_id, p.depth + 1
+			     FROM job_node c JOIN subtree p ON c.parent_id = p.id
+			 )
+			 SELECT
+			     s.id AS Id,
+			     s.parent_id AS ParentId,
+			     s.depth AS Depth,
+			     jn.description AS Description,
+			     lw.achievement_id AS AchievementId,
+			     (lw.job_node_id IS NOT NULL) AS HasLeafWork,
+			     (jn.archived_at IS NOT NULL) AS IsArchived
+			 FROM subtree s
+			 JOIN job_node jn ON jn.id = s.id
+			 LEFT JOIN leaf_work lw ON lw.job_node_id = s.id
+			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
 }
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetAncestorChainAsync" />.</summary>
@@ -257,3 +291,7 @@ internal sealed record RequesterSubtreeRow(long Id, long? ParentId, string Descr
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetBoundedSubtreeAsync" />.</summary>
 internal sealed record BoundedSubtreeRow(long Id, long? ParentId, int Depth, bool WasExpanded);
+
+/// <summary>One row of <see cref="JobNodeHierarchyQueries.GetSubtreeImpactRowsAsync" />.</summary>
+internal sealed record SubtreeImpactRow(
+	long Id, long? ParentId, int Depth, string Description, short? AchievementId, bool HasLeafWork, bool IsArchived);

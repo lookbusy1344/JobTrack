@@ -759,6 +759,204 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task A_non_administrator_cannot_delete_a_subtree()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+
+		// Owned by the worker so the ownership check passes and the refusal can only come from the
+		// Administrator gate itself, not from CanManage.
+		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+		_ = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, branch.Id));
+
+		var act = () => port.DeleteSubtreeAsync(new() {
+			Context = ContextFor(workerId),
+			RootId = branch.Id,
+			Version = branch.Version,
+			Reason = "Trying anyway.",
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task Deleting_a_subtree_without_a_reason_throws_an_invariant_violation()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-no-reason", EmployeeRole.Administrator);
+		var port = CreateCommandPort(database.ConnectionString);
+		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+
+		var act = () => port.DeleteSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = branch.Id,
+			Version = branch.Version,
+			Reason = "   ",
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("subtree-delete-reason-required");
+	}
+
+	[Fact]
+	public async Task Deleting_the_root_as_a_subtree_throws_an_invariant_violation()
+	{
+		var (rootId, _, _) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-root", EmployeeRole.Administrator);
+		var port = CreateCommandPort(database.ConnectionString);
+
+		var act = () => port.DeleteSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = rootId,
+			Version = 1,
+			Reason = "Trying to wipe everything.",
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-is-root-cannot-delete");
+	}
+
+	[Fact]
+	public async Task An_administrator_deletes_a_whole_subtree_including_worked_descendants()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-delete", EmployeeRole.Administrator);
+		var port = CreateCommandPort(database.ConnectionString);
+		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		var child = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, branch.Id));
+		var grandchild = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, child.Id));
+		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = grandchild.Id });
+		_ = await SeedWorkSessionAsync(grandchild.Id, workerId, DateTimeOffset.Parse("2026-01-01T09:00:00Z", CultureInfo.InvariantCulture),
+			DateTimeOffset.Parse("2026-01-01T10:00:00Z", CultureInfo.InvariantCulture));
+
+		var result = await port.DeleteSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = branch.Id,
+			Version = branch.Version,
+			Reason = "Cancelled project; removing the whole branch.",
+		});
+
+		result.NodeCount.Should().Be(3);
+		result.LeafWorkCount.Should().Be(1);
+		result.WorkSessionCount.Should().Be(1);
+		result.TotalWorkedDuration.Should().Be(Duration.FromHours(1));
+
+		foreach (var deleted in new[] { branch.Id, child.Id, grandchild.Id }) {
+			var act = () => port.EditAsync(new() {
+				Context = ContextFor(jobManagerId),
+				NodeId = deleted,
+				Description = "irrelevant",
+				OwnerUserId = jobManagerId,
+				Priority = Priority.Medium,
+				Version = 1,
+			});
+			await act.Should().ThrowAsync<EntityNotFoundException>();
+		}
+	}
+
+	[Fact]
+	public async Task Deleting_a_subtree_drops_a_prerequisite_edge_arriving_from_outside_it()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-edges", EmployeeRole.Administrator);
+		var port = CreateCommandPort(database.ConnectionString);
+		var doomed = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		var doomedChild = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, doomed.Id));
+		var survivor = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = doomedChild.Id,
+			DependentJobId = survivor.Id,
+		});
+
+		var result = await port.DeleteSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = doomed.Id,
+			Version = doomed.Version,
+			Reason = "Removing the branch the survivor depended on.",
+		});
+
+		result.PrerequisiteEdgeCount.Should().Be(1);
+
+		// ADR 0061: the survivor absorbs the loss rather than blocking the deletion, and is still there.
+		var stillPresent = await port.EditAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = survivor.Id,
+			Description = "Survivor still editable",
+			OwnerUserId = jobManagerId,
+			Priority = Priority.Medium,
+			Version = survivor.Version,
+		});
+		stillPresent.Id.Should().Be(survivor.Id);
+	}
+
+	[Fact]
+	public async Task Archiving_a_subtree_archives_every_descendant()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-archive", EmployeeRole.Administrator);
+		var port = CreateCommandPort(database.ConnectionString);
+		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		var child = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, branch.Id));
+
+		var result = await port.ArchiveSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = branch.Id,
+			Version = branch.Version,
+		});
+
+		result.NodeCount.Should().Be(2);
+		result.NewlyArchivedCount.Should().Be(2);
+
+		// Editing with the pre-archive version proves the archive bumped every node's row version.
+		var act = () => port.EditAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = child.Id,
+			Description = "irrelevant",
+			OwnerUserId = jobManagerId,
+			Priority = Priority.Medium,
+			Version = child.Version,
+		});
+		await act.Should().ThrowAsync<ConcurrencyConflictException>();
+	}
+
+	[Fact]
+	public async Task A_non_administrator_cannot_archive_a_subtree()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+
+		// Owned by the worker for the same reason as A_non_administrator_cannot_delete_a_subtree.
+		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+
+		var act = () => port.ArchiveSubtreeAsync(new() {
+			Context = ContextFor(workerId),
+			RootId = branch.Id,
+			Version = branch.Version,
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
+	public async Task Deleting_a_subtree_with_a_stale_version_throws_a_concurrency_conflict()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-stale", EmployeeRole.Administrator);
+		var port = CreateCommandPort(database.ConnectionString);
+		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+
+		var act = () => port.DeleteSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = branch.Id,
+			Version = branch.Version + 1,
+			Reason = "Stale version.",
+		});
+
+		await act.Should().ThrowAsync<ConcurrencyConflictException>();
+	}
+
+	[Fact]
 	public async Task Deleting_with_a_stale_version_throws_a_concurrency_conflict()
 	{
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();

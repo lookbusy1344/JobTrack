@@ -1,0 +1,145 @@
+# syntax=docker/dockerfile:1
+#
+# Container image for JobTrack.Web backed by a *persistent, external* PostgreSQL instance —
+# the second configuration alongside the SQLite demo image in ./Dockerfile, which is unchanged and
+# remains the throwaway local-demo path. The difference that matters: this image holds no database at
+# all, seeds nothing at build time, and carries no credential. Every byte of state lives in a
+# PostgreSQL server that outlives the container, so a recycle, redeploy, or scale-to-zero loses
+# nothing.
+#
+# docs/operations/postgresql-cloud-run-deployment.md is the full narrative (why Cloud SQL rather than
+# PostgreSQL inside the container, credential separation, the data-protection key ring, and why the
+# service is pinned to one instance). ADR 0014 still fixes the project's blessed topology as a single
+# bare-metal/VM server; this is an additional container path, not an amendment to it.
+#
+# Two targets share one build stage:
+#
+#   --target serve      (default) chiseled, non-root, JobTrack.Web only — no shell, no CLI, no
+#                       package manager. This is what serves requests.
+#   --target provision  aspnet:10.0-noble + postgresql-client, running docker/provision.sh:
+#                       schema deploy, login roles, and the three accounts. Run once, then idle.
+#
+# Build context MUST be the monorepo root (VSStuff/), NOT JobTrack/ — .editorconfig lives one level
+# above JobTrack/ and the build is TreatWarningsAsErrors, so a context rooted at JobTrack/ fails on
+# analyzer rules the real local build never hits. Run from JobTrack/:
+#
+#   docker build -f Dockerfile.postgresql --target provision -t jobtrack-provision ..
+#   docker build -f Dockerfile.postgresql                    -t jobtrack-web-pg     ..
+#
+# scripts/deploy-cloudrun-postgresql.sh does both, plus everything around them.
+
+# ---- build stage -----------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# Same partial-copy reasoning as ./Dockerfile: JobTrack.Web references sibling projects and
+# Directory.Build.props, so copy the whole folder and let the .dockerignore prune it. The monorepo
+# root's .editorconfig is copied separately, one level up, to mirror its real position relative to
+# JobTrack/ so the analyzer directory-walk finds the same severity overrides a local build sees.
+COPY .editorconfig ./.editorconfig
+COPY JobTrack/ ./JobTrack/
+WORKDIR /src/JobTrack
+
+# wwwroot/lib (Bootstrap, Mulish) is restored via LibMan, not committed — restore it here rather
+# than relying on it being present in the build context.
+RUN dotnet tool install --tool-path /libman Microsoft.Web.LibraryManager.Cli \
+    && (cd src/JobTrack.Web && /libman/libman restore)
+
+# ReadyToRun pre-compiles IL to native code at publish time, taking JIT work off the cold-start path
+# (which matters more here than in the demo image: --min-instances=0 means real users hit cold
+# starts). It is RID-specific, so derive the RID from the build's target platform, and it must be set
+# on *restore* too or the crossgen2 package is absent and publish fails with NETSDK1094.
+ARG TARGETARCH
+RUN RID=linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/') && echo "$RID" > /rid \
+    && dotnet restore src/JobTrack.Web/JobTrack.Web.csproj -r "$RID" -p:PublishReadyToRun=true \
+    && dotnet restore src/JobTrack.Database/JobTrack.Database.csproj -r "$RID" -p:PublishReadyToRun=true \
+    && dotnet restore src/JobTrack.AdminCli/JobTrack.AdminCli.csproj -r "$RID" -p:PublishReadyToRun=true
+
+# Framework-dependent publish; the aspnet runtime image supplies the framework (itself already
+# R2R-compiled), so only each app's own assemblies need crossgen here. JobTrack.UatSeed is
+# deliberately absent — this deployment seeds no example nodes.
+RUN RID="$(cat /rid)" \
+    && dotnet publish src/JobTrack.Web/JobTrack.Web.csproj \
+         -c Release -o /app/web --no-restore -r "$RID" --self-contained false -p:PublishReadyToRun=true \
+    && dotnet publish src/JobTrack.Database/JobTrack.Database.csproj \
+         -c Release -o /app/database --no-restore -r "$RID" --self-contained false -p:PublishReadyToRun=true \
+    && dotnet publish src/JobTrack.AdminCli/JobTrack.AdminCli.csproj \
+         -c Release -o /app/admincli --no-restore -r "$RID" --self-contained false -p:PublishReadyToRun=true
+
+# The data-protection key directory, built here rather than in the runtime stage because chiseled has
+# no shell/mkdir/chown, and so its ownership can be set on COPY below. Empty: a Cloud Run GCS volume
+# mounts over it, and the key ring must survive the container (lose it and every session cookie and
+# antiforgery token is invalidated).
+RUN mkdir -p /appkeys
+
+# ---- provisioning image ----------------------------------------------------
+# Not chiseled, deliberately: this target needs a shell to sequence four commands, stdin to feed
+# --password-stdin, and psql to create the login roles. It is executed once as a Cloud Run job and
+# never serves a request, so the hardened base is spent where it counts (the serve target below)
+# rather than here.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS provision
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+COPY --from=build /app/database ./database
+COPY --from=build /app/admincli ./admincli
+# The deployment tool resolves the roles script and stored functions as fixed siblings of
+# --scripts-root's parent, so the whole database/postgresql tree is copied, not just schema-versions.
+COPY --from=build /src/JobTrack/database/postgresql ./sql/postgresql
+COPY --from=build /src/JobTrack/docker/provision.sh /src/JobTrack/docker/login-role.sql ./sql/
+RUN chmod +x ./sql/provision.sh
+
+USER $APP_UID
+ENTRYPOINT ["/app/sql/provision.sh"]
+
+# ---- serve image (default target) ------------------------------------------
+# Chiseled: half the size of the Debian default tag, much smaller attack surface, no shell, no
+# package manager, non-root by default. It ships no ICU and so defaults to
+# DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true — fine, as the codebase uses CultureInfo.InvariantCulture
+# exclusively and Noda Time's TZDB data is bundled in NodaTime.TimeZones rather than relying on
+# system ICU/tzdata.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS serve
+WORKDIR /app
+
+COPY --from=build /app/web ./web
+COPY --from=build --chown=$APP_UID:$APP_UID /appkeys /var/lib/jobtrack/keys
+
+# Required because the apphost lives in a subdirectory under WORKDIR /app rather than at /app itself:
+# the content root otherwise defaults to the process working directory, so WebRootPath resolves to a
+# non-existent /app/wwwroot. MapStaticAssets still matches its routes (the endpoint manifest is found
+# next to the assembly) but serves every asset as an empty 200 — a silent, unstyled site, not a
+# startup error. Keep this in step with the web apphost's own directory.
+ENV ASPNETCORE_CONTENTROOT=/app/web
+ENV ASPNETCORE_ENVIRONMENT=Production
+# Plain HTTP only, and that is correct here rather than a downgrade: Cloud Run's fully-managed
+# product terminates TLS at Google's front end and always proxies to the container over HTTP on
+# $PORT — it does not do TLS passthrough, so a container-side certificate is unreachable. Program.cs
+# runs ForwardedHeaders before UseHttpsRedirection(), so a request arriving with
+# X-Forwarded-Proto: https is treated as secure and the Secure-only auth cookie works. THIS IMAGE
+# MUST NEVER BE EXPOSED WITHOUT A TLS-TERMINATING PROXY IN FRONT: over plain HTTP the browser
+# silently discards the auth cookie and sign-in bounces straight back to the login page.
+ENV ASPNETCORE_HTTP_PORTS=8080
+ENV Database__Provider=PostgreSql
+# Absolute path outside the app directory, writable by the container user, and mounted from a Cloud
+# Storage bucket at deploy time so the key ring survives every recycle. Required outside Development
+# (docs/operations/web-host-security.md); unmounted it still satisfies the check but is ephemeral,
+# which silently signs everyone out on each recycle.
+ENV DataProtection__KeyPath=/var/lib/jobtrack/keys
+
+# Deliberately NOT set here, and startup fails closed without them (web-host-security.md):
+# ConnectionStrings__JobTrack{Identity,Domain,PatManagement,PatAuthentication} — mounted from Secret
+# Manager; AllowedHosts and ForwardedHeaders__KnownNetworks__0 — the real hostname and trusted-proxy
+# range are deployment facts, not image facts. Baking placeholders would make a misconfigured
+# deployment start rather than refuse to. scripts/deploy-cloudrun-postgresql.sh sets all six.
+
+EXPOSE 8080
+
+# Run as the non-root user baked into the .NET runtime image.
+USER $APP_UID
+
+# A RID-targeted publish emits an apphost, so invoke it directly rather than through the `dotnet`
+# muxer (the chiseled image ships no shell to resolve one anyway).
+ENTRYPOINT ["./web/JobTrack.Web"]

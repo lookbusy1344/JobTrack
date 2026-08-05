@@ -343,6 +343,12 @@ public sealed class JobTrackClientUsageExampleTests
 		public Task DeleteAsync(DeleteJobNodeRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 
+		public Task<DeleteSubtreeResult> DeleteSubtreeAsync(DeleteSubtreeRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<ArchiveSubtreeResult> ArchiveSubtreeAsync(ArchiveSubtreeRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
 		public Task<LeafWorkResult> AttachLeafWorkAsync(AttachLeafWorkRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 
@@ -504,6 +510,9 @@ public sealed class JobTrackClientUsageExampleTests
 			Task.FromResult(new RateSnapshotResult { UserCostRates = [], NodeRateOverrides = [] });
 
 		public Task<LeafWorkPageResult> GetLeafWorkPageAsync(GetLeafWorkPageRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<SubtreeImpactResult> GetSubtreeImpactAsync(SubtreeImpactRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 	}
 

@@ -220,6 +220,14 @@ internal sealed class JobQueries : IJobQueries
 	}
 
 	/// <inheritdoc />
+	public Task<SubtreeImpactResult> GetSubtreeImpactAsync(SubtreeImpactRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return GetSubtreeImpactCoreAsync(request, cancellationToken);
+	}
+
+	/// <inheritdoc />
 	public Task<EquatableArray<PrerequisiteEdge>> GetPrerequisitesAsync(
 		GetPrerequisitesRequest request, CancellationToken cancellationToken = default)
 	{
@@ -521,6 +529,25 @@ internal sealed class JobQueries : IJobQueries
 					TzdbVersion = tzdbVersion,
 					Nodes = EquatableArray.CopyOf(nodes),
 				};
+			});
+
+	/// <summary>
+	///     Gated on <see cref="EmployeeRole.Administrator" /> rather than the baseline browse admission
+	///     every other job read uses: this is the preview of an irreversible administrator-only command
+	///     (ADR 0061), so the manifest is visible exactly to whoever could act on it.
+	/// </summary>
+	private Task<SubtreeImpactResult> GetSubtreeImpactCoreAsync(SubtreeImpactRequest request, CancellationToken cancellationToken) =>
+		JobTrackOperation.TraceAsync(
+			"query.get-subtree-impact", request.Context, JobTrackOperation.WithNodeId(request.RootId),
+			async () => {
+				var actorRoles = await _employeeQueryPort.GetActorRolesAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
+				if (!JobNodeDeletePolicy.CanDeleteSubtree(actorRoles)) {
+					throw new AuthorizationDeniedException(
+						$"Actor {request.Context.Actor} may not measure subtree {request.RootId} for deletion: " +
+						"the Administrator role is required (ADR 0061).");
+				}
+
+				return await _browseQueryPort.GetSubtreeImpactAsync(request.RootId, cancellationToken).ConfigureAwait(false);
 			});
 
 	private Task<BranchAchievement> GetBranchAchievementCoreAsync(GetBranchAchievementRequest request, CancellationToken cancellationToken) =>

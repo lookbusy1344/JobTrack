@@ -62,6 +62,11 @@
 							<a class="nav-link @NavState("/Rota")" asp-area="" asp-page="/Rota/Index">Rota</a>
 						</li>
 					}
+					@if (User.IsInRole(EmployeeRoleNames.Administrator) || User.IsInRole(EmployeeRoleNames.Auditor)) {
+						<li class="nav-item">
+							<a class="nav-link @NavState("/Audit")" asp-area="" asp-page="/Audit/Index">Logs</a>
+						</li>
+					}
 				</ul>
 				<ul class="navbar-nav align-items-sm-center">
 					@if (User.Identity?.IsAuthenticated == true) {

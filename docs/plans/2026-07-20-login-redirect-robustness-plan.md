@@ -11,7 +11,7 @@ three landed app-layer fixes, and the remaining infrastructure root cause.
 ## 1. Symptom
 
 Reported against the throwaway Cloud Run demo
-(`https://jobtrack-web-716005672573.europe-west1.run.app`, `scripts/deploy-cloudrun.sh`):
+(`https://jobtrack-web-wdgtyuzl4a-ew.a.run.app`, `scripts/deploy-cloudrun.sh`):
 
 - After entering valid credentials, the browser is parked on `/Account/Login` showing a **zero-byte**
   body (not the login form, not `/Index`).

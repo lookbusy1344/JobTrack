@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted.
+Accepted, superseded in part by [ADR 0061](0061-administrator-subtree-deletion-and-archive.md).
+
+ADR 0061 reverses two rules stated below: subtree deletion is no longer prohibited (an administrator
+may recursively delete a whole subtree via the separate `DeleteSubtreeAsync`), and that operation
+drops prerequisite edges rather than refusing them. Everything below still governs the single-node
+`DeleteAsync`, which continues to reject a node with children, refuse to drop a prerequisite edge,
+and require the Administrator role plus a reason for a worked leaf.
 
 ## Context
 

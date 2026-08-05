@@ -305,4 +305,17 @@ public interface IJobQueries
 	/// </exception>
 	/// <exception cref="EntityNotFoundException">The actor or the node does not exist.</exception>
 	Task<LeafWorkPageResult> GetLeafWorkPageAsync(GetLeafWorkPageRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Measures exactly what <see cref="IJobCommands.DeleteSubtreeAsync" /> rooted at
+	///     <see cref="SubtreeImpactRequest.RootId" /> would destroy (ADR 0061), backing the
+	///     confirmation screen. Counts are exact over the whole subtree, deliberately not reusing the
+	///     depth/breadth-capped Browse subtree query, which would under-report. Read-only and
+	///     Administrator-gated, matching the command it previews.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor does not hold <see cref="EmployeeRole.Administrator" />.
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The actor or the root node does not exist.</exception>
+	Task<SubtreeImpactResult> GetSubtreeImpactAsync(SubtreeImpactRequest request, CancellationToken cancellationToken = default);
 }

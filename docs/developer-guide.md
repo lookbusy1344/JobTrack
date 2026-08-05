@@ -368,6 +368,21 @@ printf '%s\n' "$INITIAL_PASSWORD" | dotnet run --project src/JobTrack.AdminCli -
 dotnet run --project src/JobTrack.AdminCli -- set-home-node --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --username <username> --node-id 42
 ```
 
+- `set-schedule` makes one uniform weekly pattern an employee's standing rota — a single civil-time
+  interval repeated across `--days`. It **corrects rather than adds**, which is the point: every
+  account is created with `EmployeeProvisioningDefaults`' Mon–Fri 09:00–17:00 from 2020-01-01,
+  open-ended, so a plain add always collides on the `schedule-version-overlap` invariant. On a freshly
+  provisioned account the intent is to replace that placeholder, not to record a change of working
+  pattern, so the existing version is corrected in place (ADR 0003). It keeps that version's effective
+  start unless `--effective-start` is given, so existing sessions stay inside covered working time,
+  and refuses outright once the employee has more than one version or any schedule exception — real
+  history belongs in the Rota pages, where you can see what you are changing. A per-day pattern, an
+  effective end, or an exception is likewise the Rota pages' job, not this command's.
+
+```bash
+dotnet run --project src/JobTrack.AdminCli -- set-schedule --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --actor <admin-username> --username <username> --days Mon,Tue,Wed,Thu,Fri --start 09:00 --end 17:00
+```
+
 A personal access token can only be issued through the self-service `/Account/PersonalAccessTokens`
 page by the signed-in owner (ADR 0029, ADR 0055) — there is no CLI or unauthenticated path to mint
 one for another account.

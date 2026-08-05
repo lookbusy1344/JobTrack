@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using NodaTime;
 
 /// <summary>
@@ -31,9 +32,14 @@ public sealed class IndexModel(
 	IViewerTimeZoneResolver viewerTimeZoneResolver)
 	: PageModel
 {
+	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
+		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
+
 	[BindProperty(SupportsGet = true)]
 	[Display(Name = "Actor")]
 	public long? ActorId { get; init; }
+
+	public List<SelectListItem> ActorOptions { get; private set; } = [];
 
 	[BindProperty(SupportsGet = true)]
 	[Display(Name = "Entity type")]
@@ -74,6 +80,11 @@ public sealed class IndexModel(
 
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.AppUserId, cancellationToken);
 		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+
+		var directory = await LoadEmployeeDirectoryAsync(actor.AppUserId, cancellationToken);
+		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
+		ActorOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("All", string.Empty));
+
 		if (!BackdateInstant.TryParseOptional(From, ViewerZone, out var from)
 			|| !BackdateInstant.TryParseOptional(To, ViewerZone, out var to)) {
 			ErrorMessage = "Enter a valid date and time for each audit time filter.";
@@ -106,5 +117,31 @@ public sealed class IndexModel(
 		}
 
 		return Page();
+	}
+
+	/// <summary>
+	///     "Display name (username)" for an event's actor, "system" for an actor-less event (e.g. an
+	///     unknown-subject login failure), matching <see cref="EmployeeDirectoryDisplay" />'s rendering
+	///     used elsewhere for the same <see cref="AppUserId" />.
+	/// </summary>
+	public string DescribeActor(AppUserId? actorId) => EmployeeDirectoryDisplay.Describe(_employeeDirectoryById, actorId?.Value, "system");
+
+	/// <summary>
+	///     <see cref="IJobQueries.GetAllEmployeesAsync" /> requires <see cref="EmployeeRole.Administrator" />;
+	///     an <see cref="EmployeeRole.Auditor" /> without that role (a valid holder of
+	///     <see cref="JobTrackPolicyNames.AuditSearch" />) falls back to
+	///     <see cref="IJobQueries.GetEmployeeDirectoryAsync" />, which every operational role including
+	///     Auditor may use (<see cref="Domain.Authorization.JobDataAccessPolicy.CanBrowseJobData" />).
+	/// </summary>
+	private async Task<EquatableArray<EmployeeDirectoryEntry>> LoadEmployeeDirectoryAsync(AppUserId actor, CancellationToken cancellationToken)
+	{
+		try {
+			return await jobTrackClient.Query.GetAllEmployeesAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+		}
+		catch (AuthorizationDeniedException) {
+			return await jobTrackClient.Query.GetEmployeeDirectoryAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+		}
 	}
 }

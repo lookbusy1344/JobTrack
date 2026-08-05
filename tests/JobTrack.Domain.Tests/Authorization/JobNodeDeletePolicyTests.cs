@@ -30,4 +30,33 @@ public sealed class JobNodeDeletePolicyTests
 
 		act.Should().Throw<ArgumentNullException>();
 	}
+
+	[Fact]
+	public void An_administrator_may_delete_a_subtree() =>
+		JobNodeDeletePolicy.CanDeleteSubtree([EmployeeRole.Administrator]).Should().BeTrue();
+
+	[Fact]
+	public void An_administrator_holding_other_roles_too_may_delete_a_subtree() =>
+		JobNodeDeletePolicy.CanDeleteSubtree([EmployeeRole.Worker, EmployeeRole.Administrator]).Should().BeTrue();
+
+	[Theory]
+	[InlineData(EmployeeRole.JobManager)]
+	[InlineData(EmployeeRole.Worker)]
+	[InlineData(EmployeeRole.RateManager)]
+	[InlineData(EmployeeRole.CostViewer)]
+	[InlineData(EmployeeRole.Auditor)]
+	[InlineData(EmployeeRole.Requester)]
+	public void A_non_administrator_role_may_not_delete_a_subtree(EmployeeRole role) =>
+		JobNodeDeletePolicy.CanDeleteSubtree([role]).Should().BeFalse();
+
+	[Fact]
+	public void An_actor_with_no_roles_may_not_delete_a_subtree() => JobNodeDeletePolicy.CanDeleteSubtree([]).Should().BeFalse();
+
+	[Fact]
+	public void A_null_role_collection_is_rejected_for_subtree_deletion()
+	{
+		var act = () => JobNodeDeletePolicy.CanDeleteSubtree(null!);
+
+		act.Should().Throw<ArgumentNullException>();
+	}
 }

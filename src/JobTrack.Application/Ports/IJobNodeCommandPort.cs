@@ -26,6 +26,12 @@ internal interface IJobNodeCommandPort
 	/// <inheritdoc cref="IJobCommands.DeleteAsync" />
 	Task DeleteAsync(DeleteJobNodeRequest request, CancellationToken cancellationToken = default);
 
+	/// <inheritdoc cref="IJobCommands.DeleteSubtreeAsync" />
+	Task<DeleteSubtreeResult> DeleteSubtreeAsync(DeleteSubtreeRequest request, CancellationToken cancellationToken = default);
+
+	/// <inheritdoc cref="IJobCommands.ArchiveSubtreeAsync" />
+	Task<ArchiveSubtreeResult> ArchiveSubtreeAsync(ArchiveSubtreeRequest request, CancellationToken cancellationToken = default);
+
 	/// <inheritdoc cref="IJobCommands.AttachLeafWorkAsync" />
 	Task<LeafWorkResult> AttachLeafWorkAsync(AttachLeafWorkRequest request, CancellationToken cancellationToken = default);
 

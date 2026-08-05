@@ -2051,6 +2051,16 @@ nav[aria-label="breadcrumb"] li + li::before {
     box-shadow: var(--jt-shadow-sm);
 }
 
+/* Same escape as `.jt-list--wide`, for the same reason. On a page whose blocks are all sized to the
+   content column (Delete subtree: notice, summary card, tree table, form), the readable-measure cap
+   makes this the one block that stops short, so the page's left edge steps in and out down the
+   scroll. Line length is not what the cap was protecting here anyway — `p` carries its own
+   `--jt-measure-prose` ceiling, so the paragraphs inside stay readable at any box width. Only for a
+   notice sitting in a column of full-width siblings; a notice standing alone keeps the default. */
+.jt-notice--wide {
+    max-width: none;
+}
+
 /* Empty-state line used across list/table pages ("None.", "No jobs to show."). */
 .jt-empty {
     padding: var(--jt-space-4);

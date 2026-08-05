@@ -74,4 +74,8 @@ internal interface IJobBrowseQueryPort
 	/// </summary>
 	/// <exception cref="EntityNotFoundException">The node does not exist.</exception>
 	Task<BranchAchievement> GetSubtreeAchievementAsync(JobNodeId rootId, CancellationToken cancellationToken = default);
+
+	/// <inheritdoc cref="IJobQueries.GetSubtreeImpactAsync" />
+	/// <exception cref="EntityNotFoundException">The root node does not exist.</exception>
+	Task<SubtreeImpactResult> GetSubtreeImpactAsync(JobNodeId rootId, CancellationToken cancellationToken = default);
 }

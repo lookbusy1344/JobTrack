@@ -76,6 +76,46 @@ public interface IJobCommands
 	/// </exception>
 	Task DeleteAsync(DeleteJobNodeRequest request, CancellationToken cancellationToken = default);
 
+	/// <summary>
+	///     Recursively and permanently destroys a subtree — the root, every descendant, and their
+	///     <c>LeafWork</c>, <c>WorkSession</c>, rate-override, request, and prerequisite rows — in one
+	///     transaction (ADR 0061, superseding ADR 0036's prohibition). Every prerequisite edge touching
+	///     the subtree is dropped, including edges arriving from outside, so an external dependent can
+	///     become ready where it was blocked. Destroyed session history stops counting toward every
+	///     surviving ancestor's cost, which is an accepted and irreversible consequence.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor does not hold <see cref="EmployeeRole.Administrator" />
+	///     (<see cref="Domain.Authorization.JobNodeDeletePolicy.CanDeleteSubtree" />), or may not manage
+	///     this node's subtree.
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The root node does not exist.</exception>
+	/// <exception cref="ConcurrencyConflictException">The supplied version is stale.</exception>
+	/// <exception cref="InvariantViolationException">
+	///     The root is the permanent root (<c>"job-node-is-root-cannot-delete"</c>), a request holding
+	///     area is anchored inside the subtree (<c>"subtree-delete-holding-area-anchored"</c>), or
+	///     <see cref="DeleteSubtreeRequest.Reason" /> is blank
+	///     (<c>"subtree-delete-reason-required"</c>).
+	/// </exception>
+	Task<DeleteSubtreeResult> DeleteSubtreeAsync(DeleteSubtreeRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	///     Archives a subtree root and every descendant not already archived, in one transaction — the
+	///     non-destructive alternative to <see cref="DeleteSubtreeAsync" /> (ADR 0061). Nodes already
+	///     archived keep their original instant.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">
+	///     The actor does not hold <see cref="EmployeeRole.Administrator" />, or may not manage this
+	///     node's subtree.
+	/// </exception>
+	/// <exception cref="EntityNotFoundException">The root node does not exist.</exception>
+	/// <exception cref="ConcurrencyConflictException">The supplied version is stale.</exception>
+	/// <exception cref="InvariantViolationException">
+	///     A session on some leaf in the subtree is still active (<c>ConstraintId</c>
+	///     <c>"leaf-closure-active-sessions"</c>, ADR 0044).
+	/// </exception>
+	Task<ArchiveSubtreeResult> ArchiveSubtreeAsync(ArchiveSubtreeRequest request, CancellationToken cancellationToken = default);
+
 	/// <summary>Attaches achievement tracking to an existing bare leaf node.</summary>
 	/// <exception cref="AuthorizationDeniedException">
 	///     The actor may not manage this node's subtree (see <see cref="Domain.Authorization.JobNodeAccessPolicy" />).

@@ -1,0 +1,43 @@
+# Build context here is the monorepo root (VSStuff/), not JobTrack/ — see Dockerfile.postgresql's
+# header comment for why. Everything is ignored by default except .editorconfig and the JobTrack/
+# subtree actually needed to build the three published apphosts (Web, Database, AdminCli); other
+# sibling monorepo projects (EnrolmentRules/, etc.) are irrelevant to this image and excluded to keep
+# the build context small.
+*
+!.editorconfig
+!JobTrack/
+
+# Build output and caches — rebuilt inside the image.
+JobTrack/**/bin/
+JobTrack/**/obj/
+JobTrack/TestResults/
+
+# LibMan-restored client libs (gitignored; restored during the build).
+JobTrack/src/JobTrack.Web/wwwroot/lib/
+
+# Not needed to build/run the published apps; keeps the build context small.
+JobTrack/tests/
+JobTrack/spikes/
+JobTrack/scripts/
+JobTrack/docs/
+
+# This deployment seeds no example nodes and no requester scenario, so unlike the SQLite demo image
+# nothing under samples/ is needed at all — not the UatSeed project and not the job-tree JSON.
+JobTrack/samples/
+
+# SQLite/Postgres scratch data and dev-only artifacts.
+JobTrack/*.db
+JobTrack/*.db-shm
+JobTrack/*.db-wal
+JobTrack/jobtrack-web-dev.db*
+
+# IDE / OS / VCS noise.
+JobTrack/.git/
+JobTrack/.github/
+JobTrack/.idea/
+JobTrack/.vs/
+JobTrack/.vscode/
+JobTrack/.cursor/
+JobTrack/.claude/
+JobTrack/**/*.user
+JobTrack/**/.DS_Store

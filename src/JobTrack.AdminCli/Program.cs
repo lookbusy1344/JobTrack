@@ -31,6 +31,10 @@ public static class Program
 		"(--connection-string <connection-string> | --connection-string-file <path>) " +
 		"--actor <admin-username> --username <username> [--password-stdin] --display-name <name> " +
 		"--roles <role[,role...]> [--iana-time-zone <iana>] [--default-hourly-rate <amount>] [--no-force-password-change]\n" +
+		"       JobTrack.AdminCli set-schedule --provider <postgresql|sqlite> " +
+		"(--connection-string <connection-string> | --connection-string-file <path>) " +
+		"--actor <admin-username> --username <username> --days <day[,day...]> --start <HH:mm> --end <HH:mm> " +
+		"[--iana-time-zone <iana>] [--effective-start <yyyy-MM-dd>]\n" +
 		"  A direct --connection-string must not contain a password; use --connection-string-file, a PostgreSQL passfile, " +
 		"or integrated authentication. Omit --password-stdin to prompt interactively without echo.";
 
@@ -49,6 +53,7 @@ public static class Program
 				"import-tree" => await RunImportTreeAsync(JobTreeImportCommandOptions.Parse(pico), io),
 				"set-home-node" => await RunSetHomeNodeAsync(SetHomeNodeCommandOptions.Parse(pico), io),
 				"create-employee" => await RunCreateEmployeeAsync(CreateEmployeeCommandOptions.Parse(pico), io),
+				"set-schedule" => await RunSetScheduleAsync(SetScheduleCommandOptions.Parse(pico), io),
 				_ => Usage(io),
 			};
 		}
@@ -174,6 +179,25 @@ public static class Program
 		return await JobTreeImportCommand.RunAsync(
 				io, userManager, client, options.Username, new(options.ParentJobNodeId), jsonContent, SystemClock.Instance,
 				options.HomeNodeUsernames, CancellationToken.None);
+	}
+
+	private static async Task<int> RunSetScheduleAsync(SetScheduleCommandOptions options, SystemConsoleIO io)
+	{
+		var services = new ServiceCollection();
+		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
+		_ = options.Provider switch {
+			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
+			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
+			_ => throw new AdminCliUsageException($"Unknown provider '{options.Provider}'."),
+		};
+
+		await using var provider = services.BuildServiceProvider();
+		using var scope = provider.CreateScope();
+		var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+		var client = CreateClient(options.Provider, options.ConnectionString);
+
+		return await SetScheduleCommand.RunAsync(io, userManager, client, options, SystemClock.Instance, CancellationToken.None);
 	}
 
 	private static async Task<int> RunSetHomeNodeAsync(SetHomeNodeCommandOptions options, SystemConsoleIO io)

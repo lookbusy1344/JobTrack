@@ -343,6 +343,142 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		return Task.FromResult(WithStructuralFacts(updated));
 	}
 
+	/// <summary>
+	///     Mirrors the real ports' ADR 0061 rules: Administrator only, reason required, the permanent
+	///     root refused, and every prerequisite edge touching the subtree dropped rather than refused.
+	/// </summary>
+	public Task<DeleteSubtreeResult> DeleteSubtreeAsync(DeleteSubtreeRequest request, CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(request.Reason)) {
+			throw new InvariantViolationException("subtree-delete-reason-required", "Deleting a subtree requires a reason.");
+		}
+
+		var existing = GetExisting(request.RootId);
+		AuthorizeOrThrow(request.Context.Actor, request.RootId);
+
+		if (!JobNodeDeletePolicy.CanDeleteSubtree(RolesOf(request.Context.Actor))) {
+			throw new AuthorizationDeniedException(
+				$"Actor {request.Context.Actor} may not delete subtree {request.RootId}: recursive deletion " +
+				"requires the Administrator role (ADR 0061).");
+		}
+
+		CheckVersionOrThrow(existing.Version, request.Version);
+
+		if (existing.ParentId is null) {
+			throw new InvariantViolationException("job-node-is-root-cannot-delete", "The root job node cannot be deleted.");
+		}
+
+		var subtreeIds = _nodes.Keys.Where(id => IsInSubtree(id, request.RootId)).ToList();
+		var leafWorkCount = subtreeIds.Count(_leafWork.ContainsKey);
+		var droppedEdges = _prerequisites
+			.Where(edge => subtreeIds.Contains(edge.RequiredJobId) || subtreeIds.Contains(edge.DependentJobId))
+			.ToList();
+
+		foreach (var edge in droppedEdges) {
+			_ = _prerequisites.Remove(edge);
+		}
+
+		foreach (var id in subtreeIds) {
+			_ = _nodes.Remove(id);
+			_ = _leafWork.Remove(id);
+			_ = _workedLeafIds.Remove(id);
+			_ = _undeletable.Remove(id);
+		}
+
+		return Task.FromResult(new DeleteSubtreeResult {
+			NodeCount = subtreeIds.Count,
+			LeafWorkCount = leafWorkCount,
+			WorkSessionCount = 0,
+			TotalWorkedDuration = Duration.Zero,
+			PrerequisiteEdgeCount = droppedEdges.Count,
+			JobRequestCount = 0,
+		});
+	}
+
+	/// <inheritdoc />
+	public Task<ArchiveSubtreeResult> ArchiveSubtreeAsync(ArchiveSubtreeRequest request, CancellationToken cancellationToken = default)
+	{
+		var existing = GetExisting(request.RootId);
+		AuthorizeOrThrow(request.Context.Actor, request.RootId);
+
+		if (!JobNodeDeletePolicy.CanDeleteSubtree(RolesOf(request.Context.Actor))) {
+			throw new AuthorizationDeniedException(
+				$"Actor {request.Context.Actor} may not archive subtree {request.RootId}: recursive archiving " +
+				"requires the Administrator role (ADR 0061).");
+		}
+
+		CheckVersionOrThrow(existing.Version, request.Version);
+
+		var subtreeIds = _nodes.Keys.Where(id => IsInSubtree(id, request.RootId)).ToList();
+		var newlyArchived = 0;
+		foreach (var id in subtreeIds) {
+			var node = _nodes[id];
+			if (node.ArchivedAt is null) {
+				_nodes[id] = node with { ArchivedAt = NowToReturn, Version = node.Version + 1 };
+				++newlyArchived;
+			}
+		}
+
+		return Task.FromResult(new ArchiveSubtreeResult { NodeCount = subtreeIds.Count, NewlyArchivedCount = newlyArchived });
+	}
+
+	/// <inheritdoc />
+	public Task<SubtreeImpactResult> GetSubtreeImpactAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
+	{
+		var root = GetExisting(rootId);
+		var subtreeIds = _nodes.Keys.Where(id => IsInSubtree(id, rootId)).ToList();
+		var inside = subtreeIds.ToHashSet();
+		var touching = _prerequisites
+			.Where(edge => inside.Contains(edge.RequiredJobId) || inside.Contains(edge.DependentJobId))
+			.ToList();
+		var external = touching
+			.Where(edge => !inside.Contains(edge.RequiredJobId) || !inside.Contains(edge.DependentJobId))
+			.ToList();
+
+		return Task.FromResult(new SubtreeImpactResult {
+			RootId = rootId,
+			Nodes = EquatableArray.CopyOf(subtreeIds.Select(id => new SubtreeImpactNode {
+				Id = id,
+				ParentId = _nodes[id].ParentId,
+				Depth = DepthBelow(id, rootId),
+				Description = _nodes[id].Description,
+				Kind = _nodes[id].Kind,
+				Achievement = _leafWork.TryGetValue(id, out var leafWork) ? leafWork.Achievement : null,
+				WorkSessionCount = _workedLeafIds.Contains(id) ? 1 : 0,
+				IsArchived = _nodes[id].ArchivedAt is not null,
+			}).ToArray()),
+			NodeCount = subtreeIds.Count,
+			LeafWorkCount = subtreeIds.Count(_leafWork.ContainsKey),
+			WorkSessionCount = subtreeIds.Count(_workedLeafIds.Contains),
+			TotalWorkedDuration = Duration.Zero,
+			InternalPrerequisiteEdgeCount = touching.Count - external.Count,
+			ExternalPrerequisiteEdges = EquatableArray.CopyOf(external.Select(edge => new SubtreeImpactPrerequisiteEdge {
+				FromId = edge.RequiredJobId,
+				ToId = edge.DependentJobId,
+				ExternalDescription = _nodes.TryGetValue(
+					inside.Contains(edge.RequiredJobId) ? edge.DependentJobId : edge.RequiredJobId, out var outside)
+					? outside.Description
+					: string.Empty,
+				ExternalNodeIsDependent = !inside.Contains(edge.DependentJobId),
+			}).ToArray()),
+			JobRequestCount = 0,
+			BlockingHoldingAreas = EquatableArray.CopyOf<SubtreeImpactHoldingArea>([]),
+			IsPermanentRoot = root.ParentId is null,
+		});
+	}
+
+	private int DepthBelow(JobNodeId id, JobNodeId rootId)
+	{
+		var depth = 0;
+		var current = id;
+		while (current != rootId && _nodes.TryGetValue(current, out var node) && node.ParentId is JobNodeId parentId) {
+			current = parentId;
+			++depth;
+		}
+
+		return depth;
+	}
+
 	public Task DeleteAsync(DeleteJobNodeRequest request, CancellationToken cancellationToken = default)
 	{
 		var existing = GetExisting(request.NodeId);

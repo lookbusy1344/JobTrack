@@ -1,4 +1,15 @@
 #nullable enable
+~override JobTrack.Domain.Costing.AllocatedShare.Equals(object obj) -> bool
+~override JobTrack.Domain.Costing.AllocatedShare.ToString() -> string
+~override JobTrack.Domain.Hierarchy.RequesterSubtreeLeafState.Equals(object obj) -> bool
+~override JobTrack.Domain.Hierarchy.RequesterSubtreeLeafState.ToString() -> string
+~override JobTrack.Domain.Intervals.WorkInterval.Equals(object obj) -> bool
+~override JobTrack.Domain.Intervals.WorkInterval.ToString() -> string
+~override JobTrack.Domain.Schedules.WeeklyInterval.Equals(object obj) -> bool
+~override JobTrack.Domain.Schedules.WeeklyInterval.ToString() -> string
+const JobTrack.Domain.Hierarchy.JobSubtreeLimits.BreadthCap = 25 -> int
+const JobTrack.Domain.Hierarchy.JobSubtreeLimits.DefaultMaxDepth = 3 -> int
+const JobTrack.Domain.Hierarchy.JobSubtreeLimits.HardMaxDepth = 5 -> int
 JobTrack.Domain.Authorization.AchievementAccessPolicy
 JobTrack.Domain.Authorization.AuditAccessPolicy
 JobTrack.Domain.Authorization.CostAccessPolicy
@@ -11,8 +22,8 @@ JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy
 JobTrack.Domain.Authorization.PersonalAccessTokenAccessPolicy
 JobTrack.Domain.Authorization.PersonalAccessTokenPolicy
 JobTrack.Domain.Authorization.RateAccessPolicy
-JobTrack.Domain.Authorization.RequestHoldingAreaConfigurationPolicy
 JobTrack.Domain.Authorization.RequesterAccessPolicy
+JobTrack.Domain.Authorization.RequestHoldingAreaConfigurationPolicy
 JobTrack.Domain.Authorization.ScheduleAccessPolicy
 JobTrack.Domain.Authorization.WorkSessionAccessPolicy
 JobTrack.Domain.Concurrency.ConcurrentWorkCalculator
@@ -60,6 +71,17 @@ JobTrack.Domain.Costing.AllocatedShare.ConcurrencyDivisor.get -> int
 JobTrack.Domain.Costing.AllocatedShare.Equals(JobTrack.Domain.Costing.AllocatedShare other) -> bool
 JobTrack.Domain.Costing.AllocatedShare.IsUninitialized.get -> bool
 JobTrack.Domain.Costing.AllocatedShare.SegmentTicks.get -> long
+JobTrack.Domain.Costing.CostableSession
+JobTrack.Domain.Costing.CostableSession.<Clone>$() -> JobTrack.Domain.Costing.CostableSession!
+JobTrack.Domain.Costing.CostableSession.CostableSession(JobTrack.Abstractions.WorkSessionId SessionId, JobTrack.Abstractions.JobNodeId NodeId, JobTrack.Domain.Intervals.WorkInterval Interval) -> void
+JobTrack.Domain.Costing.CostableSession.Deconstruct(out JobTrack.Abstractions.WorkSessionId SessionId, out JobTrack.Abstractions.JobNodeId NodeId, out JobTrack.Domain.Intervals.WorkInterval Interval) -> void
+JobTrack.Domain.Costing.CostableSession.Equals(JobTrack.Domain.Costing.CostableSession? other) -> bool
+JobTrack.Domain.Costing.CostableSession.Interval.get -> JobTrack.Domain.Intervals.WorkInterval
+JobTrack.Domain.Costing.CostableSession.Interval.init -> void
+JobTrack.Domain.Costing.CostableSession.NodeId.get -> JobTrack.Abstractions.JobNodeId
+JobTrack.Domain.Costing.CostableSession.NodeId.init -> void
+JobTrack.Domain.Costing.CostableSession.SessionId.get -> JobTrack.Abstractions.WorkSessionId
+JobTrack.Domain.Costing.CostableSession.SessionId.init -> void
 JobTrack.Domain.Costing.CostCalculation
 JobTrack.Domain.Costing.CostCalculation.<Clone>$() -> JobTrack.Domain.Costing.CostCalculation!
 JobTrack.Domain.Costing.CostCalculation.AllocatedDurations.get -> JobTrack.Abstractions.EquatableDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>
@@ -94,17 +116,6 @@ JobTrack.Domain.Costing.CostSegmentTrace.SessionId.get -> JobTrack.Abstractions.
 JobTrack.Domain.Costing.CostSegmentTrace.SessionId.init -> void
 JobTrack.Domain.Costing.CostSegmentTrace.UnroundedContribution.get -> JobTrack.Abstractions.Money
 JobTrack.Domain.Costing.CostSegmentTrace.UnroundedContribution.init -> void
-JobTrack.Domain.Costing.CostableSession
-JobTrack.Domain.Costing.CostableSession.<Clone>$() -> JobTrack.Domain.Costing.CostableSession!
-JobTrack.Domain.Costing.CostableSession.CostableSession(JobTrack.Abstractions.WorkSessionId SessionId, JobTrack.Abstractions.JobNodeId NodeId, JobTrack.Domain.Intervals.WorkInterval Interval) -> void
-JobTrack.Domain.Costing.CostableSession.Deconstruct(out JobTrack.Abstractions.WorkSessionId SessionId, out JobTrack.Abstractions.JobNodeId NodeId, out JobTrack.Domain.Intervals.WorkInterval Interval) -> void
-JobTrack.Domain.Costing.CostableSession.Equals(JobTrack.Domain.Costing.CostableSession? other) -> bool
-JobTrack.Domain.Costing.CostableSession.Interval.get -> JobTrack.Domain.Intervals.WorkInterval
-JobTrack.Domain.Costing.CostableSession.Interval.init -> void
-JobTrack.Domain.Costing.CostableSession.NodeId.get -> JobTrack.Abstractions.JobNodeId
-JobTrack.Domain.Costing.CostableSession.NodeId.init -> void
-JobTrack.Domain.Costing.CostableSession.SessionId.get -> JobTrack.Abstractions.WorkSessionId
-JobTrack.Domain.Costing.CostableSession.SessionId.init -> void
 JobTrack.Domain.Costing.HierarchicalAllocatedDurationAggregator
 JobTrack.Domain.Costing.HierarchicalCostAggregator
 JobTrack.Domain.Costing.HierarchyDisplayReconciler
@@ -317,9 +328,6 @@ JobTrack.Domain.Schedules.WeeklyInterval.Equals(JobTrack.Domain.Schedules.Weekly
 JobTrack.Domain.Schedules.WeeklyInterval.Start.get -> NodaTime.LocalTime
 JobTrack.Domain.Schedules.WeeklyInterval.WeeklyInterval() -> void
 JobTrack.Domain.Schedules.WeeklyInterval.WeeklyInterval(NodaTime.IsoDayOfWeek day, NodaTime.LocalTime start, NodaTime.LocalTime end) -> void
-const JobTrack.Domain.Hierarchy.JobSubtreeLimits.BreadthCap = 25 -> int
-const JobTrack.Domain.Hierarchy.JobSubtreeLimits.DefaultMaxDepth = 3 -> int
-const JobTrack.Domain.Hierarchy.JobSubtreeLimits.HardMaxDepth = 5 -> int
 override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.Equals(object? obj) -> bool
 override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.GetHashCode() -> int
 override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.ToString() -> string!
@@ -330,15 +338,15 @@ override JobTrack.Domain.Costing.AllocatedDuration.Equals(object? obj) -> bool
 override JobTrack.Domain.Costing.AllocatedDuration.GetHashCode() -> int
 override JobTrack.Domain.Costing.AllocatedDuration.ToString() -> string!
 override JobTrack.Domain.Costing.AllocatedShare.GetHashCode() -> int
+override JobTrack.Domain.Costing.CostableSession.Equals(object? obj) -> bool
+override JobTrack.Domain.Costing.CostableSession.GetHashCode() -> int
+override JobTrack.Domain.Costing.CostableSession.ToString() -> string!
 override JobTrack.Domain.Costing.CostCalculation.Equals(object? obj) -> bool
 override JobTrack.Domain.Costing.CostCalculation.GetHashCode() -> int
 override JobTrack.Domain.Costing.CostCalculation.ToString() -> string!
 override JobTrack.Domain.Costing.CostSegmentTrace.Equals(object? obj) -> bool
 override JobTrack.Domain.Costing.CostSegmentTrace.GetHashCode() -> int
 override JobTrack.Domain.Costing.CostSegmentTrace.ToString() -> string!
-override JobTrack.Domain.Costing.CostableSession.Equals(object? obj) -> bool
-override JobTrack.Domain.Costing.CostableSession.GetHashCode() -> int
-override JobTrack.Domain.Costing.CostableSession.ToString() -> string!
 override JobTrack.Domain.Costing.ReconciledChildCost.Equals(object? obj) -> bool
 override JobTrack.Domain.Costing.ReconciledChildCost.GetHashCode() -> int
 override JobTrack.Domain.Costing.ReconciledChildCost.ToString() -> string!
@@ -393,6 +401,7 @@ static JobTrack.Domain.Authorization.EmployeeAccessPolicy.CanManageRoles(System.
 static JobTrack.Domain.Authorization.EmployeeAccessPolicy.CanViewEmployee(JobTrack.Abstractions.AppUserId actorId, JobTrack.Abstractions.AppUserId targetUserId, System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobDataAccessPolicy.CanBrowseJobData(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobNodeAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorOwnsNodeOrAncestor) -> bool
+static JobTrack.Domain.Authorization.JobNodeDeletePolicy.CanDeleteSubtree(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobNodeDeletePolicy.CanForceDeleteWorkedLeaf(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobPickupPolicy.CanPickUp(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool ownerIsNull) -> bool
 static JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool actorParticipatedPreviously, JobTrack.Abstractions.AppUserId actorUserId, JobTrack.Abstractions.AppUserId targetWorkedByUserId) -> bool
@@ -400,10 +409,10 @@ static JobTrack.Domain.Authorization.PersonalAccessTokenAccessPolicy.CanIssue(Jo
 static JobTrack.Domain.Authorization.PersonalAccessTokenAccessPolicy.CanManage(JobTrack.Abstractions.AppUserId actorId, JobTrack.Abstractions.AppUserId targetUserId, System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.PersonalAccessTokenPolicy.EnsureValidExpiry(NodaTime.Instant now, NodaTime.Instant expiresAt) -> void
 static JobTrack.Domain.Authorization.RateAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
-static JobTrack.Domain.Authorization.RequestHoldingAreaConfigurationPolicy.CanConfigure(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanCommentAsRequester(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorIsRequestOwner, bool departmentVisibilityEnabled, bool actorSharesRequestDepartment, bool actorControlsAnchorNode, bool requestIsClosedToRequester) -> bool
 static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanSubmit(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool holdingAreaIsActive, bool actorIsEligibleForHoldingArea) -> bool
 static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanView(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorIsRequestOwner, bool departmentVisibilityEnabled, bool actorSharesRequestDepartment, bool actorControlsAnchorNode) -> bool
+static JobTrack.Domain.Authorization.RequestHoldingAreaConfigurationPolicy.CanConfigure(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.ScheduleAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool isOwnSchedule) -> bool
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanFinishSession(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool isOwnSession) -> bool
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode) -> bool
@@ -414,12 +423,14 @@ static JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.operator ==(JobTrack.Do
 static JobTrack.Domain.Concurrency.ConcurrentWorkSession.operator !=(JobTrack.Domain.Concurrency.ConcurrentWorkSession? left, JobTrack.Domain.Concurrency.ConcurrentWorkSession? right) -> bool
 static JobTrack.Domain.Concurrency.ConcurrentWorkSession.operator ==(JobTrack.Domain.Concurrency.ConcurrentWorkSession? left, JobTrack.Domain.Concurrency.ConcurrentWorkSession? right) -> bool
 static JobTrack.Domain.Costing.AllocatedDuration.FromShare(JobTrack.Domain.Costing.AllocatedShare share) -> JobTrack.Domain.Costing.AllocatedDuration!
-static JobTrack.Domain.Costing.AllocatedDuration.Zero.get -> JobTrack.Domain.Costing.AllocatedDuration!
 static JobTrack.Domain.Costing.AllocatedDuration.operator !=(JobTrack.Domain.Costing.AllocatedDuration? left, JobTrack.Domain.Costing.AllocatedDuration? right) -> bool
 static JobTrack.Domain.Costing.AllocatedDuration.operator ==(JobTrack.Domain.Costing.AllocatedDuration? left, JobTrack.Domain.Costing.AllocatedDuration? right) -> bool
+static JobTrack.Domain.Costing.AllocatedDuration.Zero.get -> JobTrack.Domain.Costing.AllocatedDuration!
 static JobTrack.Domain.Costing.AllocatedDurationCalculator.ComputeLeafDurations(System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.SessionSegmentAllocation!>! allocations) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>!
 static JobTrack.Domain.Costing.AllocatedShare.operator !=(JobTrack.Domain.Costing.AllocatedShare left, JobTrack.Domain.Costing.AllocatedShare right) -> bool
 static JobTrack.Domain.Costing.AllocatedShare.operator ==(JobTrack.Domain.Costing.AllocatedShare left, JobTrack.Domain.Costing.AllocatedShare right) -> bool
+static JobTrack.Domain.Costing.CostableSession.operator !=(JobTrack.Domain.Costing.CostableSession? left, JobTrack.Domain.Costing.CostableSession? right) -> bool
+static JobTrack.Domain.Costing.CostableSession.operator ==(JobTrack.Domain.Costing.CostableSession? left, JobTrack.Domain.Costing.CostableSession? right) -> bool
 static JobTrack.Domain.Costing.CostCalculation.operator !=(JobTrack.Domain.Costing.CostCalculation? left, JobTrack.Domain.Costing.CostCalculation? right) -> bool
 static JobTrack.Domain.Costing.CostCalculation.operator ==(JobTrack.Domain.Costing.CostCalculation? left, JobTrack.Domain.Costing.CostCalculation? right) -> bool
 static JobTrack.Domain.Costing.CostEngine.AggregateExactCosts(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.SessionSegmentAllocation!>! allocations, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Intervals.WorkInterval>! scheduledWorkingIntervals, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Schedules.ScheduleExceptionEntry!>! exceptions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.NodeRateOverride!>! nodeOverrides, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.UserCostRate!>! userCostRates, JobTrack.Abstractions.HourlyRate? userDefaultRate) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>!
@@ -430,8 +441,6 @@ static JobTrack.Domain.Costing.CostSegmentPartitioner.Partition(System.Collectio
 static JobTrack.Domain.Costing.CostSegmentPartitioner.PartitionBounded(System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Costing.CostableSession!>! sessions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Intervals.WorkInterval>! effectiveWorkingIntervals, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Schedules.ScheduleExceptionEntry!>! exceptions, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.NodeRateOverride!>! nodeOverrides, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Rates.UserCostRate!>! userCostRates, JobTrack.Domain.Intervals.WorkInterval bounds, System.Collections.Generic.IReadOnlySet<JobTrack.Abstractions.JobNodeId>! includedNodeIds, int maximumAllocationCount) -> System.Collections.Generic.IReadOnlyList<JobTrack.Domain.Costing.SessionSegmentAllocation!>!
 static JobTrack.Domain.Costing.CostSegmentTrace.operator !=(JobTrack.Domain.Costing.CostSegmentTrace? left, JobTrack.Domain.Costing.CostSegmentTrace? right) -> bool
 static JobTrack.Domain.Costing.CostSegmentTrace.operator ==(JobTrack.Domain.Costing.CostSegmentTrace? left, JobTrack.Domain.Costing.CostSegmentTrace? right) -> bool
-static JobTrack.Domain.Costing.CostableSession.operator !=(JobTrack.Domain.Costing.CostableSession? left, JobTrack.Domain.Costing.CostableSession? right) -> bool
-static JobTrack.Domain.Costing.CostableSession.operator ==(JobTrack.Domain.Costing.CostableSession? left, JobTrack.Domain.Costing.CostableSession? right) -> bool
 static JobTrack.Domain.Costing.HierarchicalAllocatedDurationAggregator.Aggregate(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>! leafDurations) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>!
 static JobTrack.Domain.Costing.HierarchicalAllocatedDurationAggregator.SumSubtreeTotals(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.JobNodeId>! rootIds, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>! leafDurations) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Costing.AllocatedDuration!>!
 static JobTrack.Domain.Costing.HierarchicalCostAggregator.Aggregate(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>! leafCosts) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Abstractions.Money>!
@@ -446,8 +455,8 @@ static JobTrack.Domain.Hierarchy.AchievementCalculator.IsAchieved(JobTrack.Abstr
 static JobTrack.Domain.Hierarchy.AchievementTransitions.IsCompletedState(JobTrack.Abstractions.Achievement achievement) -> bool
 static JobTrack.Domain.Hierarchy.AchievementTransitions.IsPermitted(JobTrack.Abstractions.Achievement from, JobTrack.Abstractions.Achievement to) -> bool
 static JobTrack.Domain.Hierarchy.AchievementTransitions.IsReopening(JobTrack.Abstractions.Achievement from, JobTrack.Abstractions.Achievement to) -> bool
-static JobTrack.Domain.Hierarchy.AwaitingProgressCalculator.GetAwaitingProgress(System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts!>! factsById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Hierarchy.PrerequisiteEdge!>! prerequisites) -> JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Hierarchy.AwaitingProgressEntry!>
 static JobTrack.Domain.Hierarchy.AwaitingProgressCalculator.GetAwaitingProgress(System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts!>! factsById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Hierarchy.PrerequisiteEdge!>! prerequisites, JobTrack.Domain.Hierarchy.OwnershipFilter! ownership, JobTrack.Abstractions.JobNodeId? subtreeRootId, string? searchText = null) -> JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Hierarchy.AwaitingProgressEntry!>
+static JobTrack.Domain.Hierarchy.AwaitingProgressCalculator.GetAwaitingProgress(System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts!>! factsById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Hierarchy.PrerequisiteEdge!>! prerequisites) -> JobTrack.Abstractions.EquatableArray<JobTrack.Domain.Hierarchy.AwaitingProgressEntry!>
 static JobTrack.Domain.Hierarchy.AwaitingProgressEntry.operator !=(JobTrack.Domain.Hierarchy.AwaitingProgressEntry? left, JobTrack.Domain.Hierarchy.AwaitingProgressEntry? right) -> bool
 static JobTrack.Domain.Hierarchy.AwaitingProgressEntry.operator ==(JobTrack.Domain.Hierarchy.AwaitingProgressEntry? left, JobTrack.Domain.Hierarchy.AwaitingProgressEntry? right) -> bool
 static JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts.operator !=(JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts? left, JobTrack.Domain.Hierarchy.AwaitingProgressNodeFacts? right) -> bool
@@ -456,9 +465,9 @@ static JobTrack.Domain.Hierarchy.BranchAchievementCalculator.Derive(System.Colle
 static JobTrack.Domain.Hierarchy.HierarchyNode.operator !=(JobTrack.Domain.Hierarchy.HierarchyNode? left, JobTrack.Domain.Hierarchy.HierarchyNode? right) -> bool
 static JobTrack.Domain.Hierarchy.HierarchyNode.operator ==(JobTrack.Domain.Hierarchy.HierarchyNode? left, JobTrack.Domain.Hierarchy.HierarchyNode? right) -> bool
 static JobTrack.Domain.Hierarchy.NodeClassifier.Classify(JobTrack.Domain.Hierarchy.HierarchyNode! node) -> JobTrack.Abstractions.NodeKind
-static JobTrack.Domain.Hierarchy.OwnershipFilter.OwnedBy(JobTrack.Abstractions.AppUserId ownerUserId) -> JobTrack.Domain.Hierarchy.OwnershipFilter!
 static JobTrack.Domain.Hierarchy.OwnershipFilter.operator !=(JobTrack.Domain.Hierarchy.OwnershipFilter? left, JobTrack.Domain.Hierarchy.OwnershipFilter? right) -> bool
 static JobTrack.Domain.Hierarchy.OwnershipFilter.operator ==(JobTrack.Domain.Hierarchy.OwnershipFilter? left, JobTrack.Domain.Hierarchy.OwnershipFilter? right) -> bool
+static JobTrack.Domain.Hierarchy.OwnershipFilter.OwnedBy(JobTrack.Abstractions.AppUserId ownerUserId) -> JobTrack.Domain.Hierarchy.OwnershipFilter!
 static JobTrack.Domain.Hierarchy.PrerequisiteEdge.operator !=(JobTrack.Domain.Hierarchy.PrerequisiteEdge? left, JobTrack.Domain.Hierarchy.PrerequisiteEdge? right) -> bool
 static JobTrack.Domain.Hierarchy.PrerequisiteEdge.operator ==(JobTrack.Domain.Hierarchy.PrerequisiteEdge? left, JobTrack.Domain.Hierarchy.PrerequisiteEdge? right) -> bool
 static JobTrack.Domain.Hierarchy.ReadinessCalculator.IsReady(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Hierarchy.PrerequisiteEdge!>! prerequisites) -> JobTrack.Domain.Hierarchy.ReadinessResult!
@@ -498,11 +507,3 @@ static readonly JobTrack.Domain.Authorization.PersonalAccessTokenPolicy.MaxLifet
 static readonly JobTrack.Domain.Hierarchy.OwnershipFilter.All -> JobTrack.Domain.Hierarchy.OwnershipFilter!
 static readonly JobTrack.Domain.Hierarchy.OwnershipFilter.Unassigned -> JobTrack.Domain.Hierarchy.OwnershipFilter!
 static readonly JobTrack.Domain.Schedules.CivilTimeResolver.Resolve -> NodaTime.TimeZones.ZoneLocalMappingResolver!
-~override JobTrack.Domain.Costing.AllocatedShare.Equals(object obj) -> bool
-~override JobTrack.Domain.Costing.AllocatedShare.ToString() -> string
-~override JobTrack.Domain.Hierarchy.RequesterSubtreeLeafState.Equals(object obj) -> bool
-~override JobTrack.Domain.Hierarchy.RequesterSubtreeLeafState.ToString() -> string
-~override JobTrack.Domain.Intervals.WorkInterval.Equals(object obj) -> bool
-~override JobTrack.Domain.Intervals.WorkInterval.ToString() -> string
-~override JobTrack.Domain.Schedules.WeeklyInterval.Equals(object obj) -> bool
-~override JobTrack.Domain.Schedules.WeeklyInterval.ToString() -> string

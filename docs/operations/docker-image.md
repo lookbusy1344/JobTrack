@@ -4,6 +4,12 @@ A single-container image running `JobTrack.Web` against SQLite, intended for a q
 instance on a developer machine (this was built and verified under OrbStack on macOS/arm64). The
 image is built from [`../../Dockerfile`](../../Dockerfile).
 
+**If you need state to survive**, this is the wrong image: see
+[`postgresql-cloud-run-deployment.md`](postgresql-cloud-run-deployment.md), a second, independent
+configuration (`Dockerfile.postgresql`) running against a persistent Cloud SQL PostgreSQL instance,
+with no example job nodes and three randomly generated credentials. It does not replace anything
+here — both paths are maintained side by side.
+
 **This is not the project's deployment story.** [ADR 0014](../decisions/0014-single-server-deployment.md)
 fixes a single bare-metal/VM server with a dedicated unprivileged service account behind a locally
 managed reverse proxy, and explicitly defers containers and orchestration until a measured

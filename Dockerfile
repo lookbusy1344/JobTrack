@@ -115,6 +115,11 @@ RUN RID="$(cat /rid)" \
 #      requests but cannot be assigned work.
 #   5. Import the sample job trees as the DEMO account, so demo -- not the admin -- owns them. Each
 #      import lands a subtree under the root (import-tree's default --parent-id 1).
+#      building-a-house.json flags its top node ("home": true), so that node becomes the home node --
+#      the post-login landing node, and the header's "Jobs"/"Awaiting progress" default scope -- of
+#      the importing DEMO account and, via --home-node-for, of the ADMIN account too. Signing in as
+#      either lands inside a populated tree rather than at the bare root. The other sample files flag
+#      nothing, so --home-node-for is a no-op for them.
 #   6. Submit six requester-owned jobs through the library requester-intake API and move them into a
 #      representative mix of open and closed states. DEMO remains their technical work actor.
 #
@@ -159,7 +164,7 @@ RUN mkdir -p /appdata/keys \
     && for tree in samples/job-tree-imports/*.json; do \
          /app/admincli/JobTrack.AdminCli import-tree --provider sqlite \
            --connection-string "Data Source=/appdata/jobtrack.db" \
-           --username "$DEMO_USERNAME" --file "$tree" || exit 1; \
+           --username "$DEMO_USERNAME" --file "$tree" --home-node-for "$ADMIN_USERNAME" || exit 1; \
        done \
     && /app/uatseed/JobTrack.UatSeed --provider sqlite \
          --connection-string "Data Source=/appdata/jobtrack.db" \

@@ -1,0 +1,199 @@
+@page
+@using JobTrack.Abstractions
+@using JobTrack.Domain.Costing
+@model DeleteSubtreeModel
+@{
+	ViewData["Title"] = "Delete subtree";
+
+	// Same sprite ids and spoken nouns Browse's tree uses, so a row reads identically on both pages.
+	static string KindIconId(NodeKind kind) => kind switch {
+		NodeKind.Root => "jt-icon-root",
+		NodeKind.Branch => "jt-icon-branch",
+		NodeKind.Leaf => "jt-icon-leaf",
+		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	};
+
+	// "1 job" / "3 jobs" — a parenthesised "(s)" reads as unfinished copy on the one screen where
+	// the reader is being asked to confirm an irreversible action.
+	static string Count(int quantity, string singular, string plural) =>
+		string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{quantity} {(quantity == 1 ? singular : plural)}");
+
+	static string KindNoun(NodeKind kind) => kind switch {
+		NodeKind.Root => "root",
+		NodeKind.Branch => "branch",
+		NodeKind.Leaf => "leaf",
+		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	};
+}
+
+@* Deliberately not .jt-page-narrow: this page mixes a form with a wide tree table, which site.css's
+   own note on that class excludes ("those stay full width", like Browse/Work/AwaitingProgress). *@
+<div class="jt-page-head">
+	<h1>Delete subtree</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+@if (Model.CurrentNode is not null && Model.Impact is not null) {
+	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Deleting everything under</span><a
+			class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+			asp-route-nodeId="@Model.NodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
+
+	<div class="jt-notice jt-notice--wide">
+		<p>
+			<strong>This is destructive and cannot be undone.</strong> It permanently deletes this job and
+			every job beneath it, together with their work sessions, rate overrides, and requests. Nothing
+			is recoverable afterwards — only the audit record survives.
+		</p>
+		<p>
+			Deleted session history stops counting towards the cost of every job above this one, so
+			previously reported figures for its parents will change.
+		</p>
+		@if (!Model.Impact.CanDelete) {
+			<p>
+				<strong>This subtree cannot be deleted.</strong>
+				@if (Model.Impact.IsPermanentRoot) {
+					<span>It is the permanent root.</span>
+				}
+				@if (Model.Impact.BlockingHoldingAreas.Count > 0) {
+					<span>
+						A request holding area is anchored inside it
+						(@string.Join(", ", Model.Impact.BlockingHoldingAreas.Select(area => area.Name))).
+						Re-anchor or deactivate it first. You can still archive the subtree below.
+					</span>
+				}
+			</p>
+		}
+	</div>
+
+	<dl class="row jt-record--full">
+		<dt class="col-8 col-sm-6 col-lg-3">Jobs to delete</dt>
+		<dd class="col-4 col-sm-6 col-lg-3">@Model.Impact.NodeCount</dd>
+		@* "Jobs with work attached" is deliberately not shown beside this: it counts nodes carrying a
+		   LeafWork row, which differs from the session count whenever a leaf was attached but never
+		   worked, or worked more than once. The session count is the figure that states the
+		   destructiveness, so it stands alone. *@
+		<dt class="col-8 col-sm-6 col-lg-3">Work sessions to destroy</dt>
+		<dd class="col-4 col-sm-6 col-lg-3">@Model.Impact.WorkSessionCount</dd>
+		<dt class="col-8 col-sm-6 col-lg-3">Recorded work to destroy</dt>
+		<dd class="col-4 col-sm-6 col-lg-3">@DurationDisplay.Format(Model.Impact.TotalWorkedDuration)</dd>
+		<dt class="col-8 col-sm-6 col-lg-3">Total cost to destroy</dt>
+		<dd class="col-4 col-sm-6 col-lg-3">
+			@if (Model.TotalCost is Money totalCost && Model.TotalAllocatedDuration is AllocatedDuration totalAllocated) {
+				<span class="jt-amount">@CostDisplay.FormatField(totalCost, totalAllocated)</span>
+			} else {
+				<span class="jt-muted">@(Model.CostUnavailableReason ?? "Not available")</span>
+			}
+		</dd>
+		<dt class="col-8 col-sm-6 col-lg-3">Dependency links to drop</dt>
+		<dd class="col-4 col-sm-6 col-lg-3">@(Model.Impact.InternalPrerequisiteEdgeCount + Model.Impact.ExternalPrerequisiteEdges.Count)</dd>
+		<dt class="col-8 col-sm-6 col-lg-3">Requests to delete</dt>
+		<dd class="col-4 col-sm-6 col-lg-3">@Model.Impact.JobRequestCount</dd>
+	</dl>
+
+	@if (Model.Impact.ExternalPrerequisiteEdges.Count > 0) {
+		<div class="jt-notice jt-notice--wide">
+			<p>
+				These jobs <em>outside</em> the subtree are linked to jobs inside it. Deleting drops the
+				link; a job waiting on deleted work becomes unblocked rather than blocking the deletion.
+			</p>
+			<ul class="jt-list jt-list--wide">
+				@foreach (var edge in Model.Impact.ExternalPrerequisiteEdges) {
+					<li>
+						@{ var externalId = edge.ExternalNodeIsDependent ? edge.ToId : edge.FromId; }
+						<span class="jt-preserve-whitespace">@JobNodeDisplay.Title(edge.ExternalDescription, externalId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
+						@if (edge.ExternalNodeIsDependent) {
+							<span class="jt-tag">was waiting on deleted work</span>
+						} else {
+							<span class="jt-tag">was required by deleted work</span>
+						}
+					</li>
+				}
+			</ul>
+		</div>
+	}
+
+	<div class="jt-table-block">
+		<table class="table">
+			<caption>Every job that will be deleted</caption>
+			<thead>
+			<tr>
+				<th scope="col" class="col-8 col-md-7 col-lg-8">Job</th>
+				<th scope="col" class="col-4 col-md-2 col-lg-2">Outcome</th>
+				<th scope="col" class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var node in Model.Impact.Nodes) {
+				<tr>
+					@* Same tree primitives as Browse's child table: the guide rails and .jt-tree-cell
+					   depth padding, rather than a Bootstrap ps-* utility — ps-0 on a depth-0 row also
+					   cancels the cell's own horizontal padding, which pulled the root's title out of
+					   line with its heading. *@
+					<td class="jt-tree-cell col-8 col-md-7 col-lg-8" data-jt-depth="@node.Depth">
+						<span class="jt-tree-guide" aria-hidden="true">
+							@for (var railLevel = 1; railLevel < node.Depth; ++railLevel) {
+								<span class="jt-tree-rail"></span>
+							}
+							@if (node.Depth > 0) {
+								<span class="jt-tree-elbow"></span>
+							}
+						</span>
+						<span class="jt-tree-label">
+							<svg class="jt-tree-icon jt-tree-icon--@KindNoun(node.Kind)" viewBox="0 0 16 16" aria-hidden="true"
+							     focusable="false">
+								<use href="#@KindIconId(node.Kind)"></use>
+							</svg>
+							<span class="jt-tree-text">
+								<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
+								@* Same "Description (ID n)" form the rest of the UI names a node by, so a row here
+								   is identifiable against Browse without cross-referencing. *@
+								<span class="jt-preserve-whitespace">@JobNodeDisplay.Title(node.Description, node.Id.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
+								@if (node.IsArchived) {
+									@* Replaces the old State column, matching Browse: archived rows are the
+									   exception, so the fact rides the few rows that carry it. *@
+									<span class="jt-tag">Archived</span>
+								}
+							</span>
+						</span>
+					</td>
+					<td class="col-4 col-md-2 col-lg-2">@(node.Achievement is Achievement achievement ? EnumDisplay.Label(achievement) : "—")</td>
+					<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">
+						@if (Model.NodeCosts.TryGetValue(node.Id, out var nodeCost)
+						     && Model.NodeAllocatedDurations.TryGetValue(node.Id, out var nodeAllocated)) {
+							@CostDisplay.FormatCell(nodeCost, nodeAllocated)
+						}
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+
+	<form method="post" class="jt-form-card">
+		<input type="hidden" asp-for="NodeId"/>
+		<input type="hidden" asp-for="OriginalVersion"/>
+		@* Only deletion takes a reason. When deletion is refused the sole remaining action is Archive,
+		   which needs none, so asking for a required reason there would demand something no button on
+		   the page can consume. *@
+		@if (Model.Impact.CanDelete) {
+			<div class="form-group">
+				<label asp-for="Input.Reason">Reason for deleting (required)</label>
+				<input asp-for="Input.Reason" class="form-control"/>
+				<span asp-validation-for="Input.Reason" class="text-danger"></span>
+			</div>
+		}
+		<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+			@if (Model.Impact.CanDelete) {
+				<button type="submit" asp-page-handler="Delete" class="btn btn-outline-danger"
+						data-jt-confirm="Permanently delete @Count(Model.Impact.NodeCount, "job", "jobs") and @Count(Model.Impact.WorkSessionCount, "work session", "work sessions")? This cannot be undone.">
+					Delete @Count(Model.Impact.NodeCount, "job", "jobs") permanently
+				</button>
+			}
+			@* formnovalidate: archiving is the non-destructive escape hatch and needs no reason, so the
+			   Reason field's client-side Required must not block it. *@
+			<button type="submit" asp-page-handler="Archive" class="btn btn-secondary" formnovalidate>Archive instead</button>
+			<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Cancel</a>
+		</div>
+	</form>
+}

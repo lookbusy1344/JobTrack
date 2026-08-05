@@ -1,5 +1,5 @@
 [
-	{ "id": 1, "parentId": null, "title": "Build a house" },
+	{ "id": 1, "parentId": null, "title": "Build a house", "home": true },
 
 	{ "id": 2, "parentId": 1, "title": "Groundworks" },
 	{ "id": 3, "parentId": 1, "title": "Structure", "prerequisiteIds": [2] },

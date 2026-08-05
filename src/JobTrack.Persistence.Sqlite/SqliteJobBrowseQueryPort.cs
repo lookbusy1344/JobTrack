@@ -141,6 +141,15 @@ internal sealed class SqliteJobBrowseQueryPort(string connectionString) : IJobBr
 		return await GetSubtreeAchievementAsync(context, rootId, cancellationToken).ConfigureAwait(false);
 	}
 
+	public async Task<SubtreeImpactResult> GetSubtreeImpactAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
+	{
+		await using var context = CreateContext();
+
+		var impact = await SubtreeImpactComputation.ComputeAsync(context, rootId, cancellationToken).ConfigureAwait(false);
+
+		return SubtreeImpactProjection.ToResult(impact);
+	}
+
 	private static async Task<BranchAchievement> GetSubtreeAchievementAsync(
 		SqliteJobTrackDbContext context, JobNodeId rootId, CancellationToken cancellationToken)
 	{

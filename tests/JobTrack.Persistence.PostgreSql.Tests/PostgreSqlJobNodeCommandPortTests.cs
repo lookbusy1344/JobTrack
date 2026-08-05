@@ -1,6 +1,7 @@
 namespace JobTrack.Persistence.PostgreSql.Tests;
 
 using System.Data.Common;
+using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -61,6 +62,75 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 			TryMoveAsync(portB, jobManagerId, secondParent, firstChild.Id));
 
 		results.Count(succeeded => succeeded).Should().Be(1);
+	}
+
+	/// <summary>
+	///     ADR 0061's cascade spans six tables and must be one ACID transaction: two administrators
+	///     concurrently deleting the same subtree must leave exactly one winner, and the loser must not
+	///     have half-removed anything. Proves the whole subtree is gone (no orphaned
+	///     <c>leaf_work</c>/<c>work_session</c> row survives its <c>job_node</c>) rather than merely that
+	///     one call threw.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_deletions_of_the_same_subtree_allow_exactly_one_to_succeed_and_leave_nothing_behind()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-race", EmployeeRole.Administrator);
+		var portA = CreateCommandPort(ConnectionString);
+		var portB = CreateCommandPort(ConnectionString);
+
+		var branch = await portA.AddChildAsync(CreateRequest(jobManagerId, rootId));
+		var child = await portA.AddChildAsync(CreateRequest(jobManagerId, branch.Id));
+
+		// Seeded directly rather than through the ports: the base class's session helper is private,
+		// and this test only needs the rows to exist so the cascade has more than one table to span.
+		await using (var seedConnection = new NpgsqlConnection(ConnectionString)) {
+			await seedConnection.OpenAsync();
+			await using var seed = seedConnection.CreateCommand();
+			seed.CommandText = """
+							   INSERT INTO leaf_work (job_node_id) VALUES (@jobNodeId);
+							   INSERT INTO work_session (leaf_work_id, worked_by_user_id, started_at, finished_at)
+							   VALUES (@jobNodeId, @workerId, '2026-01-01T09:00:00Z', '2026-01-01T10:00:00Z');
+							   """;
+			seed.Parameters.AddWithValue("jobNodeId", child.Id.Value);
+			seed.Parameters.AddWithValue("workerId", workerId.Value);
+			_ = await seed.ExecuteNonQueryAsync();
+		}
+
+		var results = await Task.WhenAll(
+			TryDeleteSubtreeAsync(portA, administratorId, branch),
+			TryDeleteSubtreeAsync(portB, administratorId, branch));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+
+		await using var connection = new NpgsqlConnection(ConnectionString);
+		await connection.OpenAsync();
+		foreach (var (table, column) in new[] {
+					 ("job_node", "id"), ("leaf_work", "job_node_id"), ("work_session", "leaf_work_id"),
+				 }) {
+			await using var command = connection.CreateCommand();
+			command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {column} = @id;";
+			command.Parameters.AddWithValue("id", child.Id.Value);
+			Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture)
+				.Should().Be(0, $"{table} must not outlive the deleted subtree");
+		}
+	}
+
+	private static async Task<bool> TryDeleteSubtreeAsync(
+		IJobNodeCommandPort port, AppUserId actorId, JobNodeResult subtreeRoot)
+	{
+		try {
+			_ = await port.DeleteSubtreeAsync(new() {
+				Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() },
+				RootId = subtreeRoot.Id,
+				Version = subtreeRoot.Version,
+				Reason = "Concurrent subtree deletion race.",
+			});
+			return true;
+		}
+		catch (JobTrackException) {
+			return false;
+		}
 	}
 
 	/// <summary>

@@ -13,7 +13,7 @@ rather than stored as a static number.
 
 Stack: .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity, xUnit + AwesomeAssertions.
 
-[Live Google Cloud Run demo](https://jobtrack-web-716005672573.europe-west1.run.app)
+[Live Google Cloud Run demo](https://jobtrack-web-wdgtyuzl4a-ew.a.run.app)
 
 That demo (SQLite backend) is deployed by [`scripts/deploy-cloudrun.sh`](scripts/deploy-cloudrun.sh),
 which needs a running local Docker daemon — see
@@ -115,6 +115,10 @@ mandatory TDD discipline rather than accumulated fat.
 - [`docs/operations/docker-image.md`](docs/operations/docker-image.md) — the SQLite-backed container
   image for a throwaway local demo instance. Explicitly *not* the deployment story (ADR 0014 defers
   containers) and it ships known non-admin credentials, so it must never be network-exposed.
+- [`docs/operations/postgresql-cloud-run-deployment.md`](docs/operations/postgresql-cloud-run-deployment.md) —
+  the second container configuration: Cloud Run against a persistent Cloud SQL PostgreSQL instance,
+  so nothing is lost on a recycle. No example job nodes, three randomly generated credentials, and
+  four separate database login roles.
 - [`docs/operations/local-live-instance.md`](docs/operations/local-live-instance.md) — running a
   single persistent local database for your own ongoing use, without the full production runbook.
 - [`docs/operations/sqlite-limitations-and-configuration.md`](docs/operations/sqlite-limitations-and-configuration.md) —

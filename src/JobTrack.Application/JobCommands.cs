@@ -72,6 +72,26 @@ internal sealed class JobCommands : IJobCommands
 	}
 
 	/// <inheritdoc />
+	public Task<DeleteSubtreeResult> DeleteSubtreeAsync(DeleteSubtreeRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return JobTrackOperation.TraceAsync(
+			"jobs.delete-subtree", request.Context, JobTrackOperation.WithNodeId(request.RootId),
+			() => _port.DeleteSubtreeAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
+	public Task<ArchiveSubtreeResult> ArchiveSubtreeAsync(ArchiveSubtreeRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return JobTrackOperation.TraceAsync(
+			"jobs.archive-subtree", request.Context, JobTrackOperation.WithNodeId(request.RootId),
+			() => _port.ArchiveSubtreeAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
 	public Task<LeafWorkResult> AttachLeafWorkAsync(AttachLeafWorkRequest request, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(request);

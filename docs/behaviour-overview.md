@@ -205,6 +205,41 @@ closing out a job therefore also ends every other worker's active session on it 
 intentional per ADR 0045 §5, not a gap: the self-finish exception governs pausing one's own session
 only and never extends to `CompleteLeafAsync`.
 
+## Deleting a subtree
+
+Two different deletions exist, and Browse offers exactly one of them per node so the button label
+always states the scope before it is clicked.
+
+**One job** — `/Jobs/Delete`, offered on a job with no children. It never cascades: a job with
+children, a prerequisite edge, or the permanent root is refused (ADR 0036). A leaf whose work was
+never actually done deletes with its `LeafWork`; a leaf with real session history needs the
+Administrator role and a reason.
+
+**A whole branch** — `/Jobs/DeleteSubtree`, offered only to an Administrator, and only on a job that
+has children (ADR 0061). It permanently destroys the job, every job beneath it, and their sessions,
+rate overrides, and requests, in one transaction that is never partially applied. A reason is always
+required. Before confirming, the page lists exactly what will go: how many jobs and sessions, how
+much recorded work, what it cost, which dependency links break, and every job by name — drawn as the
+same indented tree Browse uses, with each job's own rolled-up cost beside it and the subtree total in
+the summary above. Costs are supplementary context, so if a rate no longer resolves (or the viewer
+cannot see costs) that one panel says so and the rest of the confirmation still works.
+
+Three things are worth knowing about it:
+
+- **Reported costs move.** Cost is computed live from current sessions and never snapshotted, so
+  destroying a branch's history changes what every job above it reports from then on. Only the audit
+  event records what was there.
+- **Dependency links are dropped, not refused.** A job outside the branch that was waiting on
+  deleted work loses its prerequisite and may become ready — a valid state per ADR 0051, and the
+  confirmation names each such job first.
+- **It refuses exactly one thing.** A request holding area anchored inside the branch aborts the
+  deletion, because that is a department's intake configuration rather than this branch's own data.
+  Re-anchor or deactivate it first.
+
+**Archive instead** sits beside the delete button on the same page and is always available,
+including on the permanent root. It marks the branch and everything under it archived without
+destroying anything, and refuses only while a session is still running somewhere inside.
+
 ## External HTTP API
 
 Beyond the server-rendered Razor Pages, `JobTrack.Web` exposes a resource-oriented JSON API under

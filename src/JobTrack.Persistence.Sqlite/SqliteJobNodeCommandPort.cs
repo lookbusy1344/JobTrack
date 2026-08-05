@@ -318,6 +318,135 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 	}
 
 	/// <inheritdoc />
+	public async Task<DeleteSubtreeResult> DeleteSubtreeAsync(DeleteSubtreeRequest request, CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(request.Reason)) {
+			throw new InvariantViolationException(
+				"subtree-delete-reason-required", "Deleting a subtree requires a reason.");
+		}
+
+		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await context.Database
+			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+
+		var now = clock.GetCurrentInstant();
+		var node = await LoadTrackedNodeAsync(context, request.RootId, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, actorRoles, request.Context.Actor, request.RootId, cancellationToken).ConfigureAwait(false);
+
+		if (!JobNodeDeletePolicy.CanDeleteSubtree(actorRoles)) {
+			throw new AuthorizationDeniedException(
+				$"Actor {request.Context.Actor} may not delete subtree {request.RootId}: recursive deletion " +
+				"requires the Administrator role (ADR 0061).");
+		}
+
+		CheckVersionOrThrow(node.RowVersion, request.Version);
+
+		if (node.ParentId is null) {
+			throw new InvariantViolationException("job-node-is-root-cannot-delete", "The root job node cannot be deleted.");
+		}
+
+		// Recomputed here rather than trusted from whatever the confirmation screen measured earlier,
+		// so the audit record and the cascade describe the subtree as it is inside this transaction.
+		var impact = await SubtreeImpactComputation.ComputeAsync(context, request.RootId, cancellationToken).ConfigureAwait(false);
+		if (impact.BlockingHoldingAreas.Count > 0) {
+			throw new InvariantViolationException(
+				"subtree-delete-holding-area-anchored",
+				"A request holding area is anchored inside this subtree; re-anchor or deactivate it first: " +
+				string.Join(", ", impact.BlockingHoldingAreas.Select(h => h.Name)));
+		}
+
+		return await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
+			transaction,
+			async ct => {
+				// Written before the rows go, since nothing else will survive to describe them.
+				AuditEventWriter.Add(
+					context, request.Context.Actor, now, "delete-subtree", "job_node", node.Id.Value,
+					request.Context.CorrelationId, request.Reason, SubtreeAuditSnapshot.Create(impact), null);
+				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
+
+				var edgesDropped = await SubtreeDeletionCascade.ExecuteAsync(context, impact, ct).ConfigureAwait(false);
+
+				// The root goes through the tracked entity so its row_version concurrency token is
+				// checked: a concurrent deleter that already removed this subtree makes this affect
+				// zero rows, surfacing as ConcurrencyConflictException instead of a phantom success.
+				_ = context.Remove(node);
+				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
+
+				return new DeleteSubtreeResult {
+					NodeCount = impact.NodeCount,
+					LeafWorkCount = impact.LeafWorkCount,
+					WorkSessionCount = impact.WorkSessionCount,
+					TotalWorkedDuration = impact.TotalWorkedDuration,
+					PrerequisiteEdgeCount = edgesDropped,
+					JobRequestCount = impact.JobRequestCount,
+				};
+			},
+			cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <inheritdoc />
+	public async Task<ArchiveSubtreeResult> ArchiveSubtreeAsync(ArchiveSubtreeRequest request, CancellationToken cancellationToken = default)
+	{
+		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await context.Database
+			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+
+		var now = clock.GetCurrentInstant();
+		var root = await LoadTrackedNodeAsync(context, request.RootId, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await GetActorRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, actorRoles, request.Context.Actor, request.RootId, cancellationToken).ConfigureAwait(false);
+
+		if (!JobNodeDeletePolicy.CanDeleteSubtree(actorRoles)) {
+			throw new AuthorizationDeniedException(
+				$"Actor {request.Context.Actor} may not archive subtree {request.RootId}: recursive archiving " +
+				"requires the Administrator role (ADR 0061).");
+		}
+
+		CheckVersionOrThrow(root.RowVersion, request.Version);
+
+		var rows = await JobNodeHierarchyQueries.GetSubtreeImpactRowsAsync(context, request.RootId.Value, cancellationToken)
+			.ConfigureAwait(false);
+		var subtreeIds = rows.Select(r => new JobNodeId(r.Id)).ToList();
+		var leafWorkIds = rows.Where(r => r.HasLeafWork).Select(r => new JobNodeId(r.Id)).ToList();
+
+		// Same rule the single-node archive enforces (ADR 0044), applied across the whole subtree:
+		// an archived leaf must not be left carrying a running session.
+		if (leafWorkIds.Count > 0 && await context.Set<WorkSessionEntity>().AsNoTracking()
+				.AnyAsync(s => leafWorkIds.Contains(s.LeafWorkId) && s.FinishedAt == null, cancellationToken)
+				.ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				"leaf-closure-active-sessions", "This subtree cannot be archived while a session is active within it.");
+		}
+
+		var toArchive = await context.Set<JobNodeEntity>()
+			.Where(n => subtreeIds.Contains(n.Id) && n.ArchivedAt == null)
+			.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+		foreach (var affected in toArchive) {
+			affected.ArchivedAt = now;
+			affected.RowVersion += 1;
+		}
+
+		AuditEventWriter.Add(
+			context, request.Context.Actor, now, "archive-subtree", "job_node", root.Id.Value,
+			request.Context.CorrelationId, null,
+			new Dictionary<string, string?> {
+				["node_count"] = rows.Count.ToString(CultureInfo.InvariantCulture),
+				["already_archived_count"] = (rows.Count - toArchive.Count).ToString(CultureInfo.InvariantCulture),
+			},
+			new Dictionary<string, string?> {
+				["archived_at"] = now.ToString(),
+				["newly_archived_count"] = toArchive.Count.ToString(CultureInfo.InvariantCulture),
+				["newly_archived_ids"] = string.Join(",", toArchive.Select(n => n.Id.Value)),
+			});
+
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+
+		return new ArchiveSubtreeResult { NodeCount = rows.Count, NewlyArchivedCount = toArchive.Count };
+	}
+
+	/// <inheritdoc />
 	public async Task<LeafWorkResult> AttachLeafWorkAsync(AttachLeafWorkRequest request, CancellationToken cancellationToken = default)
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
