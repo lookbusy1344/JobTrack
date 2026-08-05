@@ -48,7 +48,7 @@ public sealed class LeafAchievementTransitionArchitectureTests
 			.Order(StringComparer.Ordinal)
 			.ToArray();
 
-		callers.Should().BeEquivalentTo([TransitionType, "RequesterRequestAutoAcknowledgement"]);
+		callers.Should().BeEquivalentTo(TransitionType, "RequesterRequestAutoAcknowledgement");
 	}
 
 	internal static IEnumerable<string> FindAchievementReassignments(string file, string source)
@@ -70,7 +70,8 @@ public sealed class LeafAchievementTransitionArchitectureTests
 	{
 		var source = Path.Combine(RepositoryPaths.SolutionRoot(), "src");
 		foreach (var project in (string[])[
-					 "JobTrack.Persistence.Shared", "JobTrack.Persistence.PostgreSql", "JobTrack.Persistence.Sqlite"]) {
+					 "JobTrack.Persistence.Shared", "JobTrack.Persistence.PostgreSql", "JobTrack.Persistence.Sqlite",
+				 ]) {
 			foreach (var file in Directory.EnumerateFiles(Path.Combine(source, project), "*.cs", SearchOption.AllDirectories)
 						 .Where(static file => !IsGeneratedOutput(file))) {
 				yield return file;

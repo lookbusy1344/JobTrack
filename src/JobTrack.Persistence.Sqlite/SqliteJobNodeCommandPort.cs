@@ -443,7 +443,7 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 
 		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
 
-		return new ArchiveSubtreeResult { NodeCount = rows.Count, NewlyArchivedCount = toArchive.Count };
+		return new() { NodeCount = rows.Count, NewlyArchivedCount = toArchive.Count };
 	}
 
 	/// <inheritdoc />

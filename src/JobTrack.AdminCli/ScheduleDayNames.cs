@@ -6,11 +6,9 @@ using NodaTime;
 /// <summary>
 ///     The day names <see cref="SetScheduleCommandOptions" />'s <c>--days</c> flag accepts: each
 ///     weekday's full and three-letter form, matched case-insensitively.
-///
 ///     A fixed table rather than parsing through <see cref="DayOfWeek" /> or a culture-aware format,
 ///     so the accepted spellings are decided here and not by the host's current culture — the
 ///     container this runs in has no ICU at all.
-///
 ///     It lives in its own static class rather than as a member of the options record because a
 ///     <see cref="FrozenDictionary{TKey,TValue}" /> has no value semantics, which a record's members
 ///     are required to have.

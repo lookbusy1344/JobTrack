@@ -812,7 +812,13 @@ public sealed class JobCommandsTests
 			ParentId = RootId,
 			Nodes = [
 				new() { LocalId = 1, Description = "Home branch", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
-				new() { LocalId = 2, ParentLocalId = 1, Description = "Child", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
+				new() {
+					LocalId = 2,
+					ParentLocalId = 1,
+					Description = "Child",
+					OwnerUserId = OwnerWorkerId,
+					Priority = Priority.Medium,
+				},
 			],
 			HomeNodeLocalId = 1,
 			HomeNodeUserIds = [OwnerWorkerId, OwnerWorkerId],

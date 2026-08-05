@@ -1,4 +1,5 @@
 @page
+@using System.Globalization
 @using JobTrack.Abstractions
 @using JobTrack.Domain.Costing
 @model DeleteSubtreeModel
@@ -16,7 +17,7 @@
 	// "1 job" / "3 jobs" — a parenthesised "(s)" reads as unfinished copy on the one screen where
 	// the reader is being asked to confirm an irreversible action.
 	static string Count(int quantity, string singular, string plural) =>
-		string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{quantity} {(quantity == 1 ? singular : plural)}");
+		string.Create(CultureInfo.InvariantCulture, $"{quantity} {(quantity == 1 ? singular : plural)}");
 
 	static string KindNoun(NodeKind kind) => kind switch {
 		NodeKind.Root => "root",
@@ -101,7 +102,8 @@
 				@foreach (var edge in Model.Impact.ExternalPrerequisiteEdges) {
 					<li>
 						@{ var externalId = edge.ExternalNodeIsDependent ? edge.ToId : edge.FromId; }
-						<span class="jt-preserve-whitespace">@JobNodeDisplay.Title(edge.ExternalDescription, externalId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
+						<span
+							class="jt-preserve-whitespace">@JobNodeDisplay.Title(edge.ExternalDescription, externalId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
 						@if (edge.ExternalNodeIsDependent) {
 							<span class="jt-tag">was waiting on deleted work</span>
 						} else {
@@ -148,7 +150,8 @@
 								<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
 								@* Same "Description (ID n)" form the rest of the UI names a node by, so a row here
 								   is identifiable against Browse without cross-referencing. *@
-								<span class="jt-preserve-whitespace">@JobNodeDisplay.Title(node.Description, node.Id.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
+								<span
+									class="jt-preserve-whitespace">@JobNodeDisplay.Title(node.Description, node.Id.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>
 								@if (node.IsArchived) {
 									@* Replaces the old State column, matching Browse: archived rows are the
 									   exception, so the fact rides the few rows that carry it. *@
@@ -186,7 +189,7 @@
 		<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
 			@if (Model.Impact.CanDelete) {
 				<button type="submit" asp-page-handler="Delete" class="btn btn-outline-danger"
-						data-jt-confirm="Permanently delete @Count(Model.Impact.NodeCount, "job", "jobs") and @Count(Model.Impact.WorkSessionCount, "work session", "work sessions")? This cannot be undone.">
+				        data-jt-confirm="Permanently delete @Count(Model.Impact.NodeCount, "job", "jobs") and @Count(Model.Impact.WorkSessionCount, "work session", "work sessions")? This cannot be undone.">
 					Delete @Count(Model.Impact.NodeCount, "job", "jobs") permanently
 				</button>
 			}

@@ -1,6 +1,5 @@
 namespace JobTrack.AdminCli;
 
-
 using System.Globalization;
 using Abstractions;
 using NodaTime;

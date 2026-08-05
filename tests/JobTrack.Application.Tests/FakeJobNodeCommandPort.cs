@@ -260,6 +260,51 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		return Task.FromResult(achieved ? BranchAchievement.Success : BranchAchievement.Unfinished);
 	}
 
+	/// <inheritdoc />
+	public Task<SubtreeImpactResult> GetSubtreeImpactAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
+	{
+		var root = GetExisting(rootId);
+		var subtreeIds = _nodes.Keys.Where(id => IsInSubtree(id, rootId)).ToList();
+		var inside = subtreeIds.ToHashSet();
+		var touching = _prerequisites
+			.Where(edge => inside.Contains(edge.RequiredJobId) || inside.Contains(edge.DependentJobId))
+			.ToList();
+		var external = touching
+			.Where(edge => !inside.Contains(edge.RequiredJobId) || !inside.Contains(edge.DependentJobId))
+			.ToList();
+
+		return Task.FromResult(new SubtreeImpactResult {
+			RootId = rootId,
+			Nodes = EquatableArray.CopyOf(subtreeIds.Select(id => new SubtreeImpactNode {
+				Id = id,
+				ParentId = _nodes[id].ParentId,
+				Depth = DepthBelow(id, rootId),
+				Description = _nodes[id].Description,
+				Kind = _nodes[id].Kind,
+				Achievement = _leafWork.TryGetValue(id, out var leafWork) ? leafWork.Achievement : null,
+				WorkSessionCount = _workedLeafIds.Contains(id) ? 1 : 0,
+				IsArchived = _nodes[id].ArchivedAt is not null,
+			}).ToArray()),
+			NodeCount = subtreeIds.Count,
+			LeafWorkCount = subtreeIds.Count(_leafWork.ContainsKey),
+			WorkSessionCount = subtreeIds.Count(_workedLeafIds.Contains),
+			TotalWorkedDuration = Duration.Zero,
+			InternalPrerequisiteEdgeCount = touching.Count - external.Count,
+			ExternalPrerequisiteEdges = EquatableArray.CopyOf(external.Select(edge => new SubtreeImpactPrerequisiteEdge {
+				FromId = edge.RequiredJobId,
+				ToId = edge.DependentJobId,
+				ExternalDescription = _nodes.TryGetValue(
+					inside.Contains(edge.RequiredJobId) ? edge.DependentJobId : edge.RequiredJobId, out var outside)
+					? outside.Description
+					: string.Empty,
+				ExternalNodeIsDependent = !inside.Contains(edge.DependentJobId),
+			}).ToArray()),
+			JobRequestCount = 0,
+			BlockingHoldingAreas = EquatableArray.CopyOf<SubtreeImpactHoldingArea>([]),
+			IsPermanentRoot = root.ParentId is null,
+		});
+	}
+
 	public Task<JobNodeResult> AddChildAsync(CreateJobNodeRequest request, CancellationToken cancellationToken = default)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
@@ -420,63 +465,6 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		}
 
 		return Task.FromResult(new ArchiveSubtreeResult { NodeCount = subtreeIds.Count, NewlyArchivedCount = newlyArchived });
-	}
-
-	/// <inheritdoc />
-	public Task<SubtreeImpactResult> GetSubtreeImpactAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
-	{
-		var root = GetExisting(rootId);
-		var subtreeIds = _nodes.Keys.Where(id => IsInSubtree(id, rootId)).ToList();
-		var inside = subtreeIds.ToHashSet();
-		var touching = _prerequisites
-			.Where(edge => inside.Contains(edge.RequiredJobId) || inside.Contains(edge.DependentJobId))
-			.ToList();
-		var external = touching
-			.Where(edge => !inside.Contains(edge.RequiredJobId) || !inside.Contains(edge.DependentJobId))
-			.ToList();
-
-		return Task.FromResult(new SubtreeImpactResult {
-			RootId = rootId,
-			Nodes = EquatableArray.CopyOf(subtreeIds.Select(id => new SubtreeImpactNode {
-				Id = id,
-				ParentId = _nodes[id].ParentId,
-				Depth = DepthBelow(id, rootId),
-				Description = _nodes[id].Description,
-				Kind = _nodes[id].Kind,
-				Achievement = _leafWork.TryGetValue(id, out var leafWork) ? leafWork.Achievement : null,
-				WorkSessionCount = _workedLeafIds.Contains(id) ? 1 : 0,
-				IsArchived = _nodes[id].ArchivedAt is not null,
-			}).ToArray()),
-			NodeCount = subtreeIds.Count,
-			LeafWorkCount = subtreeIds.Count(_leafWork.ContainsKey),
-			WorkSessionCount = subtreeIds.Count(_workedLeafIds.Contains),
-			TotalWorkedDuration = Duration.Zero,
-			InternalPrerequisiteEdgeCount = touching.Count - external.Count,
-			ExternalPrerequisiteEdges = EquatableArray.CopyOf(external.Select(edge => new SubtreeImpactPrerequisiteEdge {
-				FromId = edge.RequiredJobId,
-				ToId = edge.DependentJobId,
-				ExternalDescription = _nodes.TryGetValue(
-					inside.Contains(edge.RequiredJobId) ? edge.DependentJobId : edge.RequiredJobId, out var outside)
-					? outside.Description
-					: string.Empty,
-				ExternalNodeIsDependent = !inside.Contains(edge.DependentJobId),
-			}).ToArray()),
-			JobRequestCount = 0,
-			BlockingHoldingAreas = EquatableArray.CopyOf<SubtreeImpactHoldingArea>([]),
-			IsPermanentRoot = root.ParentId is null,
-		});
-	}
-
-	private int DepthBelow(JobNodeId id, JobNodeId rootId)
-	{
-		var depth = 0;
-		var current = id;
-		while (current != rootId && _nodes.TryGetValue(current, out var node) && node.ParentId is JobNodeId parentId) {
-			current = parentId;
-			++depth;
-		}
-
-		return depth;
 	}
 
 	public Task DeleteAsync(DeleteJobNodeRequest request, CancellationToken cancellationToken = default)
@@ -729,6 +717,18 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		}
 
 		return Task.FromResult(BuildReadinessInputs());
+	}
+
+	private int DepthBelow(JobNodeId id, JobNodeId rootId)
+	{
+		var depth = 0;
+		var current = id;
+		while (current != rootId && _nodes.TryGetValue(current, out var node) && node.ParentId is JobNodeId parentId) {
+			current = parentId;
+			++depth;
+		}
+
+		return depth;
 	}
 
 	/// <summary>Childless, non-terminal achievement -- exactly <c>AwaitingProgressCalculator.IsUnfinishedLeaf</c>'s own shape check.</summary>

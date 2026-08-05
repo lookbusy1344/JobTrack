@@ -92,18 +92,18 @@ internal static class SubtreeImpactComputation
 		var nodes = rows
 			.OrderBy(r => r.Depth).ThenBy(r => r.Id)
 			.Select(r => new SubtreeImpactNodeData(
-				new JobNodeId(r.Id),
+				new(r.Id),
 				r.ParentId is long parentId ? new JobNodeId(parentId) : null,
 				r.Depth,
 				r.Description,
 				KindOf(r),
 				r.HasLeafWork ? (Achievement)r.AchievementId!.Value : null,
 				r.HasLeafWork,
-				sessionCountByLeaf.GetValueOrDefault(new JobNodeId(r.Id)),
+				sessionCountByLeaf.GetValueOrDefault(new(r.Id)),
 				r.IsArchived))
 			.ToList();
 
-		return new SubtreeImpactData(
+		return new(
 			rootId,
 			EquatableArray.CopyOf(nodes),
 			rows.Count,
@@ -116,7 +116,7 @@ internal static class SubtreeImpactComputation
 					e.FromId,
 					e.ToId,
 					externalDescriptions.GetValueOrDefault(inside.Contains(e.FromId) ? e.ToId : e.FromId, string.Empty),
-					ExternalNodeIsDependent: !inside.Contains(e.ToId)))
+					!inside.Contains(e.ToId)))
 				.ToArray()),
 			jobRequestCount,
 			EquatableArray.CopyOf(holdingAreas),
@@ -152,7 +152,10 @@ internal sealed record SubtreeImpactNodeData(
 
 /// <summary>One subtree-crossing prerequisite edge inside a <see cref="SubtreeImpactData" />.</summary>
 internal sealed record SubtreeImpactPrerequisiteEdgeData(
-	JobNodeId FromId, JobNodeId ToId, string ExternalDescription, bool ExternalNodeIsDependent);
+	JobNodeId FromId,
+	JobNodeId ToId,
+	string ExternalDescription,
+	bool ExternalNodeIsDependent);
 
 /// <summary>One request holding area anchored inside a <see cref="SubtreeImpactData" />'s subtree.</summary>
 internal sealed record SubtreeImpactHoldingAreaData(RequestHoldingAreaId Id, string Name, JobNodeId JobNodeId);

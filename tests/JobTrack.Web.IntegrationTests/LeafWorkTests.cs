@@ -7,7 +7,6 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
-using Domain.Rates;
 using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;

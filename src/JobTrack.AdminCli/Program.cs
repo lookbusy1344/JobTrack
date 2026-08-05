@@ -98,7 +98,7 @@ public static class Program
 		var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
 
 		return await BootstrapCommand.RunAsync(
-				io, client.Installation, Environment.UserName, CancellationToken.None, password, userManager, false);
+			io, client.Installation, Environment.UserName, CancellationToken.None, password, userManager, false);
 	}
 
 	private static async Task<int> RunResetPasswordAsync(ResetPasswordCommandOptions options, SystemConsoleIO io)
@@ -121,8 +121,8 @@ public static class Program
 		var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<JobTrackIdentityUser>>();
 
 		return await EmergencyPasswordReset.RunAsync(
-				io, userManager, identityContext, passwordHasher, options.Provider, options.Username, SystemClock.Instance,
-				CancellationToken.None);
+			io, userManager, identityContext, passwordHasher, options.Provider, options.Username, SystemClock.Instance,
+			CancellationToken.None);
 	}
 
 	private static async Task<int> RunResetTwoFactorAsync(ResetTwoFactorCommandOptions options, SystemConsoleIO io)
@@ -144,7 +144,7 @@ public static class Program
 		var identityContext = scope.ServiceProvider.GetRequiredService<JobTrackIdentityDbContext>();
 
 		return await EmergencyTwoFactorReset.RunAsync(
-				io, userManager, identityContext, options.Provider, options.Username, SystemClock.Instance, CancellationToken.None);
+			io, userManager, identityContext, options.Provider, options.Username, SystemClock.Instance, CancellationToken.None);
 	}
 
 	private static async Task<int> RunImportTreeAsync(JobTreeImportCommandOptions options, SystemConsoleIO io)
@@ -177,8 +177,8 @@ public static class Program
 		var client = CreateClient(options.Provider, options.ConnectionString);
 
 		return await JobTreeImportCommand.RunAsync(
-				io, userManager, client, options.Username, new(options.ParentJobNodeId), jsonContent, SystemClock.Instance,
-				options.HomeNodeUsernames, CancellationToken.None);
+			io, userManager, client, options.Username, new(options.ParentJobNodeId), jsonContent, SystemClock.Instance,
+			options.HomeNodeUsernames, CancellationToken.None);
 	}
 
 	private static async Task<int> RunSetScheduleAsync(SetScheduleCommandOptions options, SystemConsoleIO io)
@@ -217,8 +217,8 @@ public static class Program
 		var client = CreateClient(options.Provider, options.ConnectionString);
 
 		return await SetHomeNodeCommand.RunAsync(
-				io, userManager, client, options.Username, options.JobNodeId is long nodeId ? new JobNodeId(nodeId) : null,
-				CancellationToken.None);
+			io, userManager, client, options.Username, options.JobNodeId is long nodeId ? new JobNodeId(nodeId) : null,
+			CancellationToken.None);
 	}
 
 	private static async Task<int> RunCreateEmployeeAsync(CreateEmployeeCommandOptions options, SystemConsoleIO io)

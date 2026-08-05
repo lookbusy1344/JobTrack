@@ -157,7 +157,7 @@ public sealed class SetHomeNodeCommandTests
 	}
 
 	private static async Task<JobNodeId?> ReadHomeNodeAsync(IJobTrackClient client) =>
-		(await client.Query.GetEmployeeProfileAsync(new() { Context = Context(), TargetUserId = new AppUserId(1) })).HomeNodeId;
+		(await client.Query.GetEmployeeProfileAsync(new() { Context = Context(), TargetUserId = new(1) })).HomeNodeId;
 
 	private static async Task DeploySchemaAsync(string connectionString)
 	{

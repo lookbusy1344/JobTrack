@@ -1,6 +1,5 @@
 namespace JobTrack.Persistence.Shared;
 
-using Abstractions;
 using Entities;
 using Microsoft.EntityFrameworkCore;
 

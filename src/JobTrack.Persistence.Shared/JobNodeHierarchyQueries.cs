@@ -294,4 +294,10 @@ internal sealed record BoundedSubtreeRow(long Id, long? ParentId, int Depth, boo
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetSubtreeImpactRowsAsync" />.</summary>
 internal sealed record SubtreeImpactRow(
-	long Id, long? ParentId, int Depth, string Description, short? AchievementId, bool HasLeafWork, bool IsArchived);
+	long Id,
+	long? ParentId,
+	int Depth,
+	string Description,
+	short? AchievementId,
+	bool HasLeafWork,
+	bool IsArchived);

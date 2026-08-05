@@ -1,5 +1,6 @@
 namespace JobTrack.Web.Pages.Jobs;
 
+using System.ComponentModel.DataAnnotations;
 using Abstractions;
 using Application;
 using Domain.Costing;
@@ -136,11 +137,9 @@ public sealed class DeleteSubtreeModel(
 		}
 
 		try {
-			_ = await jobTrackClient.Jobs.ArchiveSubtreeAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
-				RootId = new(NodeId),
-				Version = OriginalVersion,
-			}, cancellationToken);
+			_ = await jobTrackClient.Jobs.ArchiveSubtreeAsync(
+				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, RootId = new(NodeId), Version = OriginalVersion },
+				cancellationToken);
 
 			return RedirectToPage("/Jobs/Browse", new { nodeId = NodeId });
 		}
@@ -189,7 +188,7 @@ public sealed class DeleteSubtreeModel(
 			OriginalVersion = OriginalVersion == 0 ? CurrentNode.Node.Version : OriginalVersion;
 
 			Impact = await jobTrackClient.Query.GetSubtreeImpactAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, RootId = new JobNodeId(NodeId) },
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, RootId = new(NodeId) },
 				cancellationToken);
 
 			await LoadCostsAsync(actor, cancellationToken);
@@ -214,19 +213,17 @@ public sealed class DeleteSubtreeModel(
 	private async Task LoadCostsAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		try {
-			var totals = await jobTrackClient.Costs.GetHierarchyTotalsAsync(new() {
-				Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
-				NodeId = new JobNodeId(NodeId),
-				AsOf = clock.GetCurrentInstant(),
-			}, cancellationToken);
+			var totals = await jobTrackClient.Costs.GetHierarchyTotalsAsync(
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new(NodeId), AsOf = clock.GetCurrentInstant() },
+				cancellationToken);
 
 			NodeCosts = totals.DisplayedCosts;
 			NodeAllocatedDurations = totals.AllocatedDurations;
-			if (totals.DisplayedCosts.TryGetValue(new JobNodeId(NodeId), out var total)) {
+			if (totals.DisplayedCosts.TryGetValue(new(NodeId), out var total)) {
 				TotalCost = total;
 			}
 
-			if (totals.AllocatedDurations.TryGetValue(new JobNodeId(NodeId), out var totalDuration)) {
+			if (totals.AllocatedDurations.TryGetValue(new(NodeId), out var totalDuration)) {
 				TotalAllocatedDuration = totalDuration;
 			}
 		}
@@ -253,7 +250,7 @@ public sealed class DeleteSubtreeModel(
 		///     Always required for a subtree deletion (ADR 0061), unlike the single-node page's
 		///     conditional reason — the server enforces it too, and is authoritative.
 		/// </summary>
-		[System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A reason is required to delete a subtree.")]
+		[Required(ErrorMessage = "A reason is required to delete a subtree.")]
 		public string? Reason { get; set; }
 	}
 }

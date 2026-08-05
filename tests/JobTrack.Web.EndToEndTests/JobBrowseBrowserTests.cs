@@ -104,7 +104,9 @@ public abstract class JobBrowseBrowserTestsBase
 
 	private const double TabletCostMaximumShare = 3.0 / 12.0;
 	private const double LaptopCostMinimumShare = 1.5 / 12.0;
+
 	private const double LaptopCostMaximumShare = 2.0 / 12.0;
+
 	// The floor that holds across the whole wide band (1280 and 1440): at 1280 Description has the
 	// twelfth Priority gives up, at 1440 it is back at its three-of-twelve floor.
 	private const double MinimumWideDescriptionShare = WideDescriptionMinimumShare;

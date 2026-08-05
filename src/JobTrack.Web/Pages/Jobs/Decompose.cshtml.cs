@@ -174,7 +174,7 @@ public sealed class DecomposeModel(
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
 				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(LeafNodeId) }, cancellationToken);
 			WorkPage = await jobTrackClient.Query.GetLeafWorkPageAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, JobNodeId = new JobNodeId(LeafNodeId) }, cancellationToken);
+				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, JobNodeId = new(LeafNodeId) }, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node no longer exists.";

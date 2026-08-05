@@ -379,8 +379,8 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 	{
 		var (requesterId, jobManagerId, _, requestPort, submitted) = await SeedSubmittedRequestAsync();
 		var (first, second) = await SeedTwoLeavesUnderRequestAsync(jobManagerId, submitted.JobNodeId);
-		var interceptor = new TwoPartyNonQueryCommandBarrierInterceptor(
-			sql => sql.Contains("UPDATE job_request", StringComparison.OrdinalIgnoreCase));
+		var interceptor =
+			new TwoPartyNonQueryCommandBarrierInterceptor(sql => sql.Contains("UPDATE job_request", StringComparison.OrdinalIgnoreCase));
 
 		await Task.WhenAll(
 			SetCancelledAsync(createPort(interceptor), jobManagerId, first),
@@ -646,5 +646,4 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 
 	/// <summary>A created child node with <c>LeafWork</c> attached, and that leaf work's current version.</summary>
 	private sealed record SeededLeaf(JobNodeId NodeId, long Version);
-
 }

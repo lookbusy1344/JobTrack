@@ -112,7 +112,7 @@ public sealed class CreateModel(
 			NeededFinish = neededFinish,
 			Priority = Input.Priority,
 			BeginWork = Input.BeginWorkForUserId.HasValue
-				? new CreateJobNodeWorkSpec { WorkedByUserId = new AppUserId(Input.BeginWorkForUserId.Value) }
+				? new CreateJobNodeWorkSpec { WorkedByUserId = new(Input.BeginWorkForUserId.Value) }
 				: null,
 		};
 

@@ -606,7 +606,8 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Costed leaf (ID {leafId.Value.ToString(CultureInfo.InvariantCulture)})</a>");
+		body.Should().Contain(
+			$"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Costed leaf (ID {leafId.Value.ToString(CultureInfo.InvariantCulture)})</a>");
 		body.Should().Contain(">&#xA3;200.00 /&#xA0;8.0 hrs<");
 	}
 

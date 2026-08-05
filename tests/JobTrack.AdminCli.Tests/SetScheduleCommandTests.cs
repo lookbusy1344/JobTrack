@@ -1,10 +1,8 @@
 namespace JobTrack.AdminCli.Tests;
 
-using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
-using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
@@ -16,7 +14,6 @@ using TestSupport;
 /// <summary>
 ///     Real, schema-deployed database tests for <see cref="SetScheduleCommand" /> — the
 ///     <c>set-schedule</c> CLI command an installation uses to give an account its standing rota.
-///
 ///     The case that shapes every test here: an account is never schedule-less. Both <c>bootstrap</c>
 ///     and <c>create-employee</c> seed <c>EmployeeProvisioningDefaults</c>' Mon–Fri 09:00–17:00 from
 ///     2020-01-01, open-ended, so this command has to correct that placeholder in place rather than
@@ -39,7 +36,7 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon,Tue,Wed,Thu,Fri,Sat,Sun", start: "08:00", end: "20:00"),
+				Options(AdminUserName, "Mon,Tue,Wed,Thu,Fri,Sat,Sun", "08:00", "20:00"),
 				clock, CancellationToken.None);
 
 			console.Errors.Should().BeEmpty();
@@ -50,8 +47,8 @@ public sealed class SetScheduleCommandTests
 			var intervals = snapshot.Versions.Single().Schedule.WeeklyIntervals;
 			intervals.Should().HaveCount(7);
 			intervals.Should().AllSatisfy(interval => {
-				interval.Start.Should().Be(new LocalTime(8, 0));
-				interval.End.Should().Be(new LocalTime(20, 0));
+				interval.Start.Should().Be(new(8, 0));
+				interval.End.Should().Be(new(20, 0));
 			});
 		});
 
@@ -62,7 +59,7 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon,Tue,Wed,Thu,Fri", start: "09:00", end: "17:00"),
+				Options(AdminUserName, "Mon,Tue,Wed,Thu,Fri", "09:00", "17:00"),
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(0);
@@ -78,7 +75,7 @@ public sealed class SetScheduleCommandTests
 
 			_ = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon", start: "08:00", end: "20:00"),
+				Options(AdminUserName, "Mon", "08:00", "20:00"),
 				clock, CancellationToken.None);
 
 			(await ReadScheduleAsync(client)).Versions.Single().Schedule.EffectiveStart
@@ -92,14 +89,12 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon", start: "09:00", end: "17:00") with {
-					EffectiveStart = new LocalDate(2026, 6, 1),
-				},
+				Options(AdminUserName, "Mon", "09:00", "17:00") with { EffectiveStart = new LocalDate(2026, 6, 1) },
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			(await ReadScheduleAsync(client)).Versions.Single().Schedule.EffectiveStart
-				.Should().Be(new LocalDate(2026, 6, 1));
+				.Should().Be(new(2026, 6, 1));
 		});
 
 	[Fact]
@@ -109,7 +104,7 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon", start: "09:00", end: "17:00", ianaTimeZone: "America/New_York"),
+				Options(AdminUserName, "Mon", "09:00", "17:00", "America/New_York"),
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(0);
@@ -124,7 +119,7 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon", start: "08:00", end: "20:00"),
+				Options(AdminUserName, "Mon", "08:00", "20:00"),
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(1);
@@ -139,7 +134,7 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options("no.such.user", days: "Mon", start: "09:00", end: "17:00"),
+				Options("no.such.user", "Mon", "09:00", "17:00"),
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(1);
@@ -154,7 +149,7 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon", start: "09:00", end: "17:00") with { ActorUsername = "no.such.admin" },
+				Options(AdminUserName, "Mon", "09:00", "17:00") with { ActorUsername = "no.such.admin" },
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(1);
@@ -168,7 +163,7 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, days: "Mon", start: "09:00", end: "17:00", ianaTimeZone: "Mars/Olympus_Mons"),
+				Options(AdminUserName, "Mon", "09:00", "17:00", "Mars/Olympus_Mons"),
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(1);
@@ -186,7 +181,7 @@ public sealed class SetScheduleCommandTests
 	private static CommandContext Context() => new() { Actor = new(1), CorrelationId = Guid.NewGuid() };
 
 	private static async Task<ScheduleSnapshotResult> ReadScheduleAsync(IJobTrackClient client) =>
-		await client.Query.GetScheduleAsync(new() { Context = Context(), UserId = new AppUserId(1) });
+		await client.Query.GetScheduleAsync(new() { Context = Context(), UserId = new(1) });
 
 	/// <summary>
 	///     Closes the provisioned open-ended version and adds a second one after it, so the account has
@@ -208,7 +203,7 @@ public sealed class SetScheduleCommandTests
 
 		_ = await client.Schedules.AddScheduleVersionAsync(new() {
 			Context = Context(),
-			UserId = new AppUserId(1),
+			UserId = new(1),
 			Schedule = new(
 				provisioned.Schedule.Zone, boundary, null, [new(IsoDayOfWeek.Monday, new(10, 0), new(16, 0))]),
 		});

@@ -7,7 +7,6 @@ using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
-using Domain.Rates;
 using Domain.Schedules;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
@@ -33,6 +32,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	private const string AppliedBy = "test-runner";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
 	private const string AdministratorPassword = "Bootstrap-Horse-Battery-77!";
+
+	private static readonly Instant SessionCostStart = Instant.FromUtc(2026, 1, 1, 9, 0);
+	private static readonly Instant SessionCostFinish = Instant.FromUtc(2026, 1, 1, 11, 0);
 
 	private readonly SqliteDatabaseFixture database = new();
 	private AppUserId administratorId;
@@ -145,13 +147,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("2.0 hrs");
 	}
 
-	private static readonly Instant SessionCostStart = Instant.FromUtc(2026, 1, 1, 9, 0);
-	private static readonly Instant SessionCostFinish = Instant.FromUtc(2026, 1, 1, 11, 0);
-
 	/// <summary>
-	/// Seeds a full working window, a &#163;60/hour rate, and a 09:00-11:00 finished session for
-	/// <paramref name="workerId" /> on <paramref name="leafId" /> -- a &#163;120.00 / 2.0 hrs session,
-	/// mirroring <c>CostReportTests.SeedLeafWithCostedSessionAsync</c>'s own fixture shape.
+	///     Seeds a full working window, a &#163;60/hour rate, and a 09:00-11:00 finished session for
+	///     <paramref name="workerId" /> on <paramref name="leafId" /> -- a &#163;120.00 / 2.0 hrs session,
+	///     mirroring <c>CostReportTests.SeedLeafWithCostedSessionAsync</c>'s own fixture shape.
 	/// </summary>
 	private async Task SeedCostedSessionAsync(JobNodeId leafId, AppUserId workerId)
 	{

@@ -59,5 +59,4 @@ internal static class WorkflowEmployeeEligibility
 				constraintId, $"Employee {targetId.Value} is not eligible to be assigned technical work.");
 		}
 	}
-
 }

@@ -49,8 +49,8 @@ internal static class ImportHomeNodeAssignment
 		foreach (var userId in userIds.OrderBy(id => id.Value)) {
 			var identityUser = await IdentityUserWriteLock.AcquireAsync(context, userId, cancellationToken).ConfigureAwait(false);
 			var isLockedOut = identityUser.LockoutEnabled
-				&& identityUser.LockoutEnd is Instant lockoutEnd
-				&& lockoutEnd > now;
+							  && identityUser.LockoutEnd is Instant lockoutEnd
+							  && lockoutEnd > now;
 			if (!identityUser.IsEnabled || isLockedOut) {
 				throw new InvariantViolationException(
 					"home-node-target-not-active", $"Employee {userId} is disabled or locked and cannot receive a home node.");
@@ -58,7 +58,7 @@ internal static class ImportHomeNodeAssignment
 
 			var user = await context.Set<AppUserEntity>()
 						   .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)
-						   ?? throw new EntityNotFoundException($"Employee {userId} does not exist.");
+					   ?? throw new EntityNotFoundException($"Employee {userId} does not exist.");
 			users.Add(user);
 		}
 

@@ -446,7 +446,7 @@ public sealed class JobTreeImportCommandTests
 			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
 			var house = (await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId }))
 				.Single(n => n.Description == "Build a house");
-			var profile = await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new AppUserId(1) });
+			var profile = await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new(1) });
 			profile.HomeNodeId.Should().Be(house.Id);
 		}
 		finally {
@@ -503,7 +503,7 @@ public sealed class JobTreeImportCommandTests
 
 			var house = (await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId }))
 				.Single(n => n.Description == "Build a house");
-			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new AppUserId(1) }))
+			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new(1) }))
 				.HomeNodeId.Should().Be(house.Id);
 			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = worker.Id }))
 				.HomeNodeId.Should().Be(house.Id);
@@ -722,7 +722,7 @@ public sealed class JobTreeImportCommandTests
 
 			exitCode.Should().Be(0);
 			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new AppUserId(1) }))
+			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new(1) }))
 				.HomeNodeId.Should().BeNull();
 		}
 		finally {

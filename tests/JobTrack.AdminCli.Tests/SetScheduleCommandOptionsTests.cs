@@ -6,8 +6,7 @@ using PicoArgs_dotnet;
 
 public sealed class SetScheduleCommandOptionsTests
 {
-	private static string[] BaseArgs(params string[] extra) =>
-	[
+	private static string[] BaseArgs(params string[] extra) => [
 		"--provider", "sqlite", "--connection-string", "Data Source=test.db",
 		"--actor", "admin", "--username", "ada.lovelace", .. extra,
 	];
@@ -24,8 +23,8 @@ public sealed class SetScheduleCommandOptionsTests
 		options.Username.Should().Be("ada.lovelace");
 		options.Days.Should().Equal(
 			IsoDayOfWeek.Monday, IsoDayOfWeek.Tuesday, IsoDayOfWeek.Wednesday, IsoDayOfWeek.Thursday, IsoDayOfWeek.Friday);
-		options.Start.Should().Be(new LocalTime(9, 0));
-		options.End.Should().Be(new LocalTime(17, 0));
+		options.Start.Should().Be(new(9, 0));
+		options.End.Should().Be(new(17, 0));
 	}
 
 	[Theory]
@@ -81,8 +80,8 @@ public sealed class SetScheduleCommandOptionsTests
 	{
 		var options = SetScheduleCommandOptions.Parse(new(BaseArgs("--days", "Mon", "--start", "09:00:30", "--end", "17:00:45")));
 
-		options.Start.Should().Be(new LocalTime(9, 0, 30));
-		options.End.Should().Be(new LocalTime(17, 0, 45));
+		options.Start.Should().Be(new(9, 0, 30));
+		options.End.Should().Be(new(17, 0, 45));
 	}
 
 	[Theory]

@@ -1,6 +1,7 @@
 @page
 @using System.Globalization
 @using JobTrack.Abstractions
+@using JobTrack.Identity
 @using NodaTime
 @model BrowseModel
 @{
@@ -148,9 +149,11 @@
 				   only -- sessions attach to leaf_work, so a branch has none of its own; a subtree
 				   aggregation is the future branch case. The link and its single leading space stay on the
 				   span's own line: a line break here renders as further whitespace beside the figure. *@
+				@* @formatter:off *@
 				<dd class="col-12 col-sm-8 mb-0"><span class="jt-amount">@CostDisplay.FormatField(
 							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span>@if (Model.CurrentNode.Node.Kind == NodeKind.Leaf) {<text> <a class="jt-value-aside" asp-page="/Jobs/ConcurrentWork"
 						         asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Info</a></text>}</dd>
+				@* @formatter:on *@
 			</div>
 		}
 		@if (Model.CurrentNodeAchievement is Achievement currentAchievement) {
@@ -278,7 +281,7 @@
 		   single-node Delete, so the button label states the scope before it is clicked. The page and
 		   the command both re-check the role; this only decides whether to offer it. *@
 		@if (Model.CurrentNode.Node.HasChildren && Model.CurrentNode.Node.Kind != NodeKind.Root
-			 && User.IsInRole(JobTrack.Identity.EmployeeRoleNames.Administrator)) {
+		                                        && User.IsInRole(EmployeeRoleNames.Administrator)) {
 			<a class="btn btn-outline-danger"
 			   asp-page="/Jobs/DeleteSubtree"
 			   asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Delete subtree</a>
@@ -698,6 +701,7 @@
 		   stay prose rather than swelling the click target to most of the sentence. fw-normal cancels
 		   .btn's 600 weight from the design language, which read heavier than the text around it; the
 		   utility wins on !important, so this stays a class rather than a CSS override. *@
+		@* @formatter:off *@
 		@if (emptyStartActions is not null && !emptyStartActions.IsStartClosed) {
 			<text>Start a work </text>
 			<form method="post" asp-page-handler="Start" class="d-inline">@foreach (var field in emptyStartActions.StartFields) {
@@ -708,6 +712,7 @@
 		} else {
 			<text>Get started by creating a </text>
 		}
+		@* @formatter:on *@
 		<a asp-page="/Jobs/Create" asp-route-parentId="@emptyNode.Id.Value">child job</a>.
 	</div>
 }

@@ -11,7 +11,6 @@ using NodaTime.TimeZones;
 /// <summary>
 ///     The <c>set-schedule</c> command: makes one uniform weekly pattern an employee's standing rota,
 ///     built from a single civil-time interval repeated across the named days.
-///
 ///     **It corrects rather than adds when it can, and that is the whole point.** Every account is
 ///     provisioned with a default schedule already — <c>EmployeeProvisioningDefaults</c> gives
 ///     Mon–Fri 09:00–17:00 from 2020-01-01, open-ended, on both <c>bootstrap</c> and
@@ -19,7 +18,6 @@ using NodaTime.TimeZones;
 ///     <c>schedule-version-overlap</c> invariant. On a freshly provisioned account the intent is to
 ///     replace that placeholder, not to record a change of working pattern, so this corrects the
 ///     existing version in place (ADR 0003) and leaves no misleading history behind.
-///
 ///     It refuses as soon as the picture is not that simple: more than one version, or any schedule
 ///     exception, means real history exists and a blunt overwrite could destroy it. Those cases
 ///     belong in the Rota pages, where the operator can see what they are changing. The uniform-week
@@ -108,8 +106,7 @@ public static class SetScheduleCommand
 						Schedule = schedule,
 					},
 					cancellationToken);
-			}
-			else {
+			} else {
 				_ = await jobTrackClient.Schedules.AddScheduleVersionAsync(
 					new() { Context = context, UserId = target.AppUserId, Schedule = schedule },
 					cancellationToken);

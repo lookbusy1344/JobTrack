@@ -105,9 +105,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 
 		await using var connection = new NpgsqlConnection(ConnectionString);
 		await connection.OpenAsync();
-		foreach (var (table, column) in new[] {
-					 ("job_node", "id"), ("leaf_work", "job_node_id"), ("work_session", "leaf_work_id"),
-				 }) {
+		foreach (var (table, column) in new[] { ("job_node", "id"), ("leaf_work", "job_node_id"), ("work_session", "leaf_work_id") }) {
 			await using var command = connection.CreateCommand();
 			command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {column} = @id;";
 			command.Parameters.AddWithValue("id", child.Id.Value);
@@ -284,9 +282,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 			_ = await lockCommand.ExecuteScalarAsync();
 		}
 
-		var creation = port.AddChildAsync(CreateRequest(jobManagerId, rootId) with {
-			BeginWork = new() { WorkedByUserId = workerId },
-		});
+		var creation = port.AddChildAsync(CreateRequest(jobManagerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
 
 		var firstCompleted = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
 		firstCompleted.Should().NotBe(creation, "begin-work eligibility must wait for the target account's role lock");

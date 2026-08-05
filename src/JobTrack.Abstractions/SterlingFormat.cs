@@ -20,14 +20,6 @@ internal static class SterlingFormat
 	internal const string Symbol = "£";
 
 	/// <summary>
-	///     Group-separated fixed-point at the GBP minor unit — the default when a caller supplies no
-	///     format of its own. Derived from <see cref="Money.GbpMinorUnitDecimalPlaces" /> so the precision
-	///     is stated once.
-	/// </summary>
-	internal static readonly string DefaultNumericFormat =
-		"N" + Money.GbpMinorUnitDecimalPlaces.ToString(CultureInfo.InvariantCulture);
-
-	/// <summary>
 	///     The amount from which the pennies stop being rendered. Four significant figures of pounds
 	///     already say more than the two minor-unit digits do, and dropping them keeps a column of totals
 	///     to a width a narrow table cell can hold.
@@ -36,6 +28,14 @@ internal static class SterlingFormat
 
 	/// <summary>Group-separated whole pounds — the default for an amount at or above <see cref="WholePoundsThreshold" />.</summary>
 	private const string WholePoundsNumericFormat = "N0";
+
+	/// <summary>
+	///     Group-separated fixed-point at the GBP minor unit — the default when a caller supplies no
+	///     format of its own. Derived from <see cref="Money.GbpMinorUnitDecimalPlaces" /> so the precision
+	///     is stated once.
+	/// </summary>
+	internal static readonly string DefaultNumericFormat =
+		"N" + Money.GbpMinorUnitDecimalPlaces.ToString(CultureInfo.InvariantCulture);
 
 	/// <summary>Renders <paramref name="amount" /> as a Sterling amount.</summary>
 	internal static string Format(decimal amount, string? format, IFormatProvider? formatProvider) =>

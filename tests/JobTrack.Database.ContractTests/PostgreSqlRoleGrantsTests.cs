@@ -116,7 +116,6 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 	///     while SQLite -- which has no roles at all -- stayed perfectly healthy. That asymmetry is why
 	///     this is enumerated from the live catalog rather than a hand-kept list: a table added tomorrow
 	///     is covered without anyone remembering to extend this test.
-	///
 	///     Deliberately asserts SELECT only. Which tables the domain role may write is a per-table
 	///     decision the surrounding tests pin down (it must NOT write personal_access_token, and must
 	///     not delete audit_event); what no table may be is invisible.

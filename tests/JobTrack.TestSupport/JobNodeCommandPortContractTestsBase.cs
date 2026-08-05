@@ -169,9 +169,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
-			BeginWork = new() { WorkedByUserId = workerId },
-		});
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
 
 		leaf.HasLeafWork.Should().BeTrue();
 		(await ReadAchievementIdAsync(leaf.Id)).Should().Be((long)Achievement.InProgress);
@@ -200,7 +198,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			new() { CorrelationId = correlationId }, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Select(e => e.Operation).Should()
-			.BeEquivalentTo(["create-job-node", "attach-leaf-work", "set-achievement", "start-work-session"]);
+			.BeEquivalentTo("create-job-node", "attach-leaf-work", "set-achievement", "start-work-session");
 		audit.Events.Should().OnlyContain(e => e.ActorId == jobManagerId);
 		audit.Events.Single(e => e.Operation == "attach-leaf-work").EntityId.Should().Be(leaf.Id.Value);
 	}
@@ -215,9 +213,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, null, rootId) with {
-			BeginWork = new() { WorkedByUserId = workerId },
-		});
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, null, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
 
 		leaf.OwnerUserId.Should().Be(workerId);
 		(await ReadOwnerUserIdAsync(leaf.Id)).Should().Be(workerId.Value);
@@ -284,9 +280,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var childrenBefore = await CountChildrenAsync(rootId);
 
-		var act = () => port.AddChildAsync(CreateRequest(workerId, workerId, rootId) with {
-			BeginWork = new() { WorkedByUserId = workerId },
-		});
+		var act = () => port.AddChildAsync(CreateRequest(workerId, workerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
@@ -863,11 +857,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var doomed = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var doomedChild = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, doomed.Id));
 		var survivor = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
-		await port.AddPrerequisiteAsync(new() {
-			Context = ContextFor(jobManagerId),
-			RequiredJobId = doomedChild.Id,
-			DependentJobId = survivor.Id,
-		});
+		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = doomedChild.Id, DependentJobId = survivor.Id });
 
 		var result = await port.DeleteSubtreeAsync(new() {
 			Context = ContextFor(administratorId),
@@ -899,11 +889,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var child = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, branch.Id));
 
-		var result = await port.ArchiveSubtreeAsync(new() {
-			Context = ContextFor(administratorId),
-			RootId = branch.Id,
-			Version = branch.Version,
-		});
+		var result = await port.ArchiveSubtreeAsync(new() { Context = ContextFor(administratorId), RootId = branch.Id, Version = branch.Version });
 
 		result.NodeCount.Should().Be(2);
 		result.NewlyArchivedCount.Should().Be(2);
@@ -929,11 +915,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		// Owned by the worker for the same reason as A_non_administrator_cannot_delete_a_subtree.
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		var act = () => port.ArchiveSubtreeAsync(new() {
-			Context = ContextFor(workerId),
-			RootId = branch.Id,
-			Version = branch.Version,
-		});
+		var act = () => port.ArchiveSubtreeAsync(new() { Context = ContextFor(workerId), RootId = branch.Id, Version = branch.Version });
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -1111,9 +1093,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
-		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
-			BeginWork = new() { WorkedByUserId = workerId },
-		});
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
 		var sessionId = await ReadActiveSessionIdAsync(leaf.Id);
 		var beforeDecompose = await ReadWorkSessionPreservedFieldsAsync(sessionId);
 
@@ -1812,8 +1792,20 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 	/// <summary>A two-node batch whose local id 1 is a branch (a valid home node) and local id 2 a leaf.</summary>
 	private static EquatableArray<ImportSubtreeNodeSpec> HomeNodeImportBatch(AppUserId ownerId) => [
-		new() { LocalId = 1, ParentLocalId = null, Description = "Home branch", OwnerUserId = ownerId, Priority = Priority.Medium },
-		new() { LocalId = 2, ParentLocalId = 1, Description = "Child leaf", OwnerUserId = ownerId, Priority = Priority.Medium },
+		new() {
+			LocalId = 1,
+			ParentLocalId = null,
+			Description = "Home branch",
+			OwnerUserId = ownerId,
+			Priority = Priority.Medium,
+		},
+		new() {
+			LocalId = 2,
+			ParentLocalId = 1,
+			Description = "Child leaf",
+			OwnerUserId = ownerId,
+			Priority = Priority.Medium,
+		},
 	];
 
 	private async Task<long?> ReadHomeNodeIdAsync(AppUserId userId)

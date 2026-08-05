@@ -778,10 +778,11 @@ public sealed class WorkModel(
 				EmployeeDirectoryById = _employeeDirectoryById,
 				WorkedByOptions = BuildWorkerFilterOptions(workedByUserId),
 				ShowWorkerFilter = true,
-				ExtraHiddenFields = new Dictionary<string, string?> {
-					["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture),
-					["ReturnUrl"] = ReturnUrl,
-				},
+				ExtraHiddenFields =
+					new Dictionary<string, string?> {
+						["LeafNodeId"] = LeafNodeId.ToString(CultureInfo.InvariantCulture),
+						["ReturnUrl"] = ReturnUrl,
+					},
 				ReturnUrl = ReturnUrl,
 				SessionCosts = await LoadSessionCostsAsync(context, leafId, cancellationToken),
 			};

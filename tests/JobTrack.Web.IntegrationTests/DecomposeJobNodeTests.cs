@@ -250,7 +250,8 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	private static int CountOccurrences(string body, string value)
 	{
 		var count = 0;
-		for (var index = body.IndexOf(value, StringComparison.Ordinal); index >= 0;
+		for (var index = body.IndexOf(value, StringComparison.Ordinal);
+			 index >= 0;
 			 index = body.IndexOf(value, index + value.Length, StringComparison.Ordinal)) {
 			++count;
 		}
