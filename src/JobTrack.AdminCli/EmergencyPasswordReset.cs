@@ -55,6 +55,11 @@ public static class EmergencyPasswordReset
 		user.PasswordHash = passwordHasher.HashPassword(user, temporaryPassword);
 		user.SecurityStamp = Guid.NewGuid().ToString("N");
 		user.RequiresPasswordChange = true;
+		// A locked-out account is one of the most common reasons an operator reaches for this command
+		// in the first place -- a reset that leaves the lockout in place hands back a credential that
+		// still can't sign in.
+		user.LockoutEnd = null;
+		user.AccessFailedCount = 0;
 
 		var updateResult = await userManager.UpdateAsync(user);
 		if (!updateResult.Succeeded) {

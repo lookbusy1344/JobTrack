@@ -10,8 +10,9 @@ using Domain.Hierarchy;
 ///     paired with its numeric id ("Network tasks (ID 12)") so an actor working from a report, a URL,
 ///     or a support ticket that only carries the id can match it back to what is on screen. Overloaded
 ///     per result type rather than a single "Node" parameter: <see cref="JobNodeResult" />,
-///     <see cref="JobNodeSummaryResult" />, <see cref="JobNodeAncestorResult" />, and
-///     <see cref="AwaitingProgressEntry" /> are unrelated sealed records spanning two library projects
+///     <see cref="JobNodeSummaryResult" />, <see cref="JobNodeAncestorResult" />,
+///     <see cref="JobSubtreeNodeResult" />, and <see cref="AwaitingProgressEntry" /> are unrelated
+///     sealed records spanning two library projects
 ///     (<c>JobTrack.Application</c>, <c>JobTrack.Domain</c>) with no shared interface between them —
 ///     adding one there would extend those projects' public-API surface (house style: reviewed against
 ///     the Framework Design Guidelines, gate §7.5) purely to support this Web-only display convenience,
@@ -52,6 +53,11 @@ internal static class JobNodeDisplay
 	internal static string Title(JobNodeAncestorResult node) => Title(node.Description, node.Id.Value, node.Kind);
 
 	internal static string Title(JobNodeAncestorResult node, int maxDescriptionLength) =>
+		Title(node.Description, node.Id.Value, maxDescriptionLength, node.Kind);
+
+	internal static string Title(JobSubtreeNodeResult node) => Title(node.Description, node.Id.Value, node.Kind);
+
+	internal static string Title(JobSubtreeNodeResult node, int maxDescriptionLength) =>
 		Title(node.Description, node.Id.Value, maxDescriptionLength, node.Kind);
 
 	internal static string Title(AwaitingProgressEntry entry) => Title(entry.Description, entry.Id.Value);

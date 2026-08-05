@@ -153,6 +153,82 @@ public sealed class EmergencyTwoFactorResetTests
 	}
 
 	[Fact]
+	/// <summary>
+	/// Mirrors EmergencyPasswordResetTests: an emergency two-factor reset must not hand back an
+	/// account that is still locked out from before the operator stepped in.
+	/// </summary>
+	public async Task Reset_clears_an_existing_lockout_on_sqlite()
+	{
+		var database = new SqliteDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.Sqlite, database.ConnectionString);
+			var (_, identityUserId) = await SeedEmployeeAsync(database.ConnectionString, SchemaProvider.Sqlite, "ada.locked-2fa");
+			await SeedTwoFactorEnabledAsync(database.ConnectionString, SchemaProvider.Sqlite, identityUserId);
+			await LockOutAsync(database.ConnectionString, SchemaProvider.Sqlite, identityUserId);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentitySqlite(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var identityContext = scope.ServiceProvider.GetRequiredService<JobTrackIdentityDbContext>();
+			var console = new FakeConsoleIO([], []);
+
+			var exitCode = await EmergencyTwoFactorReset.RunAsync(
+				console, userManager, identityContext, AdminCliProvider.Sqlite, "ada.locked-2fa", SystemClock.Instance, CancellationToken.None);
+
+			exitCode.Should().Be(0);
+			var reloaded = await userManager.FindByNameAsync("ada.locked-2fa");
+			reloaded.Should().NotBeNull();
+			(await userManager.IsLockedOutAsync(reloaded!)).Should().BeFalse("an emergency reset must leave the account able to sign in");
+			reloaded!.LockoutEnd.Should().BeNull();
+			reloaded.AccessFailedCount.Should().Be(0);
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	[Fact]
+	public async Task Reset_clears_an_existing_lockout_on_postgresql()
+	{
+		var database = new PostgreSqlDatabaseFixture();
+		await database.InitializeAsync();
+
+		try {
+			await DeploySchemaAsync(SchemaProvider.PostgreSql, database.ConnectionString);
+			var (_, identityUserId) = await SeedEmployeeAsync(database.ConnectionString, SchemaProvider.PostgreSql, "ada.locked-2fa");
+			await SeedTwoFactorEnabledAsync(database.ConnectionString, SchemaProvider.PostgreSql, identityUserId);
+			await LockOutAsync(database.ConnectionString, SchemaProvider.PostgreSql, identityUserId);
+
+			var services = new ServiceCollection();
+			_ = services.AddLogging();
+			_ = services.AddJobTrackIdentityPostgreSql(database.ConnectionString);
+			await using var provider = services.BuildServiceProvider();
+			using var scope = provider.CreateScope();
+			var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+			var identityContext = scope.ServiceProvider.GetRequiredService<JobTrackIdentityDbContext>();
+			var console = new FakeConsoleIO([], []);
+
+			var exitCode = await EmergencyTwoFactorReset.RunAsync(
+				console, userManager, identityContext, AdminCliProvider.PostgreSql, "ada.locked-2fa", SystemClock.Instance, CancellationToken.None);
+
+			exitCode.Should().Be(0);
+			var reloaded = await userManager.FindByNameAsync("ada.locked-2fa");
+			reloaded.Should().NotBeNull();
+			(await userManager.IsLockedOutAsync(reloaded!)).Should().BeFalse("an emergency reset must leave the account able to sign in");
+			reloaded!.LockoutEnd.Should().BeNull();
+			reloaded.AccessFailedCount.Should().Be(0);
+		}
+		finally {
+			await database.DisposeAsync();
+		}
+	}
+
+	[Fact]
 	public async Task Reset_for_an_unknown_username_fails_without_changing_any_state()
 	{
 		var database = new SqliteDatabaseFixture();
@@ -273,6 +349,24 @@ public sealed class EmergencyTwoFactorResetTests
 		AddParameter(command, p + "key", new byte[] { 1, 2, 3 });
 		AddParameter(command, p + "id", identityUserId);
 
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private static async Task LockOutAsync(string connectionString, SchemaProvider provider, long identityUserId)
+	{
+		await using var connection = await OpenConnectionAsync(connectionString, provider);
+		await using var command = connection.CreateCommand();
+		var p = Prefix(provider);
+		command.CommandText = provider == SchemaProvider.PostgreSql
+			? $"UPDATE identity_user SET lockout_end = now() + interval '5 minutes', access_failed_count = 5 WHERE id = {p}id;"
+			: $"UPDATE identity_user SET lockout_end = {p}lockoutEnd, access_failed_count = 5 WHERE id = {p}id;";
+		if (provider == SchemaProvider.Sqlite) {
+			// ADR 0007: lockout_end is a signed 64-bit UTC tick count (100ns ticks since the Unix epoch),
+			// matching SqliteJobTrackIdentityDbContext's NullableUnixTicksConverter.
+			AddParameter(command, p + "lockoutEnd", (DateTimeOffset.UtcNow.AddMinutes(5) - DateTimeOffset.UnixEpoch).Ticks);
+		}
+
+		AddParameter(command, p + "id", identityUserId);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 

@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
@@ -111,6 +112,27 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		// Both kinds are drawn, from the one sprite the page defines.
 		body.Should().Contain("#jt-icon-branch");
 		body.Should().Contain("#jt-icon-leaf");
+	}
+
+	[Fact]
+	/// <summary>
+	/// Every subtree row names its node the same way as the rest of the app -- "Description (ID N)",
+	/// via the shared JobNodeDisplay helper -- so a row can be matched back to a report, URL, or
+	/// support ticket that only carries the id. Regression test for a row that rendered the bare,
+	/// truncated description with no id suffix at all.
+	/// </summary>
+	public async Task Subtree_rows_name_each_node_with_its_id()
+	{
+		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.row-id");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation");
+		var authCookie = await SignInAsync("browse.row-id");
+
+		var response = await GetAsync("/Jobs/Browse", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain($"Kitchen renovation (ID {branchId.Value.ToString(CultureInfo.InvariantCulture)})");
 	}
 
 	[Fact]
@@ -584,7 +606,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Costed leaf</a>");
+		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\">Costed leaf (ID {leafId.Value.ToString(CultureInfo.InvariantCulture)})</a>");
 		body.Should().Contain(">&#xA3;200.00 /&#xA0;8.0 hrs<");
 	}
 

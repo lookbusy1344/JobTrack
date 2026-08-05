@@ -46,6 +46,11 @@ public static class EmergencyTwoFactorReset
 		user.AuthenticatorKeyProtected = null;
 		user.TwoFactorEnabledAt = null;
 		user.SecurityStamp = Guid.NewGuid().ToString("N");
+		// See EmergencyPasswordReset: a locked-out account is a common reason to reach for an
+		// emergency command in the first place, and this one must not hand back an account that still
+		// can't sign in.
+		user.LockoutEnd = null;
+		user.AccessFailedCount = 0;
 
 		var updateResult = await userManager.UpdateAsync(user);
 		if (!updateResult.Succeeded) {

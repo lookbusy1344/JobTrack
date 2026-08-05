@@ -586,7 +586,7 @@
 								<span class="jt-tree-text">
 									<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
 									<a class="jt-tree-name-link jt-preserve-whitespace" asp-page="/Jobs/Browse"
-									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Truncate(node.Description, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>&#x2060;
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>&#x2060;
 									@* Trails the name rather than leading it: unlike the blocked palm, an achievement
 									   is present on most leaves in a healthy tree, so it belongs where the eye lands
 									   after reading the row, not competing with the kind glyph for the leading slot.

@@ -98,6 +98,26 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	/// <summary>
+	/// Every dashboard row names its node the same way as the rest of the app -- "Description (ID N)",
+	/// via the shared JobNodeDisplay helper -- so a row can be matched back to a report, URL, or
+	/// support ticket that only carries the id.
+	/// </summary>
+	public async Task A_dashboard_row_names_its_node_with_its_id()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.row-id");
+		var rootId = bootstrappedRootId!.Value;
+		var leaf = await AddLeafWithWorkAsync(rootId, workerId, "Install cabinets", adminId);
+		var authCookie = await SignInAsync("awaiting.row-id");
+
+		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain($"Install cabinets (ID {leaf.JobNodeId.Value.ToString(CultureInfo.InvariantCulture)})");
+	}
+
+	[Fact]
 	public async Task A_leaf_with_no_leaf_work_attached_appears_on_the_dashboard()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.noleafwork");

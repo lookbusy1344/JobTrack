@@ -107,6 +107,59 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		await act.Should().NotThrowAsync();
 	}
 
+	/// <summary>
+	///     Every application table must be reachable by the role the application actually runs as.
+	///     The named-table tests above only prove the tables someone remembered to name: schema version
+	///     0020 added five tables (department, app_user_department, job_request, job_request_note,
+	///     request_holding_area) and the grants script was never updated, so on PostgreSQL every page
+	///     touching a job request failed with "permission denied for table job_request" (SqlState 42501)
+	///     while SQLite -- which has no roles at all -- stayed perfectly healthy. That asymmetry is why
+	///     this is enumerated from the live catalog rather than a hand-kept list: a table added tomorrow
+	///     is covered without anyone remembering to extend this test.
+	///
+	///     Deliberately asserts SELECT only. Which tables the domain role may write is a per-table
+	///     decision the surrounding tests pin down (it must NOT write personal_access_token, and must
+	///     not delete audit_event); what no table may be is invisible.
+	/// </summary>
+	[Fact]
+	public async Task The_domain_role_can_read_every_application_table()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+
+		var unreadable = new List<string>();
+		await using (var command = connection.CreateCommand()) {
+			// The catalog is the deployed truth, rather than re-parsing the schema-version scripts.
+			// schema_version is deployment-tool bookkeeping the application never reads, so it is
+			// excluded rather than granted.
+			//
+			// has_table_privilege is given the OID, not the name: PostgreSQL does not guarantee the
+			// order in which WHERE predicates are evaluated, so the name form can be called on a row
+			// the schema filter was going to reject and throw 42P01 for an information_schema table
+			// that is not on the search_path. An OID from the catalog always resolves.
+			//
+			// personal_access_token is the one deliberate exception, not an oversight: the domain role
+			// has no direct grant on it at all so a compromised domain credential cannot read
+			// token_hash for offline replay (security review remediation §2.6). Its whole lifecycle
+			// goes through SECURITY DEFINER functions, and
+			// The_domain_role_has_no_direct_access_to_personal_access_token below pins that. Excluded
+			// here by name so the two tests cannot silently contradict each other.
+			command.CommandText =
+				"SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+				"WHERE n.nspname = 'public' AND c.relkind = 'r' " +
+				"AND c.relname NOT IN ('schema_version', 'personal_access_token') " +
+				"AND NOT has_table_privilege('jobtrack_domain', c.oid, 'SELECT') " +
+				"ORDER BY c.relname;";
+			await using var reader = await command.ExecuteReaderAsync();
+			while (await reader.ReadAsync()) {
+				unreadable.Add(reader.GetString(0));
+			}
+		}
+
+		unreadable.Should().BeEmpty(
+			"every application table needs a grant to jobtrack_domain; these have none in " +
+			"database/postgresql/roles/jobtrack-roles-and-grants.sql");
+	}
+
 	[Fact]
 	public async Task The_domain_role_has_no_direct_access_to_personal_access_token()
 	{

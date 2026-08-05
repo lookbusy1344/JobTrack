@@ -138,6 +138,13 @@ get four *separate* login roles, each a member of exactly one group role from
 | `ConnectionStrings:JobTrackPatManagement` | `jobtrack_pat_management_login` | `jobtrack_pat_management` |
 | `ConnectionStrings:JobTrackPatAuthentication` | `jobtrack_pat_authentication_login` | `jobtrack_pat_authentication` |
 
+A fifth login role exists alongside these but backs no connection string — no running service ever
+holds it:
+
+| Login role | Group role | Used by |
+| --- | --- | --- |
+| `jobtrack_emergency_reset_login` | `jobtrack_emergency_reset` | `docker/emergency-reset.sh`, invoked ad hoc (see below) |
+
 Each gets its own random password. The service never holds the Cloud SQL admin (`postgres`)
 credential at all — only the provisioning job does, and only for the length of one execution.
 
@@ -162,7 +169,7 @@ service accounts are created instead, starting with no roles at all:
 | Service account | Runs | Can read | Can write |
 | --- | --- | --- | --- |
 | `jobtrack-run` | the Cloud Run service | the four application connection-string secrets | the key-ring bucket |
-| `jobtrack-provision-sa` | the provisioning job | the database admin password, four role passwords, three account passwords | nothing outside the database |
+| `jobtrack-provision-sa` | the provisioning job | the database admin password, five role passwords, three account passwords | nothing outside the database |
 
 Both hold `roles/cloudsql.client`, which grants *connect and authenticate* only — not a database
 privilege. What each can actually do inside the database is still decided by the PostgreSQL role its
@@ -312,10 +319,30 @@ environment, not something this script fixes.
 [`postgresql-backup-restore.md`](postgresql-backup-restore.md) remains the schema-level
 restore-verification procedure.
 
-**Rotating a password.** Change the Secret Manager version and re-run the script: role passwords are
-reapplied by step 2 of provisioning. *Account* passwords are not — `bootstrap` and `create-employee`
-are skipped once the accounts exist. Use `AdminCli reset-password` (through the provisioning job with
-an overridden command) or the account's own change-password page.
+**Rotating a role password.** Change the Secret Manager version and re-run the script: role passwords
+are reapplied by step 2 of provisioning. *Account* passwords are not — `bootstrap` and
+`create-employee` are skipped once the accounts exist. For those, use the account's own
+change-password page, or the emergency path below when it can't sign in to reach that page.
+
+**Recovering a locked or inaccessible account.** `docker/emergency-reset.sh` runs `AdminCli
+reset-password`/`reset-2fa` as `jobtrack_emergency_reset_login` — a login role provisioning creates
+every run (idempotent, like the other four) but that backs no application connection string, so no
+running service ever holds it. Invoke it by overriding the provisioning job's entrypoint for one
+execution, reusing the same env vars and secrets the job already has:
+
+```bash
+gcloud run jobs execute jobtrack-provision \
+	--project=<project> --region=<region> \
+	--command=/app/sql/emergency-reset.sh --args=password,<username> \
+	--wait
+```
+
+(`--args=two-factor,<username>` for a lost authenticator device.) `reset-password` prints a one-time
+temporary password to the job's logs (`gcloud run jobs executions logs <execution-id>` if `--wait`'s
+own output is missed) and forces a change at next sign-in; both commands clear any existing lockout
+and revoke every live personal access token for that account (ADR 0029) — the whole point of an
+emergency reset is recovering an account the normal flow can't reach, so it must not hand back a
+credential that still can't sign in.
 
 **Schema upgrades.** Re-running the script rebuilds the images and re-executes the provisioning job,
 which applies any new schema-version scripts before the new service revision goes live. Note the
