@@ -1,6 +1,8 @@
 # JobTrack Implementation Plan
 
-**Status:** Proposed 4 (correctness fixes, EF-first data access, and functional-core / .NET-exception house style incorporated)  
+**Status:** Delivered — all four gates accepted (ADRs 0025/0026/0027/0063; see §8's "Phase 1–4 gate
+status"). Plan revision 4 (correctness fixes, EF-first data access, and functional-core /
+.NET-exception house style incorporated). Post-1.0 backlog: ADR 0063's Consequences.  
 **Date:** 2026-07-04  
 **Normative specification:** `jobtrack_spec_codex.md`  
 **Supplementary specification:** `jobtrack_spec_claude.md`  
@@ -515,16 +517,20 @@ The reset command uses `JobTrack.Identity` and the configured Identity password 
 - Accessibility, keyboard navigation, browser compatibility, performance, and dependency/security scans meet agreed budgets.
 - The web project has no direct reference to provider implementation APIs beyond composition registration and no SQL.
 
-### Phase 1–3 gate status
+### Phase 1–4 gate status
 
-Formal, source-controlled acceptance records exist for all three gates above, in the order they
-were passed:
+Formal, source-controlled acceptance records exist for all four gates, in the order they were
+passed:
 
 1. **M3 (database, §6.7)** — `docs/decisions/0025-m3-database-gate-acceptance.md`, Accepted.
 2. **M6 (reusable library, §7.5)** — `docs/decisions/0026-m6-library-gate-acceptance.md`, Accepted.
    Depends on M3.
 3. **M8 (web, §8.7)** — `docs/decisions/0027-m8-web-gate-acceptance.md`, Accepted. Depends on M6 and
    on every previously `pending`/`partial` row in `docs/traceability/test-catalogue.md` being closed.
+4. **Release (§9.4)** — `docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md`,
+   Accepted 2026-08-06, with the production topology fixed by
+   `docs/decisions/0062-cloud-run-cloud-sql-production-topology.md`. §9.2 observability and the
+   other named deferrals are documented risk acceptances inside ADR 0063, not open gate items.
 
 Each ADR records evidence per exit-criterion bullet rather than restating this plan; consult the ADR
 for the concrete test classes and documents backing a given bullet, not this section.

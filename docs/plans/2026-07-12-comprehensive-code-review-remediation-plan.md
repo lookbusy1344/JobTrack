@@ -1,7 +1,9 @@
 # Comprehensive Code Review Remediation Plan
 
 **Date:** 2026-07-12
-**Status:** In progress — §2.1–§2.15 implemented 2026-07-12 (commits on `main`); §3 delegated plans unchanged.
+**Status:** Closed — §2.1–§2.15 implemented 2026-07-12 (commits on `main`). Every §3 delegated plan
+has since been implemented in its own right, except the PostgreSQL column-type plan, which is
+deferred post-1.0 (ADR 0063).
 **Scope:** Full-stack fresh-eyes review of JobTrack after M3/M6/M8 gate acceptance (phases 1–3),
 the external HTTP API/PAT work, and the client requester intake slice. This plan records **new**
 findings from the 2026-07-12 review. It does not restate work already tracked in other open plans

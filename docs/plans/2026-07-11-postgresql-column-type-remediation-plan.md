@@ -1,7 +1,8 @@
 # PostgreSQL Column-Type Remediation Plan
 
 **Date:** 2026-07-11
-**Status:** Proposed
+**Status:** Proposed — deferred post-1.0 (optimization, not correctness; recorded in ADR 0063's
+backlog)
 **Scope:** Review whether JobTrack is making optimal use of PostgreSQL-native column types and
 indexes after phases 1-3 plus the external HTTP API work. This plan covers only substantial
 improvements; it deliberately excludes cosmetic type churn.

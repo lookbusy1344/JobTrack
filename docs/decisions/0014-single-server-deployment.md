@@ -1,6 +1,9 @@
 # ADR 0014: Single-server deployment, secret source, and PostgreSQL recovery objectives
 
 **Status:** Accepted
+**Amended by:** ADR 0062, which adds Cloud Run + Cloud SQL as a second supported production
+topology. The single-server topology, secret-source policy, and recovery objectives below are
+unchanged.
 **Closes:** Implementation plan §5.1 item 11
 
 ## Decision

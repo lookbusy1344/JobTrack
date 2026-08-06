@@ -3,7 +3,8 @@
 **Date:** 2026-07-09  
 **Scope:** Define the work needed before JobTrack can claim a supported HTTP API for non-browser
 clients such as a CLI, mobile app, or third-party integration.  
-**Status:** Proposed.
+**Status:** Implemented — delivered under ADR 0029/0030; the 2026-07-10 remediation plan closed the
+review findings, and the API ships in 1.0 (`docs/api/external-http-api-reference.md`).
 
 ## 1. Current Assessment
 

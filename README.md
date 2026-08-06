@@ -10,12 +10,29 @@ a stored number: it is computed on demand from effective-dated labour rates, per
 overrides, employee schedules, and the exact time worked — including splitting an employee's time
 fairly across concurrent sessions.
 
-Stack: .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity, xUnit + AwesomeAssertions.
+## Status
 
-[Live Google Cloud Run demo](https://jobtrack-web-zeb6shxnca-ew.a.run.app) (SQLite backend,
-deployed by [`scripts/deploy-cloudrun.sh`](scripts/deploy-cloudrun.sh)). The real deployment story
-is PostgreSQL — see [ADR 0014](docs/decisions/0014-single-server-deployment.md) and
-[`docs/operations/production-deployment.md`](docs/operations/production-deployment.md).
+**Release-ready (1.0).** All four delivery gates — database, reusable library, web application, and
+release — have formal, source-controlled acceptance records
+([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),
+[0026](docs/decisions/0026-m6-library-gate-acceptance.md),
+[0027](docs/decisions/0027-m8-web-gate-acceptance.md),
+[0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md)). The codebase was built
+test-first throughout (roughly two lines of test for every line of product code), passes its full
+solution and performance suites, and has been through three internal security audits, each fully
+remediated. Performance is enforced, not hoped for: measured budgets on a 200,000-node
+production-shape database run as regression ceilings on every performance-suite run.
+
+The production deployment is PostgreSQL on Google Cloud (Cloud Run + Cloud SQL, with automated
+backups and point-in-time recovery), fixed by
+[ADR 0062](docs/decisions/0062-cloud-run-cloud-sql-production-topology.md). Items consciously
+deferred past 1.0 — observability tooling, an external penetration test, and a handful of
+documented low-risk residuals — are each recorded with their rationale and revisit trigger in
+[ADR 0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md), so nothing deferred
+is undocumented.
+
+[Live Google Cloud Run demo](https://jobtrack-web-zeb6shxnca-ew.a.run.app) (SQLite backend — a
+demonstration configuration, not the production one).
 
 ## Start here
 
@@ -23,51 +40,27 @@ is PostgreSQL — see [ADR 0014](docs/decisions/0014-single-server-deployment.md
 | --- | --- |
 | Build, test, run, or administer it locally | [`docs/developer-guide.md`](docs/developer-guide.md) |
 | Understand how it behaves for its users | [`docs/behaviour-overview.md`](docs/behaviour-overview.md) |
-| See the layers file by file | [`docs/architecture-overview.md`](docs/architecture-overview.md) |
+| See the architecture and layers file by file | [`docs/architecture-overview.md`](docs/architecture-overview.md) |
+| Deploy or operate it | [`docs/operations/postgresql-cloud-run-deployment.md`](docs/operations/postgresql-cloud-run-deployment.md) |
 | Contribute code | [`CLAUDE.md`](CLAUDE.md) — house style, TDD discipline, commit gate |
 
-## Architecture
+## In brief
 
-Built and layered strictly bottom-up, each layer calling only the one beneath it:
-
-1. **Database** (`database/`, `JobTrack.Database`) — versioned schema scripts and invariants
-   (constraints, triggers, stored functions) that hold regardless of what calls them.
-2. **Reusable .NET library** (`JobTrack.Abstractions`/`Domain`/`Application` + the two persistence
-   providers) — the cost engine, interval algebra, achievement rules, authorization, and audit,
-   behind the single `IJobTrackClient` facade. Any .NET front end can consume it in-process;
-   `JobTrack.AdminCli` and the samples do.
-3. **External HTTP API** (`JobTrack.Web`, `/api/*`) — a JSON transport over `IJobTrackClient` for
-   remote callers, authenticated by cookie session or personal access token.
-4. **Web interface** (`JobTrack.Web`, Razor Pages) — the server-rendered browser front end. Layers
-   3 and 4 share a host but neither ever bypasses `IJobTrackClient` to reach the database.
-
-The shape is ports and adapters: dependencies point inwards to a pure, framework-free core that
-knows nothing of EF Core, SQL, or ASP.NET Core, and the provider in play is a composition-root
-choice no domain type can observe — asserted by `tests/JobTrack.ArchitectureTests`, not left to
-good intentions. Two deliberate departures from orthodox Clean Architecture: the database is a real
-layer enforcing its own invariants, and failure travels one channel only — exceptions, never a
-`Result`-style return.
-
-PostgreSQL is the authoritative production backend. SQLite is a fully conforming second provider —
-every rule behaves identically on both, asserted by a shared contract-test suite — for embedded and
-demo deployments where a database server isn't warranted.
-
-The line count is dominated by tests: roughly 2:1 test-to-source, a property of the mandatory TDD
-discipline.
-
-## Scaling
-
-Read paths are request-scoped, so latency tracks the size of the question, not the installation:
-costing one leaf loads its own subtree and ancestor chains, never the table. Measured on PostgreSQL
-against a 200,000-node production-shape tree: a single-leaf cost read runs in ~100 ms, the Awaiting
-Progress worklist in under 120 ms at a realistic ~98% completion ratio, and a 400-leaf branch
-costed against a 400-session worker in ~50 ms. Worker session discovery is GiST-indexed, prerequisite
-fan-out resolves each required branch once regardless of dependents, and a serialized performance
-lane (`scripts/perf-test.sh`) enforces every figure as a regression ceiling. Budgets, plans, and
-`EXPLAIN` evidence live in
-[`docs/traceability/performance-budgets.md`](docs/traceability/performance-budgets.md); an
-installation of hundreds of thousands of jobs and years of session history is comfortably inside
-the tested envelope.
+- **Stack:** .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity.
+- **Shape:** a strictly layered system — versioned database schema, a reusable .NET library behind
+  a single client facade, an external HTTP API, and a server-rendered web interface. Each layer
+  consumes only the one beneath it, and the boundaries are enforced by automated architecture
+  tests, not convention. Details: [`docs/architecture-overview.md`](docs/architecture-overview.md).
+- **Two databases, one behaviour:** PostgreSQL is the production backend; SQLite is a fully
+  conforming second provider for embedded and demo use, held equivalent by a shared contract-test
+  suite.
+- **Performance:** read latency tracks the size of the question, not the size of the installation;
+  hundreds of thousands of jobs and years of history sit comfortably inside the tested envelope.
+  Budgets and evidence: [`docs/traceability/performance-budgets.md`](docs/traceability/performance-budgets.md).
+- **Security:** defence-in-depth web hardening, split least-privilege database credentials, audited
+  administrative actions, optional two-factor authentication, and a maintained threat model with
+  every mitigation tied to a named test:
+  [`docs/threat-model/web-authentication-threat-model.md`](docs/threat-model/web-authentication-threat-model.md).
 
 ## Documentation map
 
@@ -91,13 +84,14 @@ the tested envelope.
 
 **Operations, security, and traceability**
 
-- [`docs/operations/production-deployment.md`](docs/operations/production-deployment.md) — hosting
-  runbook: service account, reverse proxy, Kestrel, PostgreSQL provisioning and access control.
+- [`docs/operations/postgresql-cloud-run-deployment.md`](docs/operations/postgresql-cloud-run-deployment.md) —
+  the production deployment (ADR 0062): provisioning, schema upgrades, rotation, emergency reset.
+- [`docs/operations/production-deployment.md`](docs/operations/production-deployment.md) — the
+  alternative self-hosted single-server runbook (ADR 0014).
 - [`docs/operations/postgresql-backup-restore.md`](docs/operations/postgresql-backup-restore.md) —
   backup/restore procedure and the smoke test that proves it.
-- [`docs/operations/docker-image.md`](docs/operations/docker-image.md) and
-  [`docs/operations/postgresql-cloud-run-deployment.md`](docs/operations/postgresql-cloud-run-deployment.md) —
-  the throwaway SQLite demo container and the persistent Cloud SQL configuration.
+- [`docs/operations/docker-image.md`](docs/operations/docker-image.md) — the throwaway SQLite demo
+  container.
 - [`docs/operations/local-live-instance.md`](docs/operations/local-live-instance.md) — a single
   persistent local database for your own use.
 - [`docs/operations/sqlite-limitations-and-configuration.md`](docs/operations/sqlite-limitations-and-configuration.md) —

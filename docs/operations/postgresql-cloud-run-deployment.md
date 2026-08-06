@@ -1,7 +1,9 @@
 # Persistent PostgreSQL deployment on Google Cloud Run
 
-A **second** container configuration, alongside — not replacing — the SQLite demo image documented in
-[`docker-image.md`](docker-image.md). That image bakes a seeded SQLite database into its own
+**The production deployment topology**
+([ADR 0062](../decisions/0062-cloud-run-cloud-sql-production-topology.md)), and its operational
+runbook. A **second** container configuration, alongside — not replacing — the SQLite demo image
+documented in [`docker-image.md`](docker-image.md). That image bakes a seeded SQLite database into its own
 filesystem, so every Cloud Run recycle throws away whatever the app wrote. This one keeps no state in
 the container at all: it runs against a managed PostgreSQL instance (Cloud SQL) that outlives every
 revision, cold start, and redeploy.
@@ -481,5 +483,6 @@ ephemeral database are all gone — but not empty:
   §2.2/§4) — a future deploy path that omits `--binary-authorization=default` would bypass
   attestation silently. Accepted residual, not something the `run.allowedBinaryAuthorizationPolicies`
   constraint closes despite its name.
-- **ADR 0014 still says single-server, no containers.** Nothing here amends it. If this path becomes
-  the intended deployment for real, that is an ADR to write, not a script to run.
+- ~~**ADR 0014 still says single-server, no containers.**~~ Resolved:
+  [ADR 0062](../decisions/0062-cloud-run-cloud-sql-production-topology.md) makes this path a
+  supported production topology, with this script as its only sanctioned deploy path.

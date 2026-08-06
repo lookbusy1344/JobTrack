@@ -2,8 +2,12 @@
 
 **Closes (in part):** Implementation plan §9.1's "provisioning" and general hosting portion of the
 operations runbooks. This document is the host-level runbook: OS service setup, reverse proxy
-placement, and PostgreSQL provisioning for the single-server topology fixed by
-[ADR 0014](../decisions/0014-single-server-deployment.md). It complements, and does not repeat:
+placement, and PostgreSQL provisioning for the self-hosted single-server topology of
+[ADR 0014](../decisions/0014-single-server-deployment.md). The *production* deployment is the Cloud
+Run + Cloud SQL topology of
+[ADR 0062](../decisions/0062-cloud-run-cloud-sql-production-topology.md), whose runbook is
+[`postgresql-cloud-run-deployment.md`](postgresql-cloud-run-deployment.md); this document remains
+the reference for a self-hosted installation. It complements, and does not repeat:
 
 - [`web-host-security.md`](web-host-security.md) — the application's own fail-closed configuration
   (`ForwardedHeaders:*`, `DataProtection:KeyPath`, `AllowedHosts`) and the Kestrel-level request

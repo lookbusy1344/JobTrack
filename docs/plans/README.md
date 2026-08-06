@@ -9,17 +9,17 @@ authoritative — this table is a navigation aid, not a second source of truth.
 
 | Plan | Status | Subject |
 |---|---|---|
-| [`jobtrack_impl_plan.md`](jobtrack_impl_plan.md) | Proposed 4 (active) | Delivery plan: phase gates, milestone sequence, current phase status — the authoritative phase tracker. |
+| [`jobtrack_impl_plan.md`](jobtrack_impl_plan.md) | Delivered (all four gates accepted; ADRs 0025/0026/0027/0063) | Delivery plan: phase gates, milestone sequence, gate status — the authoritative phase tracker. |
 | [`2026-07-08-fix-plan.md`](2026-07-08-fix-plan.md) | Closed | Early post-review fix plan. |
-| [`2026-07-09-external-http-api-plan.md`](2026-07-09-external-http-api-plan.md) | Proposed | Defines the external HTTP API's scope, client trust model, and acceptance bar (ADR 0029/0030). |
+| [`2026-07-09-external-http-api-plan.md`](2026-07-09-external-http-api-plan.md) | Implemented | Defines the external HTTP API's scope, client trust model, and acceptance bar (ADR 0029/0030); delivered, with review findings closed by the 2026-07-10 remediation plan. |
 | [`2026-07-09-overlapping-cost-scale-plan.md`](2026-07-09-overlapping-cost-scale-plan.md) | Implemented | Overlapping-session cost-engine scale work. |
 | [`2026-07-09-phase-gate-evidence-plan.md`](2026-07-09-phase-gate-evidence-plan.md) | Implemented | Closed traceability/ADR evidence gaps for the Phase 1-3 gates (ADR 0025/0026/0027). |
 | [`2026-07-10-external-http-api-remediation-plan.md`](2026-07-10-external-http-api-remediation-plan.md) | Implemented | Remediation of the external HTTP API review findings (pagination, OpenAPI contract, auth boundary evidence). |
 | [`2026-07-11-client-requester-intake-plan.md`](2026-07-11-client-requester-intake-plan.md) | Core slice complete (Stages 1-8); Stage 9 closed by ADR 0034 | Requester self-service intake, holding areas, and progress tracking (ADR 0033/0034). |
 | [`2026-07-11-job-node-ownership-and-work-authorization.md`](2026-07-11-job-node-ownership-and-work-authorization.md) | Implemented | Nullable node ownership, unassigned pool, pickup, and owner-gated work-session authorization (ADR 0031/0032). |
-| [`2026-07-11-postgresql-column-type-remediation-plan.md`](2026-07-11-postgresql-column-type-remediation-plan.md) | Proposed | PostgreSQL column-type remediation. |
+| [`2026-07-11-postgresql-column-type-remediation-plan.md`](2026-07-11-postgresql-column-type-remediation-plan.md) | Proposed (deferred post-1.0, ADR 0063) | PostgreSQL column-type remediation — optimization, not correctness. |
 | [`2026-07-11-security-review-remediation-plan.md`](2026-07-11-security-review-remediation-plan.md) | Remediated | Closed all seven security-review findings (§2.1-§2.7). |
-| [`2026-07-12-comprehensive-code-review-remediation-plan.md`](2026-07-12-comprehensive-code-review-remediation-plan.md) | In progress | §2.1-§2.15 implemented; §3 delegated plans unchanged. |
+| [`2026-07-12-comprehensive-code-review-remediation-plan.md`](2026-07-12-comprehensive-code-review-remediation-plan.md) | Closed | §2.1-§2.15 implemented; §3 delegated plans all since implemented (column-type plan deferred post-1.0). |
 | [`2026-07-12-end-user-testing-readiness-remediation-plan.md`](2026-07-12-end-user-testing-readiness-remediation-plan.md) | Implemented | Readiness/evidence gaps closed before broad end-user testing: staff holding-area traceability, stale plan status, and a canonical UAT seed. |
 | [`2026-07-12-temporal-representation-hardening-plan.md`](2026-07-12-temporal-representation-hardening-plan.md) | Implemented | Temporal-representation hardening across schedule/identity time-zone handling. |
 | [`2026-07-12-derived-node-kind-plan.md`](2026-07-12-derived-node-kind-plan.md) | Implemented | Drop stored `job_node.kind_id`; derive Root/Branch/Leaf from structure at read time, single "create child" action (ADR 0035). |
@@ -38,6 +38,7 @@ authoritative — this table is a navigation aid, not a second source of truth.
 | [`2026-08-04-significant-code-review-remediation-plan.md`](2026-08-04-significant-code-review-remediation-plan.md) | Implemented (2026-08-04) | Significant review findings: race-idempotent requester auto-acknowledgement, create-and-start coverage (widened during delivery to subtree import), and atomic import/home-node assignment. |
 | [`2026-08-06-cost-read-materialisation-reduction-plan.md`](2026-08-06-cost-read-materialisation-reduction-plan.md) | Implemented (2026-08-06); ~42x materialisation win | Reduces cost-read materialisation on PostgreSQL: long-history baseline found and fixed `IntervalAlgebra.Subtract`'s O(M×C) cost (not the hypothesised schedule-expansion volume), plus collapsed worker discovery, server-side subtree id composition, and evidence-gated column projection. Surfaced a new, out-of-scope `CostSegmentPartitioner`/`CostEngine` computation-cost finding, recorded for a future plan. |
 | [`2026-08-06-cloudrun-persistent-isolation-plan.md`](2026-08-06-cloudrun-persistent-isolation-plan.md) | Implemented (2026-08-06; §2.2 narrowed, not closed — no GCP control makes Binary Authorization mandatory) | Live-audit findings on the shared GCP project: demos relocated to `jobtrack-demo-projects` under a no-role SA, the default compute SA's project-wide builder role stripped, the `run.allowedBinaryAuthorizationPolicies` constraint applied, and a live negative test disproving the constraint's assumed enforcement. |
+| [`2026-08-06-post-1.0-improvement-plan.md`](2026-08-06-post-1.0-improvement-plan.md) | Proposed | Post-1.0 engineering backlog as ordered stages: restore rehearsal, minimal observability, small hardening, cost-engine computation cost, column-type optimizations, deferred security test evidence — plus the trigger-based register from ADR 0063. |
 
 ## Review checklist item
 
