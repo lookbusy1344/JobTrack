@@ -285,6 +285,83 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 	}
 
 	/// <summary>
+	///     2026-08-06-cost-read-materialisation-reduction-plan.md Stage 3: PostgreSQL only (the plan's
+	///     own scope -- SQLite's assembly keeps its parameterized recursive-CTE shape unmeasured and
+	///     unchanged). The requested subtree's own node ids must never round-trip as an
+	///     `= ANY(array)` parameter proportional to subtree size; the fix joins
+	///     <c>job_node_subtrees</c>/<c>job_node_ancestor_chains</c> server-side instead. Reuses the same
+	///     200-leaf shape as the command-count test above -- an array parameter proportional to subtree
+	///     size there would be at least 200 long, versus the requested-root/worker counts this read
+	///     actually needs, both far smaller.
+	/// </summary>
+	[Fact]
+	public async Task GetHierarchyTotalsAsync_never_ships_a_node_id_array_proportional_to_subtree_size()
+	{
+		if (Provider != SchemaProvider.PostgreSql) {
+			return;
+		}
+
+		const int leafCount = 200;
+		var (_, branchId, _, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+
+		var jobNodePort = CreateJobNodePort(database.ConnectionString);
+		for (var index = 0; index < leafCount; ++index) {
+			var leaf = await jobNodePort.AddChildAsync(new() {
+				Context = ContextFor(administratorId),
+				ParentId = branchId,
+				Description = $"Array-parameter leaf {index}",
+				OwnerUserId = workerId,
+				Priority = Priority.Medium,
+			});
+			_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+			await CreateCorrectedSessionAsync(administratorId, workerId, leaf.Id, At(9), At(10));
+		}
+
+		var parameters = new MaxArrayParameterLengthInterceptor();
+		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [parameters]));
+
+		_ = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(administratorId), NodeId = branchId, AsOf = At(24) });
+
+		parameters.MaxArrayLength.Should().BeLessThan(
+			leafCount, "the requested subtree's own node ids must never round-trip as an array parameter proportional to its size");
+	}
+
+	/// <summary>
+	///     2026-08-06-cost-read-materialisation-reduction-plan.md Stage 5: PostgreSQL only. Evidence
+	///     (a wide-vs-narrow raw read of 36,500 rows at the long-history scale, 50.4 ms vs 9.7 ms)
+	///     showed entity materialisation cost visible next to the query itself for
+	///     <c>user_schedule_exception</c>, the one table this read loads at meaningful row count
+	///     (every other worker-scoped load -- schedule versions/intervals/rates/app users -- stays in
+	///     the tens of rows, not worth projecting). The exceptions query now selects only the five
+	///     columns <c>CostQueryAssembly</c> reads, never the unused <c>reason</c>/<c>created_by</c>/
+	///     <c>changed_at</c>/<c>row_version</c>/<c>id</c> columns a full entity load would carry.
+	/// </summary>
+	[Fact]
+	public async Task GetCostDetailsAsync_projects_schedule_exceptions_to_only_the_columns_it_reads()
+	{
+		if (Provider != SchemaProvider.PostgreSql) {
+			return;
+		}
+
+		var (_, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+
+		var commandTexts = new CommandTextCaptureInterceptor();
+		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [commandTexts]));
+
+		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+
+		var exceptionQuery = commandTexts.CommandTexts.Should().ContainSingle(
+			text => text.Contains("user_schedule_exception", StringComparison.Ordinal)).Subject;
+		exceptionQuery.Should().NotContain(
+			"reason", "the exceptions query must project only the columns CostQueryAssembly reads, not a full entity");
+	}
+
+	/// <summary>
 	///     2026-07-25 scalability-follow-up plan §2.4: a single-node cost read's authorization
 	///     pre-check (<c>ICostQueryPort.GetCostAccessInputsAsync</c>) and its cost-input materialization
 	///     each still open their own connection (they cannot share one transaction/snapshot the way the
@@ -306,6 +383,32 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
 
 		commands.Count.Should().BeLessThanOrEqualTo(SingleNodeCostMaximumCommandCount);
+	}
+
+	/// <summary>
+	///     2026-08-06-cost-read-materialisation-reduction-plan.md Stage 2: the earliest-session-start
+	///     <c>MIN</c> and the distinct-worker-id list were two sequential queries over the identical
+	///     filter (leaf in subtree, started before <c>asOf</c>); one grouped query returns both. Pinned
+	///     to the exact post-Stage-2 command count rather than merely below
+	///     <see cref="SingleNodeCostMaximumCommandCount" />'s shared upper bound, so a regression that
+	///     re-splits the query back into two round trips is caught even though it would still be within
+	///     the broader ceiling. Measured pre-Stage-2 count: 14 (both providers) — one query removed
+	///     leaves 13.
+	/// </summary>
+	[Fact]
+	public async Task GetCostDetailsAsync_discovers_workers_and_their_earliest_session_in_one_query()
+	{
+		var (_, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
+		await AddUserCostRateAsync(administratorId, workerId, new(60m));
+		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
+
+		var commands = new CommandCountInterceptor();
+		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [commands]));
+
+		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+
+		commands.Count.Should().Be(13, "worker discovery must issue one grouped query instead of a separate MIN and DISTINCT");
 	}
 
 	[Fact]

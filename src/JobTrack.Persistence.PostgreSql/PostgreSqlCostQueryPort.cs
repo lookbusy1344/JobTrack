@@ -212,22 +212,33 @@ internal static class CostQueryAssembly
 	public static async Task<(WorkInterval Bounds, List<WorkerCostInputs> Workers)> LoadWorkersAndExtendAncestryAsync(
 		DbContext context, SubtreeLoad subtree, Instant asOf, CancellationToken cancellationToken)
 	{
-		var requestedNodeIds = subtree.NodesById.Keys.ToArray();
-		var earliestRequestedSessionStart = await context.Set<WorkSessionEntity>().AsNoTracking()
-			.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
-			.Select(s => (Instant?)s.StartedAt)
-			.MinAsync(cancellationToken).ConfigureAwait(false);
+		// Joins job_node_subtrees(existingRootIds) server-side rather than shipping every
+		// already-materialized subtree node id back as an `= ANY(array)` parameter
+		// (2026-08-06-cost-read-materialisation-reduction-plan.md Stage 3): the parameter shrinks from
+		// O(subtree size) to O(requested root count), and the planner sees a real join instead of an
+		// opaque array. Also folds in Stage 2's grouped MIN (a composed `IQueryable<long>.Contains`
+		// against the EF-converted LeafWorkId column does not translate -- EF throws
+		// InvalidOperationException at query-compile time -- so this is one hand-authored statement,
+		// not LINQ composed over a SqlQuery subquery). `DISTINCT id` guards a hypothetical future bulk
+		// caller whose overlapping requested roots could otherwise duplicate a shared descendant across
+		// multiple `origin_root_id` rows -- immaterial to today's single-root callers, and harmless to
+		// MIN either way, but a join that silently assumed single-root shape would be a latent trap.
+		var existingRootIdValues = subtree.ExistingRootIds.Select(id => id.Value).ToArray();
+		var perWorkerEarliestStarts = await context.Database.SqlQuery<PerWorkerEarliestStartRow>(
+			$"""
+			 SELECT ws.worked_by_user_id AS "WorkerId", MIN(ws.started_at) AS "EarliestStart"
+			 FROM work_session ws
+			 JOIN (SELECT DISTINCT id FROM job_node_subtrees({existingRootIdValues})) AS subtree ON subtree.id = ws.leaf_work_id
+			 WHERE ws.started_at < {asOf}
+			 GROUP BY ws.worked_by_user_id
+			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var bounds = new WorkInterval(Instant.MinValue, asOf);
 		var workers = new List<WorkerCostInputs>();
 		var workerIds = new List<AppUserId>();
-		if (earliestRequestedSessionStart is Instant earliestStart) {
-			bounds = new(earliestStart, asOf);
-			workerIds = await context.Set<WorkSessionEntity>().AsNoTracking()
-				.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
-				.Select(s => s.WorkedByUserId)
-				.Distinct()
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
+		if (perWorkerEarliestStarts.Count > 0) {
+			bounds = new(perWorkerEarliestStarts.Min(row => row.EarliestStart), asOf);
+			workerIds = perWorkerEarliestStarts.Select(row => new AppUserId(row.WorkerId)).ToList();
 
 			// 2026-07-25 scalability-follow-up plan §2.5: a schedule version's own EffectiveStart/End
 			// are civil LocalDates in its own IanaTimeZone, not directly comparable to the Instant-based
@@ -245,8 +256,14 @@ internal static class CostQueryAssembly
 			var scheduleVersionIds = scheduleVersions.Select(v => v.Id).ToList();
 			var scheduleIntervals = await context.Set<ScheduleIntervalEntity>().AsNoTracking()
 				.Where(i => scheduleVersionIds.Contains(i.ScheduleVersionId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+			// Projected to the five columns CostQueryAssembly actually reads (2026-08-06-cost-read-
+			// materialisation-reduction-plan.md Stage 5): a wide-vs-narrow raw read of this table at the
+			// long-history scale (36,500 rows) measured 50.4 ms vs 9.7 ms -- the one worker-scoped load
+			// in this method with a row count large enough for entity-shaping cost to be visible next to
+			// the query itself; every other load here stays in the tens of rows.
 			var exceptions = await context.Set<ScheduleExceptionEntity>().AsNoTracking()
 				.Where(e => workerIds.Contains(e.UserId) && e.StartedAt < bounds.End && e.FinishedAt > bounds.Start)
+				.Select(e => new { e.UserId, e.ScheduleExceptionEffectId, e.StartedAt, e.FinishedAt, e.RateOverride })
 				.ToListAsync(cancellationToken).ConfigureAwait(false);
 			var userCostRates = await context.Set<UserCostRateEntity>().AsNoTracking()
 				.Where(r => workerIds.Contains(r.UserId) && r.EffectiveStart < bounds.End
@@ -304,23 +321,37 @@ internal static class CostQueryAssembly
 			}
 		}
 
-		await ExtendAncestryAsync(context, subtree, workers, cancellationToken).ConfigureAwait(false);
+		var ancestorChainRootIds = await ExtendAncestryAsync(context, subtree, workers, cancellationToken).ConfigureAwait(false);
 
 		if (workers.Count > 0) {
-			// Only nodes actually reachable from a session's own ancestor walk (subtree.NodesById, now
-			// fully extended) can ever be consulted by RateResolver, so this is safe to filter by node
-			// id as well as by time window and worker, unlike UserCostRates (user-wide, not node-scoped).
-			var finalNodeIds = subtree.NodesById.Keys.ToArray();
-			var nodeOverrides = await context.Set<NodeRateOverrideEntity>().AsNoTracking()
-				.Where(o => workerIds.Contains(o.UserId) && finalNodeIds.Contains(o.NodeId)
-														 && o.EffectiveStart < bounds.End &&
-														 (o.EffectiveEnd == null || o.EffectiveEnd > bounds.Start))
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
-			var overridesByWorker = nodeOverrides.ToLookup(overrideEntry => overrideEntry.UserId);
+			// Joins job_node_subtrees(existingRootIds) UNION job_node_ancestor_chains(ancestorChainRootIds)
+			// server-side -- the exact final node set ExtendAncestryAsync just materialized into
+			// subtree.NodesById -- rather than shipping that whole (potentially near-50,000-node) id set
+			// back as an `= ANY(array)` parameter (Stage 3, same rationale as the worker-discovery query
+			// above). Only nodes actually reachable from a session's own ancestor walk can ever be
+			// consulted by RateResolver, so this is safe to filter by node id as well as by time window
+			// and worker, unlike UserCostRates (user-wide, not node-scoped).
+			var overrideQueryRootIdValues = subtree.ExistingRootIds.Select(id => id.Value).ToArray();
+			var workerIdValues = workerIds.Select(id => id.Value).ToArray();
+			var nodeOverrideRows = await context.Database.SqlQuery<NodeOverrideRow>(
+				$"""
+				 SELECT nro.node_id AS "NodeId", nro.user_id AS "UserId", nro.rate AS "Rate",
+				        nro.effective_start AS "EffectiveStart", nro.effective_end AS "EffectiveEnd"
+				 FROM node_rate_override nro
+				 WHERE nro.user_id = ANY({workerIdValues})
+				   AND nro.effective_start < {bounds.End}
+				   AND (nro.effective_end IS NULL OR nro.effective_end > {bounds.Start})
+				   AND nro.node_id IN (
+				       SELECT id FROM job_node_subtrees({overrideQueryRootIdValues})
+				       UNION
+				       SELECT id FROM job_node_ancestor_chains({ancestorChainRootIds})
+				   )
+				 """).ToListAsync(cancellationToken).ConfigureAwait(false);
+			var overridesByWorker = nodeOverrideRows.ToLookup(row => new AppUserId(row.UserId));
 
 			for (var index = 0; index < workers.Count; ++index) {
 				var workerNodeOverrides = overridesByWorker[workerIds[index]]
-					.Select(o => new NodeRateOverride(o.NodeId, o.Rate, o.EffectiveStart, o.EffectiveEnd))
+					.Select(row => new NodeRateOverride(new(row.NodeId), new(row.Rate), row.EffectiveStart, row.EffectiveEnd))
 					.ToArray();
 				workers[index] = workers[index] with { NodeOverrides = EquatableArray.CopyOf(workerNodeOverrides) };
 			}
@@ -329,7 +360,7 @@ internal static class CostQueryAssembly
 		return (bounds, workers);
 	}
 
-	private static async Task ExtendAncestryAsync(
+	private static async Task<long[]> ExtendAncestryAsync(
 		DbContext context, SubtreeLoad subtree, IReadOnlyList<WorkerCostInputs> workers, CancellationToken cancellationToken)
 	{
 		var missingIds = new HashSet<JobNodeId>(subtree.ExistingRootIds);
@@ -340,7 +371,7 @@ internal static class CostQueryAssembly
 		}
 
 		if (missingIds.Count == 0) {
-			return;
+			return [];
 		}
 
 		var missingIdValues = missingIds.Select(id => id.Value).ToArray();
@@ -358,6 +389,8 @@ internal static class CostQueryAssembly
 			subtree.NodesById[id] = new(id, row.ParentId is long parentId ? new JobNodeId(parentId) : null, [], null);
 			subtree.OwnersById[id] = row.OwnerUserId is long ownerUserId ? new AppUserId(ownerUserId) : null;
 		}
+
+		return missingIdValues;
 	}
 
 	/// <summary>
@@ -396,6 +429,12 @@ internal static class CostQueryAssembly
 
 /// <summary>One row of <see cref="CostQueryAssembly.LoadWorkerSessionsAsync" />, mapping the set-based <c>worker_overlapping_sessions</c> invocation.</summary>
 internal sealed record OverlappingSessionRow(long WorkerId, long SessionId, long LeafWorkId, Instant StartedAt, Instant? FinishedAt);
+
+/// <summary>One row of <see cref="CostQueryAssembly.LoadWorkersAndExtendAncestryAsync" />'s grouped worker-discovery query.</summary>
+internal sealed record PerWorkerEarliestStartRow(long WorkerId, Instant EarliestStart);
+
+/// <summary>One row of <see cref="CostQueryAssembly.LoadWorkersAndExtendAncestryAsync" />'s node-override query.</summary>
+internal sealed record NodeOverrideRow(long NodeId, long UserId, decimal Rate, Instant EffectiveStart, Instant? EffectiveEnd);
 
 /// <summary>
 ///     <see cref="CostQueryAssembly.LoadSubtreeAsync" />'s materialized result: the requested roots'

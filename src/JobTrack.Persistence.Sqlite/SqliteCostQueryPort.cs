@@ -222,21 +222,23 @@ internal static class CostQueryAssembly
 		DbContext context, SubtreeLoad subtree, Instant asOf, CancellationToken cancellationToken)
 	{
 		var requestedNodeIds = subtree.NodesById.Keys.ToArray();
-		var earliestRequestedSessionStart = await context.Set<WorkSessionEntity>().AsNoTracking()
+		// One grouped query replaces what were previously a separate MIN and DISTINCT over the
+		// identical filter (2026-08-06-cost-read-materialisation-reduction-plan.md Stage 2): each
+		// worker's own earliest requested-session start is the per-group aggregate, and the query's
+		// earliest overall start (needed for `bounds`) is the cheap client-side minimum over the
+		// resulting per-worker rows -- at most a few dozen, not one per session.
+		var perWorkerEarliestStarts = await context.Set<WorkSessionEntity>().AsNoTracking()
 			.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
-			.Select(s => (Instant?)s.StartedAt)
-			.MinAsync(cancellationToken).ConfigureAwait(false);
+			.GroupBy(s => s.WorkedByUserId)
+			.Select(group => new { WorkerId = group.Key, EarliestStart = group.Min(s => s.StartedAt) })
+			.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var bounds = new WorkInterval(Instant.MinValue, asOf);
 		var workers = new List<WorkerCostInputs>();
 		var workerIds = new List<AppUserId>();
-		if (earliestRequestedSessionStart is Instant earliestStart) {
-			bounds = new(earliestStart, asOf);
-			workerIds = await context.Set<WorkSessionEntity>().AsNoTracking()
-				.Where(s => requestedNodeIds.Contains(s.LeafWorkId) && s.StartedAt < asOf)
-				.Select(s => s.WorkedByUserId)
-				.Distinct()
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
+		if (perWorkerEarliestStarts.Count > 0) {
+			bounds = new(perWorkerEarliestStarts.Min(row => row.EarliestStart), asOf);
+			workerIds = perWorkerEarliestStarts.Select(row => row.WorkerId).ToList();
 			var sessions = await context.Set<WorkSessionEntity>().AsNoTracking()
 				.Where(s => workerIds.Contains(s.WorkedByUserId)
 							&& s.StartedAt < bounds.End && (s.FinishedAt == null || s.FinishedAt > bounds.Start))

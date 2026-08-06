@@ -27,7 +27,35 @@ public static class RateResolver
 		IReadOnlyCollection<NodeRateOverride> nodeOverrides,
 		IReadOnlyCollection<UserCostRate> userCostRates,
 		HourlyRate? userDefaultRate) =>
-		Resolve(nodeId, at, nodesById, exceptions, IndexOverridesByNode(nodeOverrides), userCostRates, userDefaultRate);
+		Resolve(nodeId, at, nodesById, FilterPricedExceptions(exceptions), IndexOverridesByNode(nodeOverrides), userCostRates, userDefaultRate);
+
+	/// <summary>
+	///     Keeps only the exceptions that can ever resolve a rate — priced
+	///     <see cref="ScheduleExceptionEffect.AddWorkingTime" /> entries, the sole effect
+	///     <see cref="ScheduleExceptionEntry" />'s own constructor permits a <see cref="ScheduleExceptionEntry.RateOverride" />
+	///     on — preserving declaration order, since resolution takes the first effective entry it finds.
+	///     A caller resolving many instants against one unchanging exception set — the cost engine
+	///     resolves a rate per segment allocation, against a set that is overwhelmingly unpriced
+	///     removals — filters once and passes the result to the internal overload rather than scanning
+	///     the full list per resolution.
+	/// </summary>
+	internal static List<ScheduleExceptionEntry> FilterPricedExceptions(IReadOnlyCollection<ScheduleExceptionEntry> exceptions)
+	{
+		var priced = new List<ScheduleExceptionEntry>();
+		foreach (var exception in exceptions) {
+			var isPriced = exception.Effect switch {
+				ScheduleExceptionEffect.None => false,
+				ScheduleExceptionEffect.AddWorkingTime => exception.RateOverride is not null,
+				ScheduleExceptionEffect.RemoveWorkingTime => false,
+				_ => throw new ArgumentOutOfRangeException(nameof(exceptions), exception.Effect, "Unknown schedule exception effect."),
+			};
+			if (isPriced) {
+				priced.Add(exception);
+			}
+		}
+
+		return priced;
+	}
 
 	/// <summary>
 	///     Groups <paramref name="nodeOverrides" /> by node once. A caller resolving many instants
@@ -52,28 +80,24 @@ public static class RateResolver
 	}
 
 	/// <summary>
-	///     Resolves against an override index already built by <see cref="IndexOverridesByNode" />.
+	///     Resolves against a priced-exception list already built by
+	///     <see cref="FilterPricedExceptions" /> and an override index already built by
+	///     <see cref="IndexOverridesByNode" />. The rate check itself re-verifies the priced shape, so
+	///     an unfiltered list resolves identically — the filter is purely the per-resolution saving.
 	/// </summary>
 	/// <exception cref="MissingRateException">No rate source applies.</exception>
 	internal static ResolvedRate Resolve(
 		JobNodeId nodeId,
 		Instant at,
 		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
-		IReadOnlyCollection<ScheduleExceptionEntry> exceptions,
+		IReadOnlyList<ScheduleExceptionEntry> pricedExceptions,
 		IReadOnlyDictionary<JobNodeId, List<NodeRateOverride>> overridesByNode,
 		IReadOnlyCollection<UserCostRate> userCostRates,
 		HourlyRate? userDefaultRate)
 	{
-		foreach (var exception in exceptions) {
-			var priced = exception.Effect switch {
-				ScheduleExceptionEffect.None => false,
-				ScheduleExceptionEffect.AddWorkingTime =>
-					exception.RateOverride is not null && exception.Interval.Contains(at),
-				ScheduleExceptionEffect.RemoveWorkingTime => false,
-				_ => throw new ArgumentOutOfRangeException(nameof(exceptions), exception.Effect, "Unknown schedule exception effect."),
-			};
-			if (priced) {
-				return new(exception.RateOverride!.Value, RateSource.OvertimeException);
+		foreach (var exception in pricedExceptions) {
+			if (exception.RateOverride is HourlyRate overtimeRate && exception.Interval.Contains(at)) {
+				return new(overtimeRate, RateSource.OvertimeException);
 			}
 		}
 

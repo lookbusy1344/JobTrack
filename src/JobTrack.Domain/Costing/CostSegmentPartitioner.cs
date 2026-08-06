@@ -91,28 +91,40 @@ public static class CostSegmentPartitioner
 		}
 
 		var boundaries = Boundaries(eligiblePieces, nodesById, exceptions, nodeOverrides, userCostRates, bounds);
-		var startingAt = new Dictionary<Instant, List<int>>();
-		var endingAt = new Dictionary<Instant, List<int>>();
+
+		// Two flat piece-index arrays, one sorted by interval start and one by interval end, swept with
+		// cursors as the boundary walk advances -- every piece edge is itself a boundary, so cursor
+		// catch-up at each boundary visits each piece exactly once overall. Flat sorted arrays rather
+		// than per-instant dictionaries of lists: the piece count grows with the costed window, and this
+		// loop's allocation churn and pointer chasing were measurable next to the arithmetic itself.
+		var startOrder = new int[eligiblePieces.Count];
+		var endOrder = new int[eligiblePieces.Count];
+		var startKeys = new Instant[eligiblePieces.Count];
+		var endKeys = new Instant[eligiblePieces.Count];
 		for (var index = 0; index < eligiblePieces.Count; ++index) {
-			var interval = eligiblePieces[index].Interval;
-			IndexAt(startingAt, interval.Start, index);
-			IndexAt(endingAt, interval.End, index);
+			startOrder[index] = index;
+			endOrder[index] = index;
+			startKeys[index] = eligiblePieces[index].Interval.Start;
+			endKeys[index] = eligiblePieces[index].Interval.End;
 		}
 
+		Array.Sort(startKeys, startOrder);
+		Array.Sort(endKeys, endOrder);
+
+		var startCursor = 0;
+		var endCursor = 0;
 		var activeIndexes = new SortedSet<int>();
 
 		var allocations = new List<SessionSegmentAllocation>();
 		for (var i = 0; i < boundaries.Count - 1; ++i) {
-			if (endingAt.TryGetValue(boundaries[i], out var endingIndexes)) {
-				foreach (var index in endingIndexes) {
-					_ = activeIndexes.Remove(index);
-				}
+			while (endCursor < endKeys.Length && endKeys[endCursor] <= boundaries[i]) {
+				_ = activeIndexes.Remove(endOrder[endCursor]);
+				++endCursor;
 			}
 
-			if (startingAt.TryGetValue(boundaries[i], out var startingIndexes)) {
-				foreach (var index in startingIndexes) {
-					_ = activeIndexes.Add(index);
-				}
+			while (startCursor < startKeys.Length && startKeys[startCursor] <= boundaries[i]) {
+				_ = activeIndexes.Add(startOrder[startCursor]);
+				++startCursor;
 			}
 
 			var segment = new WorkInterval(boundaries[i], boundaries[i + 1]);
@@ -139,16 +151,6 @@ public static class CostSegmentPartitioner
 		}
 
 		return allocations;
-	}
-
-	private static void IndexAt(Dictionary<Instant, List<int>> index, Instant at, int pieceIndex)
-	{
-		if (!index.TryGetValue(at, out var indexes)) {
-			indexes = [];
-			index[at] = indexes;
-		}
-
-		indexes.Add(pieceIndex);
 	}
 
 	/// <summary>
@@ -188,13 +190,16 @@ public static class CostSegmentPartitioner
 	{
 		var overridesByNode = RateResolver.IndexOverridesByNode(nodeOverrides);
 
-		var boundaries = new SortedSet<Instant> { bounds.Start, bounds.End };
+		// A flat list sorted and deduplicated once at the end, not a SortedSet: the boundary count grows
+		// with the costed window, and per-instant tree nodes were measurable allocation churn next to
+		// the sweep itself.
+		var boundaries = new List<Instant> { bounds.Start, bounds.End };
 		// Every piece on the same leaf walks the same ancestor chain and contributes the same override
-		// edges; walking each node once is enough, since `boundaries` is a set either way.
+		// edges; walking each node once is enough, since `boundaries` is deduplicated either way.
 		var walkedNodes = new HashSet<JobNodeId>();
 		foreach (var (session, interval) in eligiblePieces) {
-			_ = boundaries.Add(interval.Start);
-			_ = boundaries.Add(interval.End);
+			boundaries.Add(interval.Start);
+			boundaries.Add(interval.End);
 
 			JobNodeId? ancestorId = session.NodeId;
 			while (ancestorId is JobNodeId id && walkedNodes.Add(id)) {
@@ -216,32 +221,51 @@ public static class CostSegmentPartitioner
 			AddClippedBoundary(boundaries, exception.Interval.Start, exception.Interval.End, bounds);
 		}
 
-		return [.. boundaries];
+		boundaries.Sort();
+		var lastUnique = 0;
+		for (var index = 1; index < boundaries.Count; ++index) {
+			if (boundaries[index] != boundaries[lastUnique]) {
+				boundaries[++lastUnique] = boundaries[index];
+			}
+		}
+
+		boundaries.RemoveRange(lastUnique + 1, boundaries.Count - lastUnique - 1);
+		return boundaries;
 	}
 
-	private static void AddClippedBoundary(SortedSet<Instant> boundaries, Instant start, Instant? end, WorkInterval bounds)
+	private static void AddClippedBoundary(List<Instant> boundaries, Instant start, Instant? end, WorkInterval bounds)
 	{
 		if (start > bounds.Start && start < bounds.End) {
-			_ = boundaries.Add(start);
+			boundaries.Add(start);
 		}
 
 		if (end is Instant exclusiveEnd && exclusiveEnd > bounds.Start && exclusiveEnd < bounds.End) {
-			_ = boundaries.Add(exclusiveEnd);
+			boundaries.Add(exclusiveEnd);
 		}
 	}
 
 	private static void ValidateNoSameLeafOverlap(IReadOnlyCollection<CostableSession> sessions)
 	{
-		foreach (var group in sessions.GroupBy(session => session.NodeId)) {
-			CostableSession? previous = null;
-			foreach (var session in group.OrderBy(session => session.Interval.Start).ThenBy(session => session.Interval.End)) {
-				if (previous is not null && IntervalAlgebra.Overlaps(previous.Interval, session.Interval)) {
-					throw new InvariantViolationException(
-						"work-session.same-user-leaf-overlap",
-						$"Sessions {previous.SessionId.Value} and {session.SessionId.Value} overlap on leaf {session.NodeId.Value}.");
-				}
+		// One sort by (leaf, start, end) puts each leaf's sessions adjacent, so overlap needs only each
+		// consecutive same-leaf pair -- no per-leaf grouping structures for a check that runs against
+		// every costed session set.
+		var ordered = sessions.ToArray();
+		Array.Sort(ordered, static (left, right) => {
+			var byNode = left.NodeId.Value.CompareTo(right.NodeId.Value);
+			if (byNode != 0) {
+				return byNode;
+			}
 
-				previous = session;
+			var byStart = left.Interval.Start.CompareTo(right.Interval.Start);
+			return byStart != 0 ? byStart : left.Interval.End.CompareTo(right.Interval.End);
+		});
+		for (var index = 1; index < ordered.Length; ++index) {
+			var previous = ordered[index - 1];
+			var session = ordered[index];
+			if (previous.NodeId == session.NodeId && IntervalAlgebra.Overlaps(previous.Interval, session.Interval)) {
+				throw new InvariantViolationException(
+					"work-session.same-user-leaf-overlap",
+					$"Sessions {previous.SessionId.Value} and {session.SessionId.Value} overlap on leaf {session.NodeId.Value}.");
 			}
 		}
 	}

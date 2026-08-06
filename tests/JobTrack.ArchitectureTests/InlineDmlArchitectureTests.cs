@@ -121,6 +121,16 @@ public sealed class InlineDmlArchitectureTests
 			"SqlQuery",
 			"job_node_ancestor_chains"),
 		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlCostQueryPort.cs"),
+			"LoadWorkersAndExtendAncestryAsync",
+			"SqlQuery",
+			"GROUP BY ws.worked_by_user_id"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlCostQueryPort.cs"),
+			"LoadWorkersAndExtendAncestryAsync",
+			"SqlQuery",
+			"node_rate_override"),
+		new(
 			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteCostQueryPort.cs"),
 			"LoadSubtreeAsync",
 			"SqlQueryRaw",

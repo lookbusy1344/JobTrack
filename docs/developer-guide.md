@@ -201,6 +201,21 @@ a substantial closing commit), not the per-commit gate. Any arguments are passed
 `perf-test.sh` (and so on to its `dotnet test` invocation), e.g. `./scripts/all-test.sh --filter
 "FullyQualifiedName~FullTableHierarchyLoadPerformanceTests"`.
 
+### Console logging in test hosts
+
+`tests/web-test-hosts.runsettings` sets `Logging__Console__LogLevel__Default=Warning` for
+`JobTrack.Web.IntegrationTests` and `JobTrack.Web.EndToEndTests` (each wires it in via
+`<RunSettingsFilePath>`), so a test run's output carries warnings and failures rather than a
+per-request `api_request` line from `ApiTelemetryFilter` and an authentication line per rejected
+bearer token. The end-to-end fixtures' child `dotnet JobTrack.Web.dll` processes inherit the
+variable through their environment.
+
+It is scoped to the console provider, not to `Logging:LogLevel`, because `ApiOperationalQualitiesTests`
+and `SensitiveLoggingTests` attach their own capturing `ILoggerProvider` and assert on
+Information-level entries — those two are what fails if it is ever widened. `appsettings.json` and
+`appsettings.Development.json` are untouched, so a deployment and
+`dotnet run --project src/JobTrack.Web` log exactly as before.
+
 ### Cleaning up orphaned test databases
 
 Each database-contract test class creates a disposable, uniquely named PostgreSQL database and

@@ -232,4 +232,50 @@ public sealed class CostEngineTests
 		reversed.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).Should().Equal(expected);
 		overlapping.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).Should().Equal(expected);
 	}
+
+	/// <summary>
+	///     The long-history scale's engine-side shape (performance-budgets.md §1: 5 years of daily
+	///     sessions and daily unpriced schedule exceptions per worker, 20 workers), isolated from any
+	///     database. Rate resolution runs once per allocation, and each resolution must not scan the
+	///     worker's full exception list — that is O(allocations × exceptions) across a shape where every
+	///     exception here is an unpriced <see cref="ScheduleExceptionEffect.RemoveWorkingTime" /> entry
+	///     that can never resolve a rate. The ceiling is deliberately generous for the parallelized fast
+	///     lane (it only needs to separate the quadratic shape from the linear one); the serialized perf
+	///     lane's <c>LongHistoryScalePerformanceTests</c> owns the tight end-to-end ceilings.
+	/// </summary>
+	[Fact]
+	public void Costing_twenty_workers_of_five_year_daily_sessions_against_daily_exceptions_stays_fast()
+	{
+		const int days = 5 * 365;
+		const int workerCount = 20;
+		var sessions = new List<CostableSession>(days);
+		var workingIntervals = new List<WorkInterval>(days);
+		var exceptions = new List<ScheduleExceptionEntry>(days);
+		for (var day = 0; day < days; ++day) {
+			var dayStart = Instant.FromUtc(2021, 1, 1, 0, 0) + Duration.FromDays(day);
+			sessions.Add(new(new(day + 1), LeafId, new(dayStart + Duration.FromHours(9), dayStart + Duration.FromHours(10))));
+			workingIntervals.Add(new(dayStart, dayStart + Duration.FromHours(24)));
+			exceptions.Add(new(
+				ScheduleExceptionEffect.RemoveWorkingTime,
+				new(dayStart + Duration.FromHours(12), dayStart + Duration.FromHours(13)),
+				null));
+		}
+
+		var nodes = SingleLeafUnderRoot();
+		var bounds = new WorkInterval(Instant.FromUtc(2021, 1, 1, 0, 0), Instant.FromUtc(2026, 1, 1, 0, 0));
+		var allocations = CostSegmentPartitioner.Partition(sessions, workingIntervals, nodes, exceptions, [], [], bounds);
+
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+		CostCalculation calculation = null!;
+		for (var worker = 0; worker < workerCount; ++worker) {
+			calculation = CostEngine.Calculate(
+				RootId, allocations, nodes, workingIntervals, exceptions, [], [], new HourlyRate(60m));
+		}
+
+		stopwatch.Stop();
+
+		calculation.ExactCosts[RootId].Should().Be(new(days * 60m));
+		stopwatch.Elapsed.Should().BeLessThan(
+			TimeSpan.FromMilliseconds(200), "rate resolution must not scan every schedule exception per allocation");
+	}
 }

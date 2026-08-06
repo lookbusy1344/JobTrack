@@ -240,5 +240,38 @@ public sealed class IntervalAlgebraTests
 
 			result.Should().Equal(Between(9, 17));
 		}
+
+		/// <summary>
+		///     2026-08-06-cost-read-materialisation-reduction-plan.md Stage 4: reproduces the long-history
+		///     scale's own shape (one worker's 5-year daily schedule resolved against 5 years of daily
+		///     schedule exceptions, performance-budgets.md §1) at the domain layer, in isolation from any
+		///     database. The original O(minuend x cuts) implementation measured 378.5 ms for this input
+		///     (a standalone microbenchmark, 2026-08-06); a linear-time implementation over the same,
+		///     already-sorted-and-disjoint inputs must run in a small fraction of that. The ceiling is
+		///     deliberately generous (measured post-fix: ~10 ms): this test runs in the parallelized fast
+		///     lane, not the serialized perf lane that is the accepted evidence channel for a tight
+		///     ceiling, so it only needs to separate quadratic (~400 ms) from linear under CI contention.
+		/// </summary>
+		[Fact]
+		public void Resolving_a_five_year_daily_schedule_against_five_years_of_daily_exceptions_stays_fast()
+		{
+			const int days = 5 * 365;
+			var scheduled = new List<WorkInterval>(days);
+			var exceptions = new List<WorkInterval>(days);
+			for (var day = 0; day < days; ++day) {
+				var dayStart = Instant.FromUtc(2021, 1, 1, 0, 0) + Duration.FromDays(day);
+				scheduled.Add(new(dayStart, dayStart + Duration.FromHours(23) + Duration.FromMinutes(59) + Duration.FromSeconds(59)));
+				var exceptionStart = dayStart + Duration.FromHours(12);
+				exceptions.Add(new(exceptionStart, exceptionStart + Duration.FromHours(1)));
+			}
+
+			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+			var result = IntervalAlgebra.Subtract(scheduled, exceptions);
+			stopwatch.Stop();
+
+			result.Should().HaveCount(days * 2);
+			stopwatch.Elapsed.Should().BeLessThan(
+				TimeSpan.FromMilliseconds(200), "Subtract must not be quadratic in already-sorted, disjoint minuend/cuts counts");
+		}
 	}
 }

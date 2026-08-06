@@ -23,6 +23,15 @@ public static class PerformanceScaleGenerator
 	private const decimal OverlapDefaultHourlyRate = 20.00m;
 	private const decimal OverlapRateEdgeStep = 5.00m;
 
+	// Long-history scale (docs/traceability/performance-budgets.md §1 "Long history").
+	private const int LongHistoryDefaultWorkerCount = 20;
+	private const int LongHistoryDefaultDays = 5 * 365;
+	private const decimal LongHistoryDefaultHourlyRate = 18.00m;
+	private const int LongHistorySessionStartHour = 9;
+	private const int LongHistorySessionDurationHours = 1;
+	private const int LongHistoryExceptionStartHour = 12;
+	private const int LongHistoryExceptionDurationHours = 1;
+
 	// A foreign-key check takes a row-level lock on the referenced row for
 	// the rest of the transaction, and every distinct referenced row within
 	// one statement/transaction consumes one shared-memory lock-table slot
@@ -820,6 +829,186 @@ public static class PerformanceScaleGenerator
 		command.Parameters.AddWithValue("branchId", branchId);
 		return (long)(await command.ExecuteScalarAsync())!;
 	}
+
+	/// <summary>
+	///     "Long history" (§1): one <c>job_node</c> subtree (one branch, one leaf per worker) with
+	///     <paramref name="days" /> days of daily <c>work_session</c> rows for
+	///     <paramref name="workerCount" /> workers (≈36,500 sessions at the defaults, one leaf-day per
+	///     worker) plus the same number of daily <c>user_schedule_exception</c> rows (an unpriced daily
+	///     lunch-break <c>RemoveWorkingTime</c> exception per worker, so it never trips the priced-additive
+	///     no-overlap exclusion constraint). Each worker has one 24x7 weekly schedule version spanning the
+	///     whole window, so <c>ScheduleExpander</c> must expand one interval per calendar day across the
+	///     full costed window regardless of how sparse that worker's actual sessions are within it -- the
+	///     shape 2026-08-06-cost-read-materialisation-reduction-plan §2.1 measures. Returns the seeded
+	///     anchors plus a deterministic seed string (§6.6's reproducibility rule).
+	/// </summary>
+	public static async Task<LongHistoryScaleSeed> SeedLongHistoryScaleAsync(
+		NpgsqlConnection connection,
+		DateTimeOffset baseInstant,
+		int workerCount = LongHistoryDefaultWorkerCount,
+		int days = LongHistoryDefaultDays)
+	{
+		if (workerCount <= 0) {
+			throw new ArgumentOutOfRangeException(nameof(workerCount), workerCount, "Worker count must be positive.");
+		}
+
+		if (days <= 0) {
+			throw new ArgumentOutOfRangeException(nameof(days), days, "Day count must be positive.");
+		}
+
+		var workerIds = await InsertLongHistoryWorkersAsync(connection, workerCount);
+		var rootId = await InsertOverlapRootAsync(connection, workerIds[0]);
+		var branchId = await InsertLongHistoryBranchAsync(connection, rootId, workerIds[0]);
+		var leafIdByWorker = await InsertLongHistoryLeavesAsync(connection, branchId, workerIds);
+
+		await InsertLongHistorySessionsAsync(connection, branchId, baseInstant, days);
+		await InsertWeekly24x7SchedulesAsync(connection, workerIds, baseInstant);
+		await InsertLongHistoryExceptionsAsync(connection, workerIds, baseInstant, days);
+
+		// A bulk-loaded table has no fresh statistics yet -- this fixture's own setup cost, not a
+		// production concern (autovacuum keeps them current as sessions accumulate gradually); see
+		// every other scale generator's identical note in this file.
+		await using (var analyzeCommand = connection.CreateCommand()) {
+			analyzeCommand.CommandText = "ANALYZE work_session; ANALYZE user_schedule_exception; ANALYZE job_node; ANALYZE leaf_work;";
+			_ = await analyzeCommand.ExecuteNonQueryAsync();
+		}
+
+		var asOf = baseInstant.AddDays(days + 1);
+		var seed = $"workers={workerCount};days={days};base={baseInstant:O}";
+
+		return new(workerIds[0], leafIdByWorker[workerIds[0]], branchId, asOf, seed, EquatableArray.CopyOf(workerIds));
+	}
+
+	private static async Task<long[]> InsertLongHistoryWorkersAsync(NpgsqlConnection connection, int count)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO app_user (display_name, iana_time_zone, default_hourly_rate)
+							  SELECT 'Long-history worker ' || g, 'Europe/London', @defaultHourlyRate
+							  FROM generate_series(1, @count) AS g
+							  RETURNING id;
+							  """;
+		command.Parameters.AddWithValue("count", count);
+		command.Parameters.AddWithValue("defaultHourlyRate", LongHistoryDefaultHourlyRate);
+
+		var ids = new List<long>();
+		await using var reader = await command.ExecuteReaderAsync();
+		while (await reader.ReadAsync()) {
+			ids.Add(reader.GetInt64(0));
+		}
+
+		return [.. ids];
+	}
+
+	private static async Task<long> InsertLongHistoryBranchAsync(NpgsqlConnection connection, long rootId, long ownerUserId)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)
+							  VALUES (@rootId, 'Long history branch', @ownerUserId, @ownerUserId, @priorityId, now())
+							  RETURNING id;
+							  """;
+		command.Parameters.AddWithValue("rootId", rootId);
+		command.Parameters.AddWithValue("ownerUserId", ownerUserId);
+		command.Parameters.AddWithValue("priorityId", PriorityMedium);
+		return (long)(await command.ExecuteScalarAsync())!;
+	}
+
+	/// <summary>One leaf per worker under <paramref name="branchId" />, keyed by owner user id.</summary>
+	private static async Task<Dictionary<long, long>> InsertLongHistoryLeavesAsync(
+		NpgsqlConnection connection, long branchId, long[] workerIds)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  WITH inserted_leaves AS (
+							      INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)
+							      SELECT @branchId, 'Long history leaf', u, u, @priorityId, now()
+							      FROM unnest(@workerIds) AS u
+							      RETURNING id, owner_user_id
+							  ),
+							  inserted_leaf_work AS (
+							      INSERT INTO leaf_work (job_node_id, changed_at)
+							      SELECT id, now() FROM inserted_leaves
+							      RETURNING job_node_id
+							  )
+							  SELECT ilw.job_node_id, il.owner_user_id
+							  FROM inserted_leaf_work ilw
+							  JOIN inserted_leaves il ON il.id = ilw.job_node_id;
+							  """;
+		command.Parameters.AddWithValue("branchId", branchId);
+		command.Parameters.AddWithValue("priorityId", PriorityMedium);
+		command.Parameters.AddWithValue("workerIds", workerIds);
+
+		var leafIdByWorker = new Dictionary<long, long>();
+		await using var reader = await command.ExecuteReaderAsync();
+		while (await reader.ReadAsync()) {
+			leafIdByWorker[reader.GetInt64(1)] = reader.GetInt64(0);
+		}
+
+		return leafIdByWorker;
+	}
+
+	/// <summary>
+	///     One daily <c>work_session</c> per worker on their own leaf under <paramref name="branchId" />,
+	///     for <paramref name="days" /> days starting at <paramref name="baseInstant" />'s date -- a single
+	///     set-based statement, since the leaves it references number one per worker (well under
+	///     <see cref="LockSafeBatchSize" />) regardless of how many day-rows are generated against them.
+	/// </summary>
+	private static async Task InsertLongHistorySessionsAsync(
+		NpgsqlConnection connection, long branchId, DateTimeOffset baseInstant, int days)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  WITH targets AS (
+							      SELECT lw.job_node_id AS leaf_id, jn.owner_user_id AS user_id
+							      FROM leaf_work lw
+							      JOIN job_node jn ON jn.id = lw.job_node_id
+							      WHERE jn.parent_id = @branchId
+							  )
+							  INSERT INTO work_session (leaf_work_id, worked_by_user_id, started_at, finished_at, changed_at)
+							  SELECT t.leaf_id, t.user_id,
+							         @baseInstant + make_interval(days => d) + make_interval(hours => @sessionStartHour),
+							         @baseInstant + make_interval(days => d) + make_interval(hours => @sessionStartHour + @sessionDurationHours),
+							         now()
+							  FROM targets t
+							  CROSS JOIN generate_series(0, @days - 1) AS d;
+							  """;
+		command.Parameters.AddWithValue("branchId", branchId);
+		command.Parameters.AddWithValue("baseInstant", baseInstant);
+		command.Parameters.AddWithValue("sessionStartHour", LongHistorySessionStartHour);
+		command.Parameters.AddWithValue("sessionDurationHours", LongHistorySessionDurationHours);
+		command.Parameters.AddWithValue("days", days);
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	/// <summary>
+	///     One daily unpriced <c>RemoveWorkingTime</c> exception (a lunch break) per worker for
+	///     <paramref name="days" /> days -- subtractive and unpriced, so it never engages
+	///     <c>user_schedule_exception_no_overlap_priced_additive</c>.
+	/// </summary>
+	private static async Task InsertLongHistoryExceptionsAsync(
+		NpgsqlConnection connection, long[] workerIds, DateTimeOffset baseInstant, int days)
+	{
+		const short removeWorkingTimeEffectId = 2;
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO user_schedule_exception
+							  	(user_id, started_at, finished_at, effect_id, rate_override, reason, created_by, changed_at)
+							  SELECT u, @baseInstant + make_interval(days => d) + make_interval(hours => @exceptionStartHour),
+							         @baseInstant + make_interval(days => d) + make_interval(hours => @exceptionStartHour + @exceptionDurationHours),
+							         @effectId, NULL, 'Daily lunch break', u, now()
+							  FROM unnest(@workerIds) AS u
+							  CROSS JOIN generate_series(0, @days - 1) AS d;
+							  """;
+		command.Parameters.AddWithValue("workerIds", workerIds);
+		command.Parameters.AddWithValue("baseInstant", baseInstant);
+		command.Parameters.AddWithValue("exceptionStartHour", LongHistoryExceptionStartHour);
+		command.Parameters.AddWithValue("exceptionDurationHours", LongHistoryExceptionDurationHours);
+		command.Parameters.AddWithValue("effectId", removeWorkingTimeEffectId);
+		command.Parameters.AddWithValue("days", days);
+		_ = await command.ExecuteNonQueryAsync();
+	}
 }
 
 /// <summary>
@@ -838,3 +1027,19 @@ public sealed record OverlappingCostScaleSeed(
 	string Seed,
 	long? HeavyWorkerId,
 	long? HeavyWorkerBranchId);
+
+/// <summary>
+///     Anchor ids and a human-readable, fully deterministic parameter record ("seed") for a generated
+///     long-history scale (docs/traceability/performance-budgets.md §1). <see cref="OwnerActorId" />
+///     is the first seeded worker, granted <c>CostViewer</c> separately by the performance test that
+///     needs it. <see cref="OneLeafId" /> is that same worker's own leaf under <see cref="BranchId" />
+///     (the seeded subtree root); <see cref="WorkerIds" /> is every worker for tests that need the
+///     full set (e.g. asserting session totals).
+/// </summary>
+public sealed record LongHistoryScaleSeed(
+	long OwnerActorId,
+	long OneLeafId,
+	long BranchId,
+	DateTimeOffset AsOf,
+	string Seed,
+	EquatableArray<long> WorkerIds);

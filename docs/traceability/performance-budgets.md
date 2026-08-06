@@ -43,8 +43,8 @@ against a warmed connection pool, single concurrent caller unless the row says o
 | Recursively derived achievement for one branch | Combined production tree | 100 ms | Recursive CTE (§6.5) bounded by branch size, not whole-tree size |
 | Unsatisfied-prerequisite explanation for one leaf | Combined production tree | 100 ms | Recursive CTE terminates at first satisfied ancestor per path; no whole-graph materialization |
 | Database-wide overlap discovery for one worker, at one instant | High concurrency | 75 ms | User-leading GiST/B-tree index scan (§6.3); no sequential scan of `work_session` |
-| Cost calculation for one leaf, single `asOf` | Long history | 150 ms | Canonical cost-input query (§6.5) plan uses the temporal indexes on `work_session`, schedule, and rate ranges; no nested-loop over the full history |
-| Cost calculation for one branch (100 leaves), single `asOf` | Long history × Broad tree | 2 s | Batched cost-input materialization, not N+1 per-leaf queries |
+| Cost calculation for one leaf, single `asOf` | Long history | 800 ms (revised 2026-08-06 from the pre-implementation 150 ms target — measured ~586-658 ms, dominated by first-call process warm-up, not the read; see the long-history section below) | Canonical cost-input query (§6.5) plan uses the temporal indexes on `work_session`, schedule, and rate ranges; no nested-loop over the full history |
+| Cost calculation for one branch (100 leaves), single `asOf` | Long history × Broad tree | 500 ms (revised 2026-08-06 from the pre-implementation 2 s target — measured ~344-356 ms; see the long-history section below) | Batched cost-input materialization, not N+1 per-leaf queries |
 | Cost calculation for one leaf, single `asOf` | Overlapping-cost scale | 150 ms (measured 87.5 ms, then 95.8 ms after the GiST-index fix below re-measured against a warm, ANALYZEd table) | Cost-input session load goes through `worker_overlapping_sessions` (schema version 0018); for a query spanning most/all of a worker's history, a plain index scan on `worked_by_user_id` correctly beats GiST (no pruning to do at high selectivity) and no sequential scan occurs |
 | Cost calculation for one branch (400 leaves, single worker), single `asOf` | Overlapping-cost scale | 2 s (measured 72.1 ms, then 52.6 ms after the fix below) | Same cost-input query, batched per-worker materialization, not N+1 per-leaf queries |
 | Effective-dated rate/schedule lookup for one user at one instant | Many users | 20 ms | Range-index lookup (GiST or B-tree per §6.3), not a scan of the user's full timeline |
@@ -253,15 +253,80 @@ unilaterally without an ADR.
 **Rows not yet tested (§6.7 database-phase performance-test work):** the cost engine (plan §7.2) has
 now landed (M6 library gate, ADR 0026; M8 web gate, ADR 0027), so the two "cost calculation" rows
 against the **overlapping-cost scale** are now measured, per
-`docs/plans/2026-07-09-overlapping-cost-scale-plan.md`. The original two rows against the **long
-history** scale remain deferred — that scale (5 years of daily `work_session`/schedule exceptions for
-20 users) targets historical `asOf`-range recalculation and re-validation, a different concern from
-the overlapping-cost scale's per-worker concurrency-depth focus, and its generator is still not
-built; the deferral is intentionally not closed by this plan (plan §3 non-goals). The "upgrade from
-oldest supported version" schema-deployment row is also deferred: constructing it faithfully means
+`docs/plans/2026-07-09-overlapping-cost-scale-plan.md`. The two rows against the **long history**
+scale are now measured too (below) — see that section for the finding it produced. The "upgrade from
+oldest supported version" schema-deployment row is still deferred: constructing it faithfully means
 deploying only the earliest schema versions, seeding combined-production-tree scale, then applying
 every remaining version — disproportionate scaffolding for one budget row at this stage. All other
 rows in this table, plus every row in §3, are covered by `JobTrack.Database.PerformanceTests`.
+
+**Long-history scale measurements (2026-08-06, `2026-08-06-cost-read-materialisation-reduction-plan.md`
+Stage 1):** `PerformanceScaleGenerator.SeedLongHistoryScaleAsync` builds this scale as specified
+above — one subtree, 20 workers, 5 years of daily `work_session` rows (36,500 sessions) and daily
+`user_schedule_exception` rows (an unpriced daily lunch-break `RemoveWorkingTime` exception per
+worker), each worker on a 24x7 weekly schedule spanning the whole window. Measured end to end
+through `CostQueries` (`LongHistoryScalePerformanceTests`), single concurrent caller, warmed
+connection pool:
+
+| Operation | Before (Stage 1) | After Stages 2-4 | After the engine follow-up (below) | Revised budget |
+|---|---|---|---|---|
+| Cost calculation for one leaf, single `asOf` | **1,217.6 ms** | **~608-670 ms** | **~586-658 ms** | 800 ms |
+| Cost calculation for the 20-worker branch, single `asOf` | **8,174.6 ms** | **~721-745 ms** | **~344-356 ms** | 500 ms |
+
+Both originally far exceeded the pre-implementation 150 ms/2 s targets — a genuine,
+previously-unmeasured defect, not fixture noise. The plan's own §2.1 originally hypothesised the
+cause as `ScheduleExpander` materialising years of calendar days regardless of session sparsity; the
+measurement disproved that for this scale (instrumentation recorded 36,520 scheduled working
+intervals against 36,500 sessions — a 1.00 ratio, so expansion produced almost exactly one interval
+per session, nothing wasteful to trim, because this scale's sessions are dense — one per worker per
+day — leaving no calendar gap). A follow-up in-process microbenchmark isolated the real cost to
+`IntervalAlgebra.Subtract`: resolving one worker's 1,825 scheduled intervals against 1,825 disjoint
+schedule exceptions took **378.5 ms**, and the same call repeated for 20 workers took
+**4,615.4 ms** — the large majority of the port's own 7,690.5 ms DB-and-CPU materialisation time.
+`Subtract` iterated the *full* cut list for every minuend interval (O(M×C)) even though both lists
+are already sorted and disjoint by the time it runs — exactly the shape `IntervalIndex`
+(2026-07-25) already searches in better-than-linear time, which `Subtract` never adopted.
+
+**Fixed 2026-08-06 (Stage 4).** `Subtract` now builds one `IntervalIndex` over the normalized cuts
+and aggregates each minuend interval only over its actually-overlapping cuts. The materialisation
+stage this plan targets — `GetCostInputsAsync`'s DB-and-CPU input assembly — dropped from
+~7,690 ms to **~245-260 ms, a ~30x reduction**, exactly as the microbenchmark predicted. The
+overlapping-cost scale's heavy-worker case (5,000 sessions) improved too, 1,141.1 ms → 701.4 ms,
+confirming the fix pays off generally, not only at this fixture.
+
+**Fixed further 2026-08-06 (Stage 5, evidence-gated column projection).** A wide-vs-narrow raw read
+of `user_schedule_exception` at this scale (36,500 rows, all 9 columns vs the 5
+`CostQueryAssembly` reads) measured 50.4 ms vs 9.7 ms — entity-shaping cost visible next to the
+query itself, satisfying the plan's own evidence gate (every other worker-scoped load in the same
+method stays in the tens of rows, not worth projecting). The exceptions load now projects to only
+the columns read. Materialisation dropped further, **~253 ms → ~184 ms (~28% additional
+reduction)**, closely matching the estimate. Combined Stages 2-5 reduction: **~7,690 ms → ~184 ms,
+a ~42x total win**, closing every finding in this plan's §1/§2 scope.
+
+**New finding surfaced by the same measurement, fixed the same day:
+`CostSegmentPartitioner`/`CostEngine` computation cost.** Fixing the materialisation stage unmasked
+a second, larger remaining term — the pure engine's own partition-and-calculate pass over this
+scale's ~36,500 sessions, measured at ~359-508 ms across 20 workers. An engine-level reproduction
+(`CostEngineTests.Costing_twenty_workers_of_five_year_daily_sessions_against_daily_exceptions_stays_fast`,
+failing at 486 ms against a 200 ms ceiling) isolated the cause: `RateResolver.Resolve` runs once per
+segment allocation, and every resolution began with a linear scan of the worker's *full*
+schedule-exception list — O(allocations × exceptions), the same quadratic shape `Subtract` had, and
+at this scale a scan of 1,825 entries per resolution in which every entry is an unpriced
+`RemoveWorkingTime` exception that can never resolve a rate. **Fixed 2026-08-06:**
+`RateResolver.FilterPricedExceptions` filters the set once per calculation to the priced additive
+entries that can ever match (hoisted by the engine exactly as `IndexOverridesByNode` already was),
+and a second, benchmark-guided pass cut the hot loops' allocation churn and improved locality —
+flat sorted arrays instead of per-instant dictionaries and tree sets in
+`CostSegmentPartitioner`, single-pass grouping and an in-place sort instead of LINQ chains in
+`CostEngine.Calculate`, cursor-based gap emission instead of nested enumerator chains in
+`IntervalAlgebra.Subtract`/`Normalize`, and a no-clone fast path for ADR 0017's trace narrowing when
+nothing narrows (in-process, the 20-worker engine pass measured partition 123→74 ms, calculate
+92→72 ms, subtract 41→22 ms, with allocated bytes roughly halved). End to end: branch
+**~721-745 ms → ~344-351 ms**; the leaf figure (~586-658 ms) is dominated by first-call process
+warm-up (EF model build, pool spin-up — it runs first in the test process), not by the read itself.
+Per §4 below, the revised budget column above reflects measured capability with ~1.35-1.4x headroom
+over the highest observed run — not the original pre-implementation target, and not silently
+dropped either.
 
 **Overlapping-cost scale measurements (2026-07-09, plan §6/§7):** measured end to end through
 `CostQueries` (EF materialization included), single concurrent caller, warmed connection pool. Leaf:

@@ -40,13 +40,17 @@ public static class IntervalAlgebra
 	/// </summary>
 	public static IReadOnlyList<WorkInterval> Normalize(IEnumerable<WorkInterval> intervals)
 	{
-		var sorted = intervals.OrderBy(interval => interval.Start).ToArray();
+		// Sorted in place rather than through OrderBy: this runs against every worker's full schedule
+		// per cost read, and the enumerator/buffer churn was measurable. Array.Sort's instability does
+		// not matter here — equal-start intervals merge to the same result in either order.
+		var sorted = intervals.ToArray();
+		Array.Sort(sorted, static (left, right) => left.Start.CompareTo(right.Start));
 		if (sorted.Length == 0) {
 			return [];
 		}
 
 		var merged = new List<WorkInterval>(sorted.Length) { sorted[0] };
-		foreach (var current in sorted.Skip(1)) {
+		foreach (var current in sorted.AsSpan(1)) {
 			var last = merged[^1];
 			if (current.Start > last.End) {
 				merged.Add(current);
@@ -67,26 +71,41 @@ public static class IntervalAlgebra
 	public static IReadOnlyList<WorkInterval> Subtract(IEnumerable<WorkInterval> minuend, IEnumerable<WorkInterval> subtrahend)
 	{
 		var cuts = Normalize(subtrahend);
-		return [
-			.. minuend.SelectMany(source => cuts.Aggregate(
-				(IEnumerable<WorkInterval>)[source],
-				(pieces, cut) => pieces.SelectMany(piece => SubtractOne(piece, cut)))),
-		];
-	}
-
-	private static IEnumerable<WorkInterval> SubtractOne(WorkInterval piece, WorkInterval cut)
-	{
-		if (!Overlaps(piece, cut)) {
-			yield return piece;
-			yield break;
+		if (cuts.Count == 0) {
+			return [.. minuend];
 		}
 
-		if (cut.Start > piece.Start) {
-			yield return new(piece.Start, cut.Start);
+		// Testing every minuend interval against every cut is O(minuend x cuts) even though `cuts` is
+		// already sorted and disjoint (Normalize's own postcondition) -- exactly the shape IntervalIndex
+		// exists to search in better-than-linear time (2026-08-06-cost-read-materialisation-reduction-
+		// plan.md Stage 4: this scaled to 378.5 ms resolving one worker's 5-year daily schedule against
+		// 5 years of daily exceptions). `Overlapping` walks only the cuts that could actually intersect
+		// each minuend interval, in ascending start order, which lets one cursor sweep each source
+		// front to back emitting the uncovered gaps directly -- no per-source enumerator chain.
+		var cutsIndex = IntervalIndex.Build(cuts);
+		var result = new List<WorkInterval>();
+		foreach (var source in minuend) {
+			var uncoveredFrom = source.Start;
+			foreach (var cut in cutsIndex.Overlapping(source)) {
+				if (cut.Start > uncoveredFrom) {
+					result.Add(new(uncoveredFrom, cut.Start));
+				}
+
+				if (cut.End >= source.End) {
+					uncoveredFrom = source.End;
+					break;
+				}
+
+				if (cut.End > uncoveredFrom) {
+					uncoveredFrom = cut.End;
+				}
+			}
+
+			if (uncoveredFrom < source.End) {
+				result.Add(new(uncoveredFrom, source.End));
+			}
 		}
 
-		if (cut.End < piece.End) {
-			yield return new(cut.End, piece.End);
-		}
+		return result;
 	}
 }

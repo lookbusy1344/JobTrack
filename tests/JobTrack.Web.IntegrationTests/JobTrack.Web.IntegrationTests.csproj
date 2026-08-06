@@ -8,6 +8,8 @@
              expression statements whose value is intentionally discarded. Source projects do not
              suppress IDE0058 — they use explicit discards instead. -->
         <NoWarn>$(NoWarn);CA1707;IDE0058</NoWarn>
+        <!-- Quiets the JobTrack.Web console logger in test hosts; see the file's own comment. -->
+        <RunSettingsFilePath>$(MSBuildThisFileDirectory)../web-test-hosts.runsettings</RunSettingsFilePath>
     </PropertyGroup>
 
     <ItemGroup>
