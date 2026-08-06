@@ -18,6 +18,10 @@ host is built) when any of these is left unconfigured and `ASPNETCORE_ENVIRONMEN
 - `DataProtection:KeyPath` — an absolute filesystem path outside the application's deployment
   directory (so a redeploy that replaces the app directory doesn't discard the key ring, and so an
   application-level path-traversal bug can't reach it through a relative path).
+- `DataProtection:CertificatePath` — an absolute path to a PKCS#12 certificate containing its private
+  key. ASP.NET Core uses it to encrypt each persisted data-protection XML key.
+- `DataProtection:CertificatePasswordPath` — an absolute path to a protected file containing the
+  PKCS#12 password. Keep the password out of environment variables and process arguments.
 - `AllowedHosts` — a `;`-separated list of the host names this deployment answers to, e.g.
   `jobtrack.example.com` or `jobtrack.example.com;www.jobtrack.example.com`. ASP.NET Core's own
   default (unset, or `*`) disables host filtering entirely, which lets a request forge the absolute
@@ -30,9 +34,10 @@ host is built) when any of these is left unconfigured and `ASPNETCORE_ENVIRONMEN
 `Startup_fails_closed_outside_development_without_forwarded_header_configuration` covers the
 forwarded-headers one; `..._without_a_data_protection_key_path` covers data protection, isolated by
 configuring a trusted proxy so only that guard is exercised;
+`..._without_a_data_protection_certificate` covers application-level encryption of persisted keys;
 `Startup_fails_closed_outside_development_with_wildcard_allowed_hosts` covers host filtering, with
 both earlier guards satisfied. `Startup_succeeds_outside_development_when_allowed_hosts_names_a_real_host`
-is the positive control — a fully configured Production host starts, so the three failure tests are
+is the positive control — a fully configured Production host starts, so the four failure tests are
 known to trip on the setting under test rather than on the environment being Production at all.
 
 ## Required filesystem permissions for the data-protection key path
@@ -50,6 +55,13 @@ The directory named by `DataProtection:KeyPath` must:
   documents the database side; the key path is a separate, non-database artifact that must be
   backed up in step with it, or every existing session and antiforgery token invalidates on
   restore).
+
+The certificate and password files must be readable only by the service identity and operators who
+rotate or restore the key ring. Back up the certificate together with the key ring: replacing or
+losing its private key makes existing XML keys, cookies, antiforgery tokens, and protected TOTP
+secrets unreadable. Do not overwrite the pair in place: the current single-certificate configuration
+does not constitute a rotation mechanism. A future rotation must retain the old private certificate
+as an additional decrypting certificate until every key encrypted by it has expired.
 
 ## Real-Kestrel evidence (security review remediation §2.6)
 

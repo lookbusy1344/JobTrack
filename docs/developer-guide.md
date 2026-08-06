@@ -68,6 +68,35 @@ at the wrong thing — a pile of axe colour-contrast and layout failures rather 
 stylesheet. Re-run it after any change to `libman.json`, and bump versions there rather than editing
 files under `wwwroot/lib/` by hand.
 
+### NuGet lock files
+
+Every project under `src/` commits a `packages.lock.json`. `Dockerfile.postgresql` restores against
+them with `--locked-mode`, so the container build fails rather than silently resolving a different
+dependency graph than the one reviewed — that is the point of committing them.
+
+They are **regenerated, never hand-edited**. After changing a `PackageReference` or a version in
+`Directory.Packages.props`:
+
+```bash
+dotnet restore JobTrack.slnx --force-evaluate
+```
+
+Commit the resulting lock-file changes alongside the package change. A plain `dotnet restore` will
+not pick up a version bump on its own — it validates against the lock file instead, and fails with
+`NU1004` if they disagree.
+
+The container restores for a specific runtime (`-r linux-x64`, needed for ReadyToRun), and NuGet can
+satisfy a locked-mode RID restore only from a RID-specific section of the lock file.
+`src/Directory.Build.props` therefore declares `<RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>`,
+which makes an ordinary RID-less restore resolve that same graph. Without it the two restores fight:
+a solution build rewrites the files without the RID section, and the next image build dies on
+`NU1004: the project's runtime identifiers have changed`. If you ever see that error, check the RID
+section survived rather than regenerating with an explicit `-r` — that fix does not stick.
+
+That file is also why `src/` has its own `Directory.Build.props`: MSBuild stops at the first one it
+finds walking up, so it imports the solution-wide file explicitly at the top. Settings that apply to
+everything still belong in the root `Directory.Build.props`.
+
 ## Test
 
 The per-commit gate (see [`CLAUDE.md`](../CLAUDE.md)): build, format, the fast core suite, plus a

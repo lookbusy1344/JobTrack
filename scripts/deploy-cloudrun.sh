@@ -23,6 +23,17 @@ repo="$(cd "$here/.." && pwd)"
 monorepo_root="$(cd "$repo/.." && pwd)"
 
 project="${1:?Usage: $0 <gcp-project-id> [region]}"
+# The persistent PostgreSQL deployment's project. This demo is publicly reachable with published
+# credentials, so it must never share a project (and therefore an IAM policy) with jobtrack-web-pg's
+# Cloud SQL instance, secrets, or data-protection key ring -- deploy it to jobtrack-demo-projects
+# instead. See docs/plans/2026-08-06-cloudrun-persistent-isolation-plan.md #2.1/#2.3.
+persistent_project="project-e2ce9938-0f7b-48a8-b0d"
+if [[ "$project" == "$persistent_project" ]]; then
+  echo "ERROR: $persistent_project hosts the persistent jobtrack-web-pg deployment." >&2
+  echo "Deploying this demo there would re-open the co-tenancy risk closed by" >&2
+  echo "docs/plans/2026-08-06-cloudrun-persistent-isolation-plan.md. Use jobtrack-demo-projects." >&2
+  exit 1
+fi
 # europe-west1 (Belgium) is a Tier 1 GCP pricing region; europe-west2 (London) is Tier 2,
 # so the Always Free allowance and per-unit cost are both worse there for no functional gain.
 region="${2:-europe-west1}"
@@ -30,7 +41,17 @@ service="jobtrack-web"
 repository="cloud-run-source-deploy"
 image="$region-docker.pkg.dev/$project/$repository/$service:latest"
 orbstack_socket="${HOME}/.orbstack/run/docker.sock"
+# Deliberately no roles: this demo reads no secret, bucket, or database, so it
+# needs nothing beyond what its own image carries. Kept off the default compute
+# service account, which typically holds project-wide roles (e.g.
+# cloudbuild.builds.builder) that would let a compromise of this public,
+# credential-published demo reach the persistent deployment's resources -- see
+# docs/plans/2026-08-06-cloudrun-persistent-isolation-plan.md #2.1.
+demo_service_account="demo-run@$project.iam.gserviceaccount.com"
 
+# Keep this distinct from deploy-cloudrun-postgresql.sh's admin_username (adminpg): the two images are
+# separate databases with no technical conflict, but sharing the same username across both makes it
+# easy to confuse or overwrite one deployment's admin credential with the other's when juggling both.
 admin_username="admin"
 admin_password="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
 demo_username="demo"
@@ -62,6 +83,13 @@ echo "==> pushing to Artifact Registry"
 gcloud auth configure-docker "$region-docker.pkg.dev" --project="$project" --quiet
 docker push "$image"
 
+if ! gcloud iam service-accounts describe "$demo_service_account" --project="$project" >/dev/null 2>&1; then
+  echo "==> creating $demo_service_account (no roles, deliberately)"
+  gcloud iam service-accounts create demo-run \
+    --project="$project" \
+    --display-name="Disposable demo services (no roles, deliberately)"
+fi
+
 echo "==> deploying to Cloud Run ($service, $region)"
 # Kestrel__Endpoints__Http__Url: Cloud Run's fully-managed product terminates
 # TLS at its own front end and always proxies to the container over plain
@@ -83,6 +111,7 @@ gcloud run deploy "$service" \
   --allow-unauthenticated \
   --min-instances=0 \
   --max-instances=1 \
+  --service-account="$demo_service_account" \
   --set-env-vars="Kestrel__Endpoints__Http__Url=http://+:8080,ForwardedHeaders__KnownNetworks__0=0.0.0.0/0,AllowedHosts=*.run.app" \
   --quiet
 

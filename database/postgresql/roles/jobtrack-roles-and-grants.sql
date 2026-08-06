@@ -197,6 +197,30 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
 
 GRANT SELECT, INSERT, DELETE ON job_prerequisite TO jobtrack_domain;
 
+-- Requester intake, schema version 0020 (ADR 0033/0034). These grants were
+-- missing when 0020 landed, which nothing caught until the first real
+-- PostgreSQL deployment: SQLite has no roles, so the SQLite host stayed
+-- healthy while every PostgreSQL page touching a request failed with
+-- "permission denied for table job_request". PostgreSqlRoleGrantsTests'
+-- The_domain_role_can_read_every_application_table now enumerates the live
+-- catalog, so a table added later cannot repeat this.
+--
+--   job_request      -- submitted, then acknowledged in place
+--                       (acknowledged_at/acknowledged_by_user_id). Never
+--                       deleted: a withdrawn or rejected request stays as
+--                       intake history, the same retention rule work_session
+--                       follows above.
+--   job_request_note -- append-only correspondence on a request.
+--   department, app_user_department, request_holding_area -- read-only to the
+--                       application. They are routing configuration, and no
+--                       code path in src/ writes them; provisioning them is an
+--                       administrative act outside the running application, so
+--                       granting writes here would widen the domain role for a
+--                       capability it does not exercise.
+GRANT SELECT, INSERT, UPDATE ON job_request TO jobtrack_domain;
+GRANT SELECT, INSERT ON job_request_note TO jobtrack_domain;
+GRANT SELECT ON department, app_user_department, request_holding_area TO jobtrack_domain;
+
 -- work_session: cost-relevant execution history -- corrected, never
 -- deleted (spec: "audited correction").
 GRANT SELECT, INSERT, UPDATE ON work_session TO jobtrack_domain;

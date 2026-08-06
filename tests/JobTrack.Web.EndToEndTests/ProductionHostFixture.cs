@@ -32,6 +32,7 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 
 	private readonly string[] knownProxies;
 	private readonly StringBuilder processOutput = new();
+	private string? certificatePasswordPath;
 	private string? certificatePath;
 	private string? dataProtectionKeyPath;
 	private Process? webProcess;
@@ -59,9 +60,10 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 		HttpsBaseAddress = $"https://127.0.0.1:{httpsPort}";
 		HttpBaseAddress = $"http://127.0.0.1:{httpPort}";
 		certificatePath = WriteSelfSignedCertificate();
+		certificatePasswordPath = WriteCertificatePassword();
 		dataProtectionKeyPath = Directory.CreateTempSubdirectory("jobtrack-production-host-smoke-keys-").FullName;
 
-		StartWebProcess(httpsPort, httpPort, certificatePath, dataProtectionKeyPath);
+		StartWebProcess(httpsPort, httpPort, certificatePath, certificatePasswordPath, dataProtectionKeyPath);
 		await WaitForReadinessAsync();
 	}
 
@@ -88,6 +90,11 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 		}
 
 		certificatePath = null;
+		if (certificatePasswordPath is not null && File.Exists(certificatePasswordPath)) {
+			File.Delete(certificatePasswordPath);
+		}
+
+		certificatePasswordPath = null;
 
 		if (dataProtectionKeyPath is not null && Directory.Exists(dataProtectionKeyPath)) {
 			Directory.Delete(dataProtectionKeyPath, true);
@@ -96,7 +103,7 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 		dataProtectionKeyPath = null;
 	}
 
-	private void StartWebProcess(int httpsPort, int httpPort, string certPath, string keyPath)
+	private void StartWebProcess(int httpsPort, int httpPort, string certPath, string certPasswordPath, string keyPath)
 	{
 		var webAssemblyPath = typeof(Program).Assembly.Location;
 		var startInfo = new ProcessStartInfo {
@@ -114,6 +121,8 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = certPath;
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = CertificatePassword;
 		startInfo.EnvironmentVariables["DataProtection__KeyPath"] = keyPath;
+		startInfo.EnvironmentVariables["DataProtection__CertificatePath"] = certPath;
+		startInfo.EnvironmentVariables["DataProtection__CertificatePasswordPath"] = certPasswordPath;
 		// Required outside Development (Program.cs rejects an unset or '*' AllowedHosts). The loopback
 		// entries cover this fixture's own base addresses; jobtrack.internal.test is the non-loopback
 		// Host header the HSTS smoke test sends deliberately, since HstsMiddleware's default
@@ -189,6 +198,13 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 
 		var path = Path.Combine(Path.GetTempPath(), $"jobtrack-production-host-smoke-{Guid.NewGuid():N}.pfx");
 		File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, CertificatePassword));
+		return path;
+	}
+
+	private static string WriteCertificatePassword()
+	{
+		var path = Path.Combine(Path.GetTempPath(), $"jobtrack-production-host-{Guid.NewGuid():N}.password");
+		File.WriteAllText(path, CertificatePassword);
 		return path;
 	}
 

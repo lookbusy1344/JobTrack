@@ -65,7 +65,9 @@ RUN dotnet tool install --tool-path /libman Microsoft.Web.LibraryManager.Cli \
 # image explicitly out of scope for production (see header comment), never for a publicly
 # reachable deployment.
 ARG DEV_CERT_PASSWORD=JobTrackDevOnly1!
-RUN mkdir -p /https && dotnet dev-certs https -ep /https/devcert.pfx -p "$DEV_CERT_PASSWORD"
+RUN mkdir -p /https \
+    && dotnet dev-certs https -ep /https/devcert.pfx -p "$DEV_CERT_PASSWORD" \
+    && printf '%s' "$DEV_CERT_PASSWORD" > /https/devcert.password
 
 # ReadyToRun pre-compiles IL to native code at publish time, taking JIT work off the cold-start
 # path. It is RID-specific, so derive the RID from the build's target platform. PublishReadyToRun
@@ -186,6 +188,7 @@ COPY --from=build /src/JobTrack/database/sqlite/schema-versions ./schema-version
 # --chown is required, not cosmetic: dev-certs writes the .pfx 0600/root, which the non-root
 # APP_UID below cannot read, and Kestrel fails to bind at startup.
 COPY --from=build --chown=$APP_UID:$APP_UID /https/devcert.pfx ./certs/devcert.pfx
+COPY --from=build --chown=$APP_UID:$APP_UID /https/devcert.password ./certs/devcert.password
 COPY --from=build --chown=$APP_UID:$APP_UID /appdata ./data
 
 # No plaintext HTTP endpoint at all (see header comment on Secure-only cookies) — clear the
@@ -208,6 +211,8 @@ ENV ConnectionStrings__JobTrackIdentity="Data Source=/app/data/jobtrack.db"
 # web-host-security.md) — an absolute path outside the app directory, writable by the container
 # user, backed by the /app/data named volume so a re-created container keeps the same key ring.
 ENV DataProtection__KeyPath=/app/data/keys
+ENV DataProtection__CertificatePath=/app/certs/devcert.pfx
+ENV DataProtection__CertificatePasswordPath=/app/certs/devcert.password
 # Also required outside Development. Kestrel here is reached directly (no reverse proxy in front,
 # unlike the real single-server topology), so no request will ever actually arrive at this address
 # with forwarded headers to trust — it exists only to satisfy the fail-closed check, not to name a

@@ -2,6 +2,7 @@ namespace JobTrack.Web;
 
 using System.Collections.Frozen;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
 using Application;
 using Identity;
@@ -110,6 +111,8 @@ public sealed class Program
 	// Development, an unconfigured path fails startup closed rather than falling back to the
 	// framework's ephemeral/registry-based default key ring.
 	private const string DataProtectionKeyPathConfigKey = "DataProtection:KeyPath";
+	private const string DataProtectionCertificatePathConfigKey = "DataProtection:CertificatePath";
+	private const string DataProtectionCertificatePasswordPathConfigKey = "DataProtection:CertificatePasswordPath";
 
 	// No attachments/file uploads exist in this content model (fix-plan non-goals), so request
 	// bodies are plain JSON/form payloads -- generous headroom over the largest legitimate body
@@ -477,7 +480,32 @@ public sealed class Program
 		}
 
 		if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath)) {
-			_ = builder.Services.AddDataProtection().PersistKeysToFileSystem(new(dataProtectionKeyPath));
+			if (!builder.Environment.IsDevelopment() && !Path.IsPathFullyQualified(dataProtectionKeyPath)) {
+				throw new InvalidOperationException($"{DataProtectionKeyPathConfigKey} must be an absolute path outside Development.");
+			}
+
+			var dataProtectionBuilder = builder.Services.AddDataProtection().PersistKeysToFileSystem(new(dataProtectionKeyPath));
+			var certificatePath = builder.Configuration[DataProtectionCertificatePathConfigKey];
+			var certificatePasswordPath = builder.Configuration[DataProtectionCertificatePasswordPathConfigKey];
+			if (!builder.Environment.IsDevelopment()
+				&& (string.IsNullOrWhiteSpace(certificatePath) || !Path.IsPathFullyQualified(certificatePath))) {
+				throw new InvalidOperationException(
+					$"{DataProtectionCertificatePathConfigKey} must name an absolute PKCS#12 certificate path outside Development.");
+			}
+
+			if (!builder.Environment.IsDevelopment()
+				&& (string.IsNullOrWhiteSpace(certificatePasswordPath) || !Path.IsPathFullyQualified(certificatePasswordPath))) {
+				throw new InvalidOperationException(
+					$"{DataProtectionCertificatePasswordPathConfigKey} must name an absolute secret-file path outside Development.");
+			}
+
+			if (!string.IsNullOrWhiteSpace(certificatePath) && !string.IsNullOrWhiteSpace(certificatePasswordPath)) {
+				var certificatePassword = File.ReadAllText(certificatePasswordPath).TrimEnd('\r', '\n');
+				var certificate = X509CertificateLoader.LoadPkcs12FromFile(
+					certificatePath,
+					certificatePassword);
+				_ = dataProtectionBuilder.ProtectKeysWithCertificate(certificate);
+			}
 		}
 
 		var allowedHostEntries = (builder.Configuration[AllowedHostsConfigKey] ?? string.Empty)

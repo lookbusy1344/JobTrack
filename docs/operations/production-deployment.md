@@ -43,8 +43,10 @@ for speculatively.
   bootstrap and employee creation reject plaintext `--password`; use the masked prompt or pipe one
   line to `--password-stdin`. Restrict any secret file to the invoking service account and remove a
   one-use file after the command completes.
-- **`DataProtection:KeyPath`** must be an absolute path outside the deployment directory, created
-  ahead of time, writable only by the service account (see `web-host-security.md`).
+- **Data protection** requires an absolute `DataProtection:KeyPath` outside the deployment directory,
+  plus absolute `DataProtection:CertificatePath` and `DataProtection:CertificatePasswordPath` files.
+  Create them ahead of time and restrict all three to the service account (see
+  `web-host-security.md`).
 - **`ForwardedHeaders:KnownProxies` / `KnownNetworks`** must list the reverse proxy's own address —
   the loopback address it connects from, not a public range.
 - **`AllowedHosts`** must list this deployment's own host names, `;`-separated. Startup rejects an
@@ -116,6 +118,8 @@ for speculatively.
    Environment=ASPNETCORE_ENVIRONMENT=Production
    Environment=ASPNETCORE_URLS=http://127.0.0.1:5000
    Environment=DataProtection__KeyPath=/var/lib/jobtrack/dataprotection-keys
+   Environment=DataProtection__CertificatePath=/etc/jobtrack/data-protection.pfx
+   Environment=DataProtection__CertificatePasswordPath=/etc/jobtrack/data-protection-password
    Environment=ForwardedHeaders__KnownProxies__0=127.0.0.1
    Environment=AllowedHosts=jobtrack.example.com
    EnvironmentFile=/etc/jobtrack/secrets.env

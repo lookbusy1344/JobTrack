@@ -17,7 +17,8 @@
 #   --target serve      (default) chiseled, non-root, JobTrack.Web only — no shell, no CLI, no
 #                       package manager. This is what serves requests.
 #   --target provision  aspnet:10.0-noble + postgresql-client, running docker/provision.sh:
-#                       schema deploy, login roles, and the three accounts. Run once, then idle.
+#                       schema deploy, login roles, and the three accounts. The deployment script
+#                       deletes this privileged Cloud Run job immediately after it completes.
 #
 # Build context MUST be the monorepo root (VSStuff/), NOT JobTrack/ — .editorconfig lives one level
 # above JobTrack/ and the build is TreatWarningsAsErrors, so a context rooted at JobTrack/ fails on
@@ -28,8 +29,15 @@
 #
 # scripts/deploy-cloudrun-postgresql.sh does both, plus everything around them.
 
+# Base images are pinned by manifest-list digest: builds remain reproducible while --platform still
+# selects the correct architecture. Updating .NET is an explicit reviewed change that updates these
+# three digests, rebuilds both targets, and reruns the vulnerability gate in the deployment script.
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0
+ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:f1126d438ccc359f51cc6d4701a8deae513856cf10f5fe645d29ea6403dcac6b
+ARG DOTNET_ASPNET_CHISELED_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:70d6f993bf715a031f027832a19cfb7f894df66c8b5eb40be0aaee820ad5d119
+
 # ---- build stage -----------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM ${DOTNET_SDK_IMAGE} AS build
 WORKDIR /src
 
 # Same partial-copy reasoning as ./Dockerfile: JobTrack.Web references sibling projects and
@@ -42,8 +50,9 @@ WORKDIR /src/JobTrack
 
 # wwwroot/lib (Bootstrap, Mulish) is restored via LibMan, not committed — restore it here rather
 # than relying on it being present in the build context.
-RUN dotnet tool install --tool-path /libman Microsoft.Web.LibraryManager.Cli \
-    && (cd src/JobTrack.Web && /libman/libman restore)
+RUN dotnet tool install --tool-path /libman Microsoft.Web.LibraryManager.Cli --version 3.0.114 \
+    && (cd src/JobTrack.Web && /libman/libman restore) \
+    && sha256sum --check docker/libman.sha256
 
 # ReadyToRun pre-compiles IL to native code at publish time, taking JIT work off the cold-start path
 # (which matters more here than in the demo image: --min-instances=0 means real users hit cold
@@ -51,9 +60,9 @@ RUN dotnet tool install --tool-path /libman Microsoft.Web.LibraryManager.Cli \
 # on *restore* too or the crossgen2 package is absent and publish fails with NETSDK1094.
 ARG TARGETARCH
 RUN RID=linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/') && echo "$RID" > /rid \
-    && dotnet restore src/JobTrack.Web/JobTrack.Web.csproj -r "$RID" -p:PublishReadyToRun=true \
-    && dotnet restore src/JobTrack.Database/JobTrack.Database.csproj -r "$RID" -p:PublishReadyToRun=true \
-    && dotnet restore src/JobTrack.AdminCli/JobTrack.AdminCli.csproj -r "$RID" -p:PublishReadyToRun=true
+    && dotnet restore src/JobTrack.Web/JobTrack.Web.csproj --locked-mode -r "$RID" -p:PublishReadyToRun=true \
+    && dotnet restore src/JobTrack.Database/JobTrack.Database.csproj --locked-mode -r "$RID" -p:PublishReadyToRun=true \
+    && dotnet restore src/JobTrack.AdminCli/JobTrack.AdminCli.csproj --locked-mode -r "$RID" -p:PublishReadyToRun=true
 
 # Framework-dependent publish; the aspnet runtime image supplies the framework (itself already
 # R2R-compiled), so only each app's own assemblies need crossgen here. JobTrack.UatSeed is
@@ -77,7 +86,7 @@ RUN mkdir -p /appkeys
 # --password-stdin, and psql to create the login roles. It is executed once as a Cloud Run job and
 # never serves a request, so the hardened base is spent where it counts (the serve target below)
 # rather than here.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS provision
+FROM ${DOTNET_ASPNET_IMAGE} AS provision
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client \
@@ -89,8 +98,8 @@ COPY --from=build /app/admincli ./admincli
 # The deployment tool resolves the roles script and stored functions as fixed siblings of
 # --scripts-root's parent, so the whole database/postgresql tree is copied, not just schema-versions.
 COPY --from=build /src/JobTrack/database/postgresql ./sql/postgresql
-COPY --from=build /src/JobTrack/docker/provision.sh /src/JobTrack/docker/login-role.sql ./sql/
-RUN chmod +x ./sql/provision.sh
+COPY --from=build /src/JobTrack/docker/provision.sh /src/JobTrack/docker/login-role.sql /src/JobTrack/docker/emergency-reset.sh ./sql/
+RUN chmod +x ./sql/provision.sh ./sql/emergency-reset.sh
 
 USER $APP_UID
 ENTRYPOINT ["/app/sql/provision.sh"]
@@ -101,7 +110,7 @@ ENTRYPOINT ["/app/sql/provision.sh"]
 # DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true — fine, as the codebase uses CultureInfo.InvariantCulture
 # exclusively and Noda Time's TZDB data is bundled in NodaTime.TimeZones rather than relying on
 # system ICU/tzdata.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS serve
+FROM ${DOTNET_ASPNET_CHISELED_IMAGE} AS serve
 WORKDIR /app
 
 COPY --from=build /app/web ./web
@@ -128,6 +137,11 @@ ENV Database__Provider=PostgreSql
 # (docs/operations/web-host-security.md); unmounted it still satisfies the check but is ephemeral,
 # which silently signs everyone out on each recycle.
 ENV DataProtection__KeyPath=/var/lib/jobtrack/keys
+# One directory per secret: Cloud Run backs each secret file mount with its own directory volume and
+# refuses a second, different secret mounted into a directory already in use. These must stay in step
+# with certificate_mount_path/certificate_password_mount_path in the deployment script.
+ENV DataProtection__CertificatePath=/var/run/secrets/jobtrack/certificate/data-protection.pfx
+ENV DataProtection__CertificatePasswordPath=/var/run/secrets/jobtrack/certificate-password/data-protection-password
 
 # Deliberately NOT set here, and startup fails closed without them (web-host-security.md):
 # ConnectionStrings__JobTrack{Identity,Domain,PatManagement,PatAuthentication} — mounted from Secret

@@ -42,6 +42,10 @@ readonly DOMAIN_LOGIN_ROLE=jobtrack_domain_login
 readonly IDENTITY_LOGIN_ROLE=jobtrack_identity_login
 readonly PAT_MANAGEMENT_LOGIN_ROLE=jobtrack_pat_management_login
 readonly PAT_AUTHENTICATION_LOGIN_ROLE=jobtrack_pat_authentication_login
+# Not one of the four connection strings above -- no running service ever holds this one. It exists
+# only so an operator can run emergency-reset.sh (AdminCli reset-password/reset-2fa) against a locked
+# or otherwise inaccessible account, via a Cloud Run job execution overriding this image's entrypoint.
+readonly EMERGENCY_RESET_LOGIN_ROLE=jobtrack_emergency_reset_login
 
 trap 'rm -rf "$SECRET_DIR"' EXIT
 
@@ -58,6 +62,7 @@ for required in \
 	JOBTRACK_DB_ADMIN_USER JOBTRACK_DB_ADMIN_PASSWORD \
 	JOBTRACK_ROLE_PASSWORD_DOMAIN JOBTRACK_ROLE_PASSWORD_IDENTITY \
 	JOBTRACK_ROLE_PASSWORD_PAT_MANAGEMENT JOBTRACK_ROLE_PASSWORD_PAT_AUTHENTICATION \
+	JOBTRACK_ROLE_PASSWORD_EMERGENCY_RESET \
 	JOBTRACK_ADMIN_USERNAME JOBTRACK_ADMIN_PASSWORD \
 	JOBTRACK_USER1_USERNAME JOBTRACK_USER1_PASSWORD JOBTRACK_USER1_ROLES \
 	JOBTRACK_USER2_USERNAME JOBTRACK_USER2_PASSWORD JOBTRACK_USER2_ROLES; do
@@ -126,6 +131,7 @@ create_login_role "$DOMAIN_LOGIN_ROLE" jobtrack_domain "$JOBTRACK_ROLE_PASSWORD_
 create_login_role "$IDENTITY_LOGIN_ROLE" jobtrack_identity "$JOBTRACK_ROLE_PASSWORD_IDENTITY"
 create_login_role "$PAT_MANAGEMENT_LOGIN_ROLE" jobtrack_pat_management "$JOBTRACK_ROLE_PASSWORD_PAT_MANAGEMENT"
 create_login_role "$PAT_AUTHENTICATION_LOGIN_ROLE" jobtrack_pat_authentication "$JOBTRACK_ROLE_PASSWORD_PAT_AUTHENTICATION"
+create_login_role "$EMERGENCY_RESET_LOGIN_ROLE" jobtrack_emergency_reset "$JOBTRACK_ROLE_PASSWORD_EMERGENCY_RESET"
 
 # ---- 3. the administrator, and the permanent root node ---------------------
 # bootstrap prompts for display name, time zone, and username on stdin, and reads the password's

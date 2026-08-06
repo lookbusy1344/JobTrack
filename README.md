@@ -13,7 +13,7 @@ rather than stored as a static number.
 
 Stack: .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity, xUnit + AwesomeAssertions.
 
-[Live Google Cloud Run demo](https://jobtrack-web-wdgtyuzl4a-ew.a.run.app)
+[Live Google Cloud Run demo](https://jobtrack-web-zeb6shxnca-ew.a.run.app)
 
 That demo (SQLite backend) is deployed by [`scripts/deploy-cloudrun.sh`](scripts/deploy-cloudrun.sh),
 which needs a running local Docker daemon — see

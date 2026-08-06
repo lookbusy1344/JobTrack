@@ -323,9 +323,19 @@ per-unit cost both go further than in `europe-west2` (London), which is Tier 2 �
 default over a same-continent alternative that costs more for no functional benefit.
 
 It assumes an existing Artifact Registry Docker repo named `cloud-run-source-deploy` in that
-project/region (already present in this project from other services). `--platform linux/amd64` in
-the script matters when building on Apple Silicon — Cloud Run's default runtime is `amd64`, and
-OrbStack's local Docker defaults to the host's `arm64`.
+project/region — create one first if the target project doesn't already have it (`gcloud artifacts
+repositories create cloud-run-source-deploy --location=<region> --repository-format=docker`).
+`--platform linux/amd64` in the script matters when building on Apple Silicon — Cloud Run's default
+runtime is `amd64`, and OrbStack's local Docker defaults to the host's `arm64`.
+
+**Deploy target: `jobtrack-demo-projects`, not the persistent deployment's project.** This demo
+(and EnrolmentRules' `enrolment-web`) was relocated out of the project holding `jobtrack-web-pg`
+so that a compromise of this public, credential-published demo cannot reach the persistent
+deployment's Cloud SQL instance, secrets, or data-protection key ring — see
+[`../plans/2026-08-06-cloudrun-persistent-isolation-plan.md`](../plans/2026-08-06-cloudrun-persistent-isolation-plan.md).
+The script also creates a dedicated `demo-run` service account with no IAM roles at all and deploys
+under it — the default compute service account is deliberately not used, since in a project holding
+anything sensitive it can carry unrelated standing roles this service does not need.
 
 **The admin password is different on every run.** The script always generates a fresh one and passes
 it via `--build-arg ADMIN_PASSWORD`; nothing pins it between deploys, and it is printed once at the
