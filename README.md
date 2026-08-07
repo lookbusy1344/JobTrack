@@ -73,6 +73,9 @@ demonstration configuration, not the production one).
   `docs/decisions/*.md` are the ADRs.
 - [`docs/database-entities.md`](docs/database-entities.md) — core entities and the costing
   algorithm.
+- [`docs/costing-engine.md`](docs/costing-engine.md) — the cost engine in depth: the
+  boundary-partition algorithm and `1/N` concurrency allocation worked through a three-deep overlap,
+  the PostgreSQL range column and GiST indexing behind it, and the EF Core materialization strategy.
 - [`docs/api/jobtrack-client-design.md`](docs/api/jobtrack-client-design.md) — the `IJobTrackClient`
   facade; [`docs/api/external-http-api-reference.md`](docs/api/external-http-api-reference.md) —
   HTTP routes and auth model.

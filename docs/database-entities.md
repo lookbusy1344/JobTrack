@@ -270,7 +270,9 @@ provenance" shown in the cost report UI.
 ## The costing algorithm
 
 Implemented in `src/JobTrack.Domain/Costing/` and `src/JobTrack.Domain/Rates/`, orchestrated by
-`JobTrack.Application`'s `CostQueries`.
+`JobTrack.Application`'s `CostQueries`. This section is the summary;
+[`costing-engine.md`](costing-engine.md) works the algorithm through a three-deep overlap and covers
+the PostgreSQL range indexing and EF materialization strategy behind it.
 
 ### Concurrent allocation
 
