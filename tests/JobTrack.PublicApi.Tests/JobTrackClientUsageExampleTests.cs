@@ -12,10 +12,12 @@ using Persistence.Sqlite;
 /// <summary>
 ///     Plan §7.1's "compiling usage examples before creating implementations": this is genuine
 ///     consumer-shaped code against the real <see cref="IJobTrackClient" />/<see cref="IInstallationCommands" />
-///     contracts declared in <c>JobTrack.Application</c>, using a throwaway in-memory test double in
-///     place of a real persistence-backed implementation (none exists yet — this is a design-review
-///     artifact, not a test of production behaviour). If the public surface's shape stops making sense
-///     as consumer code, this file is the first thing that should hurt.
+///     contracts declared in <c>JobTrack.Application</c>. Most cases use a throwaway in-memory test
+///     double rather than a real persistence provider so the design-review purpose stays isolated
+///     from provider behaviour (both `JobTrack.Persistence.PostgreSql` and `JobTrack.Persistence.Sqlite`
+///     implement the full facade for real; this is not a test of their production behaviour). If the
+///     public surface's shape stops making sense as consumer code, this file is the first thing that
+///     should hurt.
 /// </summary>
 public sealed class JobTrackClientUsageExampleTests
 {
@@ -31,6 +33,41 @@ public sealed class JobTrackClientUsageExampleTests
 		postgreSql.Query.Should().NotBeNull();
 		sqlite.Jobs.Should().NotBeNull();
 		sqlite.Query.Should().NotBeNull();
+	}
+
+	/// <summary>
+	///     Each factory's simple overload is exact-delegate-convertible with no ambiguity against the
+	///     longest overload's optional customization parameters — the FDG no-default simple-overload
+	///     requirement, proven by compilation rather than reflection.
+	/// </summary>
+	[Fact]
+	public void The_simple_provider_factory_overloads_are_exact_delegate_conversions()
+	{
+		Func<string, IJobTrackClient> sqliteCreate = JobTrackSqlite.Create;
+		Func<NpgsqlDataSource, IJobTrackClient> postgreSqlCreate = JobTrackPostgreSql.Create;
+		Func<NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IJobTrackClient> postgreSqlCreateWithPatDataSources =
+			JobTrackPostgreSql.CreateWithPatDataSources;
+
+		sqliteCreate.Should().NotBeNull();
+		postgreSqlCreate.Should().NotBeNull();
+		postgreSqlCreateWithPatDataSources.Should().NotBeNull();
+	}
+
+	/// <summary>
+	///     The advanced PostgreSQL split-data-source overload remains directly callable and unambiguous
+	///     alongside the simple three-argument overload above.
+	/// </summary>
+	[Fact]
+	public void The_advanced_split_data_source_overload_remains_callable()
+	{
+		using var dataSource = NpgsqlDataSource.Create("Host=/tmp;Database=jobtrack-split-example");
+		using var patManagementDataSource = NpgsqlDataSource.Create("Host=/tmp;Database=jobtrack-split-example-pat-mgmt");
+		using var patAuthenticationDataSource = NpgsqlDataSource.Create("Host=/tmp;Database=jobtrack-split-example-pat-auth");
+
+		var client = JobTrackPostgreSql.CreateWithPatDataSources(
+			dataSource, patManagementDataSource, patAuthenticationDataSource, null, null, SystemClock.Instance);
+
+		client.Jobs.Should().NotBeNull();
 	}
 
 	[Fact]

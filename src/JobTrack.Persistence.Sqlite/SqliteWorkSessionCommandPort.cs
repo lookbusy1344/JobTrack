@@ -732,7 +732,13 @@ internal sealed class SqliteWorkSessionCommandPort : IWorkSessionCommandPort
 			.AnyAsync(s => s.LeafWorkId == leafId && s.WorkedByUserId == actorId, cancellationToken).ConfigureAwait(false);
 
 		if (!LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(
-				actorRoles, ancestorOwnerIds.Contains(actorId.Value), actorParticipatedPreviously, actorId, targetWorkedByUserId)) {
+				actorRoles,
+				new() {
+					ActorControlsNode = ancestorOwnerIds.Contains(actorId.Value),
+					ActorParticipatedPreviously = actorParticipatedPreviously,
+					ActorUserId = actorId,
+					TargetWorkedByUserId = targetWorkedByUserId,
+				})) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not reopen and start job node {leafId} for {targetWorkedByUserId}.");
 		}
 	}

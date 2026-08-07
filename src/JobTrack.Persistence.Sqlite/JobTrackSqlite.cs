@@ -7,6 +7,15 @@ using NodaTime;
 /// <summary>Composes the SQLite provider behind JobTrack's single public facade.</summary>
 public static class JobTrackSqlite
 {
+	/// <summary>Creates a provider-neutral client over the configured SQLite database with default password hashing and clock.</summary>
+	/// <remarks>
+	///     The simple overload for the common case; see
+	///     <see
+	///         cref="Create(string, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///     to customize password hashing or the clock.
+	/// </remarks>
+	public static IJobTrackClient Create(string connectionString) => Create(connectionString, null);
+
 	/// <summary>Creates a provider-neutral client over the configured SQLite database.</summary>
 	/// <remarks>
 	///     Marked not CLS-compliant because its parameter types come from dependencies that do not

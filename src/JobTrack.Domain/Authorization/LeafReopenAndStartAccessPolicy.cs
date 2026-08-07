@@ -17,29 +17,27 @@ public static class LeafReopenAndStartAccessPolicy
 	///     in one atomic composite. Authorization comes from any of three sources (ADR 0045 §2):
 	///     <see cref="EmployeeRole.Administrator" />, <see cref="EmployeeRole.JobManager" />, or a
 	///     <see cref="EmployeeRole.Worker" /> who controls the leaf's node may start the composite for
-	///     any eligible <paramref name="targetWorkedByUserId" />. A <see cref="EmployeeRole.Worker" /> who
-	///     recorded a previous session on this leaf (<paramref name="actorParticipatedPreviously" />) but
-	///     controls nothing may use the composite only to start a session for themselves -- historical
-	///     participation grants the right to get the leaf moving again, never the right to start work for
-	///     someone else.
+	///     any eligible <see cref="LeafReopenAndStartFacts.TargetWorkedByUserId" />. A
+	///     <see cref="EmployeeRole.Worker" /> who recorded a previous session on this leaf
+	///     (<see cref="LeafReopenAndStartFacts.ActorParticipatedPreviously" />) but controls nothing may
+	///     use the composite only to start a session for themselves -- historical participation grants
+	///     the right to get the leaf moving again, never the right to start work for someone else.
 	/// </summary>
-	public static bool CanReopenAndStartFor(
-		IReadOnlyCollection<EmployeeRole> actorRoles,
-		bool actorControlsNode,
-		bool actorParticipatedPreviously,
-		AppUserId actorUserId,
-		AppUserId targetWorkedByUserId)
+	public static bool CanReopenAndStartFor(IReadOnlyCollection<EmployeeRole> actorRoles, LeafReopenAndStartFacts facts)
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
+		ArgumentNullException.ThrowIfNull(facts);
 
 		var hasElevatedOrControlAuthority = actorRoles.Contains(EmployeeRole.Administrator)
 											|| actorRoles.Contains(EmployeeRole.JobManager)
-											|| (actorRoles.Contains(EmployeeRole.Worker) && actorControlsNode);
+											|| (actorRoles.Contains(EmployeeRole.Worker) && facts.ActorControlsNode);
 
 		if (hasElevatedOrControlAuthority) {
 			return true;
 		}
 
-		return actorRoles.Contains(EmployeeRole.Worker) && actorParticipatedPreviously && actorUserId == targetWorkedByUserId;
+		return actorRoles.Contains(EmployeeRole.Worker)
+			   && facts.ActorParticipatedPreviously
+			   && facts.ActorUserId == facts.TargetWorkedByUserId;
 	}
 }

@@ -263,7 +263,14 @@ internal static class CostQueryAssembly
 			// the query itself; every other load here stays in the tens of rows.
 			var exceptions = await context.Set<ScheduleExceptionEntity>().AsNoTracking()
 				.Where(e => workerIds.Contains(e.UserId) && e.StartedAt < bounds.End && e.FinishedAt > bounds.Start)
-				.Select(e => new { e.UserId, e.ScheduleExceptionEffectId, e.StartedAt, e.FinishedAt, e.RateOverride })
+				.Select(e => new
+				{
+					e.UserId,
+					e.ScheduleExceptionEffectId,
+					e.StartedAt,
+					e.FinishedAt,
+					e.RateOverride,
+				})
 				.ToListAsync(cancellationToken).ConfigureAwait(false);
 			var userCostRates = await context.Set<UserCostRateEntity>().AsNoTracking()
 				.Where(r => workerIds.Contains(r.UserId) && r.EffectiveStart < bounds.End

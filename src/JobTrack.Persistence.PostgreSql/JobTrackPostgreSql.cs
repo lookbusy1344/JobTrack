@@ -8,9 +8,25 @@ using Npgsql;
 /// <summary>Composes the PostgreSQL provider behind JobTrack's single public facade.</summary>
 public static class JobTrackPostgreSql
 {
+	/// <summary>Creates a provider-neutral client over one shared pooled data source, with default password hashing and clock.</summary>
+	/// <remarks>
+	///     The simple overload for the common case; see
+	///     <see
+	///         cref="Create(NpgsqlDataSource, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///     to customize password hashing or the clock, or
+	///     <see
+	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///     for production PostgreSQL role separation.
+	/// </remarks>
+	[CLSCompliant(false)]
+	public static IJobTrackClient Create(NpgsqlDataSource dataSource) => Create(dataSource, null);
+
 	/// <summary>Creates a provider-neutral client over one shared pooled data source.</summary>
 	/// <remarks>
-	///     For production PostgreSQL role separation, prefer <see cref="CreateWithPatDataSources" />.
+	///     For production PostgreSQL role separation, prefer
+	///     <see
+	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///     .
 	///     This convenience member is intended for SQLite-like single-credential development/test
 	///     installations and delegates all PAT operations to <paramref name="dataSource" />.
 	///     Marked not CLS-compliant because its parameter types come from dependencies that do not
@@ -24,6 +40,24 @@ public static class JobTrackPostgreSql
 		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
 		IClock? clock = null) =>
 		CreateWithPatDataSources(dataSource, dataSource, dataSource, passwordHasher, employeePasswordHasher, clock);
+
+	/// <summary>
+	///     Creates a provider-neutral client with distinct least-privilege PAT management and
+	///     authentication connections, with default password hashing and clock.
+	/// </summary>
+	/// <remarks>
+	///     The simple overload for the common case; see
+	///     <see
+	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///     to customize password hashing or the clock.
+	/// </remarks>
+	[CLSCompliant(false)]
+	public static IJobTrackClient CreateWithPatDataSources(
+		NpgsqlDataSource dataSource,
+		NpgsqlDataSource personalAccessTokenManagementDataSource,
+		NpgsqlDataSource personalAccessTokenAuthenticationDataSource) =>
+		CreateWithPatDataSources(
+			dataSource, personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource, null);
 
 	/// <summary>Creates a provider-neutral client with distinct least-privilege PAT management and authentication connections.</summary>
 	[CLSCompliant(false)]

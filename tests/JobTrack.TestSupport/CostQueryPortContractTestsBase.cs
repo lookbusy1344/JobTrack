@@ -355,8 +355,8 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
 
-		var exceptionQuery = commandTexts.CommandTexts.Should().ContainSingle(
-			text => text.Contains("user_schedule_exception", StringComparison.Ordinal)).Subject;
+		var exceptionQuery = commandTexts.CommandTexts.Should()
+			.ContainSingle(text => text.Contains("user_schedule_exception", StringComparison.Ordinal)).Subject;
 		exceptionQuery.Should().NotContain(
 			"reason", "the exceptions query must project only the columns CostQueryAssembly reads, not a full entity");
 	}

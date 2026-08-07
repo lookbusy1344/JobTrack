@@ -9,21 +9,27 @@ public sealed class RequesterAccessPolicyTests
 	[Fact]
 	public void A_requester_may_submit_to_an_active_holding_area_they_are_eligible_for()
 	{
-		RequesterAccessPolicy.CanSubmit([EmployeeRole.Requester], true, true)
+		RequesterAccessPolicy.CanSubmit(
+				[EmployeeRole.Requester],
+				new() { IsHoldingAreaActive = true, ActorIsEligibleForHoldingArea = true })
 			.Should().BeTrue();
 	}
 
 	[Fact]
 	public void A_requester_may_not_submit_to_an_inactive_holding_area()
 	{
-		RequesterAccessPolicy.CanSubmit([EmployeeRole.Requester], false, true)
+		RequesterAccessPolicy.CanSubmit(
+				[EmployeeRole.Requester],
+				new() { IsHoldingAreaActive = false, ActorIsEligibleForHoldingArea = true })
 			.Should().BeFalse();
 	}
 
 	[Fact]
 	public void A_requester_may_not_submit_to_a_holding_area_they_are_not_eligible_for()
 	{
-		RequesterAccessPolicy.CanSubmit([EmployeeRole.Requester], true, false)
+		RequesterAccessPolicy.CanSubmit(
+				[EmployeeRole.Requester],
+				new() { IsHoldingAreaActive = true, ActorIsEligibleForHoldingArea = false })
 			.Should().BeFalse();
 	}
 
@@ -32,157 +38,254 @@ public sealed class RequesterAccessPolicyTests
 	[InlineData(EmployeeRole.JobManager)]
 	[InlineData(EmployeeRole.Worker)]
 	public void An_operational_role_without_Requester_may_not_submit_a_request(EmployeeRole role) =>
-		RequesterAccessPolicy.CanSubmit([role], true, true).Should().BeFalse();
+		RequesterAccessPolicy.CanSubmit(
+				[role],
+				new() { IsHoldingAreaActive = true, ActorIsEligibleForHoldingArea = true })
+			.Should().BeFalse();
 
 	[Fact]
 	public void A_null_role_collection_is_rejected_by_CanSubmit()
 	{
-		var act = () => RequesterAccessPolicy.CanSubmit(null!, true, true);
+		var act = () => RequesterAccessPolicy.CanSubmit(
+			null!, new() { IsHoldingAreaActive = true, ActorIsEligibleForHoldingArea = true });
 
-		act.Should().Throw<ArgumentNullException>();
+		act.Should().Throw<ArgumentNullException>().WithParameterName("actorRoles");
+	}
+
+	[Fact]
+	public void A_null_submission_facts_record_is_rejected_by_CanSubmit()
+	{
+		var act = () => RequesterAccessPolicy.CanSubmit([EmployeeRole.Requester], null!);
+
+		act.Should().Throw<ArgumentNullException>().WithParameterName("facts");
 	}
 
 	[Fact]
 	public void The_requester_who_submitted_the_request_may_view_it()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.Requester],
-			true,
-			false,
-			false,
-			false).Should().BeTrue();
+				[EmployeeRole.Requester],
+				new() {
+					ActorIsRequestOwner = true,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = false,
+				})
+			.Should().BeTrue();
 	}
 
 	[Fact]
 	public void A_different_requester_may_not_view_the_request_when_department_visibility_is_disabled()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.Requester],
-			false,
-			false,
-			true,
-			false).Should().BeFalse();
+				[EmployeeRole.Requester],
+				new() {
+					ActorIsRequestOwner = false,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = true,
+					ActorControlsAnchorNode = false,
+				})
+			.Should().BeFalse();
 	}
 
 	[Fact]
 	public void A_requester_sharing_the_department_may_view_the_request_when_department_visibility_is_enabled()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.Requester],
-			false,
-			true,
-			true,
-			false).Should().BeTrue();
+				[EmployeeRole.Requester],
+				new() {
+					ActorIsRequestOwner = false,
+					IsDepartmentVisibilityEnabled = true,
+					ActorSharesRequestDepartment = true,
+					ActorControlsAnchorNode = false,
+				})
+			.Should().BeTrue();
 	}
 
 	[Fact]
 	public void A_requester_in_a_different_department_may_not_view_the_request_even_with_department_visibility_enabled()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.Requester],
-			false,
-			true,
-			false,
-			false).Should().BeFalse();
+				[EmployeeRole.Requester],
+				new() {
+					ActorIsRequestOwner = false,
+					IsDepartmentVisibilityEnabled = true,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = false,
+				})
+			.Should().BeFalse();
 	}
 
 	[Fact]
 	public void An_administrator_may_view_any_request()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.Administrator],
-			false,
-			false,
-			false,
-			false).Should().BeTrue();
+				[EmployeeRole.Administrator],
+				new() {
+					ActorIsRequestOwner = false,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = false,
+				})
+			.Should().BeTrue();
 	}
 
 	[Fact]
 	public void A_job_manager_may_view_any_request()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.JobManager],
-			false,
-			false,
-			false,
-			false).Should().BeTrue();
+				[EmployeeRole.JobManager],
+				new() {
+					ActorIsRequestOwner = false,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = false,
+				})
+			.Should().BeTrue();
 	}
 
 	[Fact]
 	public void A_worker_who_controls_the_anchor_node_may_view_the_request()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.Worker],
-			false,
-			false,
-			false,
-			true).Should().BeTrue();
+				[EmployeeRole.Worker],
+				new() {
+					ActorIsRequestOwner = false,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = true,
+				})
+			.Should().BeTrue();
 	}
 
 	[Fact]
 	public void A_worker_who_does_not_control_the_anchor_node_may_not_view_the_request()
 	{
 		RequesterAccessPolicy.CanView(
-			[EmployeeRole.Worker],
-			false,
-			false,
-			false,
-			false).Should().BeFalse();
+				[EmployeeRole.Worker],
+				new() {
+					ActorIsRequestOwner = false,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = false,
+				})
+			.Should().BeFalse();
 	}
 
 	[Fact]
 	public void A_null_role_collection_is_rejected_by_CanView()
 	{
 		var act = () => RequesterAccessPolicy.CanView(
-			null!, true, false, false,
-			false);
+			null!,
+			new() {
+				ActorIsRequestOwner = true,
+				IsDepartmentVisibilityEnabled = false,
+				ActorSharesRequestDepartment = false,
+				ActorControlsAnchorNode = false,
+			});
 
-		act.Should().Throw<ArgumentNullException>();
+		act.Should().Throw<ArgumentNullException>().WithParameterName("actorRoles");
+	}
+
+	[Fact]
+	public void A_null_visibility_facts_record_is_rejected_by_CanView()
+	{
+		var act = () => RequesterAccessPolicy.CanView([EmployeeRole.Requester], null!);
+
+		act.Should().Throw<ArgumentNullException>().WithParameterName("facts");
 	}
 
 	[Fact]
 	public void The_requesting_requester_may_comment_on_their_own_open_request()
 	{
 		RequesterAccessPolicy.CanCommentAsRequester(
-			[EmployeeRole.Requester],
-			true,
-			false,
-			false,
-			false,
-			false).Should().BeTrue();
+				[EmployeeRole.Requester],
+				new() {
+					Visibility = new() {
+						ActorIsRequestOwner = true,
+						IsDepartmentVisibilityEnabled = false,
+						ActorSharesRequestDepartment = false,
+						ActorControlsAnchorNode = false,
+					},
+					IsOpenToRequester = true,
+				})
+			.Should().BeTrue();
 	}
 
 	[Fact]
 	public void The_requesting_requester_may_not_comment_on_a_closed_request()
 	{
 		RequesterAccessPolicy.CanCommentAsRequester(
-			[EmployeeRole.Requester],
-			true,
-			false,
-			false,
-			false,
-			true).Should().BeFalse();
+				[EmployeeRole.Requester],
+				new() {
+					Visibility = new() {
+						ActorIsRequestOwner = true,
+						IsDepartmentVisibilityEnabled = false,
+						ActorSharesRequestDepartment = false,
+						ActorControlsAnchorNode = false,
+					},
+					IsOpenToRequester = false,
+				})
+			.Should().BeFalse();
 	}
 
 	[Fact]
 	public void A_controlling_worker_who_can_view_the_request_may_not_comment_as_requester()
 	{
 		RequesterAccessPolicy.CanCommentAsRequester(
-			[EmployeeRole.Worker],
-			false,
-			false,
-			false,
-			true,
-			false).Should().BeFalse();
+				[EmployeeRole.Worker],
+				new() {
+					Visibility = new() {
+						ActorIsRequestOwner = false,
+						IsDepartmentVisibilityEnabled = false,
+						ActorSharesRequestDepartment = false,
+						ActorControlsAnchorNode = true,
+					},
+					IsOpenToRequester = true,
+				})
+			.Should().BeFalse();
 	}
 
 	[Fact]
 	public void A_null_role_collection_is_rejected_by_CanCommentAsRequester()
 	{
 		var act = () => RequesterAccessPolicy.CanCommentAsRequester(
-			null!, true, false, false,
-			false, false);
+			null!,
+			new() {
+				Visibility = new() {
+					ActorIsRequestOwner = true,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = false,
+				},
+				IsOpenToRequester = true,
+			});
 
-		act.Should().Throw<ArgumentNullException>();
+		act.Should().Throw<ArgumentNullException>().WithParameterName("actorRoles");
+	}
+
+	[Fact]
+	public void A_null_comment_facts_record_is_rejected_by_CanCommentAsRequester()
+	{
+		var act = () => RequesterAccessPolicy.CanCommentAsRequester([EmployeeRole.Requester], null!);
+
+		act.Should().Throw<ArgumentNullException>().WithParameterName("facts");
+	}
+
+	[Fact]
+	public void CanCommentAsRequester_defers_to_CanView_for_the_same_nested_visibility_facts()
+	{
+		var visibility = new RequesterVisibilityFacts {
+			ActorIsRequestOwner = false,
+			IsDepartmentVisibilityEnabled = true,
+			ActorSharesRequestDepartment = true,
+			ActorControlsAnchorNode = false,
+		};
+
+		var viewResult = RequesterAccessPolicy.CanView([EmployeeRole.Requester], visibility);
+		var commentResult = RequesterAccessPolicy.CanCommentAsRequester(
+			[EmployeeRole.Requester], new() { Visibility = visibility, IsOpenToRequester = true });
+
+		commentResult.Should().Be(viewResult);
 	}
 }

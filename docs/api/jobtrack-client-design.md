@@ -32,13 +32,18 @@ below is the target shape; the Status column reflects what exists in code today.
 | Property | Sub-interface | Plan §7.3 step | Status |
 |---|---|---|---|
 | `Installation` | `IInstallationCommands` | 1 (bootstrap) | **Implemented** |
+| `Query` | `IJobQueries` | 2, 5 (profiles, readiness, hierarchy) | **Implemented** — grew well past steps 2/5 below: job-tree browsing/search/summaries, awaiting-progress, work-session listing, leaf work, and prerequisite-edge queries were all added for `JobTrack.Web`'s browsing UI (plan §8.5 slice 2) and the external HTTP API (`docs/plans/2026-07-09-external-http-api-plan.md`) — see `src/JobTrack.Application/IJobQueries.cs` for the authoritative current member list, not the code block below |
+| `Employees` | `IEmployeeCommands` | plan §8.3 | **Implemented** — role assignment (grant/revoke the six baseline roles) and account state; not covered by the code blocks below, see `src/JobTrack.Application/IEmployeeCommands.cs` |
 | `Jobs` | `IJobCommands` | 3–5 (planning nodes, leaf work, prerequisites) | **Implemented** |
 | `Work` | `IWorkCommands` | 6 (sessions), 7 (achievement) | **Implemented** |
 | `Schedules` | `IScheduleCommands` | 8 (schedule versions/exceptions) | **Implemented** |
 | `Rates` | `IRateCommands` | 9 (user rates/node overrides) | **Implemented** |
-| `Query` | `IJobQueries` | 2, 5 (profiles, readiness, hierarchy) | **Implemented** — grew well past steps 2/5 below: job-tree browsing/search/summaries, awaiting-progress, work-session listing, leaf work, and prerequisite-edge queries were all added for `JobTrack.Web`'s browsing UI (plan §8.5 slice 2) and the external HTTP API (`docs/plans/2026-07-09-external-http-api-plan.md`) — see `src/JobTrack.Application/IJobQueries.cs` for the authoritative current member list, not the code block below |
-| `Costing` | `ICostQueries` | 10 (cost details, allocated duration, totals) | **Implemented** |
+| `Costs` | `ICostQueries` | 10 (cost details, allocated duration, totals) | **Implemented** — named `Costs`, not `Costing`; also documented for HTTP consumers in `docs/api/external-http-api-reference.md` |
 | `Audit` | `IAuditQueries` | 11 (audit search) | **Implemented** |
+| `Tokens` | `ITokenCommands` | ADR 0029/0030 | **Implemented** — personal access token lifecycle for the external HTTP API, including the deliberate expected-absence `TryAuthenticateAsync` (see below) |
+| `Requests` | `IRequestCommands` | ADR 0033 | **Implemented** — requester intake into a configured holding area |
+| `AuthenticationAudit` | `IAuthenticationAuditCommands` | — | **Implemented** — authentication/credential self-service audit trail |
+| `Credentials` | `IAccountCredentialCommands` | — | **Implemented** — credential-sensitive account state transitions (two-factor state, own-password change) |
 
 "Rate" is broken out from "Schedule" as its own property even though `jobtrack_spec_claude.md`
 §12.2 groups them under one `IScheduleCommands` — the implementation plan's own §7.1 bullet list
@@ -52,15 +57,20 @@ documents' own disagreement, not just spec-vs-plan).
 
 - **Async, cancellable, task-based**: every member is `Task`/`Task<T>`-returning, `Async`-suffixed,
   with a trailing `CancellationToken cancellationToken = default` — the only defaulted parameter
-  anywhere in the surface (FDG ch. 8).
+  in the command/query interfaces described below (FDG ch. 8). Provider factories and standalone
+  utility APIs have their own consumer-shaped defaults.
 - **Immutable contracts**: every request and result is a `sealed record` with `required`/`init`
   members. No mutable concrete collections in a signature — `IReadOnlyList<T>`/`IEnumerable<T>` in,
   `IReadOnlyList<T>` out, never `null` for "no results" (empty collection instead).
 - **Strongly typed identifiers and value objects** (`AppUserId`, `JobNodeId`, `Money`,
   `HourlyRate`, ...) from `JobTrack.Abstractions`, never a bare `long`/`decimal` where a specific ID
   or amount is meant (ADR 0006).
-- **No Boolean clusters**: an enum parameter where two or more related booleans would otherwise be
-  needed together (FDG ch. 5).
+- **No Boolean clusters**: two or more related booleans are never accepted together as bare
+  parameters. Where they name one closed choice, an enum parameter replaces them; where they are
+  independent facts a caller must supply together (as with the authorization policies in
+  `JobTrack.Domain.Authorization`, e.g. `RequesterVisibilityFacts`, `LeafReopenAndStartFacts`), a
+  small sealed nominal record with `required init` properties groups them instead — an enum would
+  invite invalid or combinatorial values that don't correspond to one meaningful choice (FDG ch. 5).
 - **Optimistic concurrency**: every mutation request that targets an existing row carries the
   caller's `Version` (a `long`); every mutation result returns the new `Version`. A stale version
   throws `ConcurrencyConflictException` (`JobTrack.Abstractions`), never a silent overwrite.
@@ -71,11 +81,17 @@ documents' own disagreement, not just spec-vs-plan).
   was implemented, reused uniformly for reads and writes rather than a separate read-only context
   type.
 - **Exceptions are the sole failure channel** (ADR 0019): usage errors throw framework exceptions
-  directly; the six `JobTrackException` subtypes in `JobTrack.Abstractions`
+  directly; the seven `JobTrackException` subtypes in `JobTrack.Abstractions`
   (`EntityNotFoundException`, `AuthorizationDeniedException`, `ConcurrencyConflictException`,
-  `PrerequisiteBlockedException`, `MissingRateException`, `InvariantViolationException`) cover every
-  condition callers handle distinctly. No `Try*` member exists anywhere in this design yet — none
-  has a measured performance or common-failure justification (ADR 0019's relief-valve criterion).
+  `PrerequisiteBlockedException`, `MissingRateException`, `InvariantViolationException`,
+  `UnknownStoredTimeZoneException`) cover every condition callers handle distinctly.
+  `ITokenCommands.TryAuthenticateAsync` is the surface's one
+  deliberate exception to "exceptions are the sole failure channel": a failed personal-access-token
+  authentication attempt (bad token, revoked, expired) is an expected outcome on a hot external-API
+  path, not a caller usage error, so it returns `AuthenticatedPersonalAccessTokenResult?` — `null` on
+  expected absence — rather than throwing, matching ADR 0019's relief-valve criterion. Every other
+  member in the surface keeps the throwing shape; this is not a precedent for adding further `Try*`
+  members without the same measured performance or common-failure justification.
 - **Mutation authorization is port-owned; query authorization is Application-owned:** command
   handlers (`JobCommands`, `WorkCommands`, `RateCommands`, `ScheduleCommands`, `EmployeeCommands`,
   `RequestCommands`, `TokenCommands`) orchestrate tracing and input shaping only — they never call
@@ -109,9 +125,12 @@ it is called out explicitly above rather than left to the general rule. See
 for the exact fields, and
 `tests/JobTrack.PublicApi.Tests/JobTrackClientUsageExampleTests.cs` for the compiling usage example
 plan §7.1 asks for — a consumer calling `client.Installation.BootstrapAdministratorAsync(...)`
-against a fake implementation, including the "already initialised" failure path
-(`InvariantViolationException` with `ConstraintId` `"installation-already-initialised"`, per
-ADR 0015).
+against an in-memory test double kept for this design-review purpose, including the "already
+initialised" failure path (`InvariantViolationException` with `ConstraintId`
+`"installation-already-initialised"`, per ADR 0015). Both persistence providers
+(`JobTrack.Persistence.PostgreSql`, `JobTrack.Persistence.Sqlite`) implement the full facade for
+real; see "Provider composition" below for how a consumer gets a real instance instead of the test
+double.
 
 ## `IJobQueries` — steps 2 and 5 (employee profile/account state; readiness) implemented
 
@@ -373,9 +392,60 @@ about. For the authoritative current shape of each, read:
 for every other command: `null` means "now", captured once inside the command (plan §2's "one
 captured clock value per operation").
 
-## Registration (not yet designed in detail)
+## Provider composition — implemented as static factories, not DI extension methods
 
-Spec §13.2 / spec_claude §12.8 call for parallel composition methods
-(`AddJobTrackPostgreSql`/`AddJobTrackSqlite`) that wire a provider without exposing connections or
-repositories. This is deferred to plan §7.4 (persistence implementations), since it cannot be
-designed sensibly before at least one persistence provider exists to compose.
+Spec §13.2 / spec_claude §12.8 originally called for parallel DI composition methods
+(`AddJobTrackPostgreSql`/`AddJobTrackSqlite`). What actually shipped, once both persistence
+providers existed to compose, is a static factory per provider that returns a ready `IJobTrackClient`
+directly rather than registering services into an `IServiceCollection` — simpler for a facade with no
+public sub-services for a consumer to resolve independently, and it keeps connection/data-source
+ownership explicit at the call site. Each factory has a longest overload carrying every optional
+customization (password hashers, clock) and an explicit simple overload with no defaults for the
+common case, delegating to the longest overload with `null` customizations — the FDG's
+no-default-simple-overload rule for a member with two or more defaults:
+
+```csharp
+public static class JobTrackSqlite
+{
+    public static IJobTrackClient Create(string connectionString);
+
+    public static IJobTrackClient Create(
+        string connectionString,
+        IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
+        IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
+        IClock? clock = null);
+}
+
+public static class JobTrackPostgreSql
+{
+    public static IJobTrackClient Create(NpgsqlDataSource dataSource);
+
+    public static IJobTrackClient Create(
+        NpgsqlDataSource dataSource,
+        IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
+        IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
+        IClock? clock = null);
+
+    // Production PostgreSQL role separation: distinct least-privilege PAT management and
+    // authentication connections, rather than the one shared pooled data source above.
+    public static IJobTrackClient CreateWithPatDataSources(
+        NpgsqlDataSource dataSource,
+        NpgsqlDataSource personalAccessTokenManagementDataSource,
+        NpgsqlDataSource personalAccessTokenAuthenticationDataSource);
+
+    public static IJobTrackClient CreateWithPatDataSources(
+        NpgsqlDataSource dataSource,
+        NpgsqlDataSource personalAccessTokenManagementDataSource,
+        NpgsqlDataSource personalAccessTokenAuthenticationDataSource,
+        IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
+        IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
+        IClock? clock = null);
+}
+```
+
+The longest overload in each pair remains the sole implementation path; the simple overload is a
+one-line delegation and performs no separate validation. See
+`src/JobTrack.Persistence.Sqlite/JobTrackSqlite.cs`, `src/JobTrack.Persistence.PostgreSql/JobTrackPostgreSql.cs`,
+and `tests/JobTrack.PublicApi.Tests/JobTrackClientUsageExampleTests.cs` (exact-delegate-conversion
+compile tests plus a usage example for each overload, including the advanced split-data-source
+case) for the current source and compiling proof.

@@ -1,5 +1,6 @@
 namespace JobTrack.Domain.Tests.Intervals;
 
+using System.Diagnostics;
 using AwesomeAssertions;
 using Domain.Intervals;
 using NodaTime;
@@ -265,7 +266,7 @@ public sealed class IntervalAlgebraTests
 				exceptions.Add(new(exceptionStart, exceptionStart + Duration.FromHours(1)));
 			}
 
-			var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+			var stopwatch = Stopwatch.StartNew();
 			var result = IntervalAlgebra.Subtract(scheduled, exceptions);
 			stopwatch.Stop();
 

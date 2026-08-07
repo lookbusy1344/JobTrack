@@ -21,3 +21,10 @@
 - **Pre-1.0 the entire surface lives in `PublicAPI.Unshipped.txt`; `PublicAPI.Shipped.txt` holds only `#nullable enable`.** This is the intended `Microsoft.CodeAnalysis.PublicApiAnalyzers` convention, not an incomplete baseline: every public member is still recorded and reviewed (the analyzer fails the build on any unrecorded surface change, additive or breaking, in either file), but nothing has been *frozen* as shipped because "1.0" here means "library gate accepted" (§7.5, M6) and that gate has not yet closed. The Unshipped→Shipped promotion happens **once**, at the library gate: the reviewed Unshipped surface is moved into `PublicAPI.Shipped.txt` in that acceptance change, after which additive members land in Unshipped and removals require the breaking-change process above. An empty-looking `Shipped.txt` before that point is correct and must not be "fixed" by prematurely promoting the surface.
 - Architecture tests (§7.5) enforce that no provider, SQL, ASP.NET Core, or mutable entity type leaks into the surface the baseline covers.
 - If the library is ever extracted for external/multi-repo consumption, this ADR is revisited to add real package versioning (a version number consumers pin to) — that is out of scope for the initial release and not designed for speculatively now.
+
+**Implementation note (2026-08-07):** ADR 0026 accepted M6 and ADR 0063 subsequently accepted the
+1.0 release gate, but the Unshipped→Shipped promotion described above did not happen at either
+acceptance — every `PublicAPI.Shipped.txt` still held only `#nullable enable` while the accepted
+surface remained in `PublicAPI.Unshipped.txt`. `docs/plans/2026-08-07-framework-design-guidelines-follow-up-remediation-plan.md`
+Stage 1 completed the promotion mechanically (existing entries moved, none regenerated, added, or
+removed) so the shipped baseline now matches the surface actually accepted at the gate.

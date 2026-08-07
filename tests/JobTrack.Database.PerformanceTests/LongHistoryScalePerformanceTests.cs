@@ -4,6 +4,7 @@ using System.Diagnostics;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
+using Domain.Costing;
 using NodaTime;
 using Npgsql;
 using Persistence.PostgreSql;
@@ -97,10 +98,10 @@ public sealed class LongHistoryScalePerformanceTests : IAsyncLifetime
 
 		var engineStopwatch = Stopwatch.StartNew();
 		foreach (var worker in inputs.Workers) {
-			var allocations = Domain.Costing.CostSegmentPartitioner.Partition(
+			var allocations = CostSegmentPartitioner.Partition(
 				worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
 				worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds);
-			_ = Domain.Costing.CostEngine.Calculate(
+			_ = CostEngine.Calculate(
 				new(seed.BranchId), allocations, inputs.NodesById, worker.ScheduledWorkingIntervals, worker.Exceptions, worker.NodeOverrides,
 				worker.UserCostRates, worker.UserDefaultRate);
 		}

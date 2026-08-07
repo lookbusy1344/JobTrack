@@ -16,11 +16,12 @@ public static class RequesterAccessPolicy
 	///     for that holding area (department routing or global eligibility, ADR 0033 §3). No other role
 	///     may submit through this path.
 	/// </summary>
-	public static bool CanSubmit(IReadOnlyCollection<EmployeeRole> actorRoles, bool holdingAreaIsActive, bool actorIsEligibleForHoldingArea)
+	public static bool CanSubmit(IReadOnlyCollection<EmployeeRole> actorRoles, RequesterSubmissionFacts facts)
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
+		ArgumentNullException.ThrowIfNull(facts);
 
-		return actorRoles.Contains(EmployeeRole.Requester) && holdingAreaIsActive && actorIsEligibleForHoldingArea;
+		return actorRoles.Contains(EmployeeRole.Requester) && facts.IsHoldingAreaActive && facts.ActorIsEligibleForHoldingArea;
 	}
 
 	/// <summary>
@@ -30,40 +31,31 @@ public static class RequesterAccessPolicy
 	///     <see cref="EmployeeRole.Administrator" /> or <see cref="EmployeeRole.JobManager" />, or they
 	///     hold <see cref="EmployeeRole.Worker" /> and control the request's anchor node.
 	/// </summary>
-	public static bool CanView(
-		IReadOnlyCollection<EmployeeRole> actorRoles,
-		bool actorIsRequestOwner,
-		bool departmentVisibilityEnabled,
-		bool actorSharesRequestDepartment,
-		bool actorControlsAnchorNode)
+	public static bool CanView(IReadOnlyCollection<EmployeeRole> actorRoles, RequesterVisibilityFacts facts)
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
+		ArgumentNullException.ThrowIfNull(facts);
 
-		return actorIsRequestOwner
-			   || (departmentVisibilityEnabled && actorRoles.Contains(EmployeeRole.Requester) && actorSharesRequestDepartment)
+		return facts.ActorIsRequestOwner
+			   || (facts.IsDepartmentVisibilityEnabled && actorRoles.Contains(EmployeeRole.Requester) && facts.ActorSharesRequestDepartment)
 			   || actorRoles.Contains(EmployeeRole.Administrator)
 			   || actorRoles.Contains(EmployeeRole.JobManager)
-			   || (actorRoles.Contains(EmployeeRole.Worker) && actorControlsAnchorNode);
+			   || (actorRoles.Contains(EmployeeRole.Worker) && facts.ActorControlsAnchorNode);
 	}
 
 	/// <summary>
 	///     An actor may add a requester-visible comment/clarification if <see cref="CanView" /> holds,
-	///     they hold <see cref="EmployeeRole.Requester" />, and the request is not yet closed to the
+	///     they hold <see cref="EmployeeRole.Requester" />, and the request is still open to the
 	///     requester. Staff notes are a separate, non-requester channel and are not governed by this
 	///     method.
 	/// </summary>
-	public static bool CanCommentAsRequester(
-		IReadOnlyCollection<EmployeeRole> actorRoles,
-		bool actorIsRequestOwner,
-		bool departmentVisibilityEnabled,
-		bool actorSharesRequestDepartment,
-		bool actorControlsAnchorNode,
-		bool requestIsClosedToRequester)
+	public static bool CanCommentAsRequester(IReadOnlyCollection<EmployeeRole> actorRoles, RequesterCommentFacts facts)
 	{
 		ArgumentNullException.ThrowIfNull(actorRoles);
+		ArgumentNullException.ThrowIfNull(facts);
 
-		return CanView(actorRoles, actorIsRequestOwner, departmentVisibilityEnabled, actorSharesRequestDepartment, actorControlsAnchorNode)
+		return CanView(actorRoles, facts.Visibility)
 			   && actorRoles.Contains(EmployeeRole.Requester)
-			   && !requestIsClosedToRequester;
+			   && facts.IsOpenToRequester;
 	}
 }

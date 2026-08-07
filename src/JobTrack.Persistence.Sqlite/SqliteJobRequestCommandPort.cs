@@ -63,7 +63,8 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 									  d => d.AppUserId == request.Context.Actor && d.DepartmentId == holdingArea.DepartmentId, cancellationToken)
 								  .ConfigureAwait(false);
 
-		if (!RequesterAccessPolicy.CanSubmit(actorRoles, holdingArea.IsActive, actorIsEligible)) {
+		if (!RequesterAccessPolicy.CanSubmit(
+				actorRoles, new() { IsHoldingAreaActive = holdingArea.IsActive, ActorIsEligibleForHoldingArea = actorIsEligible })) {
 			throw new AuthorizationDeniedException(
 				$"Actor {request.Context.Actor} may not submit a request into holding area {request.HoldingAreaId}.");
 		}
@@ -309,8 +310,16 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 			visibleToRequester = request.VisibleToRequester;
 		} else if (jobRequest.RequesterUserId == request.Context.Actor
 				   && RequesterAccessPolicy.CanCommentAsRequester(
-					   actorRoles, true, false, false,
-					   controlsAnchor, jobRequest.ClosedToRequesterAt is not null)) {
+					   actorRoles,
+					   new() {
+						   Visibility = new() {
+							   ActorIsRequestOwner = true,
+							   IsDepartmentVisibilityEnabled = false,
+							   ActorSharesRequestDepartment = false,
+							   ActorControlsAnchorNode = controlsAnchor,
+						   },
+						   IsOpenToRequester = jobRequest.ClosedToRequesterAt is null,
+					   })) {
 			visibleToRequester = true;
 		} else {
 			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not add a note to request {request.NodeId}.");
@@ -367,8 +376,13 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		var controlsAnchor = ancestorOwnerIds.Contains(request.Context.Actor.Value);
 
 		if (!RequesterAccessPolicy.CanView(
-				actorRoles, jobRequest.RequesterUserId == request.Context.Actor,
-				false, false, controlsAnchor)) {
+				actorRoles,
+				new() {
+					ActorIsRequestOwner = jobRequest.RequesterUserId == request.Context.Actor,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = controlsAnchor,
+				})) {
 			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view request {request.NodeId}.");
 		}
 

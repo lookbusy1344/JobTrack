@@ -897,8 +897,13 @@ internal sealed class JobQueries : IJobQueries
 
 					var isTerminal = AchievementTransitions.IsCompletedState(achievement.Value);
 					canReopenAndStartForSelf = isTerminal && LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(
-						manageCapabilities.ActorRoles, actorControlsNode, actorParticipatedPreviously,
-						request.Context.Actor, request.Context.Actor);
+						manageCapabilities.ActorRoles,
+						new() {
+							ActorControlsNode = actorControlsNode,
+							ActorParticipatedPreviously = actorParticipatedPreviously,
+							ActorUserId = request.Context.Actor,
+							TargetWorkedByUserId = request.Context.Actor,
+						});
 					canReopenAndStartForOthers = isTerminal && hasElevatedOrControlAuthority;
 					canReopenWithoutStarting = isTerminal && AchievementAccessPolicy.CanSetAchievement(
 						manageCapabilities.ActorRoles, actorControlsNode, true);

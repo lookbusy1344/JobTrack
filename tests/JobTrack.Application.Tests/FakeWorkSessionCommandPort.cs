@@ -379,8 +379,13 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		var actorParticipatedPreviously = _sessions.Values.Any(session =>
 			session.LeafWorkId == request.JobNodeId && session.WorkedByUserId == request.Context.Actor);
 		if (!LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(
-				nodePort.RolesOf(request.Context.Actor), actorControlsNode, actorParticipatedPreviously,
-				request.Context.Actor, request.WorkedByUserId)) {
+				nodePort.RolesOf(request.Context.Actor),
+				new() {
+					ActorControlsNode = actorControlsNode,
+					ActorParticipatedPreviously = actorParticipatedPreviously,
+					ActorUserId = request.Context.Actor,
+					TargetWorkedByUserId = request.WorkedByUserId,
+				})) {
 			throw new AuthorizationDeniedException(
 				$"Actor {request.Context.Actor} may not reopen and start job node {request.JobNodeId} for {request.WorkedByUserId}.");
 		}

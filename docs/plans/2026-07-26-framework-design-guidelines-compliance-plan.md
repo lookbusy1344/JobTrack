@@ -273,10 +273,24 @@ Recorded so a later reviewer does not re-derive them. Each is a defensible devia
   `RequesterAccessPolicy.CanSubmit`, `JobNodeStructuralProjection.ToResult`). Ch. 5: *"DO prefer an
   enum over two or more Boolean parameters."* All three have self-documenting parameter names and
   are called from a handful of sites; an enum would be heavier than the problem.
+  **Superseded (2026-08-07):** a later fresh-eyes review found this observation covered only three
+  of several public Boolean-cluster call shapes and did not weigh a nominal fact-record contract
+  against an enum for the wider set (up to five parameters, including `RequesterAccessPolicy.CanView`/
+  `CanCommentAsRequester` and `LeafReopenAndStartAccessPolicy.CanReopenAndStartFor`, not named here).
+  `docs/plans/2026-08-07-framework-design-guidelines-follow-up-remediation-plan.md` §3.1 replaced the
+  Boolean-cluster methods this observation covers (`CanSubmit`, `CanView`, `CanCommentAsRequester`,
+  `CanReopenAndStartFor`) with fact-record parameters; `JobNodeStructuralProjection.ToResult` is
+  `internal` and stayed out of that plan's scope, so it is undecided, not accepted, going forward.
 - **Every `PublicAPI.Shipped.txt` is empty** (1 header line) with the full surface in
   `Unshipped.txt` — 290 + 2,376 + 439 + 3 + 3 entries. Correct for pre-release. Promoting to
   `Shipped.txt` is the natural mechanical marker for passing the library gate (§7.5), at which point
   `CLAUDE.md`'s compatibility commitment starts to bind.
+  **Superseded (2026-08-07):** the library gate (ADR 0026, M6) and the 1.0 release gate (ADR 0063)
+  have since passed, but the promotion this observation anticipated did not happen at either
+  acceptance — every `PublicAPI.Shipped.txt` still held only the nullable header.
+  `docs/plans/2026-08-07-framework-design-guidelines-follow-up-remediation-plan.md` Stage 1 performed
+  the mechanical Unshipped→Shipped promotion this observation describes; see ADR 0013's dated
+  implementation note.
 
 ## 4. Sequencing
 

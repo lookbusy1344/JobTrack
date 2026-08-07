@@ -1,5 +1,6 @@
 namespace JobTrack.Domain.Tests.Costing;
 
+using System.Diagnostics;
 using Abstractions;
 using AwesomeAssertions;
 using Domain.Costing;
@@ -265,7 +266,7 @@ public sealed class CostEngineTests
 		var bounds = new WorkInterval(Instant.FromUtc(2021, 1, 1, 0, 0), Instant.FromUtc(2026, 1, 1, 0, 0));
 		var allocations = CostSegmentPartitioner.Partition(sessions, workingIntervals, nodes, exceptions, [], [], bounds);
 
-		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+		var stopwatch = Stopwatch.StartNew();
 		CostCalculation calculation = null!;
 		for (var worker = 0; worker < workerCount; ++worker) {
 			calculation = CostEngine.Calculate(
