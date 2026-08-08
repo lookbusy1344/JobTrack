@@ -1,5 +1,6 @@
 namespace JobTrack.Domain.Costing;
 
+using System.Runtime.InteropServices;
 using Abstractions;
 using Hierarchy;
 using Intervals;
@@ -64,8 +65,10 @@ public static class CostEngine
 		foreach (var allocation in allocations) {
 			var rate = RateResolver.Resolve(
 				allocation.NodeId, allocation.Segment.Start, nodesById, pricedExceptions, overridesByNode, userCostRates, userDefaultRate).Rate;
-			leafCosts[allocation.NodeId] =
-				leafCosts.GetValueOrDefault(allocation.NodeId) + SegmentCostCalculator.Calculate(allocation.Share, rate).Amount;
+			// Single probe (Stage 2 item 2d): decimal's default (0m) is the correct additive
+			// identity, so a not-yet-seen leaf needs no separate initialization branch.
+			ref var cost = ref CollectionsMarshal.GetValueRefOrAddDefault(leafCosts, allocation.NodeId, out _);
+			cost += SegmentCostCalculator.Calculate(allocation.Share, rate).Amount;
 		}
 
 		return leafCosts.ToDictionary(entry => entry.Key, entry => new Money(entry.Value));
@@ -92,12 +95,12 @@ public static class CostEngine
 		// measurable next to the arithmetic itself.
 		var sessionIdsBySegment = new Dictionary<WorkInterval, List<WorkSessionId>>();
 		foreach (var allocation in allocations) {
-			if (!sessionIdsBySegment.TryGetValue(allocation.Segment, out var segmentSessionIds)) {
+			ref var segmentSessionIds = ref CollectionsMarshal.GetValueRefOrAddDefault(sessionIdsBySegment, allocation.Segment, out var existed);
+			if (!existed) {
 				segmentSessionIds = [];
-				sessionIdsBySegment[allocation.Segment] = segmentSessionIds;
 			}
 
-			segmentSessionIds.Add(allocation.SessionId);
+			segmentSessionIds!.Add(allocation.SessionId);
 		}
 
 		var activeSessionsBySegment = new Dictionary<WorkInterval, EquatableArray<WorkSessionId>>(sessionIdsBySegment.Count);
@@ -147,7 +150,8 @@ public static class CostEngine
 		});
 		var leafCostAmounts = new Dictionary<JobNodeId, decimal>();
 		foreach (var entry in trace) {
-			leafCostAmounts[entry.NodeId] = leafCostAmounts.GetValueOrDefault(entry.NodeId) + entry.UnroundedContribution.Amount;
+			ref var amount = ref CollectionsMarshal.GetValueRefOrAddDefault(leafCostAmounts, entry.NodeId, out _);
+			amount += entry.UnroundedContribution.Amount;
 		}
 
 		var leafCosts = leafCostAmounts.ToDictionary(entry => entry.Key, entry => new Money(entry.Value));

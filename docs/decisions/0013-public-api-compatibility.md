@@ -1,6 +1,8 @@
 # ADR 0013: Internal public API compatibility and versioning policy
 
-**Status:** Accepted
+**Status:** Superseded by ADR 0065 (2026-08-08) — the binding compatibility-commitment/
+breaking-change-review requirement below is no longer mandatory; kept as the historical record of
+why it was originally adopted.
 **Closes:** Implementation plan §5.1 item 10
 
 ## Decision

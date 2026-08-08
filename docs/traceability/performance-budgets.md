@@ -458,6 +458,303 @@ head-to-head latency comparison misleading, §6.4): every operation above must c
 indefinite blocking under SQLite's configured busy timeout, and a concurrent write attempt during
 another writer's transaction must fail fast with the documented busy/locked error rather than hang.
 
+**Stage 0 attribution profile (2026-08-08, large-database performance plan §4 Stage 0).** Temporary
+in-process instrumentation (`Stopwatch` checkpoints around `CostSegmentPartitioner`'s
+`EligiblePieces`/`Boundaries`/sweep phases and `CostEngine`'s rate-resolution loop, plus a
+`CommandCountInterceptor` and `GC.GetTotalAllocatedBytes()`/`GC.CollectionCount` deltas), reverted
+before commit per the plan's "temporary, not committed" instruction — not present in the working
+tree. Measured via `./scripts/perf-test.sh`, warmed process, PostgreSQL only.
+
+*Correcting the apples-to-oranges comparison §2.3 of the plan flagged.* The 2026-08-06 materialisation
+plan's "~359-508 ms pure engine" figure came from manually replicating the engine with `Partition()` +
+trace-producing `CostEngine.Calculate()` — a different, heavier call shape than any real aggregate-read
+operation actually issues. Attributing the *real* per-operation call paths instead:
+
+| Operation (long-history: 20 workers, 5-year window, ~36,500 sessions) | Total, warm | Engine share (partition+price) | DB/orchestration share |
+|---|---|---|---|
+| `GetCostDetailsAsync` (one leaf, trace path: `Partition`+`Calculate`) | 21-27 ms (cold first call 41 ms) | ~2.5 ms (eligiblePieces 0.7, boundaries 0.6, sweep 0.3, rateResolution 0.9; 1,825 sessions/pieces, one worker) | ~19-24 ms |
+| `GetHierarchyTotalsAsync` (20-worker branch, aggregate path: `PartitionBounded`+`ComputeLeafCosts`) | 122-173 ms | ~32-36 ms (eligiblePieces 13-16, boundaries 7, sweep 4-5, rateResolution 7; 36,500 sessions/pieces across 20 workers) | ~90-140 ms |
+| `GetBulkNodeCostsAsync` (branch as one bulk candidate: `Partition`+`ComputeLeafCosts`) | 148-178 ms | ~29-33 ms, same piece/boundary counts as above | ~115-150 ms |
+| `GetRequesterVisibleHierarchyAsync` (branch, duration-only: `Partition`, no rate resolution) | 141-148 ms | ~16-25 ms (eligiblePieces 13-17, boundaries 2, sweep 3-6; no override/exception boundaries, so roughly half the boundary count of the cost paths) | ~120-125 ms |
+
+**The engine is not dominant at any of the four real operation shapes.** DB materialization and
+per-request orchestration (access checks, hierarchy aggregation, dictionary merges, the
+`JobTrackOperation.TraceAsync` wrapper) account for 75-90% of end-to-end time on the aggregate paths,
+and ~90% on the single-leaf trace path. The correctly-profiled engine share (~30-36 ms for a 20-worker,
+36,500-session branch) is roughly 10-15x smaller than the previous mis-measurement. This does not
+mean engine work is free — Stage 2's items remain candidates — but it reorders priority: DB
+materialization (already addressed by the 2026-08-06 plan, further reducible by Stage 3's rollups) is
+the larger term at this scale, not the pure engine.
+
+At the **overlapping-cost scale** (50 workers x 400 leaves, dense short-window sessions), every
+operation completes in 24-40 ms with an engine share of 0.1-2 ms — consistent with the existing
+27x-headroom finding; no regression risk identified for any Stage 1-2 change evaluated against this
+profile.
+
+Allocation/GC figures (process-wide `GC.GetTotalAllocatedBytes()`, since per-thread allocation
+counters are unreliable across `ConfigureAwait(false)` continuations that hop thread-pool threads):
+the 20-worker branch aggregate read allocates ~105-110 MB and triggers 12-15 Gen0 and 2-4 Gen1
+collections per call; Gen2 is rare (0-2 per call). Nothing observed here suggests LOH/Gen2 churn is
+yet a binding concern at this scale, but the Gen0 rate (a dozen-plus collections per single aggregate
+read) is consistent with Stage 2g's buffer-pooling candidate being worth a profile-gated look once
+Stage 1/2 land. DB round trips are flat per operation shape (10-13 commands) regardless of worker
+count, matching the existing bulk-path command-count guarantees.
+
+**Concurrent-load baseline** (`GetHierarchyTotalsAsync`, 20-worker long-history branch, one shared
+process-wide `NpgsqlDataSource` reused by every concurrent caller, matching production DI):
+
+| Concurrency | Wall (all callers) | p50 | p95 | Throughput | CPU time | Working set |
+|---|---|---|---|---|---|---|
+| 1 | 343 ms | 343 ms | 343 ms | 2.9 req/s | 532 ms | 198 MB |
+| 5 | 234 ms | 233 ms | 234 ms | 21.4 req/s | 859 ms | 389 MB |
+| 10 | 623 ms | 620 ms | 623 ms | 16.1 req/s | 4,304 ms | 441 MB |
+| 20 | 843 ms | 747 ms | 842 ms | 23.7 req/s | 3,633 ms | 690 MB |
+
+Throughput does not scale linearly with concurrency (roughly flat from 5 to 20 simultaneous callers,
+~16-24 req/s) while CPU time consumed grows close to linearly with concurrency and p50 latency more
+than doubles from 1 to 20 callers. This machine has more cores than the deployed Cloud Run revision is
+likely to be sized with, so the absolute throughput ceiling is not directly portable, but the *shape*
+— CPU-bound saturation, not connection-pool or I/O starvation, since no pool-exhaustion errors or
+latency cliffs occurred up to 20 concurrent callers against the default Npgsql pool size — supports the
+plan's own caution: Stage 1's per-request parallelism must be bounded by a process-wide CPU bulkhead,
+because it would compete with exactly this same external-request concurrency for the same CPU budget
+this baseline shows is already the binding resource, not idle headroom. Working set grew from 198 MB
+to 690 MB across the tested range without a cliff; peak memory was not the limiting factor in this run
+at up to 20 concurrent long-history branch reads, though this baseline does not by itself rule out
+memory as the binding constraint on a smaller deployed container.
+
+**Conclusion for Stages 1-3 sequencing.** The corrected attribution weakens the original case for
+prioritising Stage 2 (engine hot-path work) ahead of Stage 3: the engine is a minority term at every
+measured operation shape, so Stage 2's constant-factor wins bound a smaller fraction of total latency
+than assumed when this plan was written. Stage 1 (per-worker parallelism) still has a real target
+(the ~30-36 ms engine share is itself embarrassingly parallel per ADR 0017), but the concurrent-load
+baseline above shows CPU is already the scarce resource under realistic concurrent load, so Stage 1
+must ship with the CPU bulkhead the plan already requires, not as an unconditional win. Stage 3
+remains the only stage that flattens the unbounded axis (§3 of the plan) and targets the larger
+(DB-materialization) term directly; nothing in this profile changes its own trigger condition
+(§4 Stage 3 "when to trigger this stage").
+
+**Stage 1 — withdrawn after its acceptance measurement (2026-08-08, large-database performance plan
+§4 Stage 1).** The first implementation parallelized the aggregate per-worker loops through a static,
+process-wide CPU bulkhead. A fresh-eyes review found that the bulk-cost loop had been omitted and, more
+importantly, that the plan's mandatory post-change concurrent-load measurement had not been run. The
+bulk omission was corrected, then the same temporary in-process 1/5/10/20-caller matrix used for Stage 0
+was rerun against the 20-worker, five-year hierarchy-total shape. Results with the default degree:
+
+| Concurrency | Wall (all callers) | p50 | p95 | Throughput | CPU time | Working set after |
+|---|---|---|---|---|---|---|
+| 1 | 198 ms | 197 ms | 197 ms | 5.0 req/s | 378 ms | 219 MB |
+| 5 | 355 ms | 343 ms | 348 ms | 14.1 req/s | 2,052 ms | 300 MB |
+| 10 | 671 ms | 602 ms | 668 ms | 14.9 req/s | 4,549 ms | 409 MB |
+| 20 | 1,238 ms | 1,155 ms | 1,232 ms | 16.2 req/s | 9,577 ms | 843 MB |
+
+Against Stage 0's baseline, throughput regressed from 21.4 to 14.1 req/s at five callers and from
+23.7 to 16.2 req/s at twenty, while p95 increased from 234 to 348 ms and 842 to 1,232 ms respectively.
+A second run capped each request at degree 2 did not recover the gate: 12.9/13.5/19.4 req/s at
+5/10/20 callers, with p95 377/734/1,023 ms. The optimization therefore fails its explicit acceptance
+condition even though it improves one isolated caller. Stage 1 is withdrawn: all worker loops are
+sequential again, the bulkhead and deployment setting are removed, and cancellation is checked between
+worker calculations. Temporary measurement instrumentation was reverted before commit. This evidence
+also corrects the earlier close-out claim that the bulk path was parallelized and that the bulkhead's
+design alone was sufficient proof against a concurrent-load regression.
+
+**Stage 2 — engine hot-path work (2026-08-08, large-database performance plan §4 Stage 2).** Three
+items shipped; four withdrawn with evidence, per the plan's own "candidate list, not a mandate."
+
+*Shipped:*
+
+- **2b (packed-array active set).** `CostSegmentPartitioner.PartitionCore`'s `SortedSet<int>` active
+  set replaced with an `int[] active` / `int[] slotOf` swap-remove structure, matching the flat-array
+  pattern the same file already applied to its other hot structures. This changes active-index
+  iteration (and therefore allocation emission) order, which is safe: `CostEngine.Calculate` already
+  re-sorts its trace under a total order, and `CostSegmentPartitionerPropertyTests` already
+  canonicalizes (sorts) allocations before comparing, because `Partition` never promised an emission
+  order. All 541 `JobTrack.Domain.Tests` (including the property-based oracle tests) pass unchanged.
+- **2d (single-probe dictionary access).** `CollectionsMarshal.GetValueRefOrAddDefault` replaces
+  `GetValueOrDefault` + indexer-set (two hash probes) in `CostEngine.ComputeLeafCosts`,
+  `CostEngine.Calculate` (both the per-segment session-id grouping and the leaf-cost-amount
+  accumulation), and `AllocatedDurationCalculator.ComputeLeafDurations`.
+- **2f (struct enumerator for `IntervalIndex.Overlapping`).** Replaced the `yield return` iterator
+  (one state-machine allocation per call -- 36,500 calls at the long-history scale, once per costed
+  session) with a struct `OverlappingEnumerable`/`Enumerator` pair, still implementing
+  `IEnumerable<WorkInterval>` for LINQ/test-assertion call sites (which box the struct only on that
+  fallback path, never on the concrete `foreach` in `CostSegmentPartitioner.EligiblePieces` or
+  `IntervalAlgebra.Subtract`). `IntervalIndexTests` and the interval-property tests pass unchanged.
+
+Measured via the same manual `Partition`+`Calculate` sequential replication `LongHistoryScalePerformanceTests`
+already used for the DB-vs-engine split (20 workers, 36,500 sessions, trace-producing -- deliberately
+isolated from Stage 1's parallelism and from DB materialization, so this is a clean before/after of
+Stage 2's engine-only changes): **167.7 ms → 114.4 ms, a ~32% reduction**, all three correctness suites
+(`JobTrack.Domain.Tests`, `JobTrack.Application.Tests`, the four long-history/overlapping-cost
+performance tests) passing unchanged. Whole-operation figures from the same run (e.g. branch hierarchy
+totals) are not quoted as before/after evidence here: `./scripts/perf-test.sh`'s test-class discovery
+order was not identical between the Stage 1 and Stage 2 runs, so whichever test ran first paid a
+different share of process cold-start (EF model build, pool spin-up) each time, which would misattribute
+warm-up noise to this stage's changes.
+
+*Withdrawn with evidence:*
+
+- **2a (fused aggregate-only sweep).** Not pursued. Stage 0's corrected attribution found the *whole*
+  engine (partition + price + duration + aggregation) is only ~30-36 ms of a ~130-170 ms 20-worker
+  branch read; 2a's target -- redundant iteration/materialization of the allocation list within that
+  30-36 ms -- bounds a fraction of an already-small term. The item is also the largest, riskiest
+  rewrite in this stage (a new internal aggregate code path alongside the existing trace path). Not
+  worth its risk at the current measured scale; revisit if Stage 5's production telemetry shows
+  aggregate reads growing enough to make this term matter again.
+- **2c (compiled/cursor rate timelines).** Not pursued. Stage 0 measured rate resolution at ~7 ms of
+  the ~30-36 ms engine share for the 20-worker branch -- material relative to the engine, immaterial
+  relative to the operation. The plan's own gate ("if Stage 0 still shows rate resolution material")
+  is a judgment call given the small absolute number; deferred rather than spending a binary-search/
+  cursor rewrite of `RateResolver` on single-digit milliseconds.
+- **2e (`SessionSegmentAllocation` as `readonly record struct`).** Not pursued. This is a public-API
+  break to `JobTrack.Domain` requiring a `PublicAPI.Shipped.txt` update and every in-repo consumer
+  changed in one commit. The plan explicitly says not to take this break "merely to optimize
+  aggregate reads if 2a removes their allocation objects altogether" -- 2a itself was withdrawn above,
+  so this precondition is doubly unmet; revisit only alongside 2a, not before it.
+- **2g (pool large transient buffers).** Not pursued. Stage 0's GC figures (12-15 Gen0, 2-4 Gen1, 0-2
+  Gen2 collections per 20-worker aggregate call; ~105-110 MB allocated) showed Gen0 churn but
+  explicitly "nothing observed here suggests LOH/Gen2 churn is yet a binding concern at this scale."
+  The plan's own caution applies directly: "pooling that saves nothing is complexity with a
+  lifetime-bug surface." Revisit only if Stage 5's production telemetry or a future profile shows
+  Gen2/LOH pressure under real concurrent load.
+
+**Stage 3 — deliberately deferred (2026-08-08).** The plan's own §4 Stage 3 text is explicit: "Until
+[the trigger fires], Stage 3 stays deliberately unbuilt and no cache schema is committed." The trigger
+is "aggregate-only p95 cost-read latency exceeds half its budget or production window/session
+telemetry crosses the measured knee in that curve." Post-Stage-2 measurements do not meet that bar:
+long-history branch hierarchy totals (the aggregate operation Stage 3 would target) measured 165.7 ms
+against its 500 ms budget (33%, not "half its budget" = 250 ms) in the most recent isolated run, and no
+production telemetry exists yet to establish a knee (Stage 5b below is what will supply it). Building
+the rollup schema, dirty-generation invalidation and backfill machinery now would be exactly the
+"premature shape" the plan itself warns against. **Deferred, not skipped:** the trigger criterion above
+is the record required by completion criteria item 7; Stage 5b's telemetry is what will let the trigger
+fire on data rather than on someone remembering to re-check this file.
+
+**Stage 4 — bounded-window reads (2026-08-08, large-database performance plan §4 Stage 4).** Audited
+every call site of the four public cost-read members (`GetCostDetailsAsync`, `GetHierarchyTotalsAsync`,
+`GetBulkNodeCostsAsync`, `GetRequesterVisibleHierarchyAsync`): `src/JobTrack.Web/JobTrackApi.Cost.cs`
+(the external HTTP API), `src/JobTrack.Web/Pages/Jobs/CostReport.cshtml.cs`, and
+`src/JobTrack.Web/Pages/Jobs/Work.cshtml.cs`. Every call site passes only `AsOf` -- none accepts or
+computes a narrower start bound, confirming the plan's own prediction ("the public cost requests
+expose only `asOf`, not a start bound"). Every one of these is a lifetime-style question ("this node's
+cost as of now") by construction, not a genuinely period-scoped one ("this node's cost in March") --
+there is no existing call site to convert. Per the plan's explicit instruction ("Do not invent a
+monthly/date-ranged feature under this performance plan"), zero call sites were converted. This is the
+stage's own predicted outcome, not a gap: lifetime totals cannot narrow this way, which is precisely
+what a future Stage 3 (currently deferred, see above) would cover for aggregate reads.
+
+**Stage 5a — write-path scaling (2026-08-08, large-database performance plan §4 Stage 5a).**
+`WriteContentionPerformanceTests` covered contention shapes (concurrent session starts, overlapping
+structural moves) but every existing scenario seeded a fresh worker/subtree with no prior history --
+not the "does the same-user/same-leaf overlap rejection stay bounded when the worker already has a
+large session history" question Stage 5a asks. Added
+`Concurrent_same_user_same_leaf_session_start_rejection_meets_the_latency_budget_at_high_session_density`,
+reusing the overlapping-cost scale's "heavy worker" fixture (5,000 sessions, the heaviest single-worker
+density this codebase seeds) so the two racing inserts contend against a GiST exclusion-constraint
+index already populated with that worker's full history, on a freshly inserted leaf isolated from the
+branch's other 5,000 sessions. Passed within the existing 1.5 s `SessionRejectionBudget` -- the GiST
+index (schema version 0007's `work_session_no_same_leaf_user_overlap`) scales with lookup depth, not
+linearly with row count, so this is the expected result, now with regression coverage. `job_node_blocked`
+recomputation bound (ADR 0051) already has dedicated coverage (`FullTableHierarchyLoadPerformanceTests`,
+§2.4 above: 46.7 ms → 3.9 ms via `MATERIALIZED` CTEs) -- no new test added for that half of 5a per the
+plan's own "if coverage already exists, record that and close the item" instruction.
+
+**Stage 5b — growth-signal telemetry (2026-08-08, large-database performance plan §4 Stage 5b).**
+`CostQueries` now logs one compact `cost_read_growth_signal` structured line per call across all four
+public cost-read shapes (`GetCostDetailsAsync`, `GetHierarchyTotalsAsync`, `GetBulkNodeCostsAsync`,
+`GetRequesterVisibleHierarchyAsync`), each wrapping its own DB-materialization call and engine/
+aggregation work in separate `Stopwatch`es: `operation`, `db_ms`, `engine_ms`, `window_ticks` (the costed
+`WorkInterval.Duration` as exact BCL-compatible ticks), `workers` (contributing worker count), `sessions_total`, and
+`sessions_max`/`sessions_p50`/`sessions_p95` (per-worker session-count percentiles, sorted -- cheap at
+the realistic tens-of-workers-per-request scale ADR 0017 scopes this to). **This is the exact
+compact-subset/no-per-worker-array shape the plan specifies** and is the intended Stage 3 trigger
+input (production window/session telemetry crossing a measured knee). Redaction is structural, not a
+convention to remember: the log line's field set is fixed by a `[LoggerMessage]` template that only
+ever receives enum/`long`/`int` values -- no rate, cost, node id, user id, or session id is ever
+in scope to pass to it. `CostQueriesGrowthSignalTests` (`tests/JobTrack.Application.Tests`) proves this
+for all four call shapes with both an exact-template redaction assertion and structured-property
+assertions for operation, window ticks, worker count, total sessions and session percentiles --
+matching post-1.0 Stage 2's own TDD requirement for a redaction test. Logging is optional and off by
+default (a `null` logger everywhere except where explicitly wired): `JobTrackPostgreSql.
+CreateWithPatDataSources` takes an `ILoggerFactory?`, wired from `JobTrack.Web`'s DI container.
+
+Fresh-eyes correction (2026-08-08): `operation` distinguishes aggregate hierarchy, aggregate bulk,
+requester-duration and trace-detail reads, so Stage 3's aggregate-only p95 trigger is derivable rather
+than conflated with a query shape rollups cannot serve. For details and hierarchy totals, `db_ms` now
+starts before `GetCostAccessInputsAsync` and stops after `GetCostInputsAsync`; it therefore includes all
+port/authorization work, consistently with bulk authorization being part of `GetBulkCostInputsAsync`.
+`window_ticks` supersedes the original `double window_days`, preserving the project's prohibition on
+`double` along the duration path while retaining an exact, compact cost-window growth dimension.
+
+**Stage 5c/5d/5e/5f (2026-08-08).**
+
+- **5e (fixture economics) -- measured.** Temporary isolated timing in a fresh database per scale
+  (per the plan's "not a subject for a product test" instruction, not committed), using the existing
+  `SeedLongHistoryScaleAsync(..., days:)` parameter rather than adding fixture machinery: 1 year
+  (20 workers x 365 days = 7,300 sessions), **209.0 ms**; 5 years (36,500 sessions), **1,305.1 ms**;
+  10 years (73,000 sessions), **2,735.8 ms**. The previously recorded empty-database schema deployment
+  was 98 ms. Seed cost scales approximately linearly and remains immaterial relative to the serialized
+  performance lane even at ten years, so neither further generator optimization nor snapshot/template-
+  database lifecycle machinery is warranted. Temporary measurement code was reverted before commit.
+- **5c (PostgreSQL operating curve) -- not run.** Table/index size, autovacuum lag, backup/restore
+  time and the forward-migration window at 5- and 10-year scales, and the partitioning/BRIN/covering-
+  index evaluation need real backup/vacuum and production-volume operating evidence this session does
+  not have access to exercise credibly
+  (a `pg_dump`/restore timing or `pg_stat_user_tables` autovacuum-lag figure measured against a
+  freshly seeded 1.7-second local database proves nothing about a production-scale install). Left open
+  for a session with that infrastructure; the existing worker-leading indexes remain authoritative in
+  the meantime, per the plan's own default.
+- **5d (bounded worst case) -- not run.** Stage 5e proves the configurable generator can seed a
+  ten-year shape cheaply, removing fixture economics as a blocker; the end-to-end worst-case and
+  transaction-local timeout/failure-contract evaluation remain a distinct deferred measurement. No
+  `statement_timeout` guardrail is adopted without that evidence.
+- **5f (runtime configuration candidates) -- not run.** All three candidates (GC mode, ReadyToRun
+  validation, Npgsql automatic preparation) require, per the plan's own instruction, "a container sized
+  like the deployed Cloud Run revision" -- this session runs against a local development machine, not a
+  deployment-matched container, so a measurement taken here would not answer the question the plan
+  asks. Stage 0's attribution did not isolate DB parse/plan time specifically (its DB-vs-engine split is
+  coarser than that), so the Npgsql auto-prepare candidate's own precondition ("if DB parse/plan time is
+  material") is not yet established either. None screened out with evidence; none adopted. Left open for
+  a deployment-matched environment.
+
+**Plan close-out (2026-08-08, large-database performance plan §8 completion criteria).**
+
+- **Long-history ceilings.** `LongHistoryScalePerformanceTests`'s `LeafCostBudget` (800 ms) and
+  `BranchCostBudget` (500 ms) are left unchanged, deliberately not tightened further: warm-process
+  measurements this session ranged from ~21 ms to ~617 ms for the leaf read and ~122-280 ms for the
+  branch read depending on which test happened to run first in the process (paying first-call EF
+  model build / connection-pool spin-up) -- exactly the cold/warm variance the existing ceiling
+  comments already document. Tightening either ceiling to a warm-only figure would risk a flaky
+  regression on whichever run genuinely pays the cold cost, which the plan's own revision policy
+  ("real headroom," never asserted against best-case noise) argues against.
+- **The original 150 ms leaf aspiration was not reached, and is not expected to be reachable by this
+  plan's remaining unbuilt stage.** The leaf read's own cost is ~90% DB materialization/orchestration,
+  not engine (Stage 0's corrected attribution), and DB materialization for a lifetime-style question
+  grows with database age by construction (§3's "sessions per contributing worker" axis) -- Stages 1-2
+  here made the engine faster but engine was never the leaf read's dominant term. Stage 3 (period
+  rollups) is the only stage that could flatten the DB-materialization term for *aggregate* reads, and
+  it explicitly cannot answer `GetCostDetailsAsync`'s trace-producing leaf read at all (per its own
+  "Applicability" section) -- so even a built Stage 3 would not have closed this gap. The honest
+  number: ~600 ms cold / ~20-40 ms warm, against the 800 ms ceiling; the 150 ms aspiration is retired,
+  not met.
+- **Overlapping-cost ceilings are unchanged or improved**: the full 29-test performance suite passes
+  with every existing ceiling intact. The heavy-worker (5,000-session) figure was re-measured at 693.2 ms
+  (previously 701.4 ms -- unchanged within run-to-run noise); it remains deliberately unbudgeted, per
+  the overlapping-cost-scale plan's own §7 reasoning that this worst case has no corresponding
+  performance-budgets.md row.
+- **Stage 6 remains unexecuted.** Its own trigger ("after Stages 0-4, the profile still shows the
+  partition sweep dominant") is not met -- Stage 0's corrected attribution found the opposite: the
+  engine, including the sweep, was never the dominant term at any measured operation shape. No
+  PostgreSQL-only cost algorithm is warranted.
+- **Stage 3's deferral and Stage 5b's telemetry are both recorded above**, satisfying completion
+  criterion 7: the trigger fires on production data (once deployed), not on someone remembering to
+  re-check this file.
+- **This plan is substantially, not fully, complete.** Stages 0, 2 and 4 are fully delivered; Stage 1
+  is withdrawn with the concurrent-load evidence above; Stage
+  5's 5a/5b/5e are delivered, 5c/5d/5f are explicitly deferred (not withdrawn) pending their remaining
+  operating-curve, worst-case and deployment-matched measurements. `2026-08-06-post-1.0-improvement-plan.md` Stage 4 is annotated as
+  delegated here.
+
 ## 3. High-concurrency / write-contention budgets
 
 | Operation | Scale | Budget |

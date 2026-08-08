@@ -1,9 +1,12 @@
 namespace JobTrack.Application;
 
+using System.Diagnostics;
 using Abstractions;
 using Domain.Authorization;
 using Domain.Costing;
 using Domain.Hierarchy;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NodaTime;
 using Ports;
 
@@ -16,8 +19,16 @@ using Ports;
 ///     independently because rates, overrides, and concurrency are always resolved per worker (see
 ///     <see cref="Domain.Rates.RateResolver" />).
 /// </summary>
-internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
+internal sealed partial class CostQueries : ICostQueries, IRequesterDurationQueries
 {
+	private enum CostReadOperation
+	{
+		CostDetails,
+		HierarchyTotals,
+		BulkNodeCosts,
+		RequesterVisibleHierarchy,
+	}
+
 	// Bounded ranges for cost responses (remediation plan §3.1): a cost trace/hierarchy is not
 	// offset/limit-paginated like a flat collection -- reconciliation needs the whole subtree or
 	// whole trace to produce a correct total, so truncating it would silently corrupt the numbers.
@@ -37,13 +48,27 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 	internal const int MaxBulkNodeIdCount = 500;
 
 	private readonly ICostQueryPort _port;
+	private readonly ILogger<CostQueries> _logger;
 
-	/// <summary>Creates a <see cref="CostQueries" /> over the given port.</summary>
-	public CostQueries(ICostQueryPort port)
+	/// <summary>Creates a <see cref="CostQueries" /> over the given port with no growth-signal logging.</summary>
+	public CostQueries(ICostQueryPort port) : this(port, null)
+	{
+	}
+
+	/// <summary>
+	///     Creates a <see cref="CostQueries" /> over the given port with a growth-signal logger (Stage 5b,
+	///     large-database performance plan §4): one compact structured line per aggregate/leaf cost read
+	///     recording DB-vs-engine duration split, cost-window span, contributing worker count, total
+	///     session count and max/p50/p95 sessions per worker -- durations and counts only, never
+	///     identities, rates or costs, so this is the Stage 3 trigger-decision input, not a diagnostic
+	///     trace. <paramref name="logger" /> defaults to a no-op logger when <see langword="null" />.
+	/// </summary>
+	public CostQueries(ICostQueryPort port, ILogger<CostQueries>? logger)
 	{
 		ArgumentNullException.ThrowIfNull(port);
 
 		_port = port;
+		_logger = logger ?? NullLogger<CostQueries>.Instance;
 	}
 
 	/// <inheritdoc />
@@ -82,7 +107,10 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 	public async Task<EquatableDictionary<JobNodeId, AllocatedDuration>> GetRequesterVisibleHierarchyAsync(
 		JobNodeId nodeId, Instant asOf, CancellationToken cancellationToken = default)
 	{
+		var dbStopwatch = Stopwatch.StartNew();
 		var inputs = await _port.GetCostInputsAsync(nodeId, asOf, MaxHierarchyNodeCount, cancellationToken).ConfigureAwait(false);
+		dbStopwatch.Stop();
+		var engineStopwatch = Stopwatch.StartNew();
 		var allocatedDurations = new Dictionary<JobNodeId, AllocatedDuration>(
 			HierarchicalAllocatedDurationAggregator.Aggregate(
 				nodeId,
@@ -90,23 +118,29 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 				new Dictionary<JobNodeId, AllocatedDuration>()));
 
 		foreach (var worker in inputs.Workers) {
-			var allocations = CostSegmentPartitioner.Partition(
-				worker.Sessions,
-				worker.EffectiveWorkingIntervals,
-				inputs.NodesById,
-				[],
-				[],
-				inputs.Bounds);
-			var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
-			var workerDurations = HierarchicalAllocatedDurationAggregator.Aggregate(nodeId, inputs.NodesById, leafDurations);
-
-			foreach (var (id, duration) in workerDurations) {
-				allocatedDurations[id] =
-					allocatedDurations.GetValueOrDefault(id, AllocatedDuration.Zero).Add(duration);
-			}
+			cancellationToken.ThrowIfCancellationRequested();
+			MergeDurations(allocatedDurations, ComputeWorkerDurationContribution(worker, nodeId, inputs));
 		}
 
+		engineStopwatch.Stop();
+		LogGrowthSignal(CostReadOperation.RequesterVisibleHierarchy, inputs, dbStopwatch.Elapsed, engineStopwatch.Elapsed);
+
 		return EquatableDictionaryFactory.CopyOf(allocatedDurations);
+	}
+
+	/// <summary>One worker's duration-only contribution (no rates, no trace) -- self-contained, so safe to run on any thread (Stage 1).</summary>
+	private static IReadOnlyDictionary<JobNodeId, AllocatedDuration> ComputeWorkerDurationContribution(
+		WorkerCostInputs worker, JobNodeId nodeId, CostQueryResult inputs)
+	{
+		var allocations = CostSegmentPartitioner.Partition(
+			worker.Sessions,
+			worker.EffectiveWorkingIntervals,
+			inputs.NodesById,
+			[],
+			[],
+			inputs.Bounds);
+		var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
+		return HierarchicalAllocatedDurationAggregator.Aggregate(nodeId, inputs.NodesById, leafDurations);
 	}
 
 	private async Task<(
@@ -115,37 +149,43 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 		Dictionary<JobNodeId, AllocatedDuration> AllocatedDurations,
 		List<CostSegmentTrace> Trace)> CalculateAsync(
 		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxTraceSegments, CancellationToken cancellationToken) =>
-		await CalculateAsync(actorId, nodeId, asOf, MaxHierarchyNodeCount, maxTraceSegments, cancellationToken).ConfigureAwait(false);
+		await CalculateAsync(
+			actorId, nodeId, asOf, MaxHierarchyNodeCount, maxTraceSegments, CostReadOperation.CostDetails, cancellationToken).ConfigureAwait(false);
 
 	private async Task<(
 		CostQueryResult Inputs,
 		Dictionary<JobNodeId, Money> ExactCosts,
 		Dictionary<JobNodeId, AllocatedDuration> AllocatedDurations,
 		List<CostSegmentTrace> Trace)> CalculateAsync(
-		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, int? maxTraceSegments,
+		AppUserId actorId, JobNodeId nodeId, Instant asOf, int maxHierarchyNodes, int? maxTraceSegments, CostReadOperation operation,
 		CancellationToken cancellationToken)
 	{
+		var dbStopwatch = Stopwatch.StartNew();
 		var access = await _port.GetCostAccessInputsAsync(actorId, nodeId, cancellationToken).ConfigureAwait(false);
 		if (!CostAccessPolicy.CanView(access.ActorRoles, access.AncestorOwnerIds.Contains(actorId))) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not view costs for node {nodeId}.");
 		}
 
 		var inputs = await _port.GetCostInputsAsync(nodeId, asOf, maxHierarchyNodes, cancellationToken).ConfigureAwait(false);
+		dbStopwatch.Stop();
+		var engineStopwatch = Stopwatch.StartNew();
 
 		var exactCosts = new Dictionary<JobNodeId, Money>();
 		var allocatedDurations = new Dictionary<JobNodeId, AllocatedDuration>();
 		var trace = new List<CostSegmentTrace>();
 		var includedNodeIds = GetSubtreeNodeIds(nodeId, inputs.NodesById);
+
 		foreach (var worker in inputs.Workers) {
+			cancellationToken.ThrowIfCancellationRequested();
 			var remainingTraceSegments = maxTraceSegments.HasValue ? maxTraceSegments.Value - trace.Count : int.MaxValue;
-			var allocations = CostSegmentPartitioner.PartitionBounded(
-				worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
-				worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds,
-				includedNodeIds, remainingTraceSegments);
 
 			IReadOnlyDictionary<JobNodeId, Money> workerExactCosts;
 			IReadOnlyDictionary<JobNodeId, AllocatedDuration> workerAllocatedDurations;
 			if (maxTraceSegments.HasValue) {
+				var allocations = CostSegmentPartitioner.PartitionBounded(
+					worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
+					worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds,
+					includedNodeIds, remainingTraceSegments);
 				var calculation = CostEngine.Calculate(
 					nodeId, allocations, inputs.NodesById, worker.ScheduledWorkingIntervals, worker.Exceptions, worker.NodeOverrides,
 					worker.UserCostRates, worker.UserDefaultRate);
@@ -153,25 +193,100 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 				workerAllocatedDurations = calculation.AllocatedDurations;
 				trace.AddRange(calculation.Trace);
 			} else {
-				var leafCosts = CostEngine.ComputeLeafCosts(
-					allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides,
-					worker.UserCostRates, worker.UserDefaultRate);
-				workerExactCosts = HierarchicalCostAggregator.Aggregate(nodeId, inputs.NodesById, leafCosts);
-				var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
-				workerAllocatedDurations = HierarchicalAllocatedDurationAggregator.Aggregate(nodeId, inputs.NodesById, leafDurations);
+				(workerExactCosts, workerAllocatedDurations) = ComputeWorkerAggregateContribution(worker, nodeId, inputs, includedNodeIds);
 			}
 
-			foreach (var (id, amount) in workerExactCosts) {
-				exactCosts[id] = new(exactCosts.GetValueOrDefault(id, new(0m)).Amount + amount.Amount);
-			}
-
-			foreach (var (id, duration) in workerAllocatedDurations) {
-				allocatedDurations[id] =
-					allocatedDurations.GetValueOrDefault(id, AllocatedDuration.Zero).Add(duration);
-			}
+			MergeCosts(exactCosts, workerExactCosts);
+			MergeDurations(allocatedDurations, workerAllocatedDurations);
 		}
 
+		engineStopwatch.Stop();
+		LogGrowthSignal(operation, inputs, dbStopwatch.Elapsed, engineStopwatch.Elapsed);
+
 		return (inputs, exactCosts, allocatedDurations, trace);
+	}
+
+	/// <summary>
+	///     Stage 5b's compact growth-signal line (large-database performance plan §4): the Stage 3
+	///     trigger-decision input, so it must stay cheap to compute and small to store. Session-count
+	///     percentiles use a full sort because the realistic worker-per-request count (tens, not
+	///     thousands -- ADR 0017 scopes this to one subtree's contributors) makes that the simplest
+	///     correct choice, not a hot-path concern.
+	/// </summary>
+	private void LogGrowthSignal(
+		CostReadOperation operation, CostQueryResult inputs, TimeSpan dbDuration, TimeSpan engineDuration) =>
+		LogGrowthSignal(operation, inputs.Workers, inputs.Bounds, dbDuration, engineDuration);
+
+	private void LogGrowthSignal(
+		CostReadOperation operation, BulkCostQueryResult inputs, TimeSpan dbDuration, TimeSpan engineDuration) =>
+		LogGrowthSignal(operation, inputs.Workers, inputs.Bounds, dbDuration, engineDuration);
+
+	private void LogGrowthSignal(
+		CostReadOperation operation, EquatableArray<WorkerCostInputs> workers, Domain.Intervals.WorkInterval bounds,
+		TimeSpan dbDuration, TimeSpan engineDuration)
+	{
+		if (!_logger.IsEnabled(LogLevel.Information)) {
+			return;
+		}
+
+		var workerCount = workers.Count;
+		var sessionCounts = new int[workerCount];
+		var totalSessions = 0;
+		for (var index = 0; index < workerCount; ++index) {
+			var count = workers[index].Sessions.Count;
+			sessionCounts[index] = count;
+			totalSessions += count;
+		}
+
+		Array.Sort(sessionCounts);
+		var maxSessions = workerCount == 0 ? 0 : sessionCounts[^1];
+		var p50Sessions = workerCount == 0 ? 0 : sessionCounts[(workerCount - 1) / 2];
+		var p95Sessions = workerCount == 0 ? 0 : sessionCounts[(int)((workerCount - 1) * 0.95)];
+		var windowTicks = bounds.Duration.BclCompatibleTicks;
+
+		LogCostReadGrowthSignal(
+			_logger, operation, (long)dbDuration.TotalMilliseconds, (long)engineDuration.TotalMilliseconds,
+			windowTicks, workerCount, totalSessions, maxSessions, p50Sessions, p95Sessions);
+	}
+
+	[LoggerMessage(
+		Level = LogLevel.Information,
+		Message =
+			"cost_read_growth_signal operation={Operation} db_ms={DbMs} engine_ms={EngineMs} window_ticks={WindowTicks} workers={Workers} " +
+			"sessions_total={SessionsTotal} sessions_max={SessionsMax} sessions_p50={SessionsP50} sessions_p95={SessionsP95}")]
+	private static partial void LogCostReadGrowthSignal(
+		ILogger logger, CostReadOperation operation, long dbMs, long engineMs, long windowTicks, int workers, int sessionsTotal, int sessionsMax, int sessionsP50,
+		int sessionsP95);
+
+	/// <summary>One worker's aggregate-only (no trace) cost and duration contribution -- self-contained, so safe to run on any thread (Stage 1).</summary>
+	private static (IReadOnlyDictionary<JobNodeId, Money> ExactCosts, IReadOnlyDictionary<JobNodeId, AllocatedDuration> AllocatedDurations)
+		ComputeWorkerAggregateContribution(
+			WorkerCostInputs worker, JobNodeId nodeId, CostQueryResult inputs, HashSet<JobNodeId> includedNodeIds)
+	{
+		var allocations = CostSegmentPartitioner.PartitionBounded(
+			worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
+			worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds,
+			includedNodeIds, int.MaxValue);
+		var leafCosts = CostEngine.ComputeLeafCosts(
+			allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, worker.UserDefaultRate);
+		var workerExactCosts = HierarchicalCostAggregator.Aggregate(nodeId, inputs.NodesById, leafCosts);
+		var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
+		var workerAllocatedDurations = HierarchicalAllocatedDurationAggregator.Aggregate(nodeId, inputs.NodesById, leafDurations);
+		return (workerExactCosts, workerAllocatedDurations);
+	}
+
+	private static void MergeCosts(Dictionary<JobNodeId, Money> target, IReadOnlyDictionary<JobNodeId, Money> source)
+	{
+		foreach (var (id, amount) in source) {
+			target[id] = new(target.GetValueOrDefault(id, new(0m)).Amount + amount.Amount);
+		}
+	}
+
+	private static void MergeDurations(Dictionary<JobNodeId, AllocatedDuration> target, IReadOnlyDictionary<JobNodeId, AllocatedDuration> source)
+	{
+		foreach (var (id, duration) in source) {
+			target[id] = target.GetValueOrDefault(id, AllocatedDuration.Zero).Add(duration);
+		}
 	}
 
 	private static HashSet<JobNodeId> GetSubtreeNodeIds(
@@ -274,8 +389,9 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 			"costs.get-hierarchy-totals", request.Context, JobTrackOperation.WithNodeId(request.NodeId),
 			async () => {
 				var (inputs, exactCosts, allocatedDurations, _) = await CalculateAsync(
-						request.Context.Actor, request.NodeId, request.AsOf, maxHierarchyNodes, null, cancellationToken)
-					.ConfigureAwait(false);
+						request.Context.Actor, request.NodeId, request.AsOf, maxHierarchyNodes, null,
+						CostReadOperation.HierarchyTotals, cancellationToken)
+				.ConfigureAwait(false);
 
 				var displayedCosts = ReconcileHierarchy(request.NodeId, inputs.NodesById, exactCosts);
 				var completeAllocatedDurations = displayedCosts.Keys.ToDictionary(
@@ -309,9 +425,12 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 					};
 				}
 
+				var dbStopwatch = Stopwatch.StartNew();
 				var inputs = await _port.GetBulkCostInputsAsync(
 						request.Context.Actor, request.NodeIds, request.AsOf, MaxHierarchyNodeCount, cancellationToken)
 					.ConfigureAwait(false);
+				dbStopwatch.Stop();
+				var engineStopwatch = Stopwatch.StartNew();
 
 				// ADR 0040: a candidate is only costable if the actor is admin/cost-viewer or owns the
 				// node or one of its ancestors -- walked from the one already-materialized snapshot, so
@@ -331,21 +450,9 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 				var combinedLeafCosts = new Dictionary<JobNodeId, decimal>();
 				var combinedLeafDurations = new Dictionary<JobNodeId, AllocatedDuration>();
 				foreach (var worker in inputs.Workers) {
-					var allocations = CostSegmentPartitioner.Partition(
-						worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
-						worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds);
-					var leafCosts = CostEngine.ComputeLeafCosts(
-						allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, worker.UserDefaultRate);
-
-					foreach (var (leafId, amount) in leafCosts) {
-						combinedLeafCosts[leafId] = combinedLeafCosts.GetValueOrDefault(leafId) + amount.Amount;
-					}
-
-					var leafDurations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
-					foreach (var (leafId, duration) in leafDurations) {
-						combinedLeafDurations[leafId] =
-							combinedLeafDurations.GetValueOrDefault(leafId, AllocatedDuration.Zero).Add(duration);
-					}
+					cancellationToken.ThrowIfCancellationRequested();
+					var (costs, durations) = ComputeWorkerLeafContribution(worker, inputs);
+					MergeLeafContributions(combinedLeafCosts, combinedLeafDurations, costs, durations);
 				}
 
 				var exactCosts = HierarchicalCostAggregator.SumSubtreeTotals(
@@ -358,11 +465,41 @@ internal sealed class CostQueries : ICostQueries, IRequesterDurationQueries
 				var allocatedDurations = HierarchicalAllocatedDurationAggregator.SumSubtreeTotals(
 					authorizedNodeIds, inputs.NodesById, combinedLeafDurations);
 
+				engineStopwatch.Stop();
+				LogGrowthSignal(CostReadOperation.BulkNodeCosts, inputs, dbStopwatch.Elapsed, engineStopwatch.Elapsed);
+
 				return new BulkNodeCostResult {
 					DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayedCosts),
 					AllocatedDurations = EquatableDictionaryFactory.CopyOf(allocatedDurations),
 				};
 			});
+
+	private static (IReadOnlyDictionary<JobNodeId, Money> Costs, IReadOnlyDictionary<JobNodeId, AllocatedDuration> Durations)
+		ComputeWorkerLeafContribution(WorkerCostInputs worker, BulkCostQueryResult inputs)
+	{
+		var allocations = CostSegmentPartitioner.Partition(
+			worker.Sessions, worker.EffectiveWorkingIntervals, inputs.NodesById,
+			worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, inputs.Bounds);
+		var costs = CostEngine.ComputeLeafCosts(
+			allocations, inputs.NodesById, worker.Exceptions, worker.NodeOverrides, worker.UserCostRates, worker.UserDefaultRate);
+		var durations = AllocatedDurationCalculator.ComputeLeafDurations(allocations);
+		return (costs, durations);
+	}
+
+	private static void MergeLeafContributions(
+		Dictionary<JobNodeId, decimal> targetCosts,
+		Dictionary<JobNodeId, AllocatedDuration> targetDurations,
+		IReadOnlyDictionary<JobNodeId, Money> costs,
+		IReadOnlyDictionary<JobNodeId, AllocatedDuration> durations)
+	{
+		foreach (var (leafId, amount) in costs) {
+			targetCosts[leafId] = targetCosts.GetValueOrDefault(leafId) + amount.Amount;
+		}
+
+		foreach (var (leafId, duration) in durations) {
+			targetDurations[leafId] = targetDurations.GetValueOrDefault(leafId, AllocatedDuration.Zero).Add(duration);
+		}
+	}
 
 	/// <summary>Whether <paramref name="actorId" /> owns <paramref name="nodeId" /> or any of its ancestors, walked entirely in memory (ADR 0040).</summary>
 	private static bool OwnsNodeOrAncestor(

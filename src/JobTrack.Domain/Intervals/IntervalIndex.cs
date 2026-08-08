@@ -1,5 +1,7 @@
 namespace JobTrack.Domain.Intervals;
 
+using System.Collections;
+
 /// <summary>
 ///     A search structure over a fixed set of <see cref="WorkInterval" />s, built once and queried many
 ///     times. Replaces the repeated linear scans the cost engine previously paid per costed segment and
@@ -60,42 +62,27 @@ internal sealed class IntervalIndex
 			return false;
 		}
 
-		var first = FirstPossiblyOverlappingIndex(query);
+		var first = FirstPossiblyOverlappingIndex(sorted, query);
 		return first < sorted.Length && sorted[first].Start < query.End;
 	}
 
 	/// <summary>
 	///     Every indexed interval sharing an instant with <paramref name="query" />, in ascending start
 	///     order. A disjoint index walks only the matching run; otherwise every interval is tested.
+	///     Returns a struct enumerable (Stage 2 item 2f, large-database performance plan §4): a
+	///     `foreach` over the concrete <see cref="OverlappingEnumerable" /> allocates no iterator
+	///     state machine, which matters here because this is called once per costed session -- 36,500
+	///     times at the long-history scale. `IEnumerable&lt;WorkInterval&gt;` is still implemented for
+	///     LINQ/test-assertion call sites, which box the struct only on that fallback path.
 	/// </summary>
-	public IEnumerable<WorkInterval> Overlapping(WorkInterval query)
-	{
-		if (!isDisjoint) {
-			foreach (var interval in sorted) {
-				if (IntervalAlgebra.Overlaps(query, interval)) {
-					yield return interval;
-				}
-			}
-
-			yield break;
-		}
-
-		for (var index = FirstPossiblyOverlappingIndex(query); index < sorted.Length; ++index) {
-			var interval = sorted[index];
-			if (interval.Start >= query.End) {
-				yield break;
-			}
-
-			yield return interval;
-		}
-	}
+	public OverlappingEnumerable Overlapping(WorkInterval query) => new(sorted, isDisjoint, query);
 
 	/// <summary>
 	///     The first index whose interval ends strictly after <paramref name="query" />'s start. Valid
 	///     only for a disjoint index, where sorting by start also sorts by end, making the predicate
 	///     monotonic and so binary-searchable.
 	/// </summary>
-	private int FirstPossiblyOverlappingIndex(WorkInterval query)
+	private static int FirstPossiblyOverlappingIndex(WorkInterval[] sorted, WorkInterval query)
 	{
 		var low = 0;
 		var high = sorted.Length;
@@ -109,5 +96,86 @@ internal sealed class IntervalIndex
 		}
 
 		return low;
+	}
+
+	/// <summary>A zero-allocation `foreach` source over <see cref="IntervalIndex.Overlapping" />'s results; see that member's remarks.</summary>
+	public readonly struct OverlappingEnumerable : IEnumerable<WorkInterval>
+	{
+		private readonly WorkInterval[] sorted;
+		private readonly bool isDisjoint;
+		private readonly WorkInterval query;
+
+		internal OverlappingEnumerable(WorkInterval[] sorted, bool isDisjoint, WorkInterval query)
+		{
+			this.sorted = sorted;
+			this.isDisjoint = isDisjoint;
+			this.query = query;
+		}
+
+		public Enumerator GetEnumerator() => new(sorted, isDisjoint, query);
+
+		IEnumerator<WorkInterval> IEnumerable<WorkInterval>.GetEnumerator() => GetEnumerator();
+
+		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+		/// <summary>The struct enumerator itself -- boxed only when reached through <see cref="IEnumerator{T}" />, never on a direct `foreach`.</summary>
+		public struct Enumerator : IEnumerator<WorkInterval>
+		{
+			private readonly WorkInterval[] sorted;
+			private readonly bool isDisjoint;
+			private readonly WorkInterval query;
+			private int index;
+			private bool exhausted;
+
+			internal Enumerator(WorkInterval[] sorted, bool isDisjoint, WorkInterval query)
+			{
+				this.sorted = sorted;
+				this.isDisjoint = isDisjoint;
+				this.query = query;
+				index = isDisjoint ? FirstPossiblyOverlappingIndex(sorted, query) : 0;
+				exhausted = false;
+				Current = default;
+			}
+
+			public WorkInterval Current { get; private set; }
+
+			readonly object IEnumerator.Current => Current;
+
+			public bool MoveNext()
+			{
+				if (exhausted) {
+					return false;
+				}
+
+				if (isDisjoint) {
+					if (index >= sorted.Length || sorted[index].Start >= query.End) {
+						exhausted = true;
+						return false;
+					}
+
+					Current = sorted[index];
+					++index;
+					return true;
+				}
+
+				while (index < sorted.Length) {
+					var interval = sorted[index];
+					++index;
+					if (IntervalAlgebra.Overlaps(query, interval)) {
+						Current = interval;
+						return true;
+					}
+				}
+
+				exhausted = true;
+				return false;
+			}
+
+			public readonly void Reset() => throw new NotSupportedException();
+
+			public readonly void Dispose()
+			{
+			}
+		}
 	}
 }

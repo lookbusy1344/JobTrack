@@ -2,6 +2,7 @@ namespace JobTrack.Persistence.PostgreSql;
 
 using Application;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using NodaTime;
 using Npgsql;
 using Shared.Ports;
@@ -16,7 +17,7 @@ public static class JobTrackPostgreSql
 	///         cref="Create(NpgsqlDataSource, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.BootstrapCredentialSubject}?, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.EmployeeCredentialSubject}?, IClock?)" />
 	///     to customize password hashing or the clock, or
 	///     <see
-	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?, ILoggerFactory?)" />
 	///     for production PostgreSQL role separation.
 	/// </remarks>
 	[CLSCompliant(false)]
@@ -26,7 +27,7 @@ public static class JobTrackPostgreSql
 	/// <remarks>
 	///     For production PostgreSQL role separation, prefer
 	///     <see
-	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?, ILoggerFactory?)" />
 	///     .
 	///     This convenience member is intended for SQLite-like single-credential development/test
 	///     installations and delegates all PAT operations to <paramref name="dataSource" />.
@@ -49,7 +50,7 @@ public static class JobTrackPostgreSql
 	/// <remarks>
 	///     The simple overload for the common case; see
 	///     <see
-	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?, ILoggerFactory?)" />
 	///     to customize password hashing or the clock.
 	/// </remarks>
 	[CLSCompliant(false)]
@@ -61,6 +62,16 @@ public static class JobTrackPostgreSql
 			dataSource, personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource, null);
 
 	/// <summary>Creates a provider-neutral client with distinct least-privilege PAT management and authentication connections.</summary>
+	/// <param name="dataSource">The pooled data source for the domain connection.</param>
+	/// <param name="personalAccessTokenManagementDataSource">The pooled data source for personal-access-token management.</param>
+	/// <param name="personalAccessTokenAuthenticationDataSource">The pooled data source for personal-access-token authentication.</param>
+	/// <param name="passwordHasher">The bootstrap credential password hasher, or the default if <see langword="null" />.</param>
+	/// <param name="employeePasswordHasher">The employee credential password hasher, or the default if <see langword="null" />.</param>
+	/// <param name="clock">The clock, or <see cref="SystemClock.Instance" /> if <see langword="null" />.</param>
+	/// <param name="loggerFactory">
+	///     Creates the cost-read growth-signal logger (Stage 5b). No growth-signal line is emitted when
+	///     <see langword="null" />.
+	/// </param>
 	[CLSCompliant(false)]
 	public static IJobTrackClient CreateWithPatDataSources(
 		NpgsqlDataSource dataSource,
@@ -68,7 +79,8 @@ public static class JobTrackPostgreSql
 		NpgsqlDataSource personalAccessTokenAuthenticationDataSource,
 		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
 		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
-		IClock? clock = null)
+		IClock? clock = null,
+		ILoggerFactory? loggerFactory = null)
 	{
 		ArgumentNullException.ThrowIfNull(dataSource);
 		ArgumentNullException.ThrowIfNull(personalAccessTokenManagementDataSource);
@@ -102,7 +114,7 @@ public static class JobTrackPostgreSql
 		var authenticationAudit = new AuthenticationAuditPort(writeOperations, clock);
 		var credentials = new AccountCredentialPort(
 			writeOperations, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
-		var costQueries = new CostQueries(costs);
+		var costQueries = new CostQueries(costs, loggerFactory?.CreateLogger<CostQueries>());
 
 		return new JobTrackClient(
 			new InstallationCommands(bootstrap, passwordHasher ?? new PasswordHasher<BootstrapCredentialSubject>()),

@@ -57,6 +57,43 @@ public sealed class WriteContentionPerformanceTests : IAsyncLifetime
 		stopwatch.Elapsed.Should().BeLessThan(SessionRejectionBudget);
 	}
 
+	/// <summary>
+	///     Large-database performance plan §4 Stage 5a: reads are not the only thing a growing table
+	///     slows down -- the same-user/same-leaf overlap rejection is a GiST exclusion constraint
+	///     (schema version 0007) whose cost could in principle grow with that user's own row count.
+	///     Reuses the overlapping-cost scale's "heavy worker" (5,000 sessions, the heaviest single-
+	///     worker density this codebase seeds -- docs/plans/2026-07-09-overlapping-cost-scale-plan.md
+	///     §4) so the two racing inserts below contend against a GiST index already holding that
+	///     worker's full history, not a worker with no prior rows.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_same_user_same_leaf_session_start_rejection_meets_the_latency_budget_at_high_session_density()
+	{
+		await using var seedConnection = await OpenDeployedConnectionAsync();
+		var seed = await PerformanceScaleGenerator.SeedOverlappingCostScaleAsync(
+			seedConnection, new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), includeHeavyWorker: true);
+		seed.HeavyWorkerId.Should().NotBeNull();
+		seed.HeavyWorkerBranchId.Should().NotBeNull();
+		var heavyWorkerId = seed.HeavyWorkerId!.Value;
+		// A freshly inserted, never-worked leaf under the heavy worker's own branch: the two racing
+		// inserts below must be the only sessions on it, isolating this leaf's own exclusion-constraint
+		// check from the branch's other 5,000 pre-seeded sessions on sibling leaves.
+		var freshLeafId = await InsertNodeAsync(seedConnection, heavyWorkerId, seed.HeavyWorkerBranchId!.Value);
+		await InsertLeafWorkAsync(seedConnection, freshLeafId);
+
+		await using var connectionA = await OpenExistingConnectionAsync();
+		await using var connectionB = await OpenExistingConnectionAsync();
+
+		var stopwatch = Stopwatch.StartNew();
+		var results = await Task.WhenAll(
+			TryInsertSessionAsync(connectionA, freshLeafId, heavyWorkerId, Epoch, Epoch.AddHours(2)),
+			TryInsertSessionAsync(connectionB, freshLeafId, heavyWorkerId, Epoch.AddHours(1), Epoch.AddHours(3)));
+		stopwatch.Stop();
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+		stopwatch.Elapsed.Should().BeLessThan(SessionRejectionBudget);
+	}
+
 	[Fact]
 	public async Task Ten_concurrent_structural_moves_on_overlapping_subtrees_complete_without_deadlock_within_budget()
 	{

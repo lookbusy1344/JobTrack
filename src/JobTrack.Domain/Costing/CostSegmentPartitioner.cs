@@ -113,28 +113,50 @@ public static class CostSegmentPartitioner
 
 		var startCursor = 0;
 		var endCursor = 0;
-		var activeIndexes = new SortedSet<int>();
+
+		// Packed-array + sparse-slot active set, not a SortedSet<int>: the SortedSet is a red-black
+		// tree (a heap node per insert, pointer-chased enumeration) enumerated once per boundary, and
+		// this file already replaced its other tree/dictionary structures with flat arrays for
+		// exactly this reason. `active` holds the currently-active piece indices densely in
+		// `active[0..activeCount)`; `slotOf[pieceIndex]` is that piece's position in `active`, so both
+		// add (append) and remove (swap the removed slot with the last active entry) are O(1) with no
+		// allocation. This changes active-index iteration order relative to the old ascending
+		// SortedSet order, which is safe here: CostEngine.Calculate re-sorts its trace under a total
+		// order and sorts each segment's session list, and the property-test oracle for this method
+		// (CostSegmentPartitionerPropertyTests) already canonicalizes (sorts) allocations before
+		// comparing, precisely because Partition never promised emission order.
+		var active = new int[eligiblePieces.Count];
+		var slotOf = new int[eligiblePieces.Count];
+		var activeCount = 0;
 
 		var allocations = new List<SessionSegmentAllocation>();
 		for (var i = 0; i < boundaries.Count - 1; ++i) {
 			while (endCursor < endKeys.Length && endKeys[endCursor] <= boundaries[i]) {
-				_ = activeIndexes.Remove(endOrder[endCursor]);
+				var removedPiece = endOrder[endCursor];
+				var slot = slotOf[removedPiece];
+				var lastSlot = --activeCount;
+				var movedPiece = active[lastSlot];
+				active[slot] = movedPiece;
+				slotOf[movedPiece] = slot;
 				++endCursor;
 			}
 
 			while (startCursor < startKeys.Length && startKeys[startCursor] <= boundaries[i]) {
-				_ = activeIndexes.Add(startOrder[startCursor]);
+				var addedPiece = startOrder[startCursor];
+				active[activeCount] = addedPiece;
+				slotOf[addedPiece] = activeCount;
+				++activeCount;
 				++startCursor;
 			}
 
 			var segment = new WorkInterval(boundaries[i], boundaries[i + 1]);
-			if (activeIndexes.Count == 0) {
+			if (activeCount == 0) {
 				continue;
 			}
 
-			var share = new AllocatedShare(segment.Duration.BclCompatibleTicks, activeIndexes.Count);
-			foreach (var index in activeIndexes) {
-				var piece = eligiblePieces[index];
+			var share = new AllocatedShare(segment.Duration.BclCompatibleTicks, activeCount);
+			for (var activeSlot = 0; activeSlot < activeCount; ++activeSlot) {
+				var piece = eligiblePieces[active[activeSlot]];
 				if (includedNodeIds is not null && !includedNodeIds.Contains(piece.Session.NodeId)) {
 					continue;
 				}

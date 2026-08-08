@@ -25,6 +25,10 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 
 	public int GetBulkCostInputsCallCount { get; private set; }
 
+	public Action? AfterGetBulkCostInputs { get; init; }
+
+	public Action? AfterGetCostInputs { get; set; }
+
 	public Task<CostAccessInputs> GetCostAccessInputsAsync(
 		AppUserId actorId, JobNodeId nodeId, CancellationToken cancellationToken = default)
 	{
@@ -56,6 +60,7 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 			Bounds = new(Instant.MinValue, asOf),
 			Workers = EquatableArray.CopyOf(_workers),
 		};
+		AfterGetCostInputs?.Invoke();
 
 		return Task.FromResult(result);
 	}
@@ -76,6 +81,7 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 			Bounds = new(Instant.MinValue, asOf),
 			Workers = EquatableArray.CopyOf(_workers),
 		};
+		AfterGetBulkCostInputs?.Invoke();
 
 		return Task.FromResult(result);
 	}

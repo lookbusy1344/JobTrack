@@ -257,7 +257,8 @@ public sealed class Program
 					sp.GetRequiredKeyedService<NpgsqlDataSource>(DomainDataSourceKey),
 					sp.GetRequiredKeyedService<NpgsqlDataSource>(PatManagementDataSourceKey),
 					sp.GetRequiredKeyedService<NpgsqlDataSource>(PatAuthenticationDataSourceKey),
-					clock: sp.GetRequiredService<IClock>()));
+					clock: sp.GetRequiredService<IClock>(),
+					loggerFactory: sp.GetRequiredService<ILoggerFactory>()));
 				break;
 			case SqliteProviderName:
 				// SQLite has no roles/GRANT concept (§2.6 is PostgreSQL-only), so IJobTrackClient

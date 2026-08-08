@@ -38,7 +38,7 @@ SQLite is a complete, supported database backend for embedded or single-node dep
 - Put domain behaviour, authorization of domain scope, transaction orchestration, auditing, and costing in the reusable library. Front ends do not access tables or reproduce rules.
 - Use source-controlled, forward-only versioned schema deployment scripts. Application startup never creates or upgrades a production schema.
 - This is a greenfield implementation. There is no legacy database, no operational data import, and no legacy data migration or transformation tooling.
-- Treat public .NET APIs as compatibility commitments and review them against `Framework_Design_Guidelines_Essentials.md` before implementation and before each release.
+- Review public .NET APIs against `Framework_Design_Guidelines_Essentials.md` before implementation, as good practice — not as a mandatory compatibility commitment or a release gate (ADR 0065).
 - Use one captured clock value for each operation that depends on current time.
 - Prefer simple constraints for row-local rules and transaction-safe database enforcement for cross-row invariants. Application pre-checks improve errors but do not replace concurrency-safe enforcement.
 - Retain completed and cost-relevant history. Use archival rather than deletion.
@@ -337,7 +337,7 @@ Write consumer-first API specifications and compiling usage examples before crea
 - no Boolean parameter clusters where an enum expresses intent;
 - optimistic-concurrency versions in mutation requests and results;
 - immutable-first, functional-core implementation (§5.1 item 18): `record`/`readonly record struct` contracts, pure domain functions, exhaustive `switch` expressions over closed enums, and modern language idioms (primary constructors, file-scoped namespaces, pattern matching, collection expressions) — with .NET exception idioms followed 100% as the sole failure channel: every failure throws (framework types for usage errors, the `JobTrackException` hierarchy otherwise), no error codes and no `Result`-style error channel internally or at the boundary; throwing is the default and the `Try*` pattern is used only as FDG's performance accommodation (the `TryParse` rationale — a measured hot path or common-failure scenario) complementing a throwing member, or for genuine expected absence, never to carry a failure category back to the caller; and
-- additive evolution after 1.0, with API compatibility baselines checked in CI.
+- the approved-surface baseline stays checked in CI as a change-visibility record, not as a frozen compatibility gate (ADR 0065) — the surface changes as needed.
 
 Use framework exceptions for invalid caller arguments and a shallow documented `JobTrackException` hierarchy for failures callers handle differently: not found, authorization denied, concurrency conflict, prerequisite blocked, missing rate, and invariant violation. Validate public arguments synchronously. Provider exceptions never cross the facade.
 
@@ -578,7 +578,7 @@ Release only when:
 - dependency, secret, static-analysis, and dynamic security scans pass;
 - a production-like backup has passed a restore smoke rehearsal and integrity verification;
 - upgrade from every supported schema version has been rehearsed on production-like copies;
-- public API and HTTP compatibility reports have been reviewed;
+- HTTP compatibility reports have been reviewed (the internal library's public API is not a release-gated compatibility commitment — ADR 0065);
 - operational dashboards, alerts, runbooks, and on-call ownership exist; and
 - no known high-severity security or data-integrity defect remains.
 
