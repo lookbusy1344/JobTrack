@@ -6,7 +6,7 @@ using NodaTime;
 /// <summary>
 ///     <see cref="InstantDisplay.FormatDeadline" />: the record-card deadline field's own rendering --
 ///     the full local date and time, followed by how much of it is left, coarsening from whole days to
-///     whole hours and then to nothing at all as the deadline approaches.
+///     whole hours to whole minutes as the deadline approaches.
 /// </summary>
 public sealed class InstantDisplayDeadlineTests
 {
@@ -15,48 +15,68 @@ public sealed class InstantDisplayDeadlineTests
 
 	[Fact]
 	public void A_deadline_days_away_reads_as_a_local_stamp_and_whole_days_left() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 10, 15, 0), London, Now, isOpen: true)
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 10, 15, 0), London, Now, true)
 			.Should().Be("10 Aug 2026 16:00 (2 days)");
 
 	[Fact]
-	public void Part_days_are_truncated_rather_than_rounded_up() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 11, 11, 0), London, Now, isOpen: true)
-			.Should().Be("11 Aug 2026 12:00 (2 days)");
+	public void Part_days_round_to_the_nearest_day() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 11, 11, 0), London, Now, true)
+			.Should().Be("11 Aug 2026 12:00 (3 days)");
 
 	[Fact]
-	public void Under_two_days_left_reads_as_whole_hours() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 10, 10, 30), London, Now, isOpen: true)
-			.Should().Be("10 Aug 2026 11:30 (46 hours)");
+	public void Under_two_days_left_reads_as_whole_hours_rounded_to_the_nearest_hour() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 10, 10, 30), London, Now, true)
+			.Should().Be("10 Aug 2026 11:30 (47 hrs)");
 
 	[Fact]
-	public void A_single_hour_left_reads_in_the_singular() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 13, 30), London, Now, isOpen: true)
-			.Should().Be("8 Aug 2026 14:30 (1 hour)");
+	public void Almost_two_hours_left_rounds_up_rather_than_truncating() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 13, 30), London, Now, true)
+			.Should().Be("8 Aug 2026 14:30 (2 hrs)");
 
 	[Fact]
-	public void Under_an_hour_left_shows_the_stamp_alone() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 12, 59), London, Now, isOpen: true)
-			.Should().Be("8 Aug 2026 13:59");
+	public void Fifty_nine_minutes_left_reads_as_whole_minutes() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 12, 59), London, Now, true)
+			.Should().Be("8 Aug 2026 13:59 (59 mins)");
+
+	[Fact]
+	public void Twenty_minutes_left_still_reports_the_minutes_rather_than_falling_silent() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 12, 20), London, Now, true)
+			.Should().Be("8 Aug 2026 13:20 (20 mins)");
+
+	[Fact]
+	public void A_single_minute_left_reads_in_the_singular() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 12, 1), London, Now, true)
+			.Should().Be("8 Aug 2026 13:01 (1 min)");
 
 	[Fact]
 	public void An_open_job_days_past_its_deadline_says_how_many_days_overdue() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 1, 9, 0), London, Now, isOpen: true)
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 1, 9, 0), London, Now, true)
 			.Should().Be("1 Aug 2026 10:00 (7 days overdue)");
 
 	[Fact]
-	public void Under_two_days_overdue_reads_as_whole_hours() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 6, 14, 30), London, Now, isOpen: true)
-			.Should().Be("6 Aug 2026 15:30 (45 hours overdue)");
+	public void Under_two_days_overdue_reads_as_whole_hours_rounded_to_the_nearest_hour() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 6, 14, 30), London, Now, true)
+			.Should().Be("6 Aug 2026 15:30 (46 hrs overdue)");
 
 	[Fact]
-	public void A_single_hour_overdue_reads_in_the_singular() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 10, 30), London, Now, isOpen: true)
-			.Should().Be("8 Aug 2026 11:30 (1 hour overdue)");
+	public void Almost_two_hours_overdue_rounds_up_rather_than_truncating() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 10, 30), London, Now, true)
+			.Should().Be("8 Aug 2026 11:30 (2 hrs overdue)");
 
 	[Fact]
-	public void Under_an_hour_overdue_shows_the_stamp_alone() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 11, 1), London, Now, isOpen: true)
-			.Should().Be("8 Aug 2026 12:01");
+	public void Forty_five_minutes_overdue_reads_as_whole_minutes() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 11, 15), London, Now, true)
+			.Should().Be("8 Aug 2026 12:15 (45 mins overdue)");
+
+	[Fact]
+	public void Twenty_five_minutes_overdue_still_reports_the_minutes_rather_than_falling_silent() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 11, 35), London, Now, true)
+			.Should().Be("8 Aug 2026 12:35 (25 mins overdue)");
+
+	[Fact]
+	public void A_single_minute_overdue_reads_in_the_singular() =>
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 8, 11, 59), London, Now, true)
+			.Should().Be("8 Aug 2026 12:59 (1 min overdue)");
 
 	[Fact]
 	/// <summary>
@@ -64,12 +84,12 @@ public sealed class InstantDisplayDeadlineTests
 	///     a closed job's missed deadline out of red.
 	/// </summary>
 	public void A_closed_job_past_its_deadline_shows_the_stamp_alone() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 1, 9, 0), London, Now, isOpen: false)
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 1, 9, 0), London, Now, false)
 			.Should().Be("1 Aug 2026 10:00");
 
 	[Fact]
 	/// <summary>Time still to run is a plain fact, reported whether the job has ended or not.</summary>
 	public void A_closed_job_short_of_its_deadline_still_reports_the_time_left() =>
-		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 10, 15, 0), London, Now, isOpen: false)
+		InstantDisplay.FormatDeadline(Instant.FromUtc(2026, 8, 10, 15, 0), London, Now, false)
 			.Should().Be("10 Aug 2026 16:00 (2 days)");
 }

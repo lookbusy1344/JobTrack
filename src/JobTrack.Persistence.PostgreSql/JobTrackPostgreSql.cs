@@ -13,7 +13,7 @@ public static class JobTrackPostgreSql
 	/// <remarks>
 	///     The simple overload for the common case; see
 	///     <see
-	///         cref="Create(NpgsqlDataSource, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///         cref="Create(NpgsqlDataSource, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.BootstrapCredentialSubject}?, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.EmployeeCredentialSubject}?, IClock?)" />
 	///     to customize password hashing or the clock, or
 	///     <see
 	///         cref="CreateWithPatDataSources(NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IPasswordHasher{BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />

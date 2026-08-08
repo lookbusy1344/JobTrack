@@ -5,7 +5,7 @@ using Application.Ports;
 using Database;
 using NodaTime;
 using Npgsql;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlWorkSessionQueryPortTests()
@@ -28,7 +28,8 @@ public sealed class PostgreSqlWorkSessionQueryPortTests()
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IWorkSessionCommandPort CreateSessionCommandPort(string connectionString) =>
-		new WorkSessionCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
+		new WorkSessionCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+			SystemClock.Instance);
 
 	internal override IWorkSessionQueryPort CreateQueryPort(string connectionString) =>
 		new WorkSessionQueryPort(

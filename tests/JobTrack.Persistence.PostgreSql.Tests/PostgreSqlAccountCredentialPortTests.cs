@@ -7,7 +7,7 @@ using Database;
 using Microsoft.AspNetCore.Identity;
 using NodaTime;
 using Npgsql;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlAccountCredentialPortTests()

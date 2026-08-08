@@ -14,6 +14,9 @@ internal static class InstantDisplay
 	/// <summary>Whole days left at or above which a deadline's remainder is counted in days rather than hours.</summary>
 	private const int DeadlineDaysFloor = 2;
 
+	/// <summary>Minutes left below which a deadline's remainder is counted in minutes rather than hours.</summary>
+	private const int DeadlineMinutesCeiling = 90;
+
 	// CreateWithInvariantCulture, matching MoneyDisplay: the runtime image runs in ICU-less
 	// globalization-invariant mode (see Dockerfile), where a named culture's month names would throw.
 	private static readonly LocalDateTimePattern Pattern = LocalDateTimePattern.CreateWithInvariantCulture("d MMM yyyy HH:mm");
@@ -39,10 +42,10 @@ internal static class InstantDisplay
 	/// <summary>
 	///     A deadline as its own record-card field: the full local stamp followed by how far it is from
 	///     now -- "10 Aug 2026 16:00 (2 days)" before, "1 Aug 2026 10:00 (7 days overdue)" after. Both
-	///     directions coarsen the same way, whole days while two or more separate the deadline from now
-	///     and whole hours below that, and both fall silent under an hour, where "(0 hours)" would say
-	///     less than the stamp already does. Truncated, never rounded up: a deadline is not further away
-	///     -- nor further behind -- than it is.
+	///     directions coarsen the same way, whole days while two or more separate the deadline from now,
+	///     whole hours below that, and whole minutes under ninety minutes -- never silent, since a
+	///     deadline within touching distance is exactly when the remainder matters most. Rounded to the
+	///     nearest whole unit, not truncated: "almost 2 hours" reads as "(2 hrs)", not "(1 hr)".
 	///     <para>
 	///         How overdue a job is only counts while it is still open (<paramref name="isOpen" />): a
 	///         deadline missed by a job that has since ended is history, the same rule that keeps such a
@@ -53,26 +56,33 @@ internal static class InstantDisplay
 	{
 		var stamp = Format(deadline, zone);
 		if (deadline >= now) {
-			return Describe(deadline - now) is string left ? $"{stamp} ({left})" : stamp;
+			return $"{stamp} ({Describe(deadline - now)})";
 		}
 
-		return isOpen && Describe(now - deadline) is string over ? $"{stamp} ({over} overdue)" : stamp;
+		return isOpen ? $"{stamp} ({Describe(now - deadline)} overdue)" : stamp;
 	}
 
 	/// <summary>
-	///     A non-negative gap as whole days or whole hours, or <see langword="null" /> under an hour.
-	///     Direction is the caller's to name -- this only measures the distance.
+	///     A non-negative gap as whole days, whole hours, or whole minutes, rounded to the nearest whole
+	///     unit (a half rounds up). Direction is the caller's to name -- this only measures the distance.
+	///     Which unit is used is decided by the raw day/minute count, not the rounded value, so a gap just
+	///     under a switchover rounds within its current unit (e.g. "48 hrs", not "2 days") rather than
+	///     across it.
 	/// </summary>
-	private static string? Describe(Duration gap)
+	private static string Describe(Duration gap)
 	{
 		if (gap.Days >= DeadlineDaysFloor) {
-			return $"{gap.Days} days";
+			var roundedDays = (int)Math.Round(gap.TotalDays, MidpointRounding.AwayFromZero);
+			return $"{roundedDays} days";
 		}
 
-		// Duration.Hours is the hour component (0-23), so the day component carries the rest -- at most
-		// one day here, since two or more took the branch above.
-		var wholeHours = gap.Days * NodaConstants.HoursPerDay + gap.Hours;
-		return wholeHours < 1 ? null : $"{wholeHours} {(wholeHours == 1 ? "hour" : "hours")}";
+		if (gap.TotalMinutes < DeadlineMinutesCeiling) {
+			var roundedMinutes = (int)Math.Round(gap.TotalMinutes, MidpointRounding.AwayFromZero);
+			return $"{roundedMinutes} {(roundedMinutes == 1 ? "min" : "mins")}";
+		}
+
+		var roundedHours = (int)Math.Round(gap.TotalHours, MidpointRounding.AwayFromZero);
+		return $"{roundedHours} {(roundedHours == 1 ? "hr" : "hrs")}";
 	}
 
 	/// <summary>

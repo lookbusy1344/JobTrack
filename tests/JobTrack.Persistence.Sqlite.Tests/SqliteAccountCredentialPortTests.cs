@@ -7,7 +7,7 @@ using Database;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using NodaTime;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteAccountCredentialPortTests()

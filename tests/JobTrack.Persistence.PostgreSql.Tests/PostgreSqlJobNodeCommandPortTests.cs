@@ -9,7 +9,7 @@ using AwesomeAssertions;
 using Database;
 using NodaTime;
 using Npgsql;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlJobNodeCommandPortTests()

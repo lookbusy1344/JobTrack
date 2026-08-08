@@ -1,5 +1,4 @@
 @using JobTrack.Identity
-@using JobTrack.Web
 @{
 	var currentPage = ViewContext.RouteData.Values["page"]?.ToString() ?? string.Empty;
 	var isLoginPage = string.Equals(currentPage, "/Account/Login", StringComparison.OrdinalIgnoreCase);

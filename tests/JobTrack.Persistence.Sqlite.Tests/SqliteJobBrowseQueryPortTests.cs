@@ -6,7 +6,7 @@ using Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteJobBrowseQueryPortTests()

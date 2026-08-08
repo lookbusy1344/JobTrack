@@ -5,7 +5,7 @@ using Application.Ports;
 using Database;
 using NodaTime;
 using Npgsql;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlScheduleQueryPortTests()
@@ -25,8 +25,10 @@ public sealed class PostgreSqlScheduleQueryPortTests()
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IScheduleCommandPort CreateCommandPort(string connectionString) =>
-		new ScheduleCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
+		new ScheduleCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+			SystemClock.Instance);
 
 	internal override IScheduleQueryPort CreateQueryPort(string connectionString) =>
-		new ScheduleQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
+		new ScheduleQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+			SystemClock.Instance);
 }

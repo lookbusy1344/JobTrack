@@ -9,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 using NodaTime;
 
 internal sealed class AccountCredentialPort(
-	IProviderWriteOperations provider, IClock clock, IPasswordHasher<EmployeeCredentialSubject> passwordHasher) : IAccountCredentialPort
+	IProviderWriteOperations provider,
+	IClock clock,
+	IPasswordHasher<EmployeeCredentialSubject> passwordHasher) : IAccountCredentialPort
 {
 	private static readonly EmployeeCredentialSubject CredentialSubject = new();
 

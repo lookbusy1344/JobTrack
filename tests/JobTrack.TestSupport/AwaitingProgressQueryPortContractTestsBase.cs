@@ -230,11 +230,8 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			JobNodeId = tree.WaitingLeafId,
 			WorkedByUserId = tree.WorkerId,
 		});
-		_ = await sessionPort.FinishSessionAsync(new() {
-			Context = ContextFor(tree.JobManagerId),
-			SessionId = session.Id,
-			Version = session.Version,
-		});
+		_ = await sessionPort.FinishSessionAsync(
+			new() { Context = ContextFor(tree.JobManagerId), SessionId = session.Id, Version = session.Version });
 		var port = CreatePort(database.ConnectionString);
 
 		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId });

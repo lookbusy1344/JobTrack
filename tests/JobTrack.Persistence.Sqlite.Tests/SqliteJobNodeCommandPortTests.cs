@@ -7,7 +7,7 @@ using AwesomeAssertions;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteJobNodeCommandPortTests()

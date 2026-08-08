@@ -12,7 +12,7 @@ public static class JobTrackSqlite
 	/// <remarks>
 	///     The simple overload for the common case; see
 	///     <see
-	///         cref="Create(string, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.BootstrapCredentialSubject}?, IPasswordHasher{EmployeeCredentialSubject}?, IClock?)" />
+	///         cref="Create(string, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.BootstrapCredentialSubject}?, Microsoft.AspNetCore.Identity.IPasswordHasher{JobTrack.Application.EmployeeCredentialSubject}?, IClock?)" />
 	///     to customize password hashing or the clock.
 	/// </remarks>
 	public static IJobTrackClient Create(string connectionString) => Create(connectionString, null);

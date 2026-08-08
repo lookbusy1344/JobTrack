@@ -5,7 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteEmployeeQueryPortTests()

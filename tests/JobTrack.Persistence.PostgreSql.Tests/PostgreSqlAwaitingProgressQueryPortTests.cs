@@ -6,7 +6,7 @@ using Database;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlAwaitingProgressQueryPortTests()
@@ -32,7 +32,8 @@ public sealed class PostgreSqlAwaitingProgressQueryPortTests()
 		new PostgreSqlAchievementCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
-		new WorkSessionCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
+		new WorkSessionCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+			SystemClock.Instance);
 
 	internal override IAwaitingProgressQueryPort CreatePort(string connectionString) =>
 		new PostgreSqlAwaitingProgressQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());

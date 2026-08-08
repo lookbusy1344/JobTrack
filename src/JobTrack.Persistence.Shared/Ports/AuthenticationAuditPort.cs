@@ -2,7 +2,6 @@ namespace JobTrack.Persistence.Shared.Ports;
 
 using Application;
 using Application.Ports;
-using Microsoft.EntityFrameworkCore;
 using NodaTime;
 
 internal sealed class AuthenticationAuditPort(IProviderWriteOperations provider, IClock clock) : IAuthenticationAuditPort

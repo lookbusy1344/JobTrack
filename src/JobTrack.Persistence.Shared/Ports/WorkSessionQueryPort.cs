@@ -7,7 +7,6 @@ using Domain.Concurrency;
 using Domain.Intervals;
 using Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 
 /// <summary>

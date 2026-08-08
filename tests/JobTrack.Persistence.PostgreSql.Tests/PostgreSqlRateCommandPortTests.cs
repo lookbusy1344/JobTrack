@@ -5,7 +5,7 @@ using Application.Ports;
 using Database;
 using NodaTime;
 using Npgsql;
-using Persistence.Shared.Ports;
+using Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlRateCommandPortTests()
