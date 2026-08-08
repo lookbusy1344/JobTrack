@@ -6,6 +6,7 @@ using Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteJobBrowseQueryPortTests()
@@ -36,8 +37,8 @@ public sealed class SqliteJobBrowseQueryPortTests()
 		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
 
 	internal override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
-		new SqliteJobBrowseQueryPort(connectionString);
+		new JobBrowseQueryPort(new SqliteJobBrowseOperations(connectionString));
 
 	internal override IJobBrowseQueryPort CreateBrowsePortWithInterceptor(string connectionString, DbCommandInterceptor interceptor) =>
-		new SqliteJobBrowseQueryPort(connectionString, [interceptor]);
+		new JobBrowseQueryPort(new SqliteJobBrowseOperations(connectionString, [interceptor]));
 }

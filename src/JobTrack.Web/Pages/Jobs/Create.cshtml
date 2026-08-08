@@ -33,18 +33,18 @@
 				</div>
 				<div class="form-group">
 					<label asp-for="Input.OwnerUserId"></label>
-					<select asp-for="Input.OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
+					<select asp-for="Input.OwnerUserId" class="form-select" asp-items="Model.OwnerOptions"></select>
 					<span asp-validation-for="Input.OwnerUserId" class="text-danger"></span>
 				</div>
 				<div class="form-group">
 					<label asp-for="Input.BeginWorkForUserId"></label>
-					<select asp-for="Input.BeginWorkForUserId" class="form-control" asp-items="Model.BeginWorkOptions"></select>
+					<select asp-for="Input.BeginWorkForUserId" class="form-select" asp-items="Model.BeginWorkOptions"></select>
 					<span asp-validation-for="Input.BeginWorkForUserId" class="text-danger"></span>
 					<small class="form-text">Starts a session for this person as soon as the job is created.</small>
 				</div>
 				<div class="form-group">
 					<label asp-for="Input.Priority"></label>
-					<select asp-for="Input.Priority" class="form-control" asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
+					<select asp-for="Input.Priority" class="form-select" asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
 				</div>
 				<div class="form-group">
 					<label asp-for="Input.ExpectedDurationHours"></label>

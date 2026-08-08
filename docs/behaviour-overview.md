@@ -107,6 +107,16 @@ or more show a count (`N active`) plus a capped, stable preview of who they are 
 session first if they have one, then every other worker in start order. The complete list is always
 one click away via Sessions, regardless of how many rows are capped in a dense table view.
 
+The Awaiting Progress dashboard offers two distinct "started work" filters, which answer different
+questions and are deliberately not merged. **In progress only** is about the achievement: work has
+started and reached no closure, so a *paused* leaf — started, nobody clocked on — stays in. **Working
+now** is about sessions: choosing an employee keeps only leaves carrying an open session of theirs,
+so a paused leaf drops out and so does one someone else is working. Because starting a session
+already advances the leaf to In progress (ADR 0038), choosing a name narrows past the checkbox
+whether or not it is ticked. Both compose with the owner selector and the subtree scope rather than
+replacing them, so "who is working what inside this subtree, right now" is one query; like every
+other filter on the dashboard they are remembered per session (ADR 0052).
+
 A user who owns a leaf (or an ancestor of it) may start a session **on behalf of another worker**
 through the "Start for…" disclosure beside the ordinary one-click Start, using the same worker
 picker and backdating controls everywhere else in the app. This does not change who may *view*

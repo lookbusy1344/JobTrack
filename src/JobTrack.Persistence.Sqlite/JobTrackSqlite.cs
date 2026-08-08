@@ -3,6 +3,7 @@ namespace JobTrack.Persistence.Sqlite;
 using Application;
 using Microsoft.AspNetCore.Identity;
 using NodaTime;
+using Shared.Ports;
 
 /// <summary>Composes the SQLite provider behind JobTrack's single public facade.</summary>
 public static class JobTrackSqlite
@@ -33,29 +34,31 @@ public static class JobTrackSqlite
 
 		clock ??= SystemClock.Instance;
 
+		var readOperations = new SqliteReadOperations(connectionString);
+		var writeOperations = new SqliteWriteOperations(connectionString);
 		var bootstrap = new SqliteInstallationBootstrapPort(connectionString, clock);
-		var employees = new SqliteEmployeeQueryPort(connectionString, clock);
-		var employeeCommands = new SqliteEmployeeCommandPort(connectionString, clock);
+		var employees = new EmployeeQueryPort(readOperations, clock);
+		var employeeCommands = new EmployeeCommandPort(writeOperations, clock);
 		var readiness = new SqliteReadinessQueryPort(connectionString);
-		var browse = new SqliteJobBrowseQueryPort(connectionString);
+		var browse = new JobBrowseQueryPort(new SqliteJobBrowseOperations(connectionString));
 		var awaitingProgress = new SqliteAwaitingProgressQueryPort(connectionString);
 		var jobs = new SqliteJobNodeCommandPort(connectionString, clock);
-		var sessions = new SqliteWorkSessionCommandPort(connectionString, clock);
-		var leafSessions = new SqliteWorkSessionQueryPort(connectionString, clock);
-		var leafWork = new SqliteLeafWorkQueryPort(connectionString);
-		var prerequisites = new SqlitePrerequisiteQueryPort(connectionString);
-		var scheduleQueries = new SqliteScheduleQueryPort(connectionString, clock);
+		var sessions = new WorkSessionCommandPort(writeOperations, clock);
+		var leafSessions = new WorkSessionQueryPort(new SqliteWorkSessionQueryOperations(connectionString), clock);
+		var leafWork = new LeafWorkQueryPort(readOperations);
+		var prerequisites = new PrerequisiteQueryPort(new SqlitePrerequisiteOperations(connectionString));
+		var scheduleQueries = new ScheduleQueryPort(readOperations, clock);
 		var achievements = new SqliteAchievementCommandPort(connectionString, clock);
-		var schedules = new SqliteScheduleCommandPort(connectionString, clock);
-		var rates = new SqliteRateCommandPort(connectionString, clock);
-		var rateQueries = new SqliteRateQueryPort(connectionString, clock);
+		var schedules = new ScheduleCommandPort(writeOperations, clock);
+		var rates = new RateCommandPort(writeOperations, clock);
+		var rateQueries = new RateQueryPort(readOperations, clock);
 		var costs = new SqliteCostQueryPort(connectionString, clock);
-		var audit = new SqliteAuditQueryPort(connectionString, clock);
+		var audit = new AuditQueryPort(readOperations, clock);
 		var tokens = new SqlitePersonalAccessTokenPort(connectionString, clock);
 		var requests = new SqliteJobRequestCommandPort(connectionString, clock);
-		var authenticationAudit = new SqliteAuthenticationAuditPort(connectionString, clock);
-		var credentials = new SqliteAccountCredentialPort(
-			connectionString, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
+		var authenticationAudit = new AuthenticationAuditPort(writeOperations, clock);
+		var credentials = new AccountCredentialPort(
+			writeOperations, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
 		var costQueries = new CostQueries(costs);
 
 		return new JobTrackClient(

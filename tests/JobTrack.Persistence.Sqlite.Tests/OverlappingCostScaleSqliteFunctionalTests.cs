@@ -8,6 +8,7 @@ using Database;
 using Domain.Schedules;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 /// <summary>
@@ -61,9 +62,9 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 		var administratorContext = new CommandContext { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() };
 
 		var jobNodePort = new SqliteJobNodeCommandPort(database.ConnectionString, SystemClock.Instance);
-		var schedulePort = new SqliteScheduleCommandPort(database.ConnectionString, SystemClock.Instance);
-		var ratePort = new SqliteRateCommandPort(database.ConnectionString, SystemClock.Instance);
-		var sessionPort = new SqliteWorkSessionCommandPort(database.ConnectionString, SystemClock.Instance);
+		var schedulePort = new ScheduleCommandPort(new SqliteWriteOperations(database.ConnectionString), SystemClock.Instance);
+		var ratePort = new RateCommandPort(new SqliteWriteOperations(database.ConnectionString), SystemClock.Instance);
+		var sessionPort = new WorkSessionCommandPort(new SqliteWriteOperations(database.ConnectionString), SystemClock.Instance);
 
 		var windowEnd = BaseInstant + Duration.FromTicks(Slot.Ticks * (LeavesPerWorker - 1 + OverlapDepth));
 		var asOf = windowEnd + Duration.FromHours(1);

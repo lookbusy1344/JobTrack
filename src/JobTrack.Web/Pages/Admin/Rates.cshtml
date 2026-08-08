@@ -16,7 +16,7 @@
 <form method="get" asp-page="/Admin/Rates" class="jt-form-card">
 	<div class="form-group">
 		<label asp-for="UserId">Viewing rates for</label>
-		<select asp-for="UserId" class="form-control" asp-items="Model.UserOptions"></select>
+		<select asp-for="UserId" class="form-select" asp-items="Model.UserOptions"></select>
 	</div>
 	<button type="submit" class="btn btn-secondary">View</button>
 </form>

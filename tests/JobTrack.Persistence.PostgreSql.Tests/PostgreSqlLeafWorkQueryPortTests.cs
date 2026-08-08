@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlLeafWorkQueryPortTests()
@@ -27,5 +28,5 @@ public sealed class PostgreSqlLeafWorkQueryPortTests()
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override ILeafWorkQueryPort CreateQueryPort(string connectionString) =>
-		new PostgreSqlLeafWorkQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new LeafWorkQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()));
 }

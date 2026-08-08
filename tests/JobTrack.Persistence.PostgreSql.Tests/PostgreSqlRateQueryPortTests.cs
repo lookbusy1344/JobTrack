@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlRateQueryPortTests()
@@ -24,8 +25,8 @@ public sealed class PostgreSqlRateQueryPortTests()
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IRateCommandPort CreateCommandPort(string connectionString) =>
-		new PostgreSqlRateCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new RateCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
 
 	internal override IRateQueryPort CreateQueryPort(string connectionString) =>
-		new PostgreSqlRateQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new RateQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
 }

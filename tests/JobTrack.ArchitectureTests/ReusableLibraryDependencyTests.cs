@@ -16,7 +16,11 @@ public sealed class ReusableLibraryDependencyTests
 			["JobTrack.Abstractions"] = FrozenSet<string>.Empty,
 			["JobTrack.Domain"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions"], StringComparer.Ordinal),
 			["JobTrack.Application"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions", "JobTrack.Domain"], StringComparer.Ordinal),
-			["JobTrack.Persistence.Shared"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions"], StringComparer.Ordinal),
+			// Shared hosts the provider-neutral port implementations both providers derive from, so it
+			// sees Application's internal port interfaces and records (and Domain transitively). It must
+			// still never reach a provider assembly or ASP.NET Core.
+			["JobTrack.Persistence.Shared"] = FrozenSet.ToFrozenSet(
+				["JobTrack.Abstractions", "JobTrack.Domain", "JobTrack.Application"], StringComparer.Ordinal),
 			["JobTrack.Persistence.PostgreSql"] = FrozenSet.ToFrozenSet(
 				["JobTrack.Abstractions", "JobTrack.Application", "JobTrack.Domain", "JobTrack.Persistence.Shared"], StringComparer.Ordinal),
 			["JobTrack.Persistence.Sqlite"] = FrozenSet.ToFrozenSet(

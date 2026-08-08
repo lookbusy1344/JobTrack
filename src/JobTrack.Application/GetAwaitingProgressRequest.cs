@@ -47,6 +47,18 @@ public sealed record GetAwaitingProgressRequest
 	public bool InProgressOnly { get; init; }
 
 	/// <summary>
+	///     When set, restricts to leaves this employee is working <em>right now</em> — those carrying an
+	///     open (unfinished) session of theirs. Unlike <see cref="InProgressOnly" />, which asks what the
+	///     achievement says and so keeps a paused leaf, this asks who is clocked on: a leaf started and
+	///     since paused has no open session and drops out, and so does one someone else is working.
+	///     Independent of <see cref="InProgressOnly" /> — an open session already implies
+	///     <see cref="Achievement.InProgress" /> (ADR 0038), so setting both changes nothing — and
+	///     composes with <see cref="Ownership" /> and <see cref="SubtreeRootId" /> rather than replacing
+	///     them, answering "who is working what inside this subtree".
+	/// </summary>
+	public AppUserId? ActiveWorkerUserId { get; init; }
+
+	/// <summary>
 	///     Zero-based number of matching leaves (in the calculator's own readiness/priority/deadline order) to skip
 	///     before returning results. Must be non-negative.
 	/// </summary>

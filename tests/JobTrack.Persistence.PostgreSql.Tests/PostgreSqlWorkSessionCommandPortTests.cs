@@ -9,6 +9,7 @@ using Database;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlWorkSessionCommandPortTests()
@@ -37,13 +38,13 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 		CreateSessionPort(connectionString, SystemClock.Instance);
 
 	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock) =>
-		new PostgreSqlWorkSessionCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), clock);
+		new WorkSessionCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), clock);
 
 	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new PostgreSqlAchievementCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new AuditQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
 
 	[Fact]
 	public Task Concurrent_compound_finish_with_write_up_vs_node_edit_has_exactly_one_complete_outcome() =>

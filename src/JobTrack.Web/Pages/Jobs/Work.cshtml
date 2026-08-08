@@ -26,7 +26,15 @@
 <div class="jt-page-head">
 	<h1>Work sessions</h1>
 	@if (workPage is not null && Model.CurrentNode is not null) {
-		<h2 class="jt-preserve-whitespace"><a href="@Model.BrowseHref">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></h2>
+		@* The heading names this leaf and nothing else. "Back" is a separate sibling, not the title
+		   itself, because it goes wherever this page was reached from -- usually some *other* node's
+		   Browse, so linking the title would promise node N and deliver node M. Outside the h2 so it
+		   stays off the heading's accessible name; baseline-aligned beside it, Bootstrap utilities
+		   only. *@
+		<div class="d-flex flex-wrap align-items-baseline gap-2">
+			<h2 class="jt-preserve-whitespace mb-0">@JobNodeDisplay.Title(Model.CurrentNode.Node)</h2>
+			<a class="jt-value-aside" href="@Model.BackHref">Back</a>
+		</div>
 	}
 </div>
 
@@ -138,7 +146,7 @@
 					@if (workPage.CanReopenAndStartForOthers) {
 						<div class="form-group">
 							<label for="reopenWorkedByUserId">Worker</label>
-							<select id="reopenWorkedByUserId" name="reopenWorkedByUserId" class="form-control"
+							<select id="reopenWorkedByUserId" name="reopenWorkedByUserId" class="form-select"
 							        asp-items="Model.ReopenWorkerOptions"></select>
 						</div>
 					} else {
@@ -260,7 +268,7 @@
 								<summary>Completion options</summary>
 								<div class="form-group mt-2">
 									<label for="completionAchievement">Outcome</label>
-									<select id="completionAchievement" name="finalAchievement" class="form-control"
+									<select id="completionAchievement" name="finalAchievement" class="form-select"
 									        asp-items="Model.CompletionAchievementOptions"></select>
 								</div>
 								<div class="form-group">
@@ -332,7 +340,7 @@
 				<input type="hidden" name="returnUrl" value="@Model.ReturnUrl"/>
 				<div class="form-group">
 					<label for="changeOutcomeAchievement">New status</label>
-					<select id="changeOutcomeAchievement" name="newAchievement" class="form-control"
+					<select id="changeOutcomeAchievement" name="newAchievement" class="form-select"
 					        asp-items="Model.ChangeOutcomeOptions"></select>
 				</div>
 				<div class="form-group">

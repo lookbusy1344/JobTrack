@@ -124,6 +124,34 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	/// <summary>
+	///     Browsing the node that is already home offers no home-node control at all: "Set as home node"
+	///     would be a no-op, and resetting is what browsing somewhere else is for. Root with no home node
+	///     set is the same case -- landing already goes there.
+	/// </summary>
+	public async Task Browsing_the_home_node_offers_no_home_node_button()
+	{
+		var branchId = await AddChildAsync(rootId, "Kitchen renovation");
+		_ = await AddChildAsync(branchId, "Fit cabinets");
+		_ = await SeedEmployeeAsync("home-node.no-reset");
+		var authCookie = await SignInAsync("home-node.no-reset");
+
+		var (setCookie, setToken) = await GetBrowseFormAsync(authCookie, branchId);
+		_ = await PostSetHomeNodeAsync(authCookie, setCookie, setToken, branchId);
+
+		var atHome = await GetAsync($"/Jobs/Browse?NodeId={branchId.Value}", authCookie);
+		var atHomeBody = await atHome.Content.ReadAsStringAsync();
+		atHomeBody.Should().NotContain("Reset home node to root");
+		atHomeBody.Should().NotContain("Set as home node");
+
+		// Elsewhere the control is still offered -- and root's own "Set as home node" is how a home node
+		// gets moved back to the top, so nothing becomes unreachable.
+		var elsewhere = await GetAsync($"/Jobs/Browse?NodeId={rootId.Value}", authCookie);
+		var elsewhereBody = await elsewhere.Content.ReadAsStringAsync();
+		elsewhereBody.Should().Contain("Set as home node");
+	}
+
+	[Fact]
 	public async Task Resetting_the_home_node_returns_landing_to_the_unfiltered_root()
 	{
 		var branchId = await AddChildAsync(rootId, "Kitchen renovation");

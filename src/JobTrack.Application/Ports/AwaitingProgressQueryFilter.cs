@@ -33,6 +33,15 @@ internal sealed record AwaitingProgressQueryFilter
 	/// </summary>
 	public bool InProgressOnly { get; init; }
 
+	/// <summary>
+	///     When set, only leaves carrying an open (unfinished) <c>work_session</c> for this employee are
+	///     returned by the port's own query — before ordering and paging, so an excluded leaf never
+	///     consumes a page slot. Independent of <see cref="InProgressOnly" />: an open session already
+	///     implies <see cref="Achievement.InProgress" /> (ADR 0038), so the two compose without
+	///     interfering.
+	/// </summary>
+	public AppUserId? ActiveWorkerUserId { get; init; }
+
 	public required int Offset { get; init; }
 
 	public required int Limit { get; init; }

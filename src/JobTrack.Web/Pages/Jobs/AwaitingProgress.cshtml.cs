@@ -46,6 +46,7 @@ public sealed class AwaitingProgressModel(
 	private const string SearchTextFilterSessionKey = "Jobs.AwaitingProgress.SearchText";
 	private const string ExcludeBlockedFilterSessionKey = "Jobs.AwaitingProgress.ExcludeBlocked";
 	private const string InProgressOnlyFilterSessionKey = "Jobs.AwaitingProgress.InProgressOnly";
+	private const string ActiveWorkerFilterSessionKey = "Jobs.AwaitingProgress.ActiveWorker";
 
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
@@ -83,6 +84,17 @@ public sealed class AwaitingProgressModel(
 	/// </summary>
 	[BindProperty(SupportsGet = true)]
 	public bool InProgressOnly { get; set; }
+
+	/// <summary>
+	///     When set, restricts to leaves this employee is working right now — those carrying an open
+	///     session of theirs. A different question from <see cref="InProgressOnly" />, which asks what
+	///     the achievement says and so keeps a paused leaf: with a person chosen, a paused leaf has no
+	///     open session and drops out either way. Composes with the owner selector and the subtree
+	///     scope, so "who is working what inside this subtree" is the three filters together. Settable
+	///     for the same remembered-choice reason as <see cref="OwnerUserId" />.
+	/// </summary>
+	[BindProperty(SupportsGet = true)]
+	public long? ActiveWorkerUserId { get; set; }
 
 	// Settable so LoadAsync can replace an omitted value with the actor's home node (see LoadAsync),
 	// which every replayed filter/route value then reflects.
@@ -149,6 +161,14 @@ public sealed class AwaitingProgressModel(
 	public List<SelectListItem> OwnerOptions { get; private set; } = [];
 
 	/// <summary>
+	///     The same employee list as <see cref="OwnerOptions" />, built separately rather than shared:
+	///     the <c>asp-items</c> tag helper marks <see cref="SelectListItem.Selected" /> on the items it
+	///     is given, so one list bound to two selects would carry the owner choice into the
+	///     active-worker one.
+	/// </summary>
+	public List<SelectListItem> ActiveWorkerOptions { get; private set; } = [];
+
+	/// <summary>
 	///     The page's own view state, replayed as hidden fields by every per-row work form so a start
 	///     or finish lands back on the same owner, pool, and subtree filters rather than resetting the
 	///     dashboard to everyone's work.
@@ -161,6 +181,7 @@ public sealed class AwaitingProgressModel(
 		["SearchText"] = SearchText,
 		["ExcludeBlocked"] = ExcludeBlocked.ToString(),
 		["InProgressOnly"] = InProgressOnly.ToString(),
+		["ActiveWorkerUserId"] = ActiveWorkerUserId?.ToString(CultureInfo.InvariantCulture),
 		["Offset"] = Offset.ToString(CultureInfo.InvariantCulture),
 	};
 
@@ -178,6 +199,7 @@ public sealed class AwaitingProgressModel(
 		searchText = SearchText,
 		excludeBlocked = ExcludeBlocked,
 		inProgressOnly = InProgressOnly,
+		activeWorkerUserId = ActiveWorkerUserId,
 		offset = Offset,
 	});
 
@@ -323,6 +345,7 @@ public sealed class AwaitingProgressModel(
 		["searchText"] = SearchText,
 		["excludeBlocked"] = ExcludeBlocked,
 		["inProgressOnly"] = InProgressOnly,
+		["activeWorkerUserId"] = ActiveWorkerUserId,
 		["offset"] = Offset,
 	};
 
@@ -349,6 +372,8 @@ public sealed class AwaitingProgressModel(
 			session, ExcludeBlockedFilterSessionKey, Request.Query.ContainsKey(nameof(ExcludeBlocked)), ExcludeBlocked);
 		InProgressOnly = FilterMemory.ResolveFlag(
 			session, InProgressOnlyFilterSessionKey, Request.Query.ContainsKey(nameof(InProgressOnly)), InProgressOnly);
+		ActiveWorkerUserId = FilterMemory.Resolve(
+			session, ActiveWorkerFilterSessionKey, Request.Query.ContainsKey(nameof(ActiveWorkerUserId)), ActiveWorkerUserId, null);
 
 		var scopeProvided = Request.Query.ContainsKey(nameof(SubtreeRootId)) || Request.Query.ContainsKey(nameof(ShowWholeTree));
 		SubtreeRootId = FilterMemory.Resolve(session, SubtreeRootFilterSessionKey, scopeProvided, SubtreeRootId, null);
@@ -367,6 +392,7 @@ public sealed class AwaitingProgressModel(
 			new() { Context = context }, cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Everyone", string.Empty));
+		ActiveWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Everyone", string.Empty));
 		StartForWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(directory);
 
 		// A bare visit (no subtree specified, whole tree not explicitly chosen -- e.g. the header nav
@@ -399,6 +425,7 @@ public sealed class AwaitingProgressModel(
 					SearchText = SearchText,
 					ExcludeBlocked = ExcludeBlocked,
 					InProgressOnly = InProgressOnly,
+					ActiveWorkerUserId = ActiveWorkerUserId.HasValue ? new AppUserId(ActiveWorkerUserId.Value) : null,
 					Offset = Math.Max(0, Offset),
 					Limit = PageSize + 1,
 				},

@@ -81,8 +81,8 @@ public sealed class InlineDmlArchitectureTests
 		new(HierarchyQueries, "GetBoundedSubtreeAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetSubtreeImpactRowsAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(
-			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobBrowseQueryPort.cs"),
-			"GetSubtreeAchievementAsync",
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobBrowseOperations.cs"),
+			"IsSubtreeSucceededAsync",
 			"SqlQuery",
 			"node_succeeded"),
 		new(
@@ -91,8 +91,8 @@ public sealed class InlineDmlArchitectureTests
 			"SqlQueryRaw",
 			"sql"),
 		new(
-			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlWorkSessionQueryPort.cs"),
-			"GetManageCapabilitiesAsync",
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlWorkSessionQueryOperations.cs"),
+			"GetControlledLeafIdsAsync",
 			"SqlQuery",
 			"job_node_controlled_leaf_ids"),
 		new(

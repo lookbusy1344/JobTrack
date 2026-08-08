@@ -162,6 +162,16 @@ internal static class AwaitingProgressQueryAssembly
 			_ => throw new InvalidOperationException($"Unrecognised ownership filter kind: {filter.Ownership.Kind}."),
 		};
 
+		// "Working now" is an open session, not an achievement: composed as an EXISTS predicate here,
+		// beside ownership, so it narrows the candidate set before ordering and paging and no excluded
+		// leaf consumes a page slot. Independent of InProgressOnly below -- an open session already
+		// implies InProgress (ADR 0038).
+		if (filter.ActiveWorkerUserId is AppUserId activeWorkerUserId) {
+			var sessions = context.Set<WorkSessionEntity>().AsNoTracking();
+			filteredNodes = filteredNodes.Where(node => sessions.Any(session =>
+				session.LeafWorkId == node.Id && session.WorkedByUserId == activeWorkerUserId && session.FinishedAt == null));
+		}
+
 		if (filter.SubtreeRootId is JobNodeId subtreeRootId) {
 			var subtreeNodes = LoadSubtreeNodes(context, subtreeRootId);
 			filteredNodes = filteredNodes.Where(node =>

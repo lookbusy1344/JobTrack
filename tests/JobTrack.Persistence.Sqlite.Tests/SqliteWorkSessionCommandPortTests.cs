@@ -7,6 +7,7 @@ using AwesomeAssertions;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteWorkSessionCommandPortTests()
@@ -37,13 +38,13 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		CreateSessionPort(connectionString, SystemClock.Instance);
 
 	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString, IClock clock) =>
-		new SqliteWorkSessionCommandPort(connectionString, clock);
+		new WorkSessionCommandPort(new SqliteWriteOperations(connectionString), clock);
 
 	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
 
 	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
+		new AuditQueryPort(new SqliteReadOperations(connectionString), SystemClock.Instance);
 
 	[Fact]
 	public Task Concurrent_compound_finish_with_write_up_vs_node_edit_has_exactly_one_complete_outcome() =>

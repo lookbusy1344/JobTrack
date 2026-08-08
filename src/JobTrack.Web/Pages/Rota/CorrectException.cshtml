@@ -18,7 +18,7 @@
 			<input type="hidden" asp-for="ExceptionId"/>
 			<div class="form-group">
 				<label asp-for="Input.Effect"></label>
-				<select asp-for="Input.Effect" class="form-control" asp-items="EnumDisplay.BuildOptions<ScheduleExceptionEffect>()"></select>
+				<select asp-for="Input.Effect" class="form-select" asp-items="EnumDisplay.BuildOptions<ScheduleExceptionEffect>()"></select>
 			</div>
 			<div class="form-group">
 				<label asp-for="Input.Start"></label>

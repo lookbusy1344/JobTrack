@@ -7,6 +7,7 @@ using Database;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteAccountCredentialPortTests()
@@ -30,8 +31,7 @@ public sealed class SqliteAccountCredentialPortTests()
 	protected override object FormatInstantForRawSql(Instant instant) => instant.ToUnixTimeTicks();
 
 	internal override IAccountCredentialPort CreatePort(string connectionString, IClock clock) =>
-		new SqliteAccountCredentialPort(
-			connectionString,
+		new AccountCredentialPort(new SqliteWriteOperations(connectionString),
 			clock,
 			new PasswordHasher<EmployeeCredentialSubject>());
 }

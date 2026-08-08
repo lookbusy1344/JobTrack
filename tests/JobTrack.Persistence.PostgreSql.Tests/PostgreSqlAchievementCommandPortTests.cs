@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlAchievementCommandPortTests()
@@ -30,5 +31,5 @@ public sealed class PostgreSqlAchievementCommandPortTests()
 		new PostgreSqlAchievementCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new AuditQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
 }

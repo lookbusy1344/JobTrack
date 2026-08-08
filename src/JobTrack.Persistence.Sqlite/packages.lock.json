@@ -291,6 +291,7 @@
         "type": "Project",
         "dependencies": {
           "JobTrack.Abstractions": "[0.1.0, )",
+          "JobTrack.Application": "[0.1.0, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "NodaTime": "[3.3.3, )"

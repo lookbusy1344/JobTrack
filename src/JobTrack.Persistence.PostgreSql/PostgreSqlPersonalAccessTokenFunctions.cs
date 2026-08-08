@@ -62,7 +62,7 @@ internal static class PostgreSqlPersonalAccessTokenFunctions
 
 	/// <summary>Marks every currently-unrevoked token owned by <paramref name="appUserId" /> as revoked at <paramref name="now" />.</summary>
 	public static async Task<int> RevokeAllForUserAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId appUserId, Instant now, CancellationToken cancellationToken) =>
+		DbContext context, AppUserId appUserId, Instant now, CancellationToken cancellationToken) =>
 		await context.Database.SqlQuery<int>($"SELECT pat_revoke_all({appUserId.Value}, {now}) AS \"Value\"")
 			.SingleAsync(cancellationToken).ConfigureAwait(false);
 }

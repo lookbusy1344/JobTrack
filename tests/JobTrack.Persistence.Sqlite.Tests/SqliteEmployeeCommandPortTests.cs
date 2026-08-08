@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteEmployeeCommandPortTests()
@@ -29,7 +30,7 @@ public sealed class SqliteEmployeeCommandPortTests()
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	internal override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
-		new SqliteEmployeeCommandPort(connectionString, SystemClock.Instance);
+		new EmployeeCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;
 }

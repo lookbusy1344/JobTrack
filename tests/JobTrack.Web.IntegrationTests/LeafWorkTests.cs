@@ -1447,6 +1447,48 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		current.Node.WriteUp.Should().Be("Superseded; see the replacement job for details.");
 	}
 
+	/// <summary>
+	///     The heading names this leaf; the back affordance goes wherever the page was reached from.
+	///     Making the title itself the link conflated the two — it read as "open node N" while landing
+	///     on a different node's Browse — so the title is plain text and "Back" carries the return.
+	/// </summary>
+	[Fact]
+	public async Task The_work_page_title_is_plain_text_beside_a_back_link_to_where_it_was_reached_from()
+	{
+		var workerId = await SeedEmployeeAsync("work.back-link", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Back link leaf");
+		var authCookie = await SignInAsync("work.back-link");
+		var returnUrl = $"/Jobs/Browse?nodeId={rootId.Value}&unassignedOnly=False";
+
+		var response = await GetAsync(
+			$"/Jobs/Work?leafNodeId={leaf.Id.Value}&returnUrl={Uri.EscapeDataString(returnUrl)}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var head = body[body.IndexOf("jt-page-head", StringComparison.Ordinal)..];
+		head = head[..head.IndexOf("</div>", StringComparison.Ordinal)];
+		head.Should().NotContain(
+			$"Back link leaf (ID {leaf.Id.Value})</a>",
+			"the title names this leaf, so it must not be a link to another node's page");
+		head.Should().Contain($"href=\"/Jobs/Browse?nodeId={rootId.Value}&amp;unassignedOnly=False\"");
+		head.Should().Contain(">Back</a>");
+	}
+
+	[Fact]
+	public async Task The_work_page_back_link_falls_back_to_browse_rooted_at_this_leaf()
+	{
+		var workerId = await SeedEmployeeAsync("work.back-fallback", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Back fallback leaf");
+		var authCookie = await SignInAsync("work.back-fallback");
+
+		var response = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var head = body[body.IndexOf("jt-page-head", StringComparison.Ordinal)..];
+		head = head[..head.IndexOf("</div>", StringComparison.Ordinal)];
+		head.Should().Contain($"href=\"/Jobs/Browse?nodeId={leaf.Id.Value}\"");
+		head.Should().Contain(">Back</a>");
+	}
+
 	[Fact]
 	public async Task The_work_page_shows_the_leafs_current_write_up_in_a_prominent_multi_line_field()
 	{

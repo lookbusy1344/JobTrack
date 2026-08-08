@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteAuthenticationAuditPortTests()
@@ -26,5 +27,5 @@ public sealed class SqliteAuthenticationAuditPortTests()
 	}
 
 	internal override IAuthenticationAuditPort CreatePort(string connectionString) =>
-		new SqliteAuthenticationAuditPort(connectionString, SystemClock.Instance);
+		new AuthenticationAuditPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 }

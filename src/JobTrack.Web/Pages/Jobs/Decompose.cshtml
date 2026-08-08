@@ -84,11 +84,11 @@
 							</div>
 							<div class="col-12 col-sm-6 col-md-3">
 								<label class="form-label" asp-for="Input.NewChildren[i].OwnerUserId"></label>
-								<select asp-for="Input.NewChildren[i].OwnerUserId" class="form-control" asp-items="Model.OwnerOptions"></select>
+								<select asp-for="Input.NewChildren[i].OwnerUserId" class="form-select" asp-items="Model.OwnerOptions"></select>
 							</div>
 							<div class="col-12 col-sm-6 col-md-3">
 								<label class="form-label" asp-for="Input.NewChildren[i].Priority"></label>
-								<select asp-for="Input.NewChildren[i].Priority" class="form-control"
+								<select asp-for="Input.NewChildren[i].Priority" class="form-select"
 								        asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
 							</div>
 						</div>

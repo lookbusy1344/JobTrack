@@ -6,6 +6,7 @@ using Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteCostQueryPortTests()
@@ -33,13 +34,13 @@ public sealed class SqliteCostQueryPortTests()
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
 	internal override IScheduleCommandPort CreateSchedulePort(string connectionString) =>
-		new SqliteScheduleCommandPort(connectionString, SystemClock.Instance);
+		new ScheduleCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	internal override IRateCommandPort CreateRatePort(string connectionString) =>
-		new SqliteRateCommandPort(connectionString, SystemClock.Instance);
+		new RateCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
-		new SqliteWorkSessionCommandPort(connectionString, SystemClock.Instance);
+		new WorkSessionCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	internal override ICostQueryPort CreateCostQueryPort(string connectionString) =>
 		new SqliteCostQueryPort(connectionString, SystemClock.Instance);

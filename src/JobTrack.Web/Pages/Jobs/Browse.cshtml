@@ -108,37 +108,22 @@
 				}
 			</dd>
 		</div>
+		@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }
 		<div class="col row g-1">
 			<dt class="col-12 col-sm-4">Priority</dt>
-			<dd class="col-12 col-sm-8 mb-0">@{ var priorityDeadline = Model.CurrentNode.Node.NeededFinish ?? Model.CurrentNode.Node.NeededStart; }
+			<dd class="col-12 col-sm-8 mb-0">
 				<partial
 					name="_PriorityLabel"
 					model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority, Full = true })"/>
-				@if (priorityDeadline is Instant priorityDeadlineInstant) {
-					@* The closing paren stays on the same line as the span it closes: a line break here is
-					   rendered whitespace, which showed as "26 Jul 2030 )" on the page. The overdue class is
-					   hoisted into a local so wrapping the attribute is never tempting again. *@
-					var deadlineClass = InstantDisplay.IsPast(priorityDeadlineInstant, Model.Now) ? "jt-overdue" : null;
-					<text>(deadline <span class="@deadlineClass">@InstantDisplay.FormatDate(priorityDeadlineInstant, Model.ViewerZone)</span>)</text>
-				}
 			</dd>
 		</div>
-		@if (Model.RequestContext is not null) {
-			<div class="col row g-1">
-				<dt class="col-12 col-sm-4">Requester</dt>
-				<dd class="col-12 col-sm-8 mb-0">
-					<a class="jt-tag" asp-page="/Requests/Details" asp-route-id="@Model.RequestContext.JobNodeId.Value"
-					   asp-route-returnUrl="@Model.BrowseReturnUrl">@Model.RequestContext.RequesterDisplayName (@Model.RequestContext.RequesterUserName)</a>
-				</dd>
-			</div>
-		}
-		@* The card runs the job's standing facts first (Kind, Owner, Priority, Requester, Cost), then its
-		   status in one block: Achievement, Readiness, Active. Achievement and Readiness are reported for
-		   a branch as well as a leaf, and Active only for a leaf, so ordering the block this way keeps
-		   every field a branch and a leaf share in the same grid cell on both -- Cost above all, the
-		   field most worth scanning across a subtree, which moved under the reader when the leaf-only
-		   Active preceded it. Active last also reads right on its own terms: it is the transient fact of
-		   this moment, behind the standing ones rather than displacing them. *@
+		@* The card's field order is fixed: Kind, Owner, Priority, Cost, Deadline, Achievement, Readiness,
+		   Active -- which pairs up two-per-row on md+ as Kind/Owner, Priority/Cost, Deadline/Achievement,
+		   Readiness/Active, putting Deadline directly under Priority. Achievement and Readiness are
+		   reported for a branch as well as a leaf, and Active only for a leaf, so every field a branch and
+		   a leaf share stays in the same grid cell on both. Requester follows Active rather than sitting
+		   among the standing facts: it renders on request-raised nodes only, and anywhere earlier it would
+		   shift every later field into the opposite column on those nodes alone. *@
 		@if (Model.Subtree?.RootTotal.HasValue == true && Model.Subtree.RootAllocatedDuration is not null) {
 			<div class="col row g-1">
 				<dt class="col-12 col-sm-4">Cost</dt>
@@ -154,6 +139,18 @@
 							Model.Subtree.RootTotal.Value, Model.Subtree.RootAllocatedDuration)</span>@if (Model.CurrentNode.Node.Kind == NodeKind.Leaf) {<text> <a class="jt-value-aside" asp-page="/Jobs/ConcurrentWork"
 						         asp-route-nodeId="@Model.CurrentNode.Node.Id.Value">Info</a></text>}</dd>
 				@* @formatter:on *@
+			</div>
+		}
+		@if (priorityDeadline is Instant priorityDeadlineInstant) {
+			@* The deadline is a field of its own, not a parenthetical beside Priority: the full stamp plus
+			   its time remaining is too much to read as an aside. Red once passed, but only while the job
+			   is still open -- a deadline missed by a job that has since ended is history, not an alarm.
+			   The class is hoisted into a local so wrapping the attribute is never tempting. *@
+			var deadlineClass = InstantDisplay.IsPast(priorityDeadlineInstant, Model.Now) && Model.CurrentNodeIsOpen ? "jt-overdue" : null;
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Deadline</dt>
+				<dd class="col-12 col-sm-8 mb-0"><span
+						class="@deadlineClass">@InstantDisplay.FormatDeadline(priorityDeadlineInstant, Model.ViewerZone, Model.Now, Model.CurrentNodeIsOpen)</span></dd>
 			</div>
 		}
 		@if (Model.CurrentNodeAchievement is Achievement currentAchievement) {
@@ -202,6 +199,15 @@
 						                                        StartClosed = toolbarActions.IsStartClosed,
 						                                        Paused = toolbarActions.IsPaused,
 					                                        })"/>
+				</dd>
+			</div>
+		}
+		@if (Model.RequestContext is not null) {
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Requester</dt>
+				<dd class="col-12 col-sm-8 mb-0">
+					<a class="jt-tag" asp-page="/Requests/Details" asp-route-id="@Model.RequestContext.JobNodeId.Value"
+					   asp-route-returnUrl="@Model.BrowseReturnUrl">@Model.RequestContext.RequesterDisplayName (@Model.RequestContext.RequesterUserName)</a>
 				</dd>
 			</div>
 		}
@@ -292,18 +298,13 @@
 		@if (!Model.CurrentNode.Node.HasLeafWork) {
 			<a class="btn btn-secondary" asp-page="/Jobs/Create" asp-route-parentId="@Model.CurrentNode.Node.Id.Value">Create child</a>
 		}
+		@* A branch or the root offers the home-node control only while it is *not* already home: on the
+		   home node itself "Set as home node" would do nothing, and "Reset home node to root" answered a
+		   question nobody asks while standing on the node they chose. Nothing becomes unreachable --
+		   root's own "Set as home node" is how a home node moves back to the top. *@
 		@if (Model.CurrentNode.Node.Kind != NodeKind.Leaf) {
 			var isCurrentHomeNode = Model.HomeNodeId == Model.CurrentNode.Node.Id || (Model.HomeNodeId is null && Model.CurrentNode.Node.Kind == NodeKind.Root);
-			@if (isCurrentHomeNode) {
-				<form method="post" asp-page-handler="ResetHomeNode" class="inline-form">
-					<input type="hidden" name="NodeId" value="@Model.NodeId"/>
-					<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>
-					<input type="hidden" name="ArchiveFilter" value="@Model.ArchiveFilter"/>
-					<input type="hidden" name="SearchText" value="@Model.SearchText"/>
-					<input type="hidden" name="ShowArchived" value="@Model.ShowArchived"/>
-					<button type="submit" class="btn btn-secondary">Reset home node to root</button>
-				</form>
-			} else {
+			@if (!isCurrentHomeNode) {
 				<form method="post" asp-page-handler="SetHomeNode" class="inline-form">
 					<input type="hidden" name="NodeId" value="@Model.NodeId"/>
 					<input type="hidden" name="OwnerUserId" value="@Model.OwnerUserId"/>

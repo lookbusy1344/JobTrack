@@ -6,6 +6,7 @@ using Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteAwaitingProgressQueryPortTests()
@@ -34,6 +35,9 @@ public sealed class SqliteAwaitingProgressQueryPortTests()
 
 	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);
+
+	internal override IWorkSessionCommandPort CreateSessionPort(string connectionString) =>
+		new WorkSessionCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	internal override IAwaitingProgressQueryPort CreatePort(string connectionString) =>
 		new SqliteAwaitingProgressQueryPort(connectionString);

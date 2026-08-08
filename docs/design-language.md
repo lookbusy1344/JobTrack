@@ -90,6 +90,19 @@ Scale: `h1` 2.15rem / 800 weight / tight negative tracking; `h2` 1.45rem / 750; 
 tick. Body is 0.9375rem at 1.6 line-height. The root font-size steps from 14px to 16px at the 768px
 breakpoint.
 
+**One step down, one class.** Secondary text that should read a size below its surroundings takes
+`.jt-text-sm` (`--jt-font-size-sm`) — most visibly a list of people shown together, such as the
+active-worker preview beside the "N active" pill ("You, Demo User (demo)"), wherever
+`_ActiveSincePill` renders it: Browse's record card and subtree table, Work, Awaiting Progress.
+`.jt-value-aside` shares that one declaration under a name of its own for a link qualifying the value
+it follows. Don't add a third "small text" class; a genuinely smaller step is `--jt-font-size-xs`/
+`-xxs`, and those belong to the components that own them (record labels, pills), not to a utility.
+
+Every sub-body size is a token — no rem literals. `--jt-font-size-label` (`0.75rem`) is the label
+register shared by the `h3`/`h4` section-labels, `.status-pill` and the build revision: named for the
+voice rather than a step letter, because it falls between `-sm` and `-xs`. The handful of remaining
+literals are single-component sizes above body (the brand wordmark, the metric read-out, the lede).
+
 ### Measures and target size
 
 Every `max-width` in `site.css` references one of five named content measures, so a width is a stated
@@ -373,9 +386,14 @@ Adding an eighth means adding it to this list too.
 
 1. Prefer a token or an existing primitive over new bespoke CSS. If a page needs something new,
    add a named component to `site.css` with a comment, and reuse it.
-2. Keep Bootstrap vendored files untouched; theme through `--bs-*` overrides and explicit
+2. **Use the class Bootstrap means for the control.** A `<select>` is `.form-select`, not
+   `.form-control` — the Bootstrap 4 spelling loses the caret and the room reserved for it. Site
+   overrides on these controls stay off the right-hand edge (`padding-inline-start`, never the
+   `padding` shorthand) and off the `background` shorthand, both of which would paint over the caret
+   Bootstrap draws there.
+3. Keep Bootstrap vendored files untouched; theme through `--bs-*` overrides and explicit
    `.btn-*` custom properties (Bootstrap 5.3 compiles some values to literal hex at build time, so
    the `--bs-primary`/`--bs-link-color` overrides do not reach `a` and `.btn-primary` on their own —
    those two carry explicit rules; see the comments in `site.css`).
-3. Re-run the end-to-end axe scan after any colour, contrast, or structural change.
-4. No real PII in screenshots or fixtures (`CLAUDE.md`).
+4. Re-run the end-to-end axe scan after any colour, contrast, or structural change.
+5. No real PII in screenshots or fixtures (`CLAUDE.md`).

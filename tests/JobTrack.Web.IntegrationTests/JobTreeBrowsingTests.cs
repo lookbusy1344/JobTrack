@@ -346,6 +346,48 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	/// <summary>
+	///     The record card's Deadline field turns red on a branch as well as a leaf: a branch whose
+	///     subtree has not all succeeded is still open, so its own missed deadline is still live.
+	/// </summary>
+	public async Task A_passed_deadline_renders_red_on_an_open_branch()
+	{
+		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.branch-overdue");
+		var rootId = bootstrappedRootId!.Value;
+		var branchId = await AddChildWithDeadlineAsync(rootId, workerId, "Overdue branch", Instant.FromUtc(2020, 1, 1, 12, 0));
+		_ = await AddChildAsync(branchId, workerId, "Unfinished child");
+		var authCookie = await SignInAsync("browse.branch-overdue");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// How far past the deadline is grows with the calendar, so only its shape is asserted here --
+		// InstantDisplayDeadlineTests owns the arithmetic.
+		body.Should().Contain("jt-overdue\">1 Jan 2020 12:00 (", "the branch has not finished, so its missed deadline is still an alarm");
+		body.Should().Contain("days overdue)</span>", "an open job says how far past its deadline it is");
+	}
+
+	[Fact]
+	/// <summary>
+	///     Red is reserved for a job still open. Once a leaf has ended -- here successfully -- the
+	///     deadline it missed is a matter of record and renders like any other.
+	/// </summary>
+	public async Task A_passed_deadline_on_a_closed_leaf_does_not_render_red()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.closed-overdue");
+		var rootId = bootstrappedRootId!.Value;
+		var leafId = await AddChildWithDeadlineAsync(rootId, workerId, "Late but done", Instant.FromUtc(2020, 1, 1, 12, 0));
+		await SetAchievementAsync(leafId, adminId, Achievement.Success);
+		var authCookie = await SignInAsync("browse.closed-overdue");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain(">1 Jan 2020 12:00</span>");
+		body.Should().NotContain("jt-overdue");
+	}
+
+	[Fact]
 	public async Task Browsing_a_direct_child_of_root_shows_root_once_in_the_breadcrumb()
 	{
 		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.breadcrumb");

@@ -130,13 +130,14 @@ public sealed class WorkModel(
 	public IReadOnlyList<SelectListItem> ReopenWorkerOptions { get; private set; } = [];
 
 	/// <summary>
-	///     Where the job title links back to -- <see cref="ReturnUrl" /> when it is a valid local URL
+	///     Where the heading's "Back" link goes -- <see cref="ReturnUrl" /> when it is a valid local URL
 	///     (wherever this page was actually reached from), otherwise <c>/Jobs/Browse</c> rooted at this
-	///     leaf, matching <see cref="RedirectToReturnUrlOrBrowse" />'s own fallback. The toolbar's
-	///     "Browse" button stays a literal link to Browse -- its label promises that destination
-	///     specifically, unlike the title, which is this page's general-purpose "back" affordance.
+	///     leaf, matching <see cref="RedirectToReturnUrlOrBrowse" />'s own fallback. It is deliberately
+	///     not carried by the job title: the title names *this* leaf, while the return usually lands on
+	///     some other node's Browse. The toolbar's "Browse" button stays a literal link to Browse rooted
+	///     here -- its label promises that destination specifically.
 	/// </summary>
-	public string BrowseHref => ReturnUrl is not null && Url.IsLocalUrl(ReturnUrl)
+	public string BackHref => ReturnUrl is not null && Url.IsLocalUrl(ReturnUrl)
 		? ReturnUrl
 		: Url.Page("/Jobs/Browse", new { nodeId = LeafNodeId })!;
 

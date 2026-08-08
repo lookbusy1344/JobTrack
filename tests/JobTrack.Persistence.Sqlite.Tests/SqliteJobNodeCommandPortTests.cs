@@ -7,6 +7,7 @@ using AwesomeAssertions;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteJobNodeCommandPortTests()
@@ -34,7 +35,7 @@ public sealed class SqliteJobNodeCommandPortTests()
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
 	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
+		new AuditQueryPort(new SqliteReadOperations(connectionString), SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks;
 

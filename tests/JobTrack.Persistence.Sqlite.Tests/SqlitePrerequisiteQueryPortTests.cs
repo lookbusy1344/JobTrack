@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqlitePrerequisiteQueryPortTests()
@@ -32,10 +33,10 @@ public sealed class SqlitePrerequisiteQueryPortTests()
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
 	internal override IPrerequisiteQueryPort CreateQueryPort(string connectionString) =>
-		new SqlitePrerequisiteQueryPort(connectionString);
+		new PrerequisiteQueryPort(new SqlitePrerequisiteOperations(connectionString));
 
 	internal override IWorkSessionCommandPort CreateWorkSessionPort(string connectionString) =>
-		new SqliteWorkSessionCommandPort(connectionString, SystemClock.Instance);
+		new WorkSessionCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	internal override IAchievementCommandPort CreateAchievementPort(string connectionString) =>
 		new SqliteAchievementCommandPort(connectionString, SystemClock.Instance);

@@ -73,6 +73,11 @@
        scale it's on instead of repeating the same literal. Not a full scale: only sizes that were
        already exact duplicates before this was added. */
     --jt-font-size-sm: 0.8125rem;
+    /* The label register: small, letter-spaced, semi-bold text that names something rather than
+       reading as prose -- the h3/h4 console section-labels, status pills, the build revision. Named
+       by what it is rather than by a step letter because it sits between -sm and -xs; the three call
+       sites share a voice, not a rung on the scale. */
+    --jt-font-size-label: 0.75rem;
     --jt-font-size-xs: 0.7rem;
     --jt-font-size-xxs: 0.6875rem;
     /* Title/heading step of the same scale — h1/h2 read these rather than a literal. Deliberately
@@ -365,7 +370,7 @@ h4::before {
 }
 
 h4 {
-    font-size: 0.75rem;
+    font-size: var(--jt-font-size-label);
     margin-top: var(--jt-space-4);
 }
 
@@ -517,7 +522,6 @@ summary:focus-visible {
     background: linear-gradient(90deg, var(--jt-orange-400), var(--jt-gold-400));
 }
 
-.app-header .navbar-text,
 .app-header .jt-user {
     color: var(--jt-console-text);
 }
@@ -526,7 +530,7 @@ summary:focus-visible {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.85rem;
+    font-size: var(--jt-font-size-sm);
 }
 
 .app-header .jt-user::before {
@@ -536,6 +540,18 @@ summary:focus-visible {
     border-radius: 50%;
     background: var(--jt-gold-400);
     box-shadow: 0 0 0 3px rgb(245 158 11 / 25%);
+}
+
+/* The build revision on the login header: an identifier to read back over the phone or paste into a
+   defect report, so monospace. Quieter than the nav links beside it through size and weight rather
+   than a dimmer colour — it is small non-interactive text, where thinning the contrast against the
+   console ground is exactly what WCAG 1.4.3 forbids. */
+.app-header .jt-build-revision {
+    color: var(--jt-console-text);
+    font-family: var(--bs-font-monospace);
+    font-size: var(--jt-font-size-label);
+    font-weight: 400;
+    padding: 0.5rem 0.9rem;
 }
 
 /* Sign-out / link buttons in the header read as quiet links, not filled buttons. */
@@ -655,10 +671,6 @@ dl:not(:has(~ *:not([type="hidden"]))) {
 /* Metric read-out — the signature element. A large tabular number under a console eyebrow,
    with a hairline orange→gold baseline. Used for cost and headline figures. Multi-card layout
    comes from Bootstrap's row/row-cols-* grid on the markup, not from custom CSS here. */
-.jt-subtree-head h2 {
-    margin: 0;
-}
-
 .jt-metric {
     position: relative;
     overflow: hidden;
@@ -773,9 +785,17 @@ dd {
     color: var(--jt-ink);
 }
 
-/* A link that qualifies the value it follows rather than being a value of its own (Browse's cost
-   figure and its concurrent-work "Info"). A size down from the field value so the figure keeps the
-   reading weight, and the aside reads as a footnote to it. */
+/* The app's one step down in text size, stated once. `.jt-text-sm` is the general form -- reach for it
+   wherever a run of secondary text should sit a size below its surroundings, notably a list of people
+   shown together ("You, Demo User (demo)"), which is a supporting detail beside the fact it qualifies
+   and grows with the number of names. `.jt-value-aside` is the same size under a name of its own: a
+   link that qualifies the value it follows rather than being a value of its own (Browse's cost figure
+   and its concurrent-work "Info"), where the figure keeps the reading weight and the aside reads as a
+   footnote to it. One declaration, so the two can never drift apart.
+
+   Do not add a third class for "small text". A genuinely smaller step is --jt-font-size-xs/-xxs, and
+   those belong to the components that own them (labels, pills), not to a new utility. */
+.jt-text-sm,
 .jt-value-aside {
     font-size: var(--jt-font-size-sm);
 }
@@ -848,9 +868,16 @@ form.inline-form {
     color: var(--jt-ink-soft);
 }
 
+/* Logical padding properties rather than the `padding` shorthand, and deliberately no inline-end: a
+   `.form-select` draws its caret in the right-hand padding box, so the shorthand slid the option text
+   under the arrow. Leaving that edge to Bootstrap keeps each control's own end padding (0.75rem on a
+   `.form-control`, the caret's 2.25rem on a `.form-select`) without restating either number here.
+   `background-color`, not the `background` shorthand, for the same reason: the shorthand would clear
+   the caret image with it. */
 .form-control,
 .form-select {
-    padding: 0.5rem 0.75rem;
+    padding-block: 0.5rem;
+    padding-inline-start: 0.75rem;
     background-color: var(--jt-surface);
     border: 1px solid var(--jt-line-strong);
     border-radius: var(--bs-border-radius-sm);
@@ -968,13 +995,6 @@ fieldset legend {
     box-shadow: var(--jt-shadow-sm);
 }
 
-.btn-danger {
-    --bs-btn-bg: var(--jt-red-700);
-    --bs-btn-border-color: var(--jt-red-700);
-    --bs-btn-hover-bg: #93201a;
-    --bs-btn-hover-border-color: #93201a;
-}
-
 /* ---- Alerts ------------------------------------------------------------------------------- */
 
 /* Layout (icon-beside-message) comes from Bootstrap's d-flex align-items-start gap-2 on each
@@ -1032,7 +1052,7 @@ fieldset legend {
     padding: var(--jt-space-2) var(--jt-space-3);
     border-radius: 2rem;
     font-weight: 600;
-    font-size: 0.75rem;
+    font-size: var(--jt-font-size-label);
     letter-spacing: 0.04em;
     border: 1px solid transparent;
 }
@@ -1970,7 +1990,7 @@ nav[aria-label="breadcrumb"] li + li::before {
    come from Bootstrap's d-flex flex-wrap align-items-baseline gap-2 on the markup. */
 .jt-context {
     color: var(--jt-muted);
-    font-size: 0.9375rem;
+    font-size: var(--bs-body-font-size);
 }
 
 .jt-context strong {
@@ -2140,54 +2160,6 @@ nav[aria-label="breadcrumb"] li + li::before {
     font-weight: 700;
 }
 
-.jt-disclosure-body {
-    margin-top: var(--jt-space-3);
-}
-
 .jt-notice--error {
     border-left-color: var(--jt-red-700);
-}
-
-.jt-tree-row[data-tree-depth="0"] {
-    padding-left: 1rem;
-}
-
-.jt-tree-row[data-tree-depth="1"] {
-    padding-left: 2.5rem;
-}
-
-.jt-tree-row[data-tree-depth="2"] {
-    padding-left: 4rem;
-}
-
-.jt-tree-row[data-tree-depth="3"] {
-    padding-left: 5.5rem;
-}
-
-.jt-tree-row[data-tree-depth="4"] {
-    padding-left: 7rem;
-}
-
-.jt-tree-row[data-tree-depth="5"] {
-    padding-left: 8.5rem;
-}
-
-.jt-tree-row[data-tree-depth="6"] {
-    padding-left: 10rem;
-}
-
-.jt-tree-row[data-tree-depth="7"] {
-    padding-left: 11.5rem;
-}
-
-.jt-tree-row[data-tree-depth="8"] {
-    padding-left: 13rem;
-}
-
-.jt-tree-row[data-tree-depth="9"] {
-    padding-left: 14.5rem;
-}
-
-.jt-tree-row[data-tree-depth="10"] {
-    padding-left: 16rem;
 }

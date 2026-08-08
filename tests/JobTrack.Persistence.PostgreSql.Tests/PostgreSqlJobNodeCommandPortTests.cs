@@ -9,6 +9,7 @@ using AwesomeAssertions;
 using Database;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlJobNodeCommandPortTests()
@@ -33,7 +34,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new PostgreSqlAuditQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new AuditQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value;
 

@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteRateQueryPortTests()
@@ -29,8 +30,8 @@ public sealed class SqliteRateQueryPortTests()
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	internal override IRateCommandPort CreateCommandPort(string connectionString) =>
-		new SqliteRateCommandPort(connectionString, SystemClock.Instance);
+		new RateCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	internal override IRateQueryPort CreateQueryPort(string connectionString) =>
-		new SqliteRateQueryPort(connectionString, SystemClock.Instance);
+		new RateQueryPort(new SqliteReadOperations(connectionString), SystemClock.Instance);
 }

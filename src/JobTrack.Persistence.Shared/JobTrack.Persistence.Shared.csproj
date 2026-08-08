@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <PackageId>JobTrack.Persistence.Shared</PackageId>
-        <Description>Internal EF Core model configuration (entity mappings, strongly typed identifier converters, concurrency-token setup) shared by JobTrack.Persistence.PostgreSql and JobTrack.Persistence.Sqlite, so the two providers cannot drift independently of each other or of the reviewed SQL schema (impl plan §7.4, ADR 0010). Every type is internal; nothing here is part of the public library surface.</Description>
+        <Description>Internal EF Core model configuration (entity mappings, strongly typed identifier converters, concurrency-token setup) and the provider-neutral port bodies shared by JobTrack.Persistence.PostgreSql and JobTrack.Persistence.Sqlite, so the two providers cannot drift independently of each other or of the reviewed SQL schema (impl plan §7.4, ADR 0010, ADR 0064). Every type is internal; nothing here is part of the public library surface.</Description>
         <!-- The Description's "every type is internal" claim is not self-enforcing: this assembly is
              packaged, so any type that silently becomes public would ship. The analyzer holds both
              PublicAPI files empty, turning that claim into a build error rather than a convention. -->
@@ -23,12 +23,22 @@
 
     <ItemGroup>
         <ProjectReference Include="..\JobTrack.Abstractions\JobTrack.Abstractions.csproj"/>
+        <!-- The provider-neutral port implementations under Ports/ implement JobTrack.Application's
+             internal port interfaces over its port records, so this assembly sees Application (and
+             Domain transitively). Adding a reference beyond these is a boundary change, guarded by
+             ReusableLibraryDependencyTests. -->
+        <ProjectReference Include="..\JobTrack.Application\JobTrack.Application.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
         <InternalsVisibleTo Include="JobTrack.Persistence.PostgreSql"/>
         <InternalsVisibleTo Include="JobTrack.Persistence.Sqlite"/>
         <InternalsVisibleTo Include="JobTrack.Persistence.Shared.Tests"/>
+        <!-- The provider conformance suites construct the shared port bodies over their own provider
+             operations, exactly as JobTrackPostgreSql/JobTrackSqlite do. -->
+        <InternalsVisibleTo Include="JobTrack.Persistence.PostgreSql.Tests"/>
+        <InternalsVisibleTo Include="JobTrack.Persistence.Sqlite.Tests"/>
+        <InternalsVisibleTo Include="JobTrack.Database.PerformanceTests"/>
     </ItemGroup>
 
     <ItemGroup>

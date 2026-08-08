@@ -498,6 +498,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("You");
 		body.Should().Contain("browse.threeactive.alice");
 		body.Should().Contain("browse.threeactive.bob");
+		// The run of names takes the app's one smaller step (.jt-text-sm) rather than a size of its own,
+		// here and in every other place _ActiveSincePill renders it.
+		body.Should().Contain("class=\"jt-muted jt-text-sm\"");
 	}
 
 	[Fact]

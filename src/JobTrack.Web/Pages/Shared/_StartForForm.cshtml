@@ -10,7 +10,7 @@
 	<input type="hidden" name="@Model.NodeFieldName" value="@Model.LeafNodeId"/>
 	<div class="form-group mb-0">
 		<label for="@(Model.RowId)-worker">Worker</label>
-		<select id="@(Model.RowId)-worker" name="@StartForDisclosureModel.StartForFieldName" class="form-control" asp-items="Model.WorkerOptions">
+		<select id="@(Model.RowId)-worker" name="@StartForDisclosureModel.StartForFieldName" class="form-select" asp-items="Model.WorkerOptions">
 			<option value="">Choose a worker…</option>
 		</select>
 	</div>

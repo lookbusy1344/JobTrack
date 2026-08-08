@@ -8,7 +8,7 @@ internal static class PrerequisiteReadinessSerialization
 {
 	/// <summary>Whether any direct dependent, or a leaf below it, currently has active work.</summary>
 	public static async Task<bool> HasActiveDependentWorkAsync(
-		SqliteJobTrackDbContext context, JobNodeId requiredJobId, CancellationToken cancellationToken) =>
+		DbContext context, JobNodeId requiredJobId, CancellationToken cancellationToken) =>
 		await context.Database.SqlQuery<bool>(
 			$"""
 			 WITH RECURSIVE dependent_subtrees(id) AS (

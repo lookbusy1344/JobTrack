@@ -24,7 +24,7 @@
 		</div>
 		<div class="form-group">
 			<label asp-for="Submit.HoldingAreaId"></label>
-			<select asp-for="Submit.HoldingAreaId" class="form-control">
+			<select asp-for="Submit.HoldingAreaId" class="form-select">
 				@* The page model preselects a sole eligible area, so offering the placeholder here would
 				   only let the requester unselect the one value the form accepts. *@
 				@if (Model.EligibleHoldingAreas.Count > 1) {

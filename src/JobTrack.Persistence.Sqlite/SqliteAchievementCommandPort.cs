@@ -18,7 +18,7 @@ using Shared.Entities;
 ///     connection/transaction per call; SQLite has no advisory lock or stored function, so
 ///     <see cref="IsolationLevel.Serializable" /> starts a <c>BEGIN IMMEDIATE</c> transaction that
 ///     serializes concurrent writes through SQLite's single-writer model (matches
-///     <see cref="SqliteWorkSessionCommandPort" />'s established use of the same technique). The
+///     <see cref="Shared.Ports.WorkSessionCommandPort" />'s established use of the same technique). The
 ///     transition state machine itself is enforced purely application-side against a single tracked
 ///     <c>leaf_work</c> row guarded by its own concurrency token, not by a trigger. The one exception
 ///     is ADR 0044: a transition into a terminal value additionally rechecks (and, under a race, is

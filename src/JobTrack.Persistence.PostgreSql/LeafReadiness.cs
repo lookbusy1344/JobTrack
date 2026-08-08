@@ -9,7 +9,7 @@ using Shared.Entities;
 /// <summary>
 ///     The in-transaction prerequisite recheck (impl plan §7.3 slice 6; spec §6: "the start... command
 ///     shall recheck prerequisites inside their write transaction"), shared by every PostgreSQL command
-///     that gates on readiness — <see cref="PostgreSqlWorkSessionCommandPort" />'s start paths,
+///     that gates on readiness — <see cref="Shared.Ports.WorkSessionCommandPort" />'s start paths,
 ///     <see cref="PostgreSqlAchievementCommandPort" />'s transition into a completed state, and
 ///     <see cref="PostgreSqlJobNodeCommandPort" />'s subtree import when the batch carries recorded work.
 ///     Loads hierarchy facts through the shared portable ancestor/subtree SQL primitives, then decides
@@ -26,7 +26,7 @@ internal static class LeafReadiness
 	///     transaction.
 	/// </summary>
 	public static async Task<bool> IsReadyAsync(
-		PostgreSqlJobTrackDbContext context,
+		DbContext context,
 		JobNodeId leafId,
 		CancellationToken cancellationToken,
 		JobNodeId? additionallyLockedRequiredJobId = null)

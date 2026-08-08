@@ -61,7 +61,9 @@
 				@Model.Count active
 			</span>
 		}
-		<span class="jt-muted">
+		@* A size down (.jt-text-sm, the app's one smaller step): the names support the count pill beside
+		   them rather than competing with it, and the run grows with every extra worker. *@
+		<span class="jt-muted jt-text-sm">
 			<span class="visually-hidden">Active workers:</span>
 			@string.Join(", ", Model.PreviewEntries.Select(e => e.DisplayName))@(Model.HiddenCount > 0 ? $" +{Model.HiddenCount} more" : "")
 		</span>

@@ -9,7 +9,7 @@ using Shared.Entities;
 /// <summary>
 ///     The in-transaction prerequisite recheck (impl plan §7.3 slice 6; spec §6: "the start... command
 ///     shall recheck prerequisites inside their write transaction"), shared by every SQLite command
-///     that gates on readiness — <see cref="SqliteWorkSessionCommandPort" />'s start paths,
+///     that gates on readiness — <see cref="Shared.Ports.WorkSessionCommandPort" />'s start paths,
 ///     <see cref="SqliteAchievementCommandPort" />'s transition into a completed state, and
 ///     <see cref="SqliteJobNodeCommandPort" />'s subtree import when the batch carries recorded work.
 ///     Loads hierarchy facts through the shared portable ancestor/subtree SQL primitives, then decides
@@ -26,7 +26,7 @@ internal static class LeafReadiness
 	///     transaction.
 	/// </summary>
 	public static async Task<bool> IsReadyAsync(
-		SqliteJobTrackDbContext context, JobNodeId leafId, CancellationToken cancellationToken)
+		DbContext context, JobNodeId leafId, CancellationToken cancellationToken)
 	{
 		var ancestorChain = await JobNodeHierarchyQueries.GetAncestorChainAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);

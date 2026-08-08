@@ -14,7 +14,7 @@ using Shared.Entities;
 ///     PostgreSQL implementation of <see cref="IPersonalAccessTokenPort" /> (ADR 0029). One
 ///     <see cref="PostgreSqlJobTrackDbContext" />/connection/transaction per call, reloading the
 ///     actor's current roles and applying <see cref="PersonalAccessTokenAccessPolicy" /> itself before
-///     writing, matching the same mutation-safety shape as <see cref="PostgreSqlEmployeeCommandPort" />.
+///     writing, matching the same mutation-safety shape as <see cref="Shared.Ports.EmployeeCommandPort" />.
 /// </summary>
 internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPort
 {

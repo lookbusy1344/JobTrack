@@ -36,6 +36,9 @@ sql_instance="jobtrack-pg"
 sql_database="jobtrack"
 repository="cloud-run-source-deploy"
 source_revision="$(git -C "$repo" rev-parse --verify HEAD)"
+# The build stage's own `git describe` fallback always fails inside the container (no .git in the
+# build context), so the login page's build-revision chip needs the real value passed in from here.
+source_revision_id="$(git -C "$repo" describe --tags --always --dirty --abbrev=12)"
 build_nonce="$(openssl rand -hex 4)"
 build_id="${source_revision:0:12}-$(date -u +%Y%m%d%H%M%S)-$build_nonce"
 serve_image="$region-docker.pkg.dev/$project/$repository/$service:$build_id"
@@ -577,11 +580,13 @@ gcloud auth configure-docker "$region-docker.pkg.dev" --project="$project" --qui
 echo "==> building and pushing $provision_image (provisioning target: shell, psql, AdminCli)"
 docker buildx build -f "$repo/Dockerfile.postgresql" --target provision \
 	-t "$provision_image" --platform linux/amd64 --sbom=true --provenance=mode=max \
+	--build-arg="SOURCE_REVISION_ID=$source_revision_id" \
 	--label="org.opencontainers.image.revision=$source_revision" --push "$monorepo_root"
 
 echo "==> building and pushing $serve_image (serve target: chiseled, web only)"
 docker buildx build -f "$repo/Dockerfile.postgresql" \
 	-t "$serve_image" --platform linux/amd64 --sbom=true --provenance=mode=max \
+	--build-arg="SOURCE_REVISION_ID=$source_revision_id" \
 	--label="org.opencontainers.image.revision=$source_revision" --push "$monorepo_root"
 
 provision_digest="$(gcloud artifacts docker images describe "$provision_image" --format='value(image_summary.digest)')"

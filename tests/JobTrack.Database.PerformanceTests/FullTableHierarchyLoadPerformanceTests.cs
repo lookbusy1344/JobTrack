@@ -8,6 +8,7 @@ using Domain.Hierarchy;
 using NodaTime;
 using Npgsql;
 using Persistence.PostgreSql;
+using Persistence.Shared.Ports;
 using TestSupport;
 using Xunit.Abstractions;
 
@@ -258,7 +259,7 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 		await AnalyzeAsync(connection);
 
 		await using var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
-		var browsePort = new PostgreSqlJobBrowseQueryPort(dataSource);
+		var browsePort = new JobBrowseQueryPort(new PostgreSqlJobBrowseOperations(dataSource));
 
 		_ = await browsePort.SearchJobNodesAsync("zzznomatch", OwnershipFilter.All, JobArchiveFilter.ActiveOnly, 0, 51);
 

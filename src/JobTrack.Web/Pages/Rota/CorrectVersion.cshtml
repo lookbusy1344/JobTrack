@@ -37,7 +37,7 @@
 					<legend>Interval @(i + 1)</legend>
 					<div class="form-group">
 						<label asp-for="Input.WeeklyIntervals[i].Day"></label>
-						<select asp-for="Input.WeeklyIntervals[i].Day" class="form-control"
+						<select asp-for="Input.WeeklyIntervals[i].Day" class="form-select"
 						        asp-items="Html.GetEnumSelectList<IsoDayOfWeek>()">
 							<option value="">-- none --</option>
 						</select>

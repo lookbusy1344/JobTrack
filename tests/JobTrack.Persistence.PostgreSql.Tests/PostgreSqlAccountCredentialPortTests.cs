@@ -7,6 +7,7 @@ using Database;
 using Microsoft.AspNetCore.Identity;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlAccountCredentialPortTests()
@@ -25,8 +26,7 @@ public sealed class PostgreSqlAccountCredentialPortTests()
 	protected override object FormatInstantForRawSql(Instant instant) => instant.ToDateTimeOffset();
 
 	internal override IAccountCredentialPort CreatePort(string connectionString, IClock clock) =>
-		new PostgreSqlAccountCredentialPort(
-			new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(),
+		new AccountCredentialPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
 			clock,
 			new PasswordHasher<EmployeeCredentialSubject>());
 }

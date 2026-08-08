@@ -13,7 +13,7 @@ using Shared.Entities;
 /// <summary>
 ///     SQLite implementation of <see cref="IPersonalAccessTokenPort" /> (ADR 0029). One
 ///     <see cref="SqliteJobTrackDbContext" />/connection/transaction per call; <see cref="IsolationLevel.Serializable" />
-///     starts a <c>BEGIN IMMEDIATE</c> transaction matching <see cref="SqliteEmployeeCommandPort" />'s
+///     starts a <c>BEGIN IMMEDIATE</c> transaction matching <see cref="Shared.Ports.EmployeeCommandPort" />'s
 ///     established technique.
 /// </summary>
 internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort

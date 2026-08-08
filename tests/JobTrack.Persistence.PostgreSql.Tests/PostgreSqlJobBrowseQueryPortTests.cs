@@ -6,6 +6,7 @@ using Database;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlJobBrowseQueryPortTests()
@@ -31,8 +32,8 @@ public sealed class PostgreSqlJobBrowseQueryPortTests()
 		new PostgreSqlAchievementCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
 	internal override IJobBrowseQueryPort CreateBrowsePort(string connectionString) =>
-		new PostgreSqlJobBrowseQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build());
+		new JobBrowseQueryPort(new PostgreSqlJobBrowseOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()));
 
 	internal override IJobBrowseQueryPort CreateBrowsePortWithInterceptor(string connectionString, DbCommandInterceptor interceptor) =>
-		new PostgreSqlJobBrowseQueryPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), [interceptor]);
+		new JobBrowseQueryPort(new PostgreSqlJobBrowseOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), [interceptor]));
 }

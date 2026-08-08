@@ -4,6 +4,7 @@ using Application;
 using Microsoft.AspNetCore.Identity;
 using NodaTime;
 using Npgsql;
+using Shared.Ports;
 
 /// <summary>Composes the PostgreSQL provider behind JobTrack's single public facade.</summary>
 public static class JobTrackPostgreSql
@@ -75,30 +76,32 @@ public static class JobTrackPostgreSql
 
 		clock ??= SystemClock.Instance;
 
+		var readOperations = new PostgreSqlReadOperations(dataSource);
+		var writeOperations = new PostgreSqlWriteOperations(dataSource);
 		var bootstrap = new PostgreSqlInstallationBootstrapPort(dataSource, clock);
-		var employees = new PostgreSqlEmployeeQueryPort(dataSource, clock);
-		var employeeCommands = new PostgreSqlEmployeeCommandPort(dataSource, clock);
+		var employees = new EmployeeQueryPort(readOperations, clock);
+		var employeeCommands = new EmployeeCommandPort(writeOperations, clock);
 		var readiness = new PostgreSqlReadinessQueryPort(dataSource);
-		var browse = new PostgreSqlJobBrowseQueryPort(dataSource);
+		var browse = new JobBrowseQueryPort(new PostgreSqlJobBrowseOperations(dataSource));
 		var awaitingProgress = new PostgreSqlAwaitingProgressQueryPort(dataSource);
 		var jobs = new PostgreSqlJobNodeCommandPort(dataSource, clock);
-		var sessions = new PostgreSqlWorkSessionCommandPort(dataSource, clock);
-		var leafSessions = new PostgreSqlWorkSessionQueryPort(dataSource, clock);
-		var leafWork = new PostgreSqlLeafWorkQueryPort(dataSource);
-		var prerequisites = new PostgreSqlPrerequisiteQueryPort(dataSource);
-		var scheduleQueries = new PostgreSqlScheduleQueryPort(dataSource, clock);
+		var sessions = new WorkSessionCommandPort(writeOperations, clock);
+		var leafSessions = new WorkSessionQueryPort(new PostgreSqlWorkSessionQueryOperations(dataSource), clock);
+		var leafWork = new LeafWorkQueryPort(readOperations);
+		var prerequisites = new PrerequisiteQueryPort(new PostgreSqlPrerequisiteOperations(dataSource));
+		var scheduleQueries = new ScheduleQueryPort(readOperations, clock);
 		var achievements = new PostgreSqlAchievementCommandPort(dataSource, clock);
-		var schedules = new PostgreSqlScheduleCommandPort(dataSource, clock);
-		var rates = new PostgreSqlRateCommandPort(dataSource, clock);
-		var rateQueries = new PostgreSqlRateQueryPort(dataSource, clock);
+		var schedules = new ScheduleCommandPort(writeOperations, clock);
+		var rates = new RateCommandPort(writeOperations, clock);
+		var rateQueries = new RateQueryPort(readOperations, clock);
 		var costs = new PostgreSqlCostQueryPort(dataSource, clock);
-		var audit = new PostgreSqlAuditQueryPort(dataSource, clock);
+		var audit = new AuditQueryPort(readOperations, clock);
 		var tokens = new PostgreSqlPersonalAccessTokenPort(
 			personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource, clock);
 		var requests = new PostgreSqlJobRequestCommandPort(dataSource, clock);
-		var authenticationAudit = new PostgreSqlAuthenticationAuditPort(dataSource, clock);
-		var credentials = new PostgreSqlAccountCredentialPort(
-			dataSource, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
+		var authenticationAudit = new AuthenticationAuditPort(writeOperations, clock);
+		var credentials = new AccountCredentialPort(
+			writeOperations, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
 		var costQueries = new CostQueries(costs);
 
 		return new JobTrackClient(

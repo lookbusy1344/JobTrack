@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteLeafWorkQueryPortTests()
@@ -32,5 +33,5 @@ public sealed class SqliteLeafWorkQueryPortTests()
 		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
 
 	internal override ILeafWorkQueryPort CreateQueryPort(string connectionString) =>
-		new SqliteLeafWorkQueryPort(connectionString);
+		new LeafWorkQueryPort(new SqliteReadOperations(connectionString));
 }

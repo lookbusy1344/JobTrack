@@ -582,6 +582,7 @@ internal sealed class JobQueries : IJobQueries
 					SearchText = request.SearchText,
 					ExcludeBlocked = request.ExcludeBlocked,
 					InProgressOnly = request.InProgressOnly,
+					ActiveWorkerUserId = request.ActiveWorkerUserId,
 					Offset = request.Offset,
 					Limit = limit,
 				};

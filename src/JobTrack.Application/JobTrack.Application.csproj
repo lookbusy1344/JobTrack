@@ -19,9 +19,11 @@
 
     <ItemGroup>
         <!-- Fresh-eyes remediation §2.3/ADR 0049: internalized ports, port-only records, and concrete
-             command/query handlers, so only the two providers can construct them, plus the named test
+             command/query handlers, so only the two providers and the provider-neutral port bases they
+             share can construct them, plus the named test
              projects below that exercise them directly (fakes implementing a port interface, or a
              provider-conformance test constructing a concrete handler over a fake/real port). -->
+        <InternalsVisibleTo Include="JobTrack.Persistence.Shared"/>
         <InternalsVisibleTo Include="JobTrack.Persistence.PostgreSql"/>
         <InternalsVisibleTo Include="JobTrack.Persistence.Sqlite"/>
         <InternalsVisibleTo Include="JobTrack.Application.Tests"/>

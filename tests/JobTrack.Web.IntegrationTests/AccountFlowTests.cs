@@ -251,6 +251,39 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		response.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
 	}
 
+	/// <summary>
+	///     The build revision answers "which build am I looking at?" for someone reporting a defect,
+	///     which is a question asked before signing in. It stays on the login page alone: past the
+	///     header it is noise on every working page.
+	/// </summary>
+	[Fact]
+	public async Task The_login_page_names_the_build_revision_in_the_header()
+	{
+		BuildRevision.Short.Should().NotBeNull("the build embeds the git revision it was compiled from");
+
+		var response = await client.GetAsync("/Account/Login");
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain("jt-build-revision");
+		body.Should().Contain(BuildRevision.Short);
+	}
+
+	[Fact]
+	public async Task No_page_past_the_login_page_names_the_build_revision()
+	{
+		_ = await SeedUserAsync("revere", KnownPassword, false);
+		using var browserClient = factory.CreateClient(
+			new() { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new("https://localhost") });
+		await PostLoginWithCookieClientAsync(browserClient, "revere", KnownPassword);
+
+		var response = await browserClient.GetAsync("/Jobs/AwaitingProgress");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain("jt-build-revision");
+		body.Should().NotContain(BuildRevision.Short);
+	}
+
 	[Fact]
 	public async Task The_access_denied_page_renders_without_requiring_authentication_details()
 	{

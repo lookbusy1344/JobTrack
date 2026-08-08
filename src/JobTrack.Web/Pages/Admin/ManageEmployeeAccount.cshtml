@@ -42,7 +42,7 @@
 		</div>
 		<div class="form-group">
 			<label asp-for="CreateEmployee.Role"></label>
-			<select asp-for="CreateEmployee.Role" class="form-control" asp-items="Model.EmployeeRoleOptions"></select>
+			<select asp-for="CreateEmployee.Role" class="form-select" asp-items="Model.EmployeeRoleOptions"></select>
 			<span asp-validation-for="CreateEmployee.Role" class="text-danger"></span>
 		</div>
 		<button type="submit" class="btn btn-primary">Create</button>
@@ -52,7 +52,7 @@
 	<form method="post" asp-page-handler="SetEnabled" class="jt-form-card">
 		<div class="form-group">
 			<label asp-for="SetEnabled.TargetUserId"></label>
-			<select asp-for="SetEnabled.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<select asp-for="SetEnabled.TargetUserId" class="form-select" asp-items="Model.TargetUserOptions"></select>
 			<span asp-validation-for="SetEnabled.TargetUserId" class="text-danger"></span>
 		</div>
 		<div class="form-group form-check">
@@ -66,7 +66,7 @@
 	<form method="post" asp-page-handler="SetDefaultHourlyRate" class="jt-form-card">
 		<div class="form-group">
 			<label asp-for="SetDefaultHourlyRate.TargetUserId"></label>
-			<select asp-for="SetDefaultHourlyRate.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<select asp-for="SetDefaultHourlyRate.TargetUserId" class="form-select" asp-items="Model.TargetUserOptions"></select>
 			<span asp-validation-for="SetDefaultHourlyRate.TargetUserId" class="text-danger"></span>
 		</div>
 		<div class="form-group">
@@ -81,7 +81,7 @@
 	<form method="post" asp-page-handler="ResetPassword" class="jt-form-card">
 		<div class="form-group">
 			<label asp-for="ResetPassword.TargetUserId"></label>
-			<select asp-for="ResetPassword.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<select asp-for="ResetPassword.TargetUserId" class="form-select" asp-items="Model.TargetUserOptions"></select>
 			<span asp-validation-for="ResetPassword.TargetUserId" class="text-danger"></span>
 		</div>
 		<div class="form-group">
@@ -97,7 +97,7 @@
 	<form method="post" asp-page-handler="ResetTwoFactor" class="jt-form-card">
 		<div class="form-group">
 			<label asp-for="ResetTwoFactor.TargetUserId"></label>
-			<select asp-for="ResetTwoFactor.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<select asp-for="ResetTwoFactor.TargetUserId" class="form-select" asp-items="Model.TargetUserOptions"></select>
 			<span asp-validation-for="ResetTwoFactor.TargetUserId" class="text-danger"></span>
 		</div>
 		<button type="submit" class="btn btn-outline-danger">Reset two-factor</button>
@@ -107,7 +107,7 @@
 	<form method="post" asp-page-handler="RevokeAllTokens" class="jt-form-card">
 		<div class="form-group">
 			<label asp-for="RevokeAllTokens.TargetUserId"></label>
-			<select asp-for="RevokeAllTokens.TargetUserId" class="form-control" asp-items="Model.TargetUserOptions"></select>
+			<select asp-for="RevokeAllTokens.TargetUserId" class="form-select" asp-items="Model.TargetUserOptions"></select>
 			<span asp-validation-for="RevokeAllTokens.TargetUserId" class="text-danger"></span>
 		</div>
 		<button type="submit" class="btn btn-outline-danger">Revoke all tokens</button>

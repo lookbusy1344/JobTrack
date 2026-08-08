@@ -188,6 +188,120 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 	}
 
 	/// <summary>
+	///     "Working now" is who is clocked on, not what the achievement says: an active-worker filter
+	///     selects leaves carrying an open session for that employee. The seeded InProgress leaf —
+	///     started, nobody currently working it — is exactly the case
+	///     <see cref="AwaitingProgressQueryFilter.InProgressOnly" /> keeps and this filter drops.
+	/// </summary>
+	[Fact]
+	public async Task An_active_worker_filter_returns_only_leaves_with_an_open_session_for_that_worker()
+	{
+		var tree = await SeedScenarioAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+		_ = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			JobNodeId = tree.WaitingLeafId,
+			WorkedByUserId = tree.WorkerId,
+		});
+		_ = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			JobNodeId = tree.RequiredLeafId,
+			WorkedByUserId = tree.JobManagerId,
+		});
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
+	}
+
+	/// <summary>
+	///     Only an <em>open</em> session counts. A leaf the worker started and has since stopped is
+	///     paused, not being worked, so it drops out even though its achievement is still InProgress.
+	/// </summary>
+	[Fact]
+	public async Task An_active_worker_filter_excludes_a_leaf_whose_session_that_worker_has_finished()
+	{
+		var tree = await SeedScenarioAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+		var session = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			JobNodeId = tree.WaitingLeafId,
+			WorkedByUserId = tree.WorkerId,
+		});
+		_ = await sessionPort.FinishSessionAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Should().BeEmpty();
+	}
+
+	/// <summary>
+	///     An open session implies <see cref="Achievement.InProgress" /> (ADR 0038 advances the leaf on
+	///     session start), so the achievement checkbox neither widens nor narrows an active-worker
+	///     selection — the two compose without interfering.
+	/// </summary>
+	[Fact]
+	public async Task An_active_worker_filter_selects_the_same_leaves_whether_or_not_in_progress_only_is_set()
+	{
+		var tree = await SeedScenarioAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+		_ = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			JobNodeId = tree.WaitingLeafId,
+			WorkedByUserId = tree.WorkerId,
+		});
+		var port = CreatePort(database.ConnectionString);
+
+		var withoutFlag = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId });
+		var withFlag = await port.GetAwaitingProgressInputsAsync(
+			DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId, InProgressOnly = true });
+
+		var withoutFlagEntries = AwaitingProgressCalculator.GetAwaitingProgress(
+			withoutFlag.NodesById, withoutFlag.FactsById, withoutFlag.Prerequisites);
+		var withFlagEntries = AwaitingProgressCalculator.GetAwaitingProgress(withFlag.NodesById, withFlag.FactsById, withFlag.Prerequisites);
+
+		withoutFlagEntries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
+		withFlagEntries.Select(e => e.Id).Should().BeEquivalentTo(withoutFlagEntries.Select(e => e.Id));
+	}
+
+	/// <summary>
+	///     The active-worker filter narrows the same candidate set the other filters scope; it does not
+	///     replace them. Owner and active worker compose, so "what is Priya working right now, within
+	///     Devi's jobs" is one query.
+	/// </summary>
+	[Fact]
+	public async Task An_active_worker_filter_composes_with_the_ownership_filter_rather_than_replacing_it()
+	{
+		var tree = await SeedScenarioAsync();
+		var sessionPort = CreateSessionPort(database.ConnectionString);
+		_ = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			JobNodeId = tree.WaitingLeafId,
+			WorkedByUserId = tree.WorkerId,
+		});
+		_ = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(tree.JobManagerId),
+			JobNodeId = tree.RequiredLeafId,
+			WorkedByUserId = tree.WorkerId,
+		});
+		var port = CreatePort(database.ConnectionString);
+
+		var result = await port.GetAwaitingProgressInputsAsync(
+			DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId, Ownership = OwnershipFilter.OwnedBy(tree.JobManagerId) });
+		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
+
+		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.RequiredLeafId], "the worker's other open session is on a leaf she owns herself");
+	}
+
+	/// <summary>
 	///     A prerequisite declared on an ancestor gates the whole subtree beneath it (spec §6), so
 	///     exclusion must walk down from the declaring node, not only match leaves carrying their own
 	///     edge.
@@ -504,6 +618,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 	internal abstract IJobNodeCommandPort CreateJobNodePort(string connectionString);
 
 	internal abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
+
+	/// <summary>Seeds the open/finished sessions the active-worker filter selects on.</summary>
+	internal abstract IWorkSessionCommandPort CreateSessionPort(string connectionString);
 
 	internal abstract IAwaitingProgressQueryPort CreatePort(string connectionString);
 

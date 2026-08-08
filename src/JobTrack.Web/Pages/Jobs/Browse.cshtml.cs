@@ -206,6 +206,17 @@ public sealed class BrowseModel(
 	public BranchAchievement? CurrentNodeBranchAchievement { get; private set; }
 
 	/// <summary>
+	///     Whether the current node has yet to reach a terminal state — a branch none of whose subtree
+	///     has finished succeeding, or a leaf that has not ended in success, cancellation or failure (a
+	///     leaf with no work attached at all has not started, so it is open too). Only an open job's
+	///     passed deadline is worth colouring red; a closed one's is a matter of record.
+	/// </summary>
+	public bool CurrentNodeIsOpen =>
+		CurrentNodeBranchAchievement is BranchAchievement branchAchievement
+			? branchAchievement is BranchAchievement.Unfinished
+			: CurrentNodeAchievement is not (Achievement.Success or Achievement.Cancelled or Achievement.Unsuccessful);
+
+	/// <summary>
 	///     The current leaf's Sessions panel (shared with <see cref="WorkModel" /> via
 	///     <c>_LeafWorkSessions</c>) — <see langword="null" /> for a branch/root, where the subtree table
 	///     renders instead (a node never has both children and leaf work, so the two are mutually

@@ -53,7 +53,7 @@ internal sealed class SqliteAwaitingProgressQueryPort : IAwaitingProgressQueryPo
 ///     ancestor-chain lookup is a parameterized recursive CTE (mirroring <c>SqliteControlledLeafQuery</c>'s
 ///     established pattern) and each distinct required job's recursive achievement is resolved through
 ///     <see cref="JobNodeHierarchyQueries.IsSubtreeAchievedSqliteAsync" />, the same shared helper
-///     <see cref="SqliteJobBrowseQueryPort" />'s single-node subtree-achievement check already uses.
+///     <see cref="SqliteJobBrowseOperations" />'s single-node subtree-achievement check already uses.
 /// </summary>
 internal static class AwaitingProgressQueryAssembly
 {
@@ -165,6 +165,14 @@ internal static class AwaitingProgressQueryAssembly
 			OwnershipFilterKind.OwnedBy => filteredNodes.Where(node => node.OwnerUserId == filter.Ownership.OwnerUserId!.Value),
 			_ => throw new InvalidOperationException($"Unrecognised ownership filter kind: {filter.Ownership.Kind}."),
 		};
+
+		// See PostgreSQL's twin: an open session, composed as an EXISTS predicate before ordering and
+		// paging, independent of InProgressOnly below.
+		if (filter.ActiveWorkerUserId is AppUserId activeWorkerUserId) {
+			var sessions = context.Set<WorkSessionEntity>().AsNoTracking();
+			filteredNodes = filteredNodes.Where(node => sessions.Any(session =>
+				session.LeafWorkId == node.Id && session.WorkedByUserId == activeWorkerUserId && session.FinishedAt == null));
+		}
 
 		if (filter.SubtreeRootId is JobNodeId subtreeRootId) {
 			var subtreeNodes = LoadSubtreeNodes(context, subtreeRootId);

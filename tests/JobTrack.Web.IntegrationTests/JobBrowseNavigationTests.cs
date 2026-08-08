@@ -167,7 +167,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
-	public async Task Browsing_a_node_with_a_deadline_shows_it_next_to_priority()
+	public async Task Browsing_a_node_with_a_deadline_shows_it_as_its_own_field_below_priority()
 	{
 		// Far enough in the future to stay non-overdue (no jt-overdue class) for the life of this test.
 		var deadline = Instant.FromUtc(2030, 7, 26, 12, 0);
@@ -184,7 +184,47 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var response = await GetAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
-		body.Should().Contain("class=\"jt-priority jt-priority--high\">High</span> (deadline <span>26 Jul 2030</span>)");
+		// Its own dt/dd pair, and the priority label no longer carries the deadline as a parenthetical.
+		// The remaining-time suffix moves with the calendar, so only the stamp is asserted here --
+		// InstantDisplayDeadlineTests owns the suffix.
+		body.Should().Contain("class=\"jt-priority jt-priority--high\">High</span>");
+		body.Should().NotContain("(deadline");
+		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Deadline</dt>");
+		body.Should().Contain("<span>26 Jul 2030 12:00 (");
+	}
+
+	[Fact]
+	/// <summary>
+	///     The record card's fields run in one fixed order -- Kind, Owner, Priority, Cost, Deadline,
+	///     Achievement, Readiness, Active -- which the two-up md+ grid pairs into rows so that Deadline
+	///     falls directly under Priority. Asserted on the labels' document order, the only thing that
+	///     decides which grid cell each field lands in.
+	/// </summary>
+	public async Task The_record_card_fields_run_in_their_fixed_order()
+	{
+		var branch = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Field order branch",
+			OwnerUserId = adminId,
+			Priority = Priority.High,
+			NeededFinish = Instant.FromUtc(2030, 7, 26, 12, 0),
+		});
+		// Leaf work attached so the node carries an Achievement to place; without it that field is absent
+		// and the order it sits in goes unchecked.
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = branch.Id,
+		});
+		var authCookie = await SignInAsync("browse-nav.worker");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
+		var body = await ReadNormalizedBodyAsync(response);
+
+		// Cost and Active are conditional (cost visibility, an open session), so the fields this node
+		// does show are checked in order rather than the whole list being demanded.
+		var labels = FieldLabelPattern().Matches(body).Select(match => match.Groups["label"].Value).ToArray();
+		labels.Should().ContainInOrder("Kind", "Owner", "Priority", "Deadline", "Achievement", "Readiness");
 	}
 
 	[Fact]
@@ -216,11 +256,12 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 
 		var pastResponse = await GetAsync($"/Jobs/Browse?nodeId={pastBranch.Id.Value}", authCookie);
 		var pastBody = await ReadNormalizedBodyAsync(pastResponse);
-		pastBody.Should().Contain("class=\"jt-overdue\">1 Jan 2020</span>", "a deadline that has already passed should render red");
+		pastBody.Should().Contain("class=\"jt-overdue\">1 Jan 2020 12:00 (", "a deadline that has already passed should render red");
+		pastBody.Should().Contain("days overdue)</span>", "and should say how far past it the job now is");
 
 		var futureResponse = await GetAsync($"/Jobs/Browse?nodeId={futureBranch.Id.Value}", authCookie);
 		var futureBody = await ReadNormalizedBodyAsync(futureResponse);
-		futureBody.Should().Contain("<span>1 Jan 2030</span>", "a deadline still to come should not render red");
+		futureBody.Should().Contain("<span>1 Jan 2030 12:00 (", "a deadline still to come should not render red");
 		futureBody.Should().NotContain("jt-overdue");
 	}
 
@@ -414,7 +455,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	}
 
 	[Fact]
-	public async Task Work_page_titles_itself_Work_sessions_and_links_the_leafs_own_name_to_browse()
+	public async Task Work_page_titles_itself_Work_sessions_and_names_the_leaf_beside_a_back_link()
 	{
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
@@ -423,7 +464,8 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain("<h1>Work sessions</h1>");
-		body.Should().Contain($"<a href=\"/Jobs/Browse?nodeId={leafId.Value}\">Pour foundation (ID {leafId.Value})</a>");
+		body.Should().Contain($"<h2 class=\"jt-preserve-whitespace mb-0\">Pour foundation (ID {leafId.Value})</h2>");
+		body.Should().Contain($"<a class=\"jt-value-aside\" href=\"/Jobs/Browse?nodeId={leafId.Value}\">Back</a>");
 		body.Should().NotContain("jt-eyebrow", "the eyebrow kicker was removed project-wide -- a page shows one title, not two");
 		body.Should().NotContain("Leaf work");
 	}
@@ -579,6 +621,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 
 	[GeneratedRegex(@"\s+")]
 	private static partial Regex WhitespaceRunPattern();
+
+	/// <summary>The record card's field labels, in document order -- every <c>dt</c> of the node detail list.</summary>
+	[GeneratedRegex("<dt[^>]*>(?<label>[^<]+)</dt>")]
+	private static partial Regex FieldLabelPattern();
 
 	private async Task DeploySchemaAsync()
 	{

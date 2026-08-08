@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteScheduleQueryPortTests()
@@ -29,8 +30,8 @@ public sealed class SqliteScheduleQueryPortTests()
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	internal override IScheduleCommandPort CreateCommandPort(string connectionString) =>
-		new SqliteScheduleCommandPort(connectionString, SystemClock.Instance);
+		new ScheduleCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 
 	internal override IScheduleQueryPort CreateQueryPort(string connectionString) =>
-		new SqliteScheduleQueryPort(connectionString, SystemClock.Instance);
+		new ScheduleQueryPort(new SqliteReadOperations(connectionString), SystemClock.Instance);
 }

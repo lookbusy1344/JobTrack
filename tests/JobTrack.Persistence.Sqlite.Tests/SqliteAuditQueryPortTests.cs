@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using Microsoft.Data.Sqlite;
 using NodaTime;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class SqliteAuditQueryPortTests()
@@ -29,5 +30,5 @@ public sealed class SqliteAuditQueryPortTests()
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
 	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new SqliteAuditQueryPort(connectionString, SystemClock.Instance);
+		new AuditQueryPort(new SqliteReadOperations(connectionString), SystemClock.Instance);
 }

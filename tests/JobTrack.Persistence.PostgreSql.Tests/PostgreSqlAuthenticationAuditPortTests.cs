@@ -5,6 +5,7 @@ using Application.Ports;
 using Database;
 using NodaTime;
 using Npgsql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 public sealed class PostgreSqlAuthenticationAuditPortTests()
@@ -21,5 +22,5 @@ public sealed class PostgreSqlAuthenticationAuditPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	internal override IAuthenticationAuditPort CreatePort(string connectionString) =>
-		new PostgreSqlAuthenticationAuditPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new AuthenticationAuditPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
 }

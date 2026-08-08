@@ -408,6 +408,88 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		body.Should().NotContain("Not started yet");
 	}
 
+	/// <summary>
+	///     The "Working now" selector answers a different question from the in-progress checkbox: who
+	///     is clocked on right now, not what the achievement says. A leaf the worker started and then
+	///     paused is in progress but nobody is working it, so it drops out.
+	/// </summary>
+	[Fact]
+	public async Task Filtering_by_the_active_worker_keeps_only_leaves_with_an_open_session_for_that_person()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.activeworker");
+		var rootId = bootstrappedRootId!.Value;
+		var beingWorked = await AddLeafWithWorkAsync(rootId, workerId, "Worker is on this now", adminId);
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = beingWorked.JobNodeId,
+			WorkedByUserId = workerId,
+		});
+		var paused = await AddLeafWithWorkAsync(rootId, workerId, "Worker paused this", adminId);
+		var now = SystemClock.Instance.GetCurrentInstant();
+		await AddFinishedSessionAsync(
+			workerId, paused.JobNodeId, now - Duration.FromHours(HoursBeforeFinish), now - Duration.FromHours(HoursBeforeNowFinished));
+		var authCookie = await SignInAsync("awaiting.activeworker");
+
+		var response = await GetAsync($"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Worker is on this now");
+		body.Should().NotContain("Worker paused this");
+	}
+
+	/// <summary>
+	///     An open session is exactly one person's, so selecting a different employee excludes a leaf
+	///     someone else is working — this is the "who is doing what in this subtree" question.
+	/// </summary>
+	[Fact]
+	public async Task Filtering_by_the_active_worker_hides_a_leaf_another_employee_is_working()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.activeworkerother");
+		var rootId = bootstrappedRootId!.Value;
+		var workerLeaf = await AddLeafWithWorkAsync(rootId, workerId, "Worker is on this", adminId);
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = workerLeaf.JobNodeId,
+			WorkedByUserId = workerId,
+		});
+		var adminLeaf = await AddLeafWithWorkAsync(rootId, workerId, "Admin is on this", adminId);
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = adminLeaf.JobNodeId,
+			WorkedByUserId = adminId,
+		});
+		var authCookie = await SignInAsync("awaiting.activeworkerother");
+
+		var response = await GetAsync($"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Worker is on this");
+		body.Should().NotContain("Admin is on this");
+	}
+
+	[Fact]
+	public async Task AwaitingProgress_remembers_the_active_worker_filter_across_a_return_visit()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.activeworkermem");
+		var rootId = bootstrappedRootId!.Value;
+		var beingWorked = await AddLeafWithWorkAsync(rootId, workerId, "Worker is on this now", adminId);
+		_ = await seedClient.Work.StartWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = beingWorked.JobNodeId,
+			WorkedByUserId = workerId,
+		});
+		_ = await AddLeafWithWorkAsync(rootId, workerId, "Nobody is on this", adminId);
+		var authCookie = await SignInAsync("awaiting.activeworkermem");
+
+		var sessionCookie = await ChooseFiltersAsync(authCookie, $"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}");
+		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
+
+		body.Should().Contain("Worker is on this now");
+		body.Should().NotContain("Nobody is on this");
+	}
+
 	[Fact]
 	public async Task AwaitingProgress_remembers_the_search_text_filter_across_a_return_visit()
 	{

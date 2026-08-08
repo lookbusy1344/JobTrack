@@ -58,6 +58,9 @@ demo_username="demo"
 demo_password="demo-jobtrack-1234"
 requester_username="requester"
 requester_password="requester-jobtrack-1234"
+# The build stage's own `git describe` fallback always fails inside the container (no .git in the
+# build context), so the login page's build-revision chip needs the real value passed in from here.
+source_revision_id="$(git -C "$repo" describe --tags --always --dirty --abbrev=12)"
 
 if ! docker info >/dev/null 2>&1; then
   if [[ -S "$orbstack_socket" ]]; then
@@ -76,6 +79,7 @@ docker build -f "$repo/Dockerfile" \
   -t "$image" \
   --build-arg ADMIN_PASSWORD="$admin_password" \
   --build-arg DEMO_PASSWORD="$demo_password" \
+  --build-arg SOURCE_REVISION_ID="$source_revision_id" \
   --platform linux/amd64 \
   "$monorepo_root"
 

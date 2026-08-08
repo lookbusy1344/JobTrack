@@ -4,6 +4,7 @@ using System.Diagnostics;
 using AwesomeAssertions;
 using Npgsql;
 using Persistence.PostgreSql;
+using Persistence.Shared.Ports;
 using TestSupport;
 
 /// <summary>
@@ -31,7 +32,7 @@ public sealed class HierarchyAchievementReadinessPerformanceTests : IAsyncLifeti
 		var ownerUserId = await PerformanceScaleGenerator.SeedAppUserAsync(connection, "Combined tree owner");
 		var (rootId, _, _, _) = await PerformanceScaleGenerator.SeedCombinedProductionTreeAsync(connection, ownerUserId);
 		await using var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
-		var port = new PostgreSqlJobBrowseQueryPort(dataSource);
+		var port = new JobBrowseQueryPort(new PostgreSqlJobBrowseOperations(dataSource));
 
 		_ = await port.GetSubtreeAchievementAsync(new(rootId));
 
