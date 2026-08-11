@@ -4,64 +4,34 @@
 
 A hierarchical job-tracking system with dynamic, historically-accurate costing.
 
+[Live Google Cloud Run demo](https://jobtrack-web-zeb6shxnca-ew.a.run.app) with login `demo` and password `demo-jobtrack-1234`. Note the instance may take a couple of seconds to warm up when stopped, and recycles when not in use (the database is reset to a default state).
+
+## Introduction
+
 This is a recreation of my original project running on SQL Server and .NET 4.8, now rebuilt from scratch on PostgreSQL (or SQLite) and .NET 10, and packaged as a docker image for easy deployment.
 
-The app has 2 unique features:
+The app has 2 unusual features:
 
-- work is organised into branches and leaves, with a single root node; the tree can be arbitrarily deep, and any node can be moved to a new parent without losing its history or breaking its cost calculations. Actual work is done in leaves, which can be paused and resumed, and worked on by several people concurrently.
-- cost is computed live, according to work schedules (with overrides), and concurrent work is split fairly across all participants. Cost is never stored, and can be recomputed at any time for any node in the tree, even if the tree has been restructured since the work was done.
+- work is organised into **branches and leaves**, with a single root node; the tree can be arbitrarily deep, and any node can be moved to a new parent without losing its history or breaking its cost calculations. Actual work is done in leaves, which can be paused and resumed, and worked on by several people concurrently.
+- **cost is computed live**, according to work schedules (with overrides), and concurrent work is split fairly across all participants. Job cost is never stored, and can be recomputed at any time for any node in the tree, even if the tree has been restructured since the work was done.
 
 Additionally, all jobs can have prerequisites, and the system will automatically prevent work from being started on a node until all its prerequisites are complete. As with other features, this applies to both branches and leaves. Since branches don't have work themselves, a branch is considered complete when all its leaves are complete.
 
 Two database backends are supported:
 
-- PostgreSQL is the production backend, and is used in the live Google Cloud Run deployment. Supports multi-instance concurrent writes from multiple web hosts.
-- SQLite is a fully conforming second provider, intended for embedded and demo use. Writes will be serialized.
+- **PostgreSQL** is the production backend, and is used in the live Google Cloud Run deployment. Supports multi-instance concurrent writes from multiple web hosts.
+- **SQLite** is a fully conforming second provider, intended for embedded and demo use. Writes will be serialized.
 
-## Status
+## Overview
 
-**Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
-([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),
-[0026](docs/decisions/0026-m6-library-gate-acceptance.md),
-[0027](docs/decisions/0027-m8-web-gate-acceptance.md),
-[0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md)). The codebase was built
-test-first throughout (about two and a half lines of test for every line of product code), passes its full
-solution and performance suites, and has been through three internal security audits, each fully
-remediated. Performance is enforced: measured budgets on a 200,000-node
-production-shape database run as regression ceilings on every performance-suite run.
-
-The production deployment is PostgreSQL on Google Cloud (Cloud Run + Cloud SQL, with automated
-backups and point-in-time recovery), defined by
-[ADR 0062](docs/decisions/0062-cloud-run-cloud-sql-production-topology.md). 
-
-[Live Google Cloud Run demo](https://jobtrack-web-zeb6shxnca-ew.a.run.app) (SQLite backend — a
-demonstration configuration, not production).
-
-The SQLite backend can be run in a throwaway docker container or as a persistent local database. See [`docs/operations/sqlite-limitations-and-configuration.md`](docs/operations/sqlite-limitations-and-configuration.md) for its limitations.
-
-
-
-## Start here
-
-| If you want to… | Read |
-| --- | --- |
-| Build, test, run, or administer it locally | [`docs/developer-guide.md`](docs/developer-guide.md) |
-| Understand how it behaves for its users | [`docs/behaviour-overview.md`](docs/behaviour-overview.md) |
-| See the architecture and layers file by file | [`docs/architecture-overview.md`](docs/architecture-overview.md) |
-| Deploy or operate it | [`docs/operations/postgresql-cloud-run-deployment.md`](docs/operations/postgresql-cloud-run-deployment.md) |
-
-## In brief
-
-- **Stack:** .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity.
-- **Shape:** a database and a reusable library, with three clients over them — see
-  [Architecture](#architecture) below.
+- **Stack:** .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity, Postgres/SQLite.
+- **Shape:** a database and a reusable library, with three clients over them — see [Architecture](#architecture).
 - **Two databases, one behaviour:** PostgreSQL is the production backend; SQLite is a fully
-  conforming second provider for embedded and demo use, held equivalent by a shared contract-test
-  suite.
-- **Performance:** read latency tracks the size of the question, not the size of the installation; hundreds of thousands of jobs and years of history sit comfortably inside the tested envelope.
+  conforming second provider for embedded and demo use, held equivalent by a shared contract-test suite.
+- **Performance:** hundreds of thousands of jobs, and years of history have been planned for.
   Budgets and evidence: [`docs/traceability/performance-budgets.md`](docs/traceability/performance-budgets.md).
-- **Security:** defence-in-depth web hardening, split least-privilege database credentials, audited
-  administrative actions, optional two-factor authentication, and a maintained threat model with
+- **Security:** from first principles, defence-in-depth hardening, split least-privilege credentials, audited
+  administrative actions, two-factor authentication, and a maintained threat model with
   every mitigation tied to a named test:
   [`docs/threat-model/web-authentication-threat-model.md`](docs/threat-model/web-authentication-threat-model.md).
 
@@ -95,6 +65,15 @@ executable. Each process picks a database provider at startup and then reaches t
 through `IJobTrackClient` — the dependency rules are asserted by the tests in
 `tests/JobTrack.ArchitectureTests/`.
 
+## Key documents
+
+| If you want to… | Read |
+| --- | --- |
+| Build, test, run, or administer it locally | [`docs/developer-guide.md`](docs/developer-guide.md) |
+| Understand how it behaves for its users | [`docs/behaviour-overview.md`](docs/behaviour-overview.md) |
+| See the architecture and layers file by file | [`docs/architecture-overview.md`](docs/architecture-overview.md) |
+| Deploy or operate it | [`docs/operations/postgresql-cloud-run-deployment.md`](docs/operations/postgresql-cloud-run-deployment.md) |
+
 ## Code size
 
 Lines of code as counted by [`tokei`](https://github.com/XAMPPRocky/tokei) (blank lines and comments
@@ -107,9 +86,30 @@ excluded), as of 11 August 2026:
 | Database schema — `database/` | 41 | 2,210 |
 | Sample API client — `samples/` | 19 | 1,079 |
 
-The 70k lines of test code is a consequence of Test Driven Development, with over 3,000 tests in the full solution suite. The performance suite runs separately, via [`scripts/perf-test.sh`](scripts/perf-test.sh).
+The 70k lines of test code is a consequence of *Test Driven Development*, with over 3,000 tests in the full suite. It takes up to 10 minutes to run, even on a fast Mac.
 
-A short test script, aiming to complete in about 20 seconds. [`scripts/fast-test.sh`](scripts/fast-test.sh)
+A short test script, aiming to complete in about 20 seconds, is used for pre-commit checks [`scripts/fast-test.sh`](scripts/fast-test.sh)
+
+## Status
+
+**Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
+([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),
+[0026](docs/decisions/0026-m6-library-gate-acceptance.md),
+[0027](docs/decisions/0027-m8-web-gate-acceptance.md),
+[0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md)). The codebase was built
+test-first throughout (about two and a half lines of test for every line of product code), passes its full
+solution and performance suites, and has been through three internal security audits, each fully
+remediated. Performance is enforced: measured budgets on a 200,000-node
+production-shape database run as regression ceilings on every performance-suite run.
+
+The production deployment is PostgreSQL on Google Cloud (Cloud Run + Cloud SQL, with automated
+backups and point-in-time recovery), defined by
+[ADR 0062](docs/decisions/0062-cloud-run-cloud-sql-production-topology.md). 
+
+[Live Google Cloud Run demo](https://jobtrack-web-zeb6shxnca-ew.a.run.app) (SQLite backend — a
+demonstration configuration, not production).
+
+The SQLite backend can be run in a throwaway docker container or as a persistent local database. See [`docs/operations/sqlite-limitations-and-configuration.md`](docs/operations/sqlite-limitations-and-configuration.md) for its limitations.
 
 ## Documentation map
 
@@ -117,9 +117,6 @@ A short test script, aiming to complete in about 20 seconds. [`scripts/fast-test
 
 - [`docs/jobtrack_spec_codex.md`](docs/jobtrack_spec_codex.md) — normative specification
   ([`docs/jobtrack_spec_claude.md`](docs/jobtrack_spec_claude.md) supplements it).
-- [`docs/plans/jobtrack_impl_plan.md`](docs/plans/jobtrack_impl_plan.md) — delivery plan and phase
-  gates; [`docs/plans/README.md`](docs/plans/README.md) indexes every dated plan;
-  `docs/decisions/*.md` are the ADRs.
 - [`docs/database-entities.md`](docs/database-entities.md) — core entities and the costing
   algorithm.
 - [`docs/costing-engine.md`](docs/costing-engine.md) — the cost engine in depth: the
