@@ -59,8 +59,13 @@ public abstract class JobBrowseBrowserTestsBase
 	private const double PopoverEdgeSampleInset = 4.0;
 	private const double MaximumInlineStatusGapPixels = 8.0;
 	private const float MaximumColumnAlignmentDifferencePixels = 1.0f;
-	private const double NarrowDescriptionMinimumShare = 9.0 / 12.0;
-	private const double NarrowDescriptionMaximumShare = 10.0 / 12.0;
+	// Unlike the other tiers below, this is not the table's literal col-9 allocation: at phone width
+	// the Active icon column and the Actions buttons are the min-content floor auto table layout
+	// satisfies first (same mechanism as the cost-column comment further down), so Description is
+	// squeezed under its nominal 9/12 share. The bound brackets the measured range across the three
+	// narrow viewports (roughly 0.65-0.71) rather than the col-* fraction itself.
+	private const double NarrowDescriptionMinimumShare = 0.63;
+	private const double NarrowDescriptionMaximumShare = 0.73;
 
 	/// <summary>
 	///     Description yields one column to Cost at the tablet breakpoint. Cost renders
@@ -131,9 +136,9 @@ public abstract class JobBrowseBrowserTestsBase
 	public static TheoryData<int, int> WideViewportMatrix => new() { { DesktopWidth, DesktopHeight }, { WideDesktopWidth, WideDesktopHeight } };
 
 	public static TheoryData<int, int, int, double, double> DescriptionColumnViewportMatrix => new() {
-		{ ReflowWidth, ReflowHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
-		{ SmallPhoneWidth, SmallPhoneHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
-		{ LargePhoneWidth, LargePhoneHeight, 2, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
+		{ ReflowWidth, ReflowHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
+		{ SmallPhoneWidth, SmallPhoneHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
+		{ LargePhoneWidth, LargePhoneHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
 		{ TabletWidth, TabletHeight, 4, MediumDescriptionMinimumShare, MediumDescriptionMaximumShare },
 		{ LaptopWidth, LaptopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
 		{ DesktopWidth, DesktopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
@@ -694,7 +699,7 @@ public abstract class JobBrowseBrowserTestsBase
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, $"a long title with two active workers should not overflow at {width}x{height}");
 
 		var row = page.Locator("tbody tr", new() { HasTextString = TwoActiveWorkerRowTitle }).First;
-		var activePill = row.Locator(".jt-col-active .status-pill-active");
+		var activePill = row.Locator(".jt-col-active .status-pill-active.status-pill--compact");
 		(await activePill.GetAttributeAsync("title")).Should().Be($"{TwoActiveWorkerCount} active");
 		(await VisibleTextOfAsync(activePill)).Should().Be(TwoActiveWorkerCount.ToString(CultureInfo.InvariantCulture));
 
