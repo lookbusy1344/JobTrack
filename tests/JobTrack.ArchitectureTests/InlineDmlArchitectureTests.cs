@@ -236,6 +236,11 @@ public sealed class InlineDmlArchitectureTests
 			"ReadRateLimitLivePartitionCount",
 			"SqlQuery",
 			"rate_limit_live_partition_count"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.cs"),
+			"ForceDeleteWorkSessionsAsync",
+			"SqlQuery",
+			"force_delete_work_sessions"),
 	];
 
 	private static readonly FrozenSet<string> RawSqlReadMethods = FrozenSet.ToFrozenSet(

@@ -370,7 +370,8 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 					request.Context.CorrelationId, request.Reason, SubtreeAuditSnapshot.Create(impact), null);
 				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
 
-				var edgesDropped = await SubtreeDeletionCascade.ExecuteAsync(context, impact, ct).ConfigureAwait(false);
+				var edgesDropped = await SubtreeDeletionCascade.ExecuteAsync(
+					context, impact, DeleteWorkSessionsForLeafWorkAsync, ct).ConfigureAwait(false);
 
 				// The root goes through the tracked entity so its row_version concurrency token is
 				// checked: a concurrent deleter that already removed this subtree makes this affect
@@ -1185,6 +1186,11 @@ internal sealed class SqliteJobNodeCommandPort : IJobNodeCommandPort
 
 		return [.. roles];
 	}
+
+	/// <summary>SQLite has no roles, so a plain set-based delete is correct here (contrast the PostgreSQL SECURITY DEFINER path).</summary>
+	private static Task DeleteWorkSessionsForLeafWorkAsync(
+		DbContext context, IReadOnlyList<JobNodeId> leafWorkIds, CancellationToken cancellationToken) =>
+		context.Set<WorkSessionEntity>().Where(s => leafWorkIds.Contains(s.LeafWorkId)).ExecuteDeleteAsync(cancellationToken);
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)
 	{

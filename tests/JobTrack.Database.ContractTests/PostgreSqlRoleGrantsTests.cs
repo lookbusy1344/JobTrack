@@ -170,6 +170,34 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task The_domain_role_can_force_delete_work_sessions_through_the_narrow_function_but_not_directly()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, leafWorkId) = await SeedUserAndLeafWorkAsync(connection, "Alice Example");
+		await InsertWorkSessionAsync(connection, leafWorkId, userId);
+
+		var directDeleteAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "DELETE FROM work_session;");
+		var functionAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_domain", $"SELECT force_delete_work_sessions(ARRAY[{leafWorkId}]::bigint[]);");
+
+		await directDeleteAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await functionAct.Should().NotThrowAsync();
+		(await CountRowsAsync(connection, "work_session")).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task The_domain_role_can_delete_a_job_request()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var jobNodeId = await SeedJobRequestAsync(connection, userId);
+
+		var act = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", $"DELETE FROM job_request WHERE job_node_id = {jobNodeId};");
+
+		await act.Should().NotThrowAsync();
+	}
+
+	[Fact]
 	public async Task The_domain_role_has_no_direct_access_to_personal_access_token()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
@@ -610,6 +638,34 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		AddParameter(command, "@leafWorkId", leafWorkId);
 		AddParameter(command, "@workedByUserId", workedByUserId);
 		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private static async Task<long> SeedJobRequestAsync(DbConnection connection, long requesterUserId)
+	{
+		var rootId = await InsertNodeAsync(connection, requesterUserId, null);
+		var requestNodeId = await InsertNodeAsync(connection, requesterUserId, rootId);
+
+		await using var holdingAreaCommand = connection.CreateCommand();
+		holdingAreaCommand.CommandText = """
+										 INSERT INTO request_holding_area (job_node_id, name, default_priority_id)
+										 VALUES (@jobNodeId, 'Intake', @priorityId)
+										 RETURNING id;
+										 """;
+		AddParameter(holdingAreaCommand, "@jobNodeId", rootId);
+		AddParameter(holdingAreaCommand, "@priorityId", PriorityMedium);
+		var holdingAreaId = Convert.ToInt64(await holdingAreaCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+
+		await using var jobRequestCommand = connection.CreateCommand();
+		jobRequestCommand.CommandText = """
+										INSERT INTO job_request (job_node_id, requester_user_id, holding_area_id)
+										VALUES (@jobNodeId, @requesterUserId, @holdingAreaId);
+										""";
+		AddParameter(jobRequestCommand, "@jobNodeId", requestNodeId);
+		AddParameter(jobRequestCommand, "@requesterUserId", requesterUserId);
+		AddParameter(jobRequestCommand, "@holdingAreaId", holdingAreaId);
+		_ = await jobRequestCommand.ExecuteNonQueryAsync();
+
+		return requestNodeId;
 	}
 
 	private static async Task InsertAuditEventAsync(DbConnection connection, long actorUserId)

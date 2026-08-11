@@ -255,7 +255,11 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			before = SnapshotJobNode(node);
 			operation = "delete-job-node";
 		} else {
-			var sessions = await context.Set<WorkSessionEntity>()
+			// AsNoTracking: force_delete_work_sessions removes these rows via raw SQL below, bypassing
+			// the change tracker entirely, so a tracked fetch here would leave EF believing rows exist
+			// that no longer do -- removing leafWork afterward then throws attempting a cascade-delete
+			// fixup against sessions it thinks are still related but were never marked for deletion.
+			var sessions = await context.Set<WorkSessionEntity>().AsNoTracking()
 				.Where(s => s.LeafWorkId == request.NodeId).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 			if (sessions.Count == 0) {
@@ -278,7 +282,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 				before = SnapshotWorkedLeaf(node, leafWork, sessions);
 				operation = "delete-worked-leaf";
 				reason = request.Reason;
-				context.RemoveRange(sessions);
+				_ = await ForceDeleteWorkSessionsAsync(context, [request.NodeId], cancellationToken).ConfigureAwait(false);
 				_ = context.Remove(leafWork);
 			}
 		}
@@ -344,7 +348,8 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 					request.Context.CorrelationId, request.Reason, SubtreeAuditSnapshot.Create(impact), null);
 				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
 
-				var edgesDropped = await SubtreeDeletionCascade.ExecuteAsync(context, impact, ct).ConfigureAwait(false);
+				var edgesDropped = await SubtreeDeletionCascade.ExecuteAsync(
+					context, impact, ForceDeleteWorkSessionsAsync, ct).ConfigureAwait(false);
 
 				// The root goes through the tracked entity so its row_version concurrency token is
 				// checked: a concurrent deleter that already removed this subtree makes this affect
@@ -1194,6 +1199,18 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		return [.. roles];
 	}
+
+	/// <summary>
+	///     ADR 0036/0061's sole route to deleting <c>work_session</c> rows: <c>jobtrack_domain</c> has no
+	///     direct DELETE grant on the table (../roles/jobtrack-roles-and-grants.sql), only EXECUTE on the
+	///     narrow <c>force_delete_work_sessions</c> SECURITY DEFINER function
+	///     (database/postgresql/functions/jobtrack-security-definer-functions.sql).
+	/// </summary>
+	private static async Task<int> ForceDeleteWorkSessionsAsync(
+		DbContext context, IReadOnlyList<JobNodeId> leafWorkIds, CancellationToken cancellationToken) =>
+		await context.Database.SqlQuery<int>(
+				$"SELECT force_delete_work_sessions({leafWorkIds.Select(id => id.Value).ToArray()}) AS \"Value\"")
+			.SingleAsync(cancellationToken).ConfigureAwait(false);
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)
 	{

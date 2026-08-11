@@ -1,5 +1,6 @@
 namespace JobTrack.Persistence.Shared;
 
+using Abstractions;
 using Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,17 +34,29 @@ internal static class SubtreeDeletionCascade
 	///     both report success (the loser silently deleting zero rows) and both write a
 	///     <c>delete-subtree</c> audit event for a single deletion.
 	/// </remarks>
+	/// <param name="context">The open, transacted context the cascade issues its deletes through.</param>
+	/// <param name="impact">The subtree manifest computed inside the same transaction the deletes run in.</param>
+	/// <param name="deleteWorkSessionsForLeafWorkAsync">
+	///     Deletes every <c>work_session</c> row for the given <c>leaf_work_id</c>s. Injected rather than
+	///     issued directly here because the two providers reach it differently: SQLite has no roles, so
+	///     a plain <c>ExecuteDelete</c> is correct there, while PostgreSQL's <c>jobtrack_domain</c> role
+	///     has no direct DELETE grant on <c>work_session</c> at all (ADR 0036/0061 are the two accepted
+	///     exceptions to "cost-relevant history is never deleted") and must go through the narrow
+	///     <c>force_delete_work_sessions</c> SECURITY DEFINER function instead.
+	/// </param>
+	/// <param name="cancellationToken">Cancellation for the deletes issued here.</param>
 	/// <returns>How many prerequisite edges were dropped, both internal and subtree-crossing.</returns>
 	public static async Task<int> ExecuteAsync(
-		DbContext context, SubtreeImpactData impact, CancellationToken cancellationToken)
+		DbContext context,
+		SubtreeImpactData impact,
+		Func<DbContext, IReadOnlyList<JobNodeId>, CancellationToken, Task> deleteWorkSessionsForLeafWorkAsync,
+		CancellationToken cancellationToken)
 	{
 		var nodeIds = impact.Nodes.Select(n => n.Id).ToList();
 		var leafWorkIds = impact.Nodes.Where(n => n.HasLeafWork).Select(n => n.Id).ToList();
 
 		if (leafWorkIds.Count > 0) {
-			_ = await context.Set<WorkSessionEntity>()
-				.Where(s => leafWorkIds.Contains(s.LeafWorkId))
-				.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+			await deleteWorkSessionsForLeafWorkAsync(context, leafWorkIds, cancellationToken).ConfigureAwait(false);
 			_ = await context.Set<LeafWorkEntity>()
 				.Where(lw => leafWorkIds.Contains(lw.JobNodeId))
 				.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);

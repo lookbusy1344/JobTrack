@@ -2411,6 +2411,17 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
+
+			// PostgreSqlJobNodeCommandPort's worked-leaf/subtree deletion paths (ADR 0036/0061) call
+			// force_delete_work_sessions, a SECURITY DEFINER function from the unversioned functions
+			// script rather than a schema-versions script -- so it must exist here too, even though
+			// these tests connect as an administrator and never exercise the EXECUTE-grant boundary
+			// PostgreSqlRoleGrantsTests covers. The roles script must apply first: the functions
+			// script's GRANT EXECUTE targets (jobtrack_domain and friends) do not exist otherwise.
+			if (Provider == SchemaProvider.PostgreSql) {
+				await PostgreSqlRolesAndGrants.ApplyAsync(connection, RepositoryPaths.PostgreSqlRolesAndGrantsScriptPath(), CancellationToken.None);
+				await PostgreSqlRolesAndGrants.ApplyAsync(connection, RepositoryPaths.PostgreSqlFunctionsScriptPath(), CancellationToken.None);
+			}
 		}
 
 		var bootstrapPort = CreateBootstrapPort(database.ConnectionString);
