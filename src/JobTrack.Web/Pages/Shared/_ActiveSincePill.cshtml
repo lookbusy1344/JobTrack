@@ -1,14 +1,15 @@
 @model ActiveSessionSummaryModel
-@* Renders nothing when there is no running session: the column is empty for that row rather than
-   carrying a placeholder, since "not currently being worked on" is the ordinary case and a mark on
-   every such row would bury the few rows that are live.
+@* Renders nothing when there is no running session unless the caller explicitly identifies an
+   Unstarted or Unack state.
 
    Zero/one/several are three distinct presentations (plan §2.4), never a collapsed "pick one":
    - zero: nothing here (the outer @if below), unless the leaf is closed -- then a neutral "Closed"
      pill, so a done/archived leaf reads as settled rather than merely idle. The verbose "reopen it
      before starting another session" sentence this replaces never belonged in the Actions cell.
      Zero sessions on an *In Progress* leaf is the third case: paused, someone stopped part-way, and
-     it gets its own pill rather than reading identically to a leaf nobody has ever started.
+     it gets its own pill rather than reading identically to a leaf nobody has ever started. Browse
+     subtree rows name that latter state Unstarted, with Unack taking precedence for an
+     unacknowledged request.
    - one: the familiar compact stopwatch pill, icon plus the bare timestamp (data, not a word) --
      worker named only when it is not the viewer.
    - two or more: a prominent active-count pill, followed by the stable preview (You first, then every
@@ -68,10 +69,14 @@
 			@string.Join(", ", Model.PreviewEntries.Select(e => e.DisplayName))@(Model.HiddenCount > 0 ? $" +{Model.HiddenCount} more" : "")
 		</span>
 	</span>
-} else if (Model.StartClosed) {
+} else if (Model.Closed) {
 	<span class="status-pill status-pill-closed@(Model.Compact ? " status-pill--compact" : string.Empty)">Closed</span>
 } else if (Model.Paused) {
 	@* Closed wins over Paused: an archived leaf can be InProgress, and "you cannot start here" is the
 	   more consequential fact of the two. *@
 	<partial name="_PausedPill" model="Model.Compact"/>
+} else if (Model.UnacknowledgedRequest) {
+	<span class="status-pill status-pill-unack@(Model.Compact ? " status-pill--compact" : string.Empty)">Unack</span>
+} else if (Model.Unstarted) {
+	<span class="status-pill status-pill-inactive@(Model.Compact ? " status-pill--compact" : string.Empty)">Unstarted</span>
 }

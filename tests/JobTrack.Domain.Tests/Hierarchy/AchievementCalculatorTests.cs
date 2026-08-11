@@ -85,6 +85,30 @@ public sealed class AchievementCalculatorTests
 	}
 
 	[Fact]
+	public void Evaluating_a_subtree_caches_exactly_one_result_for_every_node()
+	{
+		var grandchildId = new JobNodeId(4);
+		var grandchild = Leaf(grandchildId, LeftId, Achievement.Success);
+		var left = new HierarchyNode(LeftId, RootId, [grandchildId], null);
+		var right = Leaf(RightId, RootId, Achievement.InProgress);
+		var root = new HierarchyNode(RootId, null, [LeftId, RightId], null);
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RootId] = root,
+			[LeftId] = left,
+			[RightId] = right,
+			[grandchildId] = grandchild,
+		};
+
+		var achievements = AchievementCalculator.EvaluateSubtree(RootId, nodes);
+
+		achievements.Should().HaveCount(nodes.Count);
+		achievements[grandchildId].Should().BeTrue();
+		achievements[LeftId].Should().BeTrue();
+		achievements[RightId].Should().BeFalse();
+		achievements[RootId].Should().BeFalse();
+	}
+
+	[Fact]
 	public void A_deep_linear_chain_is_evaluated_without_stack_overflow()
 	{
 		const int depth = 50_000;

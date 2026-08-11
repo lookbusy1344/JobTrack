@@ -626,7 +626,7 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
-	public async Task The_active_column_reflows_off_phone_width_while_session_actions_remain_available()
+	public async Task The_active_column_reflows_to_an_icon_only_pill_at_phone_width_while_session_actions_remain_available()
 	{
 		var branchId = await fixture.SeedBranchAsync("Responsive active worker branch");
 		_ = await fixture.SeedActiveSessionsAsync("Responsive active worker leaf", RequiredSimultaneousWorkerCount, branchId);
@@ -639,7 +639,11 @@ public abstract class JobBrowseBrowserTestsBase
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
-		(await phoneRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeFalse();
+		var phoneActivePill = phoneRow.Locator(".jt-col-active .status-pill-active.status-pill--icon");
+		(await phoneRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
+		(await phoneActivePill.IsVisibleAsync()).Should().BeTrue();
+		(await phoneActivePill.GetAttributeAsync("title")).Should().Be($"{RequiredSimultaneousWorkerCount} active");
+		(await VisibleTextOfAsync(phoneActivePill)).Should().BeEmpty("the one-column phone pill carries only its coloured icon");
 		(await phoneRow.GetByRole(AriaRole.Link, new() { Name = "Sessions", Exact = true }).IsVisibleAsync()).Should().BeTrue();
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
@@ -651,7 +655,7 @@ public abstract class JobBrowseBrowserTestsBase
 		(await desktopRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
 		// The table-cell pill is compact -- glyph and bare count only, per _ActiveSincePill's Compact
 		// branch -- with the full wording carried in its title tooltip rather than rendered text.
-		var activePill = desktopRow.Locator(".jt-col-active .status-pill-active");
+		var activePill = desktopRow.Locator(".jt-col-active .status-pill-active.status-pill--compact");
 		(await activePill.GetAttributeAsync("title")).Should().Be($"{RequiredSimultaneousWorkerCount} active");
 		(await VisibleTextOfAsync(activePill)).Should().Be(RequiredSimultaneousWorkerCount.ToString(CultureInfo.InvariantCulture));
 	}

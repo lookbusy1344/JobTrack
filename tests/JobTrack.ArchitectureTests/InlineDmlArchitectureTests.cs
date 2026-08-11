@@ -77,15 +77,9 @@ public sealed class InlineDmlArchitectureTests
 		new(HierarchyQueries, "GetAncestorChainAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetSubtreeAchievementsAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "IsSubtreeAchievedSqliteAsync", "SqlQuery", "WITH RECURSIVE"),
-		new(HierarchyQueries, "GetSubtreeSuccessesSqliteAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetRequesterSubtreeAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetBoundedSubtreeAsync", "SqlQuery", "WITH RECURSIVE"),
 		new(HierarchyQueries, "GetSubtreeImpactRowsAsync", "SqlQuery", "WITH RECURSIVE"),
-		new(
-			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobBrowseOperations.cs"),
-			"GetSubtreeSuccessesAsync",
-			"SqlQuery",
-			"node_succeeded"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobBrowseOperations.cs"),
 			"IsSubtreeSucceededAsync",

@@ -197,9 +197,9 @@
 						                                        ViewerZone = Model.ViewerZone,
 						                                        Now = Model.Now,
 						                                        Compact = false,
-						                                        StartClosed = toolbarActions.IsStartClosed,
+						                                        Closed = toolbarActions.IsStartClosed,
 						                                        Paused = toolbarActions.IsPaused,
-					                                        })"/>
+						                                        })"/>
 				</dd>
 			</div>
 		}
@@ -499,7 +499,7 @@
 								                DescribeWorker = id => Model.DescribeOwner(id),
 								                ViewerZone = Model.ViewerZone,
 								                Now = Model.Now,
-								                StartClosed = childActions?.IsStartClosed ?? false,
+								                Closed = childActions?.IsStartClosed ?? false,
 								                Paused = childActions?.IsPaused ?? false,
 							                })"/>
 						</td>
@@ -532,7 +532,7 @@
 				<tr>
 					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
 					   archived row is flagged in place beside its name. *@
-					<th scope="col" class="col-10 col-md-5 col-lg-5 col-xxl-3">Description</th>
+					<th scope="col" class="col-9 col-md-5 col-lg-5 col-xxl-3">Description</th>
 					@* "Pri": the cells below hold an abbreviated priority label, so the word "Priority"
 					   is wider than anything in its own column and holds the column open for nothing.
 					   The full name still rides along visually hidden, so it is never announced as
@@ -556,7 +556,7 @@
 					   workers' names (the preview list below the count pill) need more than a twelfth of the
 					   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
 					   the column, staying at its "at least 3 of 12" floor rather than the 4 it held before. *@
-					<th scope="col" class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">Active</th>
+					<th scope="col" class="jt-col-active col-1 col-md-2 col-lg-2" aria-label="Active"><span class="d-none d-md-inline">Active</span></th>
 					<th scope="col" class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
 					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
 					   the width of the bar it labels, so with it visible the column can never narrow to
@@ -575,8 +575,24 @@
 					var nodeActions = node.HasChildren
 						? null
 						: Model.WorkRowActionsFor(node.Id, "Start", "leafNodeId", node.Achievement, node.ArchivedAt is not null);
+					var activeSummary = new ActiveSessionSummaryModel {
+						ActiveSessions = nodeActions?.ActiveSessions ?? [],
+						ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+						DescribeWorker = id => Model.DescribeOwner(id),
+						ViewerZone = Model.ViewerZone,
+						Now = Model.Now,
+						Closed = node.Kind switch {
+							NodeKind.Root or NodeKind.Branch => node.BranchAchievement is BranchAchievement.Success,
+							NodeKind.Leaf => nodeActions?.IsStartClosed ?? false,
+							NodeKind.None => throw new InvalidOperationException("A displayed subtree node must have a structural kind."),
+							_ => throw new ArgumentOutOfRangeException(nameof(node.Kind), node.Kind, null),
+						},
+						Paused = nodeActions?.IsPaused ?? false,
+						UnacknowledgedRequest = node.Kind is NodeKind.Leaf && node.HasUnacknowledgedRequest,
+						Unstarted = node.Kind is NodeKind.Leaf && !node.HasSessionHistory,
+					};
 					<tr>
-						<td class="jt-tree-cell col-10 col-md-5 col-lg-5 col-xxl-3" data-jt-depth="@node.Depth">
+						<td class="jt-tree-cell col-9 col-md-5 col-lg-5 col-xxl-3" data-jt-depth="@node.Depth">
 							<span class="jt-tree-guide" aria-hidden="true">
 								@for (var railLevel = 1; railLevel < node.Depth; ++railLevel) {
 									<span class="jt-tree-rail"></span>
@@ -608,8 +624,13 @@
 									   after reading the row, not competing with the kind glyph for the leading slot.
 									   The zero-width word joiner above keeps the marker attached to the title's final
 									   word at every column width without adding visible spacing. *@
-									<partial name="_AchievementIcon"
-									         model="@(new AchievementIconModel { Achievement = node.Achievement, ShowLabel = false })"/>
+									@if (node.BranchAchievement is BranchAchievement.Success) {
+										<partial name="_BranchAchievementIcon"
+										         model="@(new BranchAchievementIconModel { Achievement = BranchAchievement.Success, ShowLabel = false })"/>
+									} else {
+										<partial name="_AchievementIcon"
+										         model="@(new AchievementIconModel { Achievement = node.Achievement, ShowLabel = false })"/>
+									}
 									@if (node.HasUnexpandedChildren) {
 										@* The name already links here; this only says the container holds more
 										   than is drawn, so it is a marker, not a second link to the same page. *@
@@ -636,17 +657,13 @@
 									class="@(InstantDisplay.IsPast(neededInstant, Model.Now) && BrowseModel.SubtreeNodeIsOpen(node) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
 							}
 						</td>
-						<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">
-							<partial name="_ActiveSincePill"
-							         model="@(new ActiveSessionSummaryModel {
-								                ActiveSessions = nodeActions?.ActiveSessions ?? [],
-								                ViewerId = Model.CurrentActorId ?? new AppUserId(0),
-								                DescribeWorker = id => Model.DescribeOwner(id),
-								                ViewerZone = Model.ViewerZone,
-								                Now = Model.Now,
-								                StartClosed = nodeActions?.IsStartClosed ?? false,
-								                Paused = nodeActions?.IsPaused ?? false,
-							                })"/>
+						<td class="jt-col-active col-1 col-md-2 col-lg-2">
+							<span class="d-md-none">
+								<partial name="_ActiveStatusIcon" model="activeSummary"/>
+							</span>
+							<span class="d-none d-md-inline">
+								<partial name="_ActiveSincePill" model="activeSummary"/>
+							</span>
 						</td>
 						<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">
 							@if (node.Cost is Money cost && node.AllocatedDuration is not null) {

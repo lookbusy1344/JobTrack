@@ -63,6 +63,15 @@ public sealed record JobSubtreeNodeResult
 	public Achievement? Achievement { get; init; }
 
 	/// <summary>
+	///     Whether this leaf has ever had a work session, active or finished. False for branches and
+	///     for a leaf on which work has never been recorded.
+	/// </summary>
+	public required bool HasSessionHistory { get; init; }
+
+	/// <summary>Whether this node anchors a requester submission that staff have not acknowledged.</summary>
+	public required bool HasUnacknowledgedRequest { get; init; }
+
+	/// <summary>
 	///     This branch's recursively derived achievement, or <see langword="null" /> for a leaf. Kept
 	///     separate from <see cref="Achievement" /> because branches and leaves have distinct state
 	///     vocabularies.

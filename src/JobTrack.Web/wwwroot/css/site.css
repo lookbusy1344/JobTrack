@@ -140,6 +140,8 @@
 
     --jt-green-700: #16704a;
     --jt-green-100: #e2f3ea;
+    --jt-blue-700: #24579f;
+    --jt-blue-100: #e5efff;
     --jt-amber-700: #8a5606;
     --jt-amber-100: #fbeed3;
     --jt-red-700: #b3261e;
@@ -1092,10 +1094,9 @@ fieldset legend {
 }
 
 /* Icon-only pills carry no text to size against, so the glyph is sized against the inline kind icon
-   (`--jt-icon-size-kind-inline`, `.jt-kind-icon-glyph`) that sits in the same row -- not the larger
-   `--jt-icon-size-kind` used by the Browse subtree's own tree row, which this class never appears
-   in. Matching that inline scale keeps every row of a jt-list (empty "None.", satisfied/blocking,
-   and plain rows with no marker at all) the same height instead of the marker rows growing taller. */
+   (`--jt-icon-size-kind-inline`, `.jt-kind-icon-glyph`) rather than the larger Browse-tree leading
+   glyph. Matching that inline scale keeps list rows uniform and lets the Browse phone status fit its
+   single Bootstrap column without increasing the table row height. */
 .status-pill--icon .status-pill-glyph {
     width: var(--jt-icon-size-kind-inline);
     height: var(--jt-icon-size-kind-inline);
@@ -1136,24 +1137,40 @@ fieldset legend {
     border-color: rgb(179 38 30 / 25%);
 }
 
-/* Closed is neutral, not a stop/go signal: a leaf that is done (terminal achievement) or archived can
-   accept no new session, but that is a settled, unalarming end-state — slate keeps it distinct from
-   the amber "someone is working now", the red "blocked", and the green "may proceed". */
+/* Closed is settled successfully rather than merely inactive. A green tint distinguishes terminal
+   or archived work from the neutral open-at-rest states without borrowing the stronger ready pill's
+   role or wording. */
 .status-pill-closed {
-    background-color: var(--jt-slate-100);
-    color: var(--jt-slate-600);
-    border-color: rgb(71 88 106 / 25%);
+    background-color: var(--jt-green-100);
+    color: var(--jt-green-700);
+    border-color: rgb(23 115 74 / 25%);
 }
 
 /* Paused is In Progress with nobody clocked on — open work at rest. It borrows the amber ink of
    .status-pill-active (this is the same "someone is working this job" thread of state) but sits on
    the neutral ground rather than the amber one, so "started, nobody on it" never reads as "running
-   right now" at a glance, nor as the settled slate-on-slate "Closed". Not red or otherwise alarming:
+   right now" at a glance, nor as the settled green-tinted "Closed". Not red or otherwise alarming:
    ADR 0045 makes zero active sessions a valid state from InProgress, and Pause job produces it. */
 .status-pill-paused {
     background-color: var(--jt-slate-50);
     color: var(--jt-amber-700);
     border-color: rgb(138 86 6 / 35%);
+}
+
+/* Unstarted leaves are open work at rest and have not crossed into active work. Neutral slate keeps
+   them related to Paused without implying closure. */
+.status-pill-inactive {
+    background-color: var(--jt-slate-50);
+    color: var(--jt-slate-600);
+    border-color: rgb(71 88 106 / 25%);
+}
+
+/* Unacknowledged requester work remains open, but it needs to stand apart from an ordinary
+   Unstarted leaf at a glance. Blue is informational here: neither ready green nor blocked red. */
+.status-pill-unack {
+    background-color: var(--jt-blue-100);
+    color: var(--jt-blue-700);
+    border-color: rgb(36 87 159 / 25%);
 }
 
 /* ---- Node-kind icon (Root / Branch / Leaf) -------------------------------------------------- */
@@ -1609,16 +1626,16 @@ fieldset legend {
    Browse subtree table cuts its priority column one tier earlier still (`d-none d-xxl-table-cell`),
    since below the widest viewports its twelfth reads better as description.
 
-   `d-none d-md-table-cell` (`.jt-col-cost`, `.jt-col-active`, `.jt-session-started` cells): cost is
+   `d-none d-md-table-cell` (`.jt-col-cost`, `.jt-session-started` cells): cost is
    the one secondary column worth keeping at tablet width — it is what most people scanning the
    table are actually looking for — as is the active-session column, since which jobs are being
    worked on right now is a live fact that changes under the reader rather than something they can
-   be sent to another page for. Both go at phone width: six-plus columns there would squeeze the
-   name to a couple of characters per line and push the page into a horizontal scroll, which WCAG
-   1.4.10 Reflow forbids. `.jt-session-started` is the same cut on the leaf's own Sessions table
-   (_LeafWorkSessions) — Worked by, Status (relabelled from Finished below lg, now a compact
-   Active/Finished pill carrying the start or finish time in place of the dropped Started column),
-   and one Pause button are what a phone reader needs at a glance.
+   be sent to another page for. Cost goes at phone width; Browse's Active column instead contracts to
+   one Bootstrap column and the shared icon-only pill, leaving Description nine columns and Actions
+   two without introducing horizontal scroll. `.jt-session-started` is the same cut on the leaf's
+   own Sessions table (_LeafWorkSessions) — Worked by, Status (relabelled from Finished below lg,
+   now a compact Active/Finished pill carrying the start or finish time in place of the dropped
+   Started column), and one Pause button are what a phone reader needs at a glance.
 
    `display: none` throughout is deliberate over a visually-hidden treatment: this is
    redundant-at-this-size content, not content withheld from assistive tech.

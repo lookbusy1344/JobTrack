@@ -156,10 +156,12 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var reloaded = await FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		// jt-col-active + d-none d-md-table-cell, not jt-col-secondary + d-none d-lg-table-cell:
-		// which jobs are being worked on right now survives the lg cut that drops
-		// owner/priority/deadline, and goes only at phone width.
-		body.Should().Contain("<th scope=\"col\" class=\"jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell\">Active</th>");
+		// Active survives at phone width as one Bootstrap column with an icon-only pill, then expands to
+		// two columns and restores its heading/pill detail from md upward.
+		body.Should().Contain(
+			"<th scope=\"col\" class=\"jt-col-active col-1 col-md-2 col-lg-2\" aria-label=\"Active\"><span class=\"d-none d-md-inline\">Active</span></th>");
+		body.Should().Contain("<span class=\"d-md-none\">");
+		body.Should().Contain("status-pill-active status-pill--icon");
 		body.Should().Contain("<th scope=\"col\" class=\"jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell\">Cost</th>");
 		// The priority heading is abbreviated to "Pri" visually, with the full name for assistive tech,
 		// and is held back to xxl (d-none d-xxl-table-cell) so Description keeps its twelfth below that.

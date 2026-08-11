@@ -15,10 +15,19 @@ public static class AchievementCalculator
 	///     bounded by the call stack, matching the deep-tree scale this hierarchy is expected to hold.
 	/// </summary>
 	public static bool IsAchieved(JobNodeId nodeId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
+		=> EvaluateSubtree(nodeId, nodesById)[nodeId];
+
+	/// <summary>
+	///     Evaluates <paramref name="rootId" /> and every descendant once in post-order, retaining one
+	///     cached result per node. Use this when several branch results from the same materialized
+	///     subtree are needed; indexing this map avoids walking shared descendants again.
+	/// </summary>
+	public static IReadOnlyDictionary<JobNodeId, bool> EvaluateSubtree(
+		JobNodeId rootId, IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById)
 	{
 		var achieved = new Dictionary<JobNodeId, bool>();
 		var pending = new Stack<(JobNodeId Id, bool ChildrenEvaluated)>();
-		pending.Push((nodeId, false));
+		pending.Push((rootId, false));
 
 		while (pending.Count > 0) {
 			var (id, childrenEvaluated) = pending.Pop();
@@ -40,6 +49,6 @@ public static class AchievementCalculator
 			}
 		}
 
-		return achieved[nodeId];
+		return achieved;
 	}
 }

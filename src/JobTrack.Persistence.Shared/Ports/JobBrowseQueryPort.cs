@@ -121,22 +121,30 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		var bounded = await JobNodeHierarchyQueries.GetBoundedSubtreeAsync(
 			context, rootId.Value, maxDepth, JobSubtreeLimits.BreadthCap, cancellationToken).ConfigureAwait(false);
 		var rows = await LoadSubtreeRowsAsync(context, rootId, bounded, ownership, archiveFilter, cancellationToken).ConfigureAwait(false);
-		// Leaf achievements already ride on the bounded rows. Derive all displayed branches in one
-		// provider command and retain the compact map only for this request: rendering never recalculates
-		// a branch, no cache can outlive a transition, and an unbounded hierarchy never enters memory.
-		var branchIds = rows
-			.Where(row => row.Kind is not NodeKind.Leaf)
-			.Select(row => row.Id.Value)
-			.ToArray();
-		var succeededByBranchId = await provider
-			.GetSubtreeSuccessesAsync(context, branchIds, cancellationToken).ConfigureAwait(false);
+		// Materialize the complete subtree once, then evaluate it bottom-up into a request-scoped cache.
+		// Every node receives exactly one cached result even when several displayed ancestor branches
+		// depend on it; the display depth cap must not make a deep unfinished leaf look completed.
+		var achievementRows = await JobNodeHierarchyQueries
+			.GetSubtreeAchievementsAsync(context, rootId.Value, cancellationToken).ConfigureAwait(false);
+		var childIdsByParent = achievementRows
+			.Where(row => row.ParentId is not null)
+			.GroupBy(row => row.ParentId!.Value)
+			.ToDictionary(group => group.Key, group => group.Select(row => new JobNodeId(row.Id)).ToArray());
+		var hierarchy = achievementRows.ToDictionary(
+			row => new JobNodeId(row.Id),
+			row => new HierarchyNode(
+				new(row.Id),
+				row.ParentId.HasValue ? new JobNodeId(row.ParentId.Value) : null,
+				childIdsByParent.TryGetValue(row.Id, out var childIds) ? [.. childIds] : [],
+				row.AchievementId.HasValue ? (Achievement)row.AchievementId.Value : null));
+		var succeededByNodeId = AchievementCalculator.EvaluateSubtree(rootId, hierarchy);
 		BranchAchievement? BranchAchievementFor(JobNodeSubtreeRow row)
 		{
 			if (row.Kind is NodeKind.Leaf) {
 				return null;
 			}
 
-			return succeededByBranchId[row.Id.Value] ? BranchAchievement.Success : BranchAchievement.Unfinished;
+			return succeededByNodeId[row.Id] ? BranchAchievement.Success : BranchAchievement.Unfinished;
 		}
 
 		var enrichedRows = rows.Select(row => row with {
@@ -297,6 +305,9 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 				// Derived from Achievement below, not probed separately -- see LoadSummariesAsync.
 				Achievement = context.Set<LeafWorkEntity>()
 					.Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
+				HasSessionHistory = context.Set<WorkSessionEntity>().Any(session => session.LeafWorkId == n.Id),
+				HasUnacknowledgedRequest = context.Set<JobRequestEntity>()
+					.Any(request => request.JobNodeId == n.Id && request.AcknowledgedAt == null),
 			})
 			.ToListAsync(cancellationToken).ConfigureAwait(false);
 
@@ -332,6 +343,8 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 				HasChildren = r.HasChildren,
 				HasLeafWork = r.Achievement is not null,
 				Achievement = r.Achievement,
+				HasSessionHistory = r.HasSessionHistory,
+				HasUnacknowledgedRequest = r.HasUnacknowledgedRequest,
 				HasUnexpandedChildren = r.HasChildren && !expandedById[r.Id],
 				MatchesFilter = matchesById[r.Id],
 			})

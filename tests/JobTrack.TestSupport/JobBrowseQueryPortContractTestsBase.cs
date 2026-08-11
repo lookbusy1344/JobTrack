@@ -350,6 +350,21 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task GetSubtreeAsync_reports_a_displayed_branch_rollup_from_beyond_the_render_depth()
+	{
+		var (rootId, branchId, tree) = await SeedTreeAsync();
+		await SucceedLeafAsync(tree.CabinetsLeafId, tree.JobManagerId);
+		await SucceedLeafAsync(tree.PlumbingLeafId, tree.JobManagerId);
+		await SucceedLeafAsync(tree.OldWiringLeafId, tree.JobManagerId);
+		var port = CreateBrowsePort(database.ConnectionString);
+
+		var result = await port.GetSubtreeAsync(rootId, 1, OwnershipFilter.All, JobArchiveFilter.All);
+
+		result.Rows.Should().HaveCount(2);
+		result.Rows.Single(row => row.Id == branchId).BranchAchievement.Should().Be(BranchAchievement.Success);
+	}
+
+	[Fact]
 	public async Task GetSubtreeAsync_omits_a_rollup_when_the_requested_root_is_a_leaf()
 	{
 		var (_, _, tree) = await SeedTreeAsync();
@@ -528,7 +543,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 			Version = plumbingWork.Version,
 		});
 		var interceptor = new BlockingReaderCommandInterceptor(sql =>
-			sql.Contains("SubtreeRootId", StringComparison.Ordinal));
+			sql.Contains("AchievementId", StringComparison.Ordinal));
 		var browsePort = CreateBrowsePortWithInterceptor(database.ConnectionString, interceptor);
 
 		var fetchTask = browsePort.GetSubtreeAsync(

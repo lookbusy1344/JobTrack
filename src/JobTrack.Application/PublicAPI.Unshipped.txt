@@ -1,5 +1,9 @@
 #nullable enable
 JobTrack.Application.JobSubtreeNodeResult.BranchAchievement.get -> JobTrack.Abstractions.BranchAchievement?
 JobTrack.Application.JobSubtreeNodeResult.BranchAchievement.init -> void
+JobTrack.Application.JobSubtreeNodeResult.HasSessionHistory.get -> bool
+JobTrack.Application.JobSubtreeNodeResult.HasSessionHistory.init -> void
+JobTrack.Application.JobSubtreeNodeResult.HasUnacknowledgedRequest.get -> bool
+JobTrack.Application.JobSubtreeNodeResult.HasUnacknowledgedRequest.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.get -> JobTrack.Abstractions.AppUserId?
 JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.init -> void

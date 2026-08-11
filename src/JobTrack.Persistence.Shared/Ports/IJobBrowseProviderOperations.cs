@@ -15,13 +15,6 @@ using Microsoft.EntityFrameworkCore;
 internal interface IJobBrowseProviderOperations : IProviderReadOperations
 {
 	/// <summary>
-	///     Derives each requested branch's recursive success state in one round trip. The caller keeps
-	///     the returned map only for the current subtree request.
-	/// </summary>
-	Task<IReadOnlyDictionary<long, bool>> GetSubtreeSuccessesAsync(
-		DbContext context, IReadOnlyCollection<long> rootIds, CancellationToken cancellationToken);
-
-	/// <summary>
 	///     Answers whether every leaf beneath <paramref name="rootId" /> reached
 	///     <see cref="Achievement.Success" />. PostgreSQL resolves this with the source-controlled
 	///     <c>node_succeeded</c> function; SQLite walks the subtree with a recursive CTE.

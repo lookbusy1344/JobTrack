@@ -228,6 +228,62 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task A_completed_branch_row_shows_the_same_green_tick_as_a_completed_leaf()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.branch-completion");
+		var rootId = bootstrappedRootId!.Value;
+		var completedBranchId = await AddChildAsync(rootId, workerId, "Completed branch");
+		var completedLeafId = await AddChildAsync(completedBranchId, workerId, "Completed branch leaf");
+		var unfinishedBranchId = await AddChildAsync(rootId, workerId, "Unfinished branch");
+		var waitingLeafId = await AddChildAsync(unfinishedBranchId, workerId, "Waiting branch leaf");
+		await SetAchievementAsync(completedLeafId, adminId, Achievement.Success);
+		await AttachLeafWorkAsync(waitingLeafId, adminId);
+		var authCookie = await SignInAsync("browse.branch-completion");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var completedBranchRow = ExtractSubtreeRow(body, completedBranchId);
+		completedBranchRow.Should().Contain("#jt-icon-achievement-success");
+		completedBranchRow.Should().Contain("status-pill-closed status-pill--icon");
+		completedBranchRow.Should().Contain("status-pill-closed status-pill--compact\">Closed</span>");
+		ExtractSubtreeRow(body, completedLeafId).Should().Contain("#jt-icon-achievement-success");
+		var unfinishedBranchRow = ExtractSubtreeRow(body, unfinishedBranchId);
+		unfinishedBranchRow.Should().NotContain("jt-achievement-icon");
+		unfinishedBranchRow.Should().NotContain("status-pill-closed");
+	}
+
+	[Fact]
+	public async Task Subtree_leaf_rows_distinguish_unstarted_and_unacknowledged_open_work()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.inactive-pills");
+		var rootId = bootstrappedRootId!.Value;
+		_ = await AddChildAsync(rootId, workerId, "No work attached");
+		var waitingId = await AddChildAsync(rootId, workerId, "Waiting without sessions");
+		var pausedId = await AddChildAsync(rootId, workerId, "Previously worked");
+		var requestId = await AddChildAsync(rootId, workerId, "Unacknowledged request");
+		await AttachLeafWorkAsync(waitingId, adminId);
+		await SetAchievementAsync(pausedId, adminId, Achievement.InProgress);
+		await AddFinishedSessionAsync(
+			workerId, pausedId, Instant.FromUtc(2026, 1, 1, 9, 0), Instant.FromUtc(2026, 1, 1, 10, 0));
+		await AddUnacknowledgedRequestAsync(requestId, workerId, rootId);
+		var authCookie = await SignInAsync("browse.inactive-pills");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		(body.Split("status-pill status-pill-inactive status-pill--compact\">Unstarted</span>", StringSplitOptions.None).Length - 1).Should()
+			.Be(2, "both workless and Waiting leaves have never had a session");
+		(body.Split("status-pill status-pill-unack status-pill--compact\">Unack</span>", StringSplitOptions.None).Length - 1).Should()
+			.Be(1, "an unacknowledged request is the more specific open state");
+		body.Should().Contain("status-pill-unack", "the request state has its own blue-tinted pill rather than the neutral Unstarted treatment");
+		(body.Split("status-pill status-pill-paused status-pill--compact", StringSplitOptions.None).Length - 1).Should()
+			.Be(1, "a leaf with session history retains the existing paused state");
+	}
+
+	[Fact]
 	/// <summary>
 	/// ADR 0043: a subtree row blocked by a prerequisite carries the stop glyph, and a prerequisite
 	/// declared on a branch gates every descendant of it. Ready rows carry nothing — in a healthy
@@ -855,6 +911,33 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 			WorkedByUserId = workerId,
 			StartedAt = startedAt,
 		});
+
+	private async Task AddUnacknowledgedRequestAsync(JobNodeId nodeId, AppUserId requesterId, JobNodeId holdingAreaNodeId)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+
+		await using var holdingArea = connection.CreateCommand();
+		holdingArea.CommandText = """
+		                          INSERT INTO request_holding_area (job_node_id, name, default_priority_id, is_active)
+		                          VALUES ($jobNodeId, 'Browse test intake', $priorityId, 1);
+		                          SELECT last_insert_rowid();
+		                          """;
+		_ = holdingArea.Parameters.AddWithValue("$jobNodeId", holdingAreaNodeId.Value);
+		_ = holdingArea.Parameters.AddWithValue("$priorityId", (short)Priority.Medium);
+		var holdingAreaId = (long)(await holdingArea.ExecuteScalarAsync())!;
+
+		await using var request = connection.CreateCommand();
+		request.CommandText = """
+		                      INSERT INTO job_request (job_node_id, requester_user_id, holding_area_id, submitted_at)
+		                      VALUES ($jobNodeId, $requesterUserId, $holdingAreaId, $submittedAt);
+		                      """;
+		_ = request.Parameters.AddWithValue("$jobNodeId", nodeId.Value);
+		_ = request.Parameters.AddWithValue("$requesterUserId", requesterId.Value);
+		_ = request.Parameters.AddWithValue("$holdingAreaId", holdingAreaId);
+		_ = request.Parameters.AddWithValue("$submittedAt", Instant.FromUtc(2026, 1, 1, 8, 0).ToUnixTimeTicks());
+		_ = await request.ExecuteNonQueryAsync();
+	}
 
 	private async Task AddPrerequisiteAsync(JobNodeId requiredJobId, JobNodeId dependentJobId, AppUserId adminId) =>
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {

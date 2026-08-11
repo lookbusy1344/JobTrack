@@ -235,18 +235,24 @@ active workers renders nothing in the column; exactly one keeps the familiar com
 pill followed by a stable, wrapping (`d-inline-flex flex-wrap`) name list — the viewer's own session
 labelled "You" first, then every other worker in start order, capped at
 `ActiveSessionSummaryModel.PreviewLimit` in the dense per-row form only (the toolbar/Sessions-page
-summary always names everyone, since it has the width).
+summary always names everyone, since it has the width). On the narrowest viewport the Browse
+subtree keeps Active as one Bootstrap column and renders only the coloured glyph with an accessible
+name; at `md` and above the ordinary worded or counted pill returns.
 
-Zero active workers is two different facts, and the column distinguishes them. A leaf nobody has
-started renders nothing. A leaf that is `InProgress` with nobody clocked on is **paused** —
-`LeafActivity.IsPaused`, the one place that predicate lives — and gets `.status-pill-paused` via the
-`_PausedPill` partial, carrying the same pause sign as the Pause job button. It is amber ink
-(`--jt-amber-700`, the same "someone is working this job" thread as `.status-pill-active`) on the
-neutral `--jt-slate-50` ground, so "started, nobody on it" reads as neither "running right now" nor
-the settled slate-on-slate "Closed". It is deliberately not a warning colour: ADR 0045 makes zero
-active sessions a valid state from `InProgress`, and Pause job produces it every time. `Closed` wins
-over `Paused` when both apply (an archived leaf can be `InProgress`, and "you cannot start here" is
-the more consequential fact).
+Zero active workers has several meaningful states, and Browse subtree rows distinguish them. A
+recursively successful branch gets green `.status-pill-closed` **Closed**, consuming the same
+request-cached branch result as its trailing green tick; an unfinished branch renders no Active
+state. A leaf nobody has started gets neutral `.status-pill-inactive` **Unstarted**. An
+unacknowledged requester submission gets informational-blue `.status-pill-unack` **Unack**. A leaf
+that is `InProgress` with nobody clocked on is **paused** — `LeafActivity.IsPaused`, the one place
+that predicate lives — and gets `.status-pill-paused` via the `_PausedPill` partial, carrying the
+same pause sign as the Pause job button. It is amber ink (`--jt-amber-700`, the same "someone is
+working this job" thread as `.status-pill-active`) on the neutral `--jt-slate-50` ground, so
+"started, nobody on it" reads as neither "running right now" nor the green-tinted settled state
+**Closed**. It is deliberately not a warning colour: ADR 0045 makes zero active sessions a valid
+state from `InProgress`, and Pause job produces it every time. `Closed` wins over `Paused` when both
+apply (an archived leaf can be `InProgress`, and "you cannot start here" is the more consequential
+fact).
 
 ### Row actions are glyphs, never words
 

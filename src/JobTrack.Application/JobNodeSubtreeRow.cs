@@ -53,6 +53,12 @@ internal sealed record JobNodeSubtreeRow
 	/// </summary>
 	public Achievement? Achievement { get; init; }
 
+	/// <summary>Whether this leaf has ever had a work session, active or finished.</summary>
+	public required bool HasSessionHistory { get; init; }
+
+	/// <summary>Whether this node anchors a requester submission that staff have not acknowledged.</summary>
+	public required bool HasUnacknowledgedRequest { get; init; }
+
 	/// <summary>The recursively derived achievement for a branch/root, or <see langword="null" /> for a leaf.</summary>
 	public BranchAchievement? BranchAchievement { get; init; }
 

@@ -43,12 +43,12 @@ public sealed class ActiveSessionSummaryModel
 	public bool Compact { get; init; } = true;
 
 	/// <summary>
-	///     Whether the leaf can accept no new session — a terminal achievement or an archived node
-	///     (<see cref="WorkRowActionsModel.IsStartClosed" />). Surfaced in the Active column as a plain
-	///     "Closed" pill only when no session is currently active, replacing the verbose closure
-	///     sentence that used to sit in the Actions cell (which is buttons only).
+	///     Whether the row represents settled work: a leaf that can accept no new session
+	///     (<see cref="WorkRowActionsModel.IsStartClosed" />), or a branch whose cached subtree
+	///     achievement is <see cref="Abstractions.BranchAchievement.Success" />. Surfaced in the Active
+	///     column as a plain "Closed" pill only when no session is currently active.
 	/// </summary>
-	public bool StartClosed { get; init; }
+	public bool Closed { get; init; }
 
 	/// <summary>
 	///     Whether the leaf is paused — <see cref="Abstractions.Achievement.InProgress" /> with nobody
@@ -57,6 +57,12 @@ public sealed class ActiveSessionSummaryModel
 	///     stopped part-way stops reading identically to one nobody has ever started.
 	/// </summary>
 	public bool Paused { get; init; }
+
+	/// <summary>Whether this open leaf anchors a requester submission not yet acknowledged by staff.</summary>
+	public bool UnacknowledgedRequest { get; init; }
+
+	/// <summary>Whether no work session has ever been recorded for this open leaf.</summary>
+	public bool Unstarted { get; init; }
 
 	/// <summary>The total number of active sessions on this leaf.</summary>
 	public int Count => ActiveSessions.Count;

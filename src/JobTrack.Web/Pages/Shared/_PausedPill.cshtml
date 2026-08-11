@@ -1,7 +1,8 @@
 @model bool
 @* "Paused": In Progress with nobody clocked on (LeafActivity.IsPaused). Carries the same pause sign
    as the Pause job button, and its own neutral-ground colour -- not the amber "someone is working
-   now", not the slate "Closed", and emphatically not a warning: this is a valid, ordinary state.
+   now", not the green-tinted "Closed", and emphatically not a warning: this is a valid, ordinary
+   state.
 
    The model is Compact (default false, so Work.cshtml's own unparameterised usage renders exactly as
    before): a table cell (via _ActiveSincePill) has no worker-name list competing for room the way the

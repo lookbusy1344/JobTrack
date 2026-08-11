@@ -16,6 +16,12 @@ tree, any node's detail, its achievement, prerequisites, readiness, and its work
 worker's, not only their own (ADR 0041). The `Requester` role is the exception: it sees only a
 read-only projection of its own requests (ADR 0033).
 
+Browse marks a completed leaf and a recursively completed branch with the same green tick and
+green **Closed** Active-column pill; an unfinished branch has neither marker. Browse materializes
+the complete rooted subtree once and folds it bottom-up into one request-local result per node, so
+nested branches reuse descendant results instead of walking the same descendants again. Both
+completed-branch indicators consume that cached row result rather than starting another traversal.
+
 **Writing is ownership-gated**, identically for branches and leaves (there is no branch/leaf
 distinction in the rule, and ownership is inherited down the tree):
 
@@ -104,8 +110,11 @@ More than one worker can be actively clocked in on the same leaf at once — thi
 supported state, not a fixable inconsistency. The UI never picks one active worker as "the" session
 to show: zero active workers shows nothing, exactly one shows a compact "Active since…" pill, and two
 or more show a count (`N active`) plus a capped, stable preview of who they are — the viewer's own
-session first if they have one, then every other worker in start order. The complete list is always
-one click away via Sessions, regardless of how many rows are capped in a dense table view.
+session first if they have one, then every other worker in start order. In Browse subtree rows, zero
+active workers instead shows the leaf's open-at-rest or closed state. At the narrowest width this
+Active column remains as one Bootstrap column containing only the coloured status glyph; from the
+medium breakpoint the pill includes its word or active count. The complete list is always one click
+away via Sessions, regardless of how many rows are capped in a dense table view.
 
 The Awaiting Progress dashboard offers two distinct "started work" filters, which answer different
 questions and are deliberately not merged. **In progress only** is about the achievement: work has
@@ -140,8 +149,13 @@ rendered a moment earlier.
 `/Jobs/Work?leafNodeId={id}` is the single interactive surface for a leaf's current status and its
 Sessions (ADR 0045). It shows one obvious primary action for the current state:
 
-- **Waiting or nothing recorded yet, no active session** — Start session (the same one-click
-  `StartWorkAsync` composite described above; on an unassigned node it also claims ownership, ADR 0048).
+- **Waiting or nothing recorded yet, no active session** — an **Unstarted** pill in Browse child
+  rows, and Start session (the same one-click `StartWorkAsync` composite described above; on an
+  unassigned node it also claims ownership, ADR 0048).
+- **An unacknowledged requester submission, no active session** — an **Unack** pill in Browse child
+  rows. Its informational blue tint distinguishes it from the neutral Unstarted and Paused states
+  while preserving that the request remains open; acknowledgement replaces it with the ordinary
+  Unstarted state until work begins.
 - **In progress, no active session** — *paused*: work started and nobody is clocked on. A valid,
   ordinary state (ADR 0045 allows zero active sessions from `InProgress`) and exactly what Pause job
   produces, so it is named with a **Paused** pill wherever a leaf appears — `/Jobs/Work`, Browse's

@@ -1,6 +1,5 @@
 namespace JobTrack.Persistence.Shared;
 
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
@@ -41,47 +40,6 @@ internal static class JobNodeHierarchyQueries
 			 """).SingleAsync(cancellationToken).ConfigureAwait(false);
 
 		return achieved != 0;
-	}
-
-	/// <summary>
-	///     SQLite's set-based equivalent of applying PostgreSQL's <c>node_succeeded</c> to several
-	///     displayed branches: each root is walked once within this command and returned as one compact
-	///     boolean row, so the bounded Browse request never materializes an unbounded hierarchy.
-	/// </summary>
-	public static async Task<IReadOnlyList<SubtreeSuccessRow>> GetSubtreeSuccessesSqliteAsync(
-		DbContext context, IReadOnlyCollection<long> rootIds, short successAchievementId,
-		CancellationToken cancellationToken)
-	{
-		if (rootIds.Count == 0) {
-			return [];
-		}
-
-		var rootIdsJson = JsonSerializer.Serialize(rootIds);
-		return await context.Database.SqlQuery<SubtreeSuccessRow>(
-			$"""
-			 WITH RECURSIVE requested_roots(id) AS (
-			     SELECT CAST(value AS INTEGER) FROM json_each({rootIdsJson})
-			 ), subtree(root_id, id) AS (
-			     SELECT id, id FROM requested_roots
-			     UNION ALL
-			     SELECT subtree.root_id, child.id
-			     FROM job_node child JOIN subtree ON child.parent_id = subtree.id
-			 )
-			 SELECT requested_roots.id AS "SubtreeRootId",
-			        CASE WHEN EXISTS (
-			            SELECT 1
-			            FROM subtree
-			            WHERE subtree.root_id = requested_roots.id
-			              AND NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = subtree.id)
-			              AND NOT EXISTS (
-			                  SELECT 1
-			                  FROM leaf_work
-			                  WHERE leaf_work.job_node_id = subtree.id
-			                    AND leaf_work.achievement_id = {successAchievementId}
-			              )
-			        ) THEN 0 ELSE 1 END AS "Succeeded"
-			 FROM requested_roots
-			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>
@@ -327,9 +285,6 @@ internal sealed record AncestorChainRow(long Id, long? ParentId);
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetSubtreeAchievementsAsync" />.</summary>
 internal sealed record SubtreeAchievementRow(long Id, long? ParentId, short? AchievementId);
-
-/// <summary>One recursively derived branch status returned by a provider's batched subtree query.</summary>
-internal sealed record SubtreeSuccessRow(long SubtreeRootId, bool Succeeded);
 
 /// <summary>One row of <see cref="JobNodeHierarchyQueries.GetRequesterSubtreeAsync" />.</summary>
 internal sealed record RequesterSubtreeRow(long Id, long? ParentId, string Description, short? AchievementId, bool IsChildless);

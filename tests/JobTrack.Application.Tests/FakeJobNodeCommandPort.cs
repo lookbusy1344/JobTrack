@@ -234,6 +234,8 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 				HasChildren = n.HasChildren,
 				HasLeafWork = n.HasLeafWork,
 				Achievement = _leafWork.TryGetValue(n.Id, out var leafWork) ? leafWork.Achievement : null,
+				HasSessionHistory = false,
+				HasUnacknowledgedRequest = false,
 				HasUnexpandedChildren = n.HasChildren && !expandedById[n.Id],
 				MatchesFilter = matchesById[n.Id],
 			})
