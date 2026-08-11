@@ -371,8 +371,12 @@ no-magic-numbers rule. Never apply both mechanisms to one element: a custom brea
 carry that element's *visual* treatment (`.jt-col-owner`'s font size) or serve as a test/semantic
 hook; it just must not own the visibility.
 
-The narrow, documented exceptions currently in `site.css` are **seven** `@media` blocks, each with a
-comment saying why, and this list is the whole of them:
+The rule covers *responsive* (`min-width`/`max-width`) queries. A `prefers-*` user-preference query
+is not a breakpoint and is never a defect: `site.css` carries two `prefers-reduced-motion: reduce`
+blocks (the `--jt-transition` token and the `main` page-load animation), outside this inventory.
+
+The narrow, documented breakpoint exceptions currently in `site.css` are **seven** `@media` blocks,
+each with a comment saying why, and this list is the whole of them:
 
 1. Root `font-size` scaling (768px).
 2. The xxl whitespace-density token block (1400px).

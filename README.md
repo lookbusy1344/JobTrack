@@ -1,38 +1,45 @@
-# JobTrack
+# JobTrack - hierarchical job-tracking and costing
 
 ![JobTrack banner](JobTrack_banner.jpg)
 
-A hierarchical job/work-tracking system with dynamic, historically-accurate costing.
+A hierarchical job-tracking system with dynamic, historically-accurate costing.
 
-Jobs form a single-rooted tree of branches and leaves. A leaf holds real work sessions
-(pause/resume without restructuring the tree), achievement rolls up recursively, and cost is never
-a stored number: it is computed on demand from effective-dated labour rates, per-job rate
-overrides, employee schedules, and the exact time worked — including splitting an employee's time
-fairly across concurrent sessions.
+This is a recreation of my original project running on SQL Server and .NET 4.8, now rebuilt from scratch on PostgreSQL (or SQLite) and .NET 10, and packaged as a docker image for easy deployment.
+
+The app has 2 unique features:
+
+- work is organised into branches and leaves, with a single root node; the tree can be arbitrarily deep, and any node can be moved to a new parent without losing its history or breaking its cost calculations. Actual work is done in leaves, which can be paused and resumed, and worked on by several people concurrently.
+- cost is computed live, according to work schedules (with overrides), and concurrent work is split fairly across all participants. Cost is never stored, and can be recomputed at any time for any node in the tree, even if the tree has been restructured since the work was done.
+
+Additionally, all jobs can have prerequisites, and the system will automatically prevent work from being started on a node until all its prerequisites are complete. As with other features, this applies to both branches and leaves. Since branches don't have work themselves, a branch is considered complete when all its leaves are complete.
+
+Two database backends are supported:
+
+- PostgreSQL is the production backend, and is used in the live Google Cloud Run deployment. Supports multi-instance concurrent writes from multiple web hosts.
+- SQLite is a fully conforming second provider, intended for embedded and demo use. Writes will be serialized.
 
 ## Status
 
-**Release-ready (1.0).** All four delivery gates — database, reusable library, web application, and
-release — have formal, source-controlled acceptance records
+**Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
 ([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),
 [0026](docs/decisions/0026-m6-library-gate-acceptance.md),
 [0027](docs/decisions/0027-m8-web-gate-acceptance.md),
 [0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md)). The codebase was built
-test-first throughout (roughly two lines of test for every line of product code), passes its full
+test-first throughout (about two and a half lines of test for every line of product code), passes its full
 solution and performance suites, and has been through three internal security audits, each fully
-remediated. Performance is enforced, not hoped for: measured budgets on a 200,000-node
+remediated. Performance is enforced: measured budgets on a 200,000-node
 production-shape database run as regression ceilings on every performance-suite run.
 
 The production deployment is PostgreSQL on Google Cloud (Cloud Run + Cloud SQL, with automated
-backups and point-in-time recovery), fixed by
-[ADR 0062](docs/decisions/0062-cloud-run-cloud-sql-production-topology.md). Items consciously
-deferred past 1.0 — observability tooling, an external penetration test, and a handful of
-documented low-risk residuals — are each recorded with their rationale and revisit trigger in
-[ADR 0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md), so nothing deferred
-is undocumented.
+backups and point-in-time recovery), defined by
+[ADR 0062](docs/decisions/0062-cloud-run-cloud-sql-production-topology.md). 
 
 [Live Google Cloud Run demo](https://jobtrack-web-zeb6shxnca-ew.a.run.app) (SQLite backend — a
-demonstration configuration, not the production one).
+demonstration configuration, not production).
+
+The SQLite backend can be run in a throwaway docker container or as a persistent local database. See [`docs/operations/sqlite-limitations-and-configuration.md`](docs/operations/sqlite-limitations-and-configuration.md) for its limitations.
+
+
 
 ## Start here
 
@@ -42,25 +49,67 @@ demonstration configuration, not the production one).
 | Understand how it behaves for its users | [`docs/behaviour-overview.md`](docs/behaviour-overview.md) |
 | See the architecture and layers file by file | [`docs/architecture-overview.md`](docs/architecture-overview.md) |
 | Deploy or operate it | [`docs/operations/postgresql-cloud-run-deployment.md`](docs/operations/postgresql-cloud-run-deployment.md) |
-| Contribute code | [`CLAUDE.md`](CLAUDE.md) — house style, TDD discipline, commit gate |
 
 ## In brief
 
 - **Stack:** .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity.
-- **Shape:** a strictly layered system — versioned database schema, a reusable .NET library behind
-  a single client facade, an external HTTP API, and a server-rendered web interface. Each layer
-  consumes only the one beneath it, and the boundaries are enforced by automated architecture
-  tests, not convention. Details: [`docs/architecture-overview.md`](docs/architecture-overview.md).
+- **Shape:** a database and a reusable library, with three clients over them — see
+  [Architecture](#architecture) below.
 - **Two databases, one behaviour:** PostgreSQL is the production backend; SQLite is a fully
   conforming second provider for embedded and demo use, held equivalent by a shared contract-test
   suite.
-- **Performance:** read latency tracks the size of the question, not the size of the installation;
-  hundreds of thousands of jobs and years of history sit comfortably inside the tested envelope.
+- **Performance:** read latency tracks the size of the question, not the size of the installation; hundreds of thousands of jobs and years of history sit comfortably inside the tested envelope.
   Budgets and evidence: [`docs/traceability/performance-budgets.md`](docs/traceability/performance-budgets.md).
 - **Security:** defence-in-depth web hardening, split least-privilege database credentials, audited
   administrative actions, optional two-factor authentication, and a maintained threat model with
   every mitigation tied to a named test:
   [`docs/threat-model/web-authentication-threat-model.md`](docs/threat-model/web-authentication-threat-model.md).
+
+## Architecture
+
+More details: [`docs/architecture-overview.md`](docs/architecture-overview.md).
+
+Broadly ports and adapters (hexagonal) — close to Clean Architecture, but not a doctrinaire
+implementation of it: the database is treated as a layer that enforces its own invariants rather
+than as a detail hidden behind a repository, and the library exposes one coarse facade instead of an
+interface per use case.
+
+Five layers, built and depended on strictly bottom-up. The database and library stack; the three
+clients above them are siblings, each calling `IJobTrackClient` in-process — the web client does
+**not** go through the HTTP API:
+
+1. **Database** — PostgreSQL (production) or SQLite (eg embedded and demo use) as numbered
+   forward-only SQL scripts applied by `JobTrack.Database`.
+2. **Reusable library** — the domain, use cases and both EF Core persistence providers, behind the
+   single `IJobTrackClient` facade; persistence is inverted, so each provider implements ports the
+   application layer declares.
+3. **HTTP API** — a token-authenticated versioned JSON API. This is for external clients; the
+   web client does not need it. A future mobile app or SPA would connect here.
+4. **Web client** — mobile-friendly as a first principle. Server-rendered Razor Pages rather than an SPA, to maximise compatibility: it
+   works without client-side state on legacy browsers, and is intentionally conservative.
+5. **Admin CLI** — uses the same library, to bootstrap the first administrator, create employees, emergency
+   password and 2FA resets, and job-tree import.
+
+The HTTP API and the web client share the one `JobTrack.Web` process; the admin CLI is its own
+executable. Each process picks a database provider at startup and then reaches the database only
+through `IJobTrackClient` — the dependency rules are asserted by the tests in
+`tests/JobTrack.ArchitectureTests/`.
+
+## Code size
+
+Lines of code as counted by [`tokei`](https://github.com/XAMPPRocky/tokei) (blank lines and comments
+excluded), as of 11 August 2026:
+
+| Area | Files | Lines of code |
+| --- | ---: | ---: |
+| Product — `src/` | 721 | 36,888 |
+| Tests — `tests/` | 426 | 71,291 |
+| Database schema — `database/` | 41 | 2,210 |
+| Sample API client — `samples/` | 19 | 1,079 |
+
+The 70k lines of test code is a consequence of Test Driven Development, with over 3,000 tests in the full solution suite. The performance suite runs separately, via [`scripts/perf-test.sh`](scripts/perf-test.sh).
+
+A short test script, aiming to complete in about 20 seconds. [`scripts/fast-test.sh`](scripts/fast-test.sh)
 
 ## Documentation map
 
