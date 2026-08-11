@@ -111,10 +111,19 @@ EXECUTE FUNCTION reject_job_request_reacknowledge();
 -- notes are immutable once written, enforced by the same
 -- reject-update/reject-delete trigger pair, not merely left unmodified by
 -- convention.
+--
+-- ADR 0068 qualifies "append-only" against ADR 0061's recursive node
+-- deletion: a note outlives every ordinary operation, but not the request
+-- it belongs to. The foreign key is therefore ON DELETE CASCADE and the
+-- reject-delete trigger fires only while the parent job_request row is
+-- still there -- during the cascade PostgreSQL has already removed the
+-- parent, so the trigger's EXISTS finds nothing and lets the note go. A
+-- note can consequently never be deleted on its own, only as part of
+-- destroying the whole request.
 CREATE TABLE job_request_note
 (
     id                      bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    job_node_id             bigint      NOT NULL REFERENCES job_request (job_node_id) ON DELETE RESTRICT,
+    job_node_id             bigint      NOT NULL REFERENCES job_request (job_node_id) ON DELETE CASCADE,
     author_user_id          bigint      NOT NULL REFERENCES app_user (id) ON DELETE RESTRICT,
     content                 text        NOT NULL,
     is_visible_to_requester boolean     NOT NULL,
@@ -134,7 +143,11 @@ $$ LANGUAGE plpgsql;
 CREATE FUNCTION reject_job_request_note_delete() RETURNS trigger AS
 $$
 BEGIN
-    RAISE EXCEPTION 'job_request_note rows are append-only and cannot be deleted';
+    IF EXISTS (SELECT 1 FROM job_request WHERE job_node_id = OLD.job_node_id) THEN
+        RAISE EXCEPTION 'job_request_note rows are append-only and cannot be deleted while their request exists';
+    END IF;
+
+    RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
 

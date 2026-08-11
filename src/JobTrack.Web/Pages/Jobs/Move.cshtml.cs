@@ -17,7 +17,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 ///     user's chosen destination on screen rather than discarding it.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
-public sealed class MoveModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class MoveModel(
+	IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager, ILogger<MoveModel> logger) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long NodeId { get; init; }
 
@@ -87,7 +88,8 @@ public sealed class MoveModel(IJobTrackClient jobTrackClient, UserManager<JobTra
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);
 			return Page();
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(MoveModel), ex);
 			ErrorMessage = "Someone else changed this node since the form was loaded. " +
 						   "The latest version is shown below — try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);

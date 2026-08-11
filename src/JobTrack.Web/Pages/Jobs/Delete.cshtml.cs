@@ -18,7 +18,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 ///     regardless of who worked it" without attempting the delete.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
-public sealed class DeleteModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed partial class DeleteModel(
+	IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager, ILogger<DeleteModel> logger) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long NodeId { get; init; }
 
@@ -91,10 +92,16 @@ public sealed class DeleteModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			return Page();
 		}
 		catch (InvariantViolationException ex) {
+			// The reader sees the invariant's own message; the operator needs more, because a refusal
+			// leaves a 200 in the request log and nothing else. The exception carries the provider's
+			// error (SQLSTATE, constraint name) for the catch-all categories, where the id alone does
+			// not say which table refused (ADR 0068).
+			LogDeleteRefused(logger, context.CorrelationId, NodeId, ex.ConstraintId, ex);
 			ErrorMessage = $"This node cannot be deleted: {ex.Message}";
 			return Page();
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(DeleteModel), ex);
 			ErrorMessage = "Someone else changed this node since the form was loaded. " +
 						   "The latest version is shown below — review and try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);
@@ -106,6 +113,11 @@ public sealed class DeleteModel(IJobTrackClient jobTrackClient, UserManager<JobT
 			return Page();
 		}
 	}
+
+	[LoggerMessage(
+		Level = LogLevel.Warning,
+		Message = "job_node_delete_refused correlation_id={CorrelationId} node_id={NodeId} constraint={ConstraintId}")]
+	private static partial void LogDeleteRefused(ILogger logger, Guid correlationId, long nodeId, string constraintId, Exception exception);
 
 	private async Task LoadCurrentNodeAsync(AppUserId actor, CancellationToken cancellationToken)
 	{

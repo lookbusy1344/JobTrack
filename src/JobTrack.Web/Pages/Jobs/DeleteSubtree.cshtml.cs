@@ -21,10 +21,11 @@ using NodaTime;
 ///     cascades; this one is reached from Browse only for a node that has children.
 /// </summary>
 [Authorize(Policy = EmployeeRoleNames.Administrator)]
-public sealed class DeleteSubtreeModel(
+public sealed partial class DeleteSubtreeModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IClock clock) : PageModel
+	IClock clock,
+	ILogger<DeleteSubtreeModel> logger) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long NodeId { get; init; }
 
@@ -89,9 +90,11 @@ public sealed class DeleteSubtreeModel(
 
 		var parentId = node.Node.ParentId;
 
+		var correlationId = Guid.NewGuid();
+
 		try {
 			_ = await jobTrackClient.Jobs.DeleteSubtreeAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = new() { Actor = actor.Value, CorrelationId = correlationId },
 				RootId = new(NodeId),
 				Version = OriginalVersion,
 				Reason = Input.Reason ?? string.Empty,
@@ -111,15 +114,16 @@ public sealed class DeleteSubtreeModel(
 			ErrorMessage = "Deleting a subtree requires a reason.";
 			return Page();
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "subtree-delete-holding-area-anchored") {
-			ErrorMessage = $"This subtree cannot be deleted: {ex.Message}";
-			return Page();
-		}
 		catch (InvariantViolationException ex) {
+			// Logged for the same reason the single-node page logs it (ADR 0068): a refusal ends in a
+			// 200 the request log cannot be told apart from a success, and the catch-all categories
+			// name no table -- only the exception's own provider error does.
+			LogSubtreeDeleteRefused(logger, correlationId, NodeId, ex.ConstraintId, ex);
 			ErrorMessage = $"This subtree cannot be deleted: {ex.Message}";
 			return Page();
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, correlationId, nameof(DeleteSubtreeModel), ex);
 			return await ReloadAfterConflictAsync(actor.Value, cancellationToken);
 		}
 	}
@@ -136,9 +140,11 @@ public sealed class DeleteSubtreeModel(
 			return Page();
 		}
 
+		var correlationId = Guid.NewGuid();
+
 		try {
 			_ = await jobTrackClient.Jobs.ArchiveSubtreeAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, RootId = new(NodeId), Version = OriginalVersion },
+				new() { Context = new() { Actor = actor.Value, CorrelationId = correlationId }, RootId = new(NodeId), Version = OriginalVersion },
 				cancellationToken);
 
 			return RedirectToPage("/Jobs/Browse", new { nodeId = NodeId });
@@ -155,10 +161,17 @@ public sealed class DeleteSubtreeModel(
 			ErrorMessage = "A session is still running somewhere in this subtree; pause or finish it before archiving.";
 			return Page();
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, correlationId, nameof(DeleteSubtreeModel), ex);
 			return await ReloadAfterConflictAsync(actor.Value, cancellationToken);
 		}
 	}
+
+	[LoggerMessage(
+		Level = LogLevel.Warning,
+		Message = "job_subtree_delete_refused correlation_id={CorrelationId} node_id={NodeId} constraint={ConstraintId}")]
+	private static partial void LogSubtreeDeleteRefused(
+		ILogger logger, Guid correlationId, long nodeId, string constraintId, Exception exception);
 
 	private async Task<IActionResult> ReloadAfterConflictAsync(AppUserId actor, CancellationToken cancellationToken)
 	{

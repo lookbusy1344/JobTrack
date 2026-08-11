@@ -471,7 +471,8 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.IsVisibleToRequester).HasColumnName("is_visible_to_requester").IsRequired();
 			_ = builder.Property(e => e.CreatedAt).HasColumnName("created_at").IsRequired();
 
-			_ = builder.HasOne<JobRequestEntity>().WithMany().HasForeignKey(e => e.JobNodeId).OnDelete(DeleteBehavior.Restrict);
+			// ADR 0068: the note thread is destroyed with its request and only with its request.
+			_ = builder.HasOne<JobRequestEntity>().WithMany().HasForeignKey(e => e.JobNodeId).OnDelete(DeleteBehavior.Cascade);
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.AuthorUserId).OnDelete(DeleteBehavior.Restrict);
 		});
 	}

@@ -20,6 +20,14 @@ internal sealed class SqliteJobBrowseOperations(string connectionString, IReadOn
 	{
 	}
 
+	public async Task<IReadOnlyDictionary<long, bool>> GetSubtreeSuccessesAsync(
+		DbContext context, IReadOnlyCollection<long> rootIds, CancellationToken cancellationToken)
+	{
+		var rows = await JobNodeHierarchyQueries.GetSubtreeSuccessesSqliteAsync(
+			context, rootIds, (short)Achievement.Success, cancellationToken).ConfigureAwait(false);
+		return rows.ToDictionary(row => row.SubtreeRootId, row => row.Succeeded);
+	}
+
 	public async Task<bool> IsSubtreeSucceededAsync(DbContext context, long rootId, CancellationToken cancellationToken) =>
 		await JobNodeHierarchyQueries.IsSubtreeAchievedSqliteAsync(
 			context, rootId, (short)Achievement.Success, cancellationToken).ConfigureAwait(false);

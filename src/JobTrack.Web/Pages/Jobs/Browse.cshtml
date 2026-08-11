@@ -260,6 +260,17 @@
 				</svg>
 				Sessions
 			</a>
+			@if (toolbarActions.CanComplete) {
+				<form method="post" asp-page-handler="@toolbarActions.CompleteHandler" class="inline-form">
+					@foreach (var field in toolbarActions.StartFields) {
+						<input type="hidden" name="@field.Key" value="@field.Value"/>
+					}
+					<button type="submit" class="btn btn-primary"
+					        data-jt-confirm="Complete this job? Every open session on it will be closed.">
+						Complete
+					</button>
+				</form>
+			}
 			<a class="btn btn-outline-danger"
 			   asp-page="/Jobs/Delete"
 			   asp-route-nodeId="@Model.CurrentNode.Node.Id.Value"
@@ -622,7 +633,7 @@
 						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
 							@if (needed is Instant neededInstant) {
 								<span
-									class="@(InstantDisplay.IsPast(neededInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
+									class="@(InstantDisplay.IsPast(neededInstant, Model.Now) && BrowseModel.SubtreeNodeIsOpen(node) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
 							}
 						</td>
 						<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">

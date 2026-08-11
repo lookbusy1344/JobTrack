@@ -25,6 +25,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	/// <summary>An <c>app_user</c> id no seeded fixture can have reached, for "target account does not exist" cases.</summary>
 	private const long NonExistentUserId = 999_999;
 
+	/// <summary>The rate a seeded <c>node_rate_override</c> carries; only its row's existence matters here.</summary>
+	private const decimal OverrideHourlyRate = 42.50m;
+
 	private static readonly TimeSpan ActiveLockoutDuration = TimeSpan.FromHours(1);
 	private static readonly TimeSpan ContentionObservationTimeout = TimeSpan.FromMilliseconds(250);
 
@@ -684,6 +687,105 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Version = 1,
 		});
 		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	/// <summary>
+	///     ADR 0068: a leaf that arrived through client-request intake carries a <c>job_request</c> row
+	///     (and possibly a note thread) whose foreign keys into <c>job_node</c> are <c>RESTRICT</c>.
+	///     Single-node deletion has to take them with it, exactly as ADR 0061's subtree cascade does --
+	///     before this, the request row blocked the delete and surfaced as the catch-all
+	///     "has dependent data".
+	/// </summary>
+	[Fact]
+	public async Task Deleting_a_leaf_that_anchors_a_client_request_takes_the_request_and_its_notes_with_it()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var requesterId = await SeedEmployeeAsync("Rita Requester", "rita.requester.delete-request", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+		var holdingNode = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		var holdingAreaId = await SeedHoldingAreaAsync(holdingNode.Id, "IT Intake");
+		var requestLeaf = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		await SeedJobRequestAsync(requestLeaf.Id, requesterId, holdingAreaId);
+		await SeedJobRequestNoteAsync(requestLeaf.Id, requesterId, "Any update on this?");
+
+		await port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = requestLeaf.Id, Version = requestLeaf.Version });
+
+		(await CountRowsForNodeAsync("job_request", "job_node_id", requestLeaf.Id)).Should().Be(0);
+		(await CountRowsForNodeAsync("job_request_note", "job_node_id", requestLeaf.Id)).Should().Be(0);
+	}
+
+	/// <summary>
+	///     The same shape one table over: <c>node_rate_override.node_id</c> is another
+	///     <c>ON DELETE RESTRICT</c> reference into <c>job_node</c> that single-node deletion never
+	///     cleared (ADR 0068).
+	/// </summary>
+	[Fact]
+	public async Task Deleting_a_leaf_with_a_node_rate_override_takes_the_override_with_it()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
+		await SeedNodeRateOverrideAsync(leaf.Id, workerId);
+
+		await port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = leaf.Id, Version = leaf.Version });
+
+		(await CountRowsForNodeAsync("node_rate_override", "node_id", leaf.Id)).Should().Be(0);
+	}
+
+	/// <summary>
+	///     A holding area is configuration that outlives the node it is anchored to, so deletion is
+	///     refused rather than cascaded -- the same rule ADR 0061 already applies to a subtree, given a
+	///     named category here instead of the catch-all "has dependent data" (ADR 0068).
+	/// </summary>
+	[Fact]
+	public async Task Deleting_a_node_that_anchors_a_request_holding_area_is_refused_by_name()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(database.ConnectionString);
+		var holdingNode = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		_ = await SeedHoldingAreaAsync(holdingNode.Id, "IT Intake");
+
+		var act = () => port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = holdingNode.Id,
+			Version = holdingNode.Version,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("job-node-holding-area-anchored");
+	}
+
+	/// <summary>
+	///     ADR 0061's cascade lists <c>job_request_note</c>, but ADR 0034's append-only trigger refused
+	///     every delete of one, making any subtree containing a commented request permanently
+	///     undeletable. ADR 0068 reconciles them; this is the regression that proves it.
+	/// </summary>
+	[Fact]
+	public async Task Deleting_a_subtree_containing_a_commented_client_request_removes_the_whole_thread()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-request", EmployeeRole.Administrator);
+		var requesterId = await SeedEmployeeAsync("Rita Requester", "rita.requester.subtree-request", EmployeeRole.Requester);
+		var port = CreateCommandPort(database.ConnectionString);
+		var holdingNode = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		var holdingAreaId = await SeedHoldingAreaAsync(holdingNode.Id, "IT Intake");
+		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
+		var requestLeaf = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, branch.Id));
+		await SeedJobRequestAsync(requestLeaf.Id, requesterId, holdingAreaId);
+		await SeedJobRequestNoteAsync(requestLeaf.Id, requesterId, "Any update on this?");
+		await SeedNodeRateOverrideAsync(requestLeaf.Id, requesterId);
+
+		var result = await port.DeleteSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = branch.Id,
+			Version = branch.Version,
+			Reason = "Cancelled intake; removing the branch.",
+		});
+
+		result.JobRequestCount.Should().Be(1);
+		(await CountRowsForNodeAsync("job_request", "job_node_id", requestLeaf.Id)).Should().Be(0);
+		(await CountRowsForNodeAsync("job_request_note", "job_node_id", requestLeaf.Id)).Should().Be(0);
+		(await CountRowsForNodeAsync("node_rate_override", "node_id", requestLeaf.Id)).Should().Be(0);
 	}
 
 	[Fact]
@@ -2369,6 +2471,92 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		await AssignRoleAsync(connection, appUserId, role);
 
 		return appUserId;
+	}
+
+	/// <summary>
+	///     Seeds a <c>request_holding_area</c> anchored at <paramref name="jobNodeId" />, written
+	///     directly rather than through the intake ports: these delete tests need only the dependent
+	///     row's existence, not the intake behaviour those ports' own contract tests already cover.
+	/// </summary>
+	private async Task<long> SeedHoldingAreaAsync(JobNodeId jobNodeId, string name)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO request_holding_area (job_node_id, name, default_priority_id)
+							  VALUES (@jobNodeId, @name, @priorityId)
+							  RETURNING id;
+							  """;
+		AddParameter(command, "@jobNodeId", jobNodeId.Value);
+		AddParameter(command, "@name", name);
+		AddParameter(command, "@priorityId", (short)Priority.Medium);
+
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
+	private async Task SeedJobRequestAsync(JobNodeId jobNodeId, AppUserId requesterUserId, long holdingAreaId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO job_request (job_node_id, requester_user_id, holding_area_id, submitted_at)
+							  VALUES (@jobNodeId, @requesterUserId, @holdingAreaId, @submittedAt);
+							  """;
+		AddParameter(command, "@jobNodeId", jobNodeId.Value);
+		AddParameter(command, "@requesterUserId", requesterUserId.Value);
+		AddParameter(command, "@holdingAreaId", holdingAreaId);
+		AddParameter(command, "@submittedAt", EncodeInstant(DateTimeOffset.UtcNow));
+
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private async Task SeedJobRequestNoteAsync(JobNodeId jobNodeId, AppUserId authorUserId, string content)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO job_request_note (job_node_id, author_user_id, content, is_visible_to_requester, created_at)
+							  VALUES (@jobNodeId, @authorUserId, @content, @isVisibleToRequester, @createdAt);
+							  """;
+		AddParameter(command, "@jobNodeId", jobNodeId.Value);
+		AddParameter(command, "@authorUserId", authorUserId.Value);
+		AddParameter(command, "@content", content);
+		AddParameter(command, "@isVisibleToRequester", true);
+		AddParameter(command, "@createdAt", EncodeInstant(DateTimeOffset.UtcNow));
+
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private async Task SeedNodeRateOverrideAsync(JobNodeId nodeId, AppUserId userId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO node_rate_override (node_id, user_id, effective_start, rate, changed_at)
+							  VALUES (@nodeId, @userId, @effectiveStart, @rate, @changedAt);
+							  """;
+		AddParameter(command, "@nodeId", nodeId.Value);
+		AddParameter(command, "@userId", userId.Value);
+		AddParameter(command, "@effectiveStart", EncodeInstant(DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture)));
+		AddParameter(command, "@rate", OverrideHourlyRate);
+		AddParameter(command, "@changedAt", EncodeInstant(DateTimeOffset.UtcNow));
+
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private async Task<long> CountRowsForNodeAsync(string tableName, string nodeColumnName, JobNodeId nodeId)
+	{
+		await using var connection = await OpenExistingConnectionAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = $"SELECT COUNT(*) FROM {tableName} WHERE {nodeColumnName} = @nodeId;";
+		AddParameter(command, "@nodeId", nodeId.Value);
+
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	private async Task<WorkSessionId> SeedWorkSessionAsync(

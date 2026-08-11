@@ -17,7 +17,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 public sealed class CorrectUserCostRateModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	ILogger<CorrectUserCostRateModel> logger) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long UserId { get; init; }
 
@@ -69,9 +70,11 @@ public sealed class CorrectUserCostRateModel(
 			return Page();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			_ = await jobTrackClient.Rates.CorrectUserCostRateAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				RateId = new(RateId),
 				UserId = new AppUserId(UserId),
 				Version = Rate.Version,
@@ -87,7 +90,8 @@ public sealed class CorrectUserCostRateModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That cost rate no longer exists.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(CorrectUserCostRateModel), ex);
 			ErrorMessage = "Someone else changed this cost rate since the form was loaded. Review and try again.";
 			await LoadRateAsync(actor.Value, cancellationToken);
 		}

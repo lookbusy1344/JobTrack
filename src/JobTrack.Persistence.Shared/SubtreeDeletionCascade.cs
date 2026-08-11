@@ -20,9 +20,10 @@ internal static class SubtreeDeletionCascade
 {
 	/// <summary>
 	///     Deletes, in dependency order, every <c>work_session</c>, <c>leaf_work</c>,
-	///     <c>node_rate_override</c>, <c>job_request_note</c>, <c>job_request</c>, and
-	///     <c>job_prerequisite</c> row belonging to the subtree, then every <c>job_node</c> row
-	///     <em>below</em> the root, deepest-first so no parent is removed before its children.
+	///     <c>node_rate_override</c>, <c>job_request</c> (taking its <c>job_request_note</c> thread with
+	///     it by <c>ON DELETE CASCADE</c>, ADR 0068), and <c>job_prerequisite</c> row belonging to the
+	///     subtree, then every <c>job_node</c> row <em>below</em> the root, deepest-first so no parent is
+	///     removed before its children.
 	/// </summary>
 	/// <remarks>
 	///     The subtree root's own <c>job_node</c> row is deliberately left for the caller to remove
@@ -52,10 +53,11 @@ internal static class SubtreeDeletionCascade
 			.Where(o => nodeIds.Contains(o.NodeId))
 			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
-		_ = await context.Set<JobRequestNoteEntity>()
-			.Where(n => nodeIds.Contains(n.JobNodeId))
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-
+		// job_request_note is deliberately not deleted here: ADR 0034's append-only trigger refuses a
+		// note deletion while its request still exists, so deleting the thread directly aborted the
+		// whole cascade and made any subtree holding a commented request permanently undeletable.
+		// ADR 0068 makes the note foreign key ON DELETE CASCADE instead, so the thread goes with the
+		// job_request row below and append-only still holds everywhere else.
 		_ = await context.Set<JobRequestEntity>()
 			.Where(r => nodeIds.Contains(r.JobNodeId))
 			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);

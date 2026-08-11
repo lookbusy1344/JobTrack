@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
@@ -29,6 +31,8 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 	private const string AppliedBy = "test-runner";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
 	private const string AdministratorPassword = "Bootstrap-Horse-Battery-77!";
+
+	private readonly ConcurrentBag<string> capturedLogEntries = [];
 
 	private readonly SqliteDatabaseFixture database = new();
 	private AppUserId administratorId;
@@ -53,7 +57,7 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 		rootId = bootstrapResult.RootJobNodeId;
 		administratorId = bootstrapResult.AdministratorId;
 
-		factory = new(database.ConnectionString);
+		factory = new(database.ConnectionString, capturedLogEntries);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
 	}
 
@@ -162,6 +166,67 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Jobs/Browse");
+	}
+
+	/// <summary>
+	///     A refused delete is the one failure the reader cannot diagnose from the page: the message
+	///     names the invariant, but nothing reaches the log stream, so an operator looking at a
+	///     production instance afterwards sees the request succeed with a 200 and no trace of why the
+	///     node is still there. The constraint id and the node it was refused for are logged, with the
+	///     exception itself carrying the provider's own error (SQLSTATE, constraint name) for the
+	///     catch-all cases where the id alone does not identify the offending table.
+	/// </summary>
+	[Fact]
+	public async Task A_refused_delete_is_logged_with_its_constraint_id_and_node()
+	{
+		var managerId = await SeedEmployeeAsync("delete.logged-refusal", EmployeeRole.JobManager);
+		var required = await AddChildAsync(rootId, managerId, "Required job");
+		var dependent = await AddChildAsync(rootId, managerId, "Dependent job");
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
+		var authCookie = await SignInAsync("delete.logged-refusal");
+
+		var (antiforgeryCookie, token) = await GetDeleteFormAsync(authCookie, required.Id);
+		var response = await PostAsync(authCookie, antiforgeryCookie, token, required.Id, required.Version, null);
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		capturedLogEntries.Should().ContainSingle(entry =>
+			entry.Contains("job_node_delete_refused", StringComparison.Ordinal)
+			&& entry.Contains("constraint=job-node-has-prerequisites-cannot-delete", StringComparison.Ordinal)
+			&& entry.Contains(
+				$"node_id={required.Id.Value.ToString(CultureInfo.InvariantCulture)}", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task A_stale_version_on_delete_is_reported_as_a_conflict_and_logged()
+	{
+		var managerId = await SeedEmployeeAsync("delete.conflict-manager", EmployeeRole.JobManager);
+		var leaf = await AddChildAsync(rootId, managerId, "Contested leaf");
+		var authCookie = await SignInAsync("delete.conflict-manager");
+
+		var (antiforgeryCookie, token) = await GetDeleteFormAsync(authCookie, leaf.Id);
+
+		// A concurrent edit lands after the form was loaded, advancing the row's version.
+		_ = await seedClient.Jobs.EditAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			NodeId = leaf.Id,
+			Description = "Concurrently edited",
+			OwnerUserId = managerId,
+			Priority = Priority.Medium,
+			Version = leaf.Version,
+		});
+
+		var response = await PostAsync(authCookie, antiforgeryCookie, token, leaf.Id, leaf.Version, null);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Someone else changed this node");
+		capturedLogEntries.Should().Contain(entry =>
+			entry.Contains("page_concurrency_conflict", StringComparison.Ordinal)
+			&& entry.Contains("page=DeleteModel", StringComparison.Ordinal));
 	}
 
 	private async Task<JobNodeResult> AddWorkedLeafAsync(AppUserId ownerId, string description)
@@ -344,13 +409,35 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
+	private sealed class TestWebApplicationFactory(string identityConnectionString, ConcurrentBag<string> capturedLogEntries)
+		: WebApplicationFactory<Program>
 	{
 		protected override void ConfigureWebHost(IWebHostBuilder builder)
 		{
 			_ = builder.UseEnvironment("Development");
 			_ = builder.UseSetting("Database:Provider", "Sqlite");
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
+			_ = builder.ConfigureLogging(logging => logging.AddProvider(new CapturingLoggerProvider(capturedLogEntries)));
+		}
+	}
+
+	private sealed class CapturingLoggerProvider(ConcurrentBag<string> capturedLogEntries) : ILoggerProvider
+	{
+		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
+
+		public void Dispose()
+		{
+		}
+
+		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
+		{
+			public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+			public bool IsEnabled(LogLevel logLevel) => true;
+
+			public void Log<TState>(
+				LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+				capturedLogEntries.Add(formatter(state, exception));
 		}
 	}
 }

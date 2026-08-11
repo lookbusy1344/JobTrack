@@ -218,18 +218,20 @@ created by later decomposition — not only from the anchor node's current direc
 `job_request_note` (added by ADR 0034) is an append-only notes/comments thread rooted at the request's
 anchor `job_node.id`, written by either staff or the requester through one authorization-branching
 command (`AddNoteAsync`). A requester-authored note is always requester-visible; a staff-authored
-note's visibility is caller-supplied. No update/delete path exists, mirroring `audit_event`'s
-immutability.
+note's visibility is caller-supplied. No update path exists, mirroring `audit_event`'s immutability,
+and a note cannot be deleted on its own — but ADR 0068 qualifies that at the request's own lifetime:
+the foreign key is `ON DELETE CASCADE` and the reject-delete trigger fires only while the parent
+`job_request` row still exists, so deleting the request (or the job node it anchors, by either
+deletion path) takes the whole thread with it.
 
 | Column | Type | Notes |
 |---|---|---|
 | `job_request_note.id` | `bigint identity` | |
-| `job_request_note.job_node_id` | `bigint` | FK `job_node`. The request's anchor node — notes stay attached there across decomposition. |
+| `job_request_note.job_node_id` | `bigint` | FK `job_request`, `ON DELETE CASCADE` (ADR 0068). The request's anchor node — notes stay attached there across decomposition. |
 | `job_request_note.author_user_id` | `bigint` | FK `app_user`. Either the requester or a staff actor. |
 | `job_request_note.content` | `text` | Non-blank. |
 | `job_request_note.is_visible_to_requester` | `boolean` | `true` for every requester-authored note; caller-supplied for staff-authored notes. |
 | `job_request_note.created_at` | `timestamptz` | |
-| `job_request_note.row_version` | `bigint` | Optimistic concurrency token. |
 
 ## Rates and cost precedence
 

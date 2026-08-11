@@ -83,6 +83,12 @@ public sealed class WorkRowActionsModel
 	/// </summary>
 	public string? ReturnUrl { get; init; }
 
+	/// <summary>
+	///     The Razor Pages handler the one-click "Complete" form posts to — <c>Complete</c> on Browse,
+	///     omitted (no button rendered) on the awaiting-progress dashboard, which has no such handler.
+	/// </summary>
+	public string? CompleteHandler { get; init; }
+
 	private ActiveSessionPresentation Presentation => ActiveSessionPresentation.Derive(ActiveSessions, ViewerId);
 
 	/// <summary>
@@ -98,6 +104,17 @@ public sealed class WorkRowActionsModel
 
 	/// <summary>Whether the leaf is paused — started, but nobody clocked on right now (<see cref="LeafActivity.IsPaused" />).</summary>
 	public bool IsPaused => LeafActivity.IsPaused(Achievement, ActiveSessions.Count);
+
+	/// <summary>
+	///     Whether the one-click "Complete" button renders for this row: the hosting page supports it
+	///     (<see cref="CompleteHandler" />), the leaf is currently <see cref="Achievement.InProgress" />
+	///     — the only state <see cref="Application.IWorkCommands.CompleteLeafAsync" /> accepts
+	///     (<c>Waiting -&gt; Success</c> stays prohibited, ADR 0001) — it is not archived, and
+	///     <see cref="CanManage" /> gives the same node-control/JobManager/Administrator authority
+	///     <see cref="Domain.Authorization.AchievementAccessPolicy.CanSetAchievement" /> requires for this
+	///     non-reopening transition.
+	/// </summary>
+	public bool CanComplete => CompleteHandler is not null && Achievement == Abstractions.Achievement.InProgress && !IsArchived && CanManage;
 
 	/// <summary>Hidden fields for the viewer's own one-click start.</summary>
 	public IReadOnlyDictionary<string, string?> StartFields =>

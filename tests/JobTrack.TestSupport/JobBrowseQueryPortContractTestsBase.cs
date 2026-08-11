@@ -527,8 +527,8 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 			Reason = "Work has started",
 			Version = plumbingWork.Version,
 		});
-		var interceptor = new BlockingReaderCommandInterceptor(sql => sql.Contains("node_succeeded", StringComparison.Ordinal)
-																	  || sql.Contains("CASE WHEN EXISTS", StringComparison.Ordinal));
+		var interceptor = new BlockingReaderCommandInterceptor(sql =>
+			sql.Contains("SubtreeRootId", StringComparison.Ordinal));
 		var browsePort = CreateBrowsePortWithInterceptor(database.ConnectionString, interceptor);
 
 		var fetchTask = browsePort.GetSubtreeAsync(
@@ -562,7 +562,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 
 		interceptor.Transactions.Should().NotContainNulls();
 		interceptor.Transactions.Distinct().Should().ContainSingle(
-			"the bounded rows and scalar rollup must execute inside the same provider transaction");
+			"the bounded rows and request-local achievement cache must use the same provider transaction");
 		result.Rows.Single(row => row.Id == tree.PlumbingLeafId).Achievement.Should().Be(Achievement.InProgress);
 		result.RootAchievement.Should().Be(BranchAchievement.Unfinished);
 	}
@@ -812,6 +812,23 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		rows.Single(r => r.Id == tree.CabinetsLeafId).Achievement.Should().Be(Achievement.Waiting);
 		rows.Single(r => r.Id == tree.OldWiringLeafId).Achievement.Should().BeNull();
 		rows.Single(r => r.Id == branchId).Achievement.Should().BeNull();
+	}
+
+	[Fact]
+	public async Task GetSubtreeAsync_reports_each_branchs_distinct_recursive_achievement()
+	{
+		var (rootId, branchId, tree) = await SeedTreeAsync();
+		var browsePort = CreateBrowsePort(database.ConnectionString);
+		await SucceedLeafAsync(tree.CabinetsLeafId, tree.JobManagerId);
+		await SucceedLeafAsync(tree.PlumbingLeafId, tree.JobManagerId);
+		await SucceedLeafAsync(tree.OldWiringLeafId, tree.JobManagerId);
+
+		var result = await browsePort.GetSubtreeAsync(
+			rootId, JobSubtreeLimits.HardMaxDepth, OwnershipFilter.All, JobArchiveFilter.All);
+
+		result.Rows.Single(row => row.Id == rootId).BranchAchievement.Should().Be(BranchAchievement.Success);
+		result.Rows.Single(row => row.Id == branchId).BranchAchievement.Should().Be(BranchAchievement.Success);
+		result.Rows.Where(row => row.Kind is NodeKind.Leaf).Should().OnlyContain(row => row.BranchAchievement == null);
 	}
 
 	/// <summary>

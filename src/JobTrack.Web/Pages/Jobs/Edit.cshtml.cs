@@ -22,7 +22,8 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 public sealed class EditModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	ILogger<EditModel> logger) : PageModel
 {
 	private Dictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById = [];
 
@@ -129,7 +130,8 @@ public sealed class EditModel(
 			ErrorMessage = "That job node no longer exists.";
 			return Page();
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(EditModel), ex);
 			ErrorMessage = "Someone else changed this node since the form was loaded. " +
 						   "The latest values are shown below — try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);

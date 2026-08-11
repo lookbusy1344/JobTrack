@@ -588,14 +588,25 @@ internal static partial class JobTrackApi
 		catch (EntityNotFoundException) {
 			return Problem(StatusCodes.Status404NotFound, "Not found", "The requested resource does not exist.", NotFoundProblemType);
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			// The response deliberately says no more than "reload and retry" -- but a repeated or
+			// unexpected conflict can indicate a stale-version bug rather than routine concurrent
+			// editing, and the underlying message (which port, which row) is otherwise lost.
+			LogConcurrencyConflict(
+				httpContext.RequestServices.GetRequiredService<ILogger<ApiTelemetryFilter>>(), correlationId, ex);
 			return Problem(
 				StatusCodes.Status409Conflict,
 				"Concurrency conflict",
 				"The resource has changed since it was last read. Reload and retry.",
 				ConcurrencyProblemType);
 		}
-		catch (InvariantViolationException) {
+		catch (InvariantViolationException ex) {
+			// The response deliberately says no more than "a constraint refused this" -- but the
+			// operator needs the constraint id and, for the catch-all categories, the provider's own
+			// error underneath it, or a refused write is indistinguishable from any other 409 in the
+			// log stream (ADR 0068).
+			LogInvariantViolation(
+				httpContext.RequestServices.GetRequiredService<ILogger<ApiTelemetryFilter>>(), correlationId, ex.ConstraintId, ex);
 			return Problem(
 				StatusCodes.Status409Conflict,
 				"Invariant violation",
@@ -609,7 +620,11 @@ internal static partial class JobTrackApi
 				"This action is blocked until its prerequisites are satisfied.",
 				BlockedProblemType);
 		}
-		catch (MissingRateException) {
+		catch (MissingRateException ex) {
+			// The response deliberately names no node or session -- but a missing rate is a rate-table
+			// configuration gap, not caller error, and the underlying message (which node, which
+			// instant) is otherwise lost.
+			LogMissingRate(httpContext.RequestServices.GetRequiredService<ILogger<ApiTelemetryFilter>>(), correlationId, ex);
 			return Problem(
 				StatusCodes.Status422UnprocessableEntity,
 				"No rate resolves",
@@ -653,6 +668,21 @@ internal static partial class JobTrackApi
 		Level = LogLevel.Error,
 		Message = "stored_time_zone_rot correlation_id={CorrelationId} detail={Detail}")]
 	private static partial void LogStoredTimeZoneRot(ILogger logger, Guid correlationId, string detail);
+
+	[LoggerMessage(
+		Level = LogLevel.Warning,
+		Message = "api_invariant_violation correlation_id={CorrelationId} constraint={ConstraintId}")]
+	private static partial void LogInvariantViolation(ILogger logger, Guid correlationId, string constraintId, Exception exception);
+
+	[LoggerMessage(
+		Level = LogLevel.Warning,
+		Message = "api_concurrency_conflict correlation_id={CorrelationId}")]
+	private static partial void LogConcurrencyConflict(ILogger logger, Guid correlationId, Exception exception);
+
+	[LoggerMessage(
+		Level = LogLevel.Warning,
+		Message = "api_missing_rate correlation_id={CorrelationId}")]
+	private static partial void LogMissingRate(ILogger logger, Guid correlationId, Exception exception);
 
 	private static ProblemHttpResult Problem(int statusCode, string title, string detail, string type) =>
 		TypedResults.Problem(statusCode: statusCode, title: title, detail: detail, type: type);

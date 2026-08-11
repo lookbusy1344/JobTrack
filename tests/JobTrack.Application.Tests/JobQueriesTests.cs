@@ -1173,7 +1173,7 @@ public sealed class JobQueriesTests
 	public async Task GetJobSubtreeAsync_returns_the_root_achievement_from_the_subtree_snapshot()
 	{
 		var owner = new AppUserId(10);
-		var port = CreateSeededTree(owner, new(11), out var rootId, out _, out var leafId);
+		var port = CreateSeededTree(owner, new(11), out var rootId, out var branchId, out var leafId);
 		await SucceedLeafAsync(port, owner, leafId);
 		await SucceedLeafAsync(port, owner, new(4));
 		var costQueries = new FakeCostQueries();
@@ -1184,6 +1184,8 @@ public sealed class JobQueriesTests
 			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
 
 		result.RootAchievement.Should().Be(BranchAchievement.Success);
+		result.Nodes.Single(node => node.Id == branchId).BranchAchievement.Should().Be(BranchAchievement.Success);
+		result.Nodes.Single(node => node.Id == leafId).BranchAchievement.Should().BeNull();
 	}
 
 	[Fact]

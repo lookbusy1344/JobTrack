@@ -1,3 +1,5 @@
 #nullable enable
+JobTrack.Application.JobSubtreeNodeResult.BranchAchievement.get -> JobTrack.Abstractions.BranchAchievement?
+JobTrack.Application.JobSubtreeNodeResult.BranchAchievement.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.get -> JobTrack.Abstractions.AppUserId?
 JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.init -> void

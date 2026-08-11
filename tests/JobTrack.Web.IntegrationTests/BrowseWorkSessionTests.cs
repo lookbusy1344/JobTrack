@@ -93,6 +93,53 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task A_worker_can_complete_a_leaf_with_one_click_from_browse()
+	{
+		var workerId = await SeedEmployeeAsync("browse.completer", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Wire the panel");
+		var authCookie = await SignInAsync("browse.completer");
+
+		var (startCookie, startToken) = await GetBrowseFormAsync(authCookie);
+		var startResponse = await PostStartAsync(authCookie, startCookie, startToken, leaf.Id, null);
+		_ = await FollowRedirectAsync(startResponse, authCookie);
+
+		var (cookie, token) = await GetFormAsync(authCookie, $"/Jobs/Browse?nodeId={leaf.Id.Value.ToString(CultureInfo.InvariantCulture)}");
+		var body = await (await GetLeafDetailAsync(authCookie, leaf.Id)).Content.ReadAsStringAsync();
+		body.Should().Contain("Complete this job? Every open session on it will be closed.");
+
+		var response = await PostCompleteAsync(authCookie, cookie, token, leaf.Id);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloadedBody = await reloaded.Content.ReadAsStringAsync();
+		reloadedBody.Should().Contain("Job marked complete. Its one open session was closed.");
+
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.Id,
+		});
+		leafWork.Achievement.Should().Be(Achievement.Success);
+
+		var activeSessions = await seedClient.Query.GetActiveSessionsAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			LeafWorkIds = [leaf.Id],
+		});
+		activeSessions.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task The_complete_button_does_not_render_for_a_leaf_that_has_not_started()
+	{
+		var workerId = await SeedEmployeeAsync("browse.notstarted", EmployeeRole.Worker);
+		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Order materials");
+		var authCookie = await SignInAsync("browse.notstarted");
+
+		var body = await (await GetLeafDetailAsync(authCookie, leaf.Id)).Content.ReadAsStringAsync();
+
+		body.Should().NotContain("Complete this job? Every open session on it will be closed.");
+	}
+
+	[Fact]
 	/// <summary>
 	/// The active-session pill has its own column rather than sharing the actions cell, where it
 	/// pushed the start/finish buttons out of vertical alignment with every other row. Priority (and
@@ -971,6 +1018,19 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		}
 
 		request.Content = new FormUrlEncodedContent(fields);
+
+		return await client.SendAsync(request);
+	}
+
+	private async Task<HttpResponseMessage> PostCompleteAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=Complete");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["leafNodeId"] = leafNodeId.Value.ToString(CultureInfo.InvariantCulture),
+			["__RequestVerificationToken"] = token,
+		});
 
 		return await client.SendAsync(request);
 	}

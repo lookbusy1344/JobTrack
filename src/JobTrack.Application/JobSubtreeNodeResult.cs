@@ -63,6 +63,13 @@ public sealed record JobSubtreeNodeResult
 	public Achievement? Achievement { get; init; }
 
 	/// <summary>
+	///     This branch's recursively derived achievement, or <see langword="null" /> for a leaf. Kept
+	///     separate from <see cref="Achievement" /> because branches and leaves have distinct state
+	///     vocabularies.
+	/// </summary>
+	public BranchAchievement? BranchAchievement { get; init; }
+
+	/// <summary>
 	///     Whether this node has children beyond what this fetch expanded -- either past the breadth cap
 	///     (ADR 0039 decision 2) or the depth cap. A drill-in (re-root Browse here) shows the rest.
 	/// </summary>

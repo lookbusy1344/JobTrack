@@ -53,6 +53,9 @@ internal sealed record JobNodeSubtreeRow
 	/// </summary>
 	public Achievement? Achievement { get; init; }
 
+	/// <summary>The recursively derived achievement for a branch/root, or <see langword="null" /> for a leaf.</summary>
+	public BranchAchievement? BranchAchievement { get; init; }
+
 	/// <summary>
 	///     Whether this node has children beyond what the fetch expanded -- either because it fell past
 	///     the breadth cap (ADR 0039 decision 2) or because the depth cap stopped recursion at this node.

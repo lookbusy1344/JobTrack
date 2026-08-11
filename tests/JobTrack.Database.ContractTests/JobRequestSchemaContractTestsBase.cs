@@ -309,7 +309,7 @@ public abstract class JobRequestSchemaContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task Deleting_a_job_request_note_is_rejected()
+	public async Task Deleting_a_job_request_note_while_its_request_exists_is_rejected()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var requesterId = await SeedAppUserAsync(connection, "Rita Requester");
@@ -323,6 +323,31 @@ public abstract class JobRequestSchemaContractTestsBase : IAsyncLifetime
 		var act = async () => await DeleteJobRequestNoteAsync(connection, noteId);
 
 		await act.Should().ThrowAsync<DbException>();
+	}
+
+	/// <summary>
+	///     ADR 0068: append-only stops at the request's own lifetime. ADR 0061's recursive node deletion
+	///     has to be able to destroy a request thread wholesale, so the note goes with its request via
+	///     <c>ON DELETE CASCADE</c> -- the case that made every subtree containing a commented request
+	///     permanently undeletable.
+	/// </summary>
+	[Fact]
+	public async Task Deleting_a_job_request_cascades_its_notes_away()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var requesterId = await SeedAppUserAsync(connection, "Rita Requester");
+		var rootId = await InsertNodeAsync(connection, requesterId, null);
+		var holdingNodeId = await InsertNodeAsync(connection, requesterId, rootId);
+		var holdingAreaId = await InsertHoldingAreaAsync(connection, holdingNodeId, "IT Intake");
+		var requestNodeId = await InsertNodeAsync(connection, requesterId, holdingNodeId);
+		await InsertJobRequestAsync(connection, requestNodeId, requesterId, holdingAreaId);
+		_ = await InsertJobRequestNoteAsync(connection, requestNodeId, requesterId, "Any update?", true);
+		_ = await InsertJobRequestNoteAsync(connection, requestNodeId, requesterId, "Still waiting.", true);
+
+		await DeleteJobRequestAsync(connection, requestNodeId);
+
+		(await CountRowsAsync(connection, "job_request")).Should().Be(0);
+		(await CountRowsAsync(connection, "job_request_note")).Should().Be(0);
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);
@@ -534,6 +559,15 @@ public abstract class JobRequestSchemaContractTestsBase : IAsyncLifetime
 		await using var command = connection.CreateCommand();
 		command.CommandText = "DELETE FROM job_request_note WHERE id = @id;";
 		AddParameter(command, "@id", noteId);
+
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private static async Task DeleteJobRequestAsync(DbConnection connection, long jobNodeId)
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = "DELETE FROM job_request WHERE job_node_id = @jobNodeId;";
+		AddParameter(command, "@jobNodeId", jobNodeId);
 
 		_ = await command.ExecuteNonQueryAsync();
 	}

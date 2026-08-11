@@ -283,6 +283,11 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			}
 		}
 
+		foreach (var (key, value) in await JobNodeDependentCascade
+					 .RemoveDependentsOfAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false)) {
+			before[key] = value;
+		}
+
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, operation, "job_node", node.Id.Value,
 			request.Context.CorrelationId, reason, before, null);

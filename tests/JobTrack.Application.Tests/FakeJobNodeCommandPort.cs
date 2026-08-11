@@ -233,13 +233,22 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 				ArchivedAt = n.ArchivedAt,
 				HasChildren = n.HasChildren,
 				HasLeafWork = n.HasLeafWork,
+				Achievement = _leafWork.TryGetValue(n.Id, out var leafWork) ? leafWork.Achievement : null,
 				HasUnexpandedChildren = n.HasChildren && !expandedById[n.Id],
 				MatchesFilter = matchesById[n.Id],
-			});
+			})
+			.ToList();
 
-		var rootAchievement = GetExisting(rootId).Kind == NodeKind.Leaf
-			? (BranchAchievement?)null
-			: await GetSubtreeAchievementAsync(rootId, cancellationToken);
+		for (var index = 0; index < result.Count; ++index) {
+			var row = result[index];
+			if (row.Kind is not NodeKind.Leaf) {
+				result[index] = row with {
+					BranchAchievement = await GetSubtreeAchievementAsync(row.Id, cancellationToken),
+				};
+			}
+		}
+
+		var rootAchievement = result.Single(row => row.Id == rootId).BranchAchievement;
 		return new() { Rows = [.. result], RootAchievement = rootAchievement };
 	}
 
@@ -247,17 +256,22 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	{
 		_ = GetExisting(rootId);
 
+		var achieved = AchievementCalculator.IsAchieved(rootId, BuildHierarchyNodes());
+		return Task.FromResult(achieved ? BranchAchievement.Success : BranchAchievement.Unfinished);
+	}
+
+	private Dictionary<JobNodeId, HierarchyNode> BuildHierarchyNodes()
+	{
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
 		foreach (var node in _nodes.Values) {
-			var childIds = _nodes.Values.Where(n => n.ParentId == node.Id).Select(n => n.Id).ToArray();
+			var childIds = _nodes.Values.Where(candidate => candidate.ParentId == node.Id).Select(candidate => candidate.Id);
 			var leafAchievement = node.Kind == NodeKind.Leaf && _leafWork.TryGetValue(node.Id, out var leafWork)
 				? leafWork.Achievement
 				: (Achievement?)null;
-			nodesById[node.Id] = new(node.Id, node.ParentId, [.. childIds], leafAchievement);
+			nodesById[node.Id] = new(node.Id, node.ParentId, EquatableArray.CopyOf(childIds), leafAchievement);
 		}
 
-		var achieved = AchievementCalculator.IsAchieved(rootId, nodesById);
-		return Task.FromResult(achieved ? BranchAchievement.Success : BranchAchievement.Unfinished);
+		return nodesById;
 	}
 
 	/// <inheritdoc />

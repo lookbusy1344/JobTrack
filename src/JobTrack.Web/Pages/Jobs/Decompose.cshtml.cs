@@ -23,7 +23,8 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 public sealed class DecomposeModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	ILogger<DecomposeModel> logger) : PageModel
 {
 	private const int MaxNewChildSlots = 5;
 
@@ -155,7 +156,8 @@ public sealed class DecomposeModel(
 			await LoadOwnerOptionsAsync(actor.Value, cancellationToken);
 			return Page();
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(DecomposeModel), ex);
 			ErrorMessage = "Someone else changed this node since the form was loaded. " +
 						   "The latest version is shown below — try again.";
 			await LoadCurrentNodeAsync(actor.Value, cancellationToken);

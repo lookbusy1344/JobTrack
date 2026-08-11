@@ -19,7 +19,8 @@ using NodaTime.TimeZones;
 ///     optimistic concurrency rather than a posted hidden field.
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.ScheduleAdministration)]
-public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager) : PageModel
+public sealed class CorrectVersionModel(
+	IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager, ILogger<CorrectVersionModel> logger) : PageModel
 {
 	private const int MaxWeeklyIntervalSlots = 10;
 
@@ -71,6 +72,8 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 			return Page();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			var zone = ScheduleZoneId.Resolve(Input.IanaTimeZone);
 			var weeklyIntervals = Input.WeeklyIntervals
@@ -81,7 +84,7 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 				.ToArray();
 
 			_ = await jobTrackClient.Schedules.CorrectScheduleVersionAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				VersionId = new(VersionId),
 				UserId = new AppUserId(UserId),
 				Version = Version.Version,
@@ -99,7 +102,8 @@ public sealed class CorrectVersionModel(IJobTrackClient jobTrackClient, UserMana
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That schedule version no longer exists.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(CorrectVersionModel), ex);
 			ErrorMessage = "Someone else changed this schedule version since the form was loaded. Review and try again.";
 			await LoadVersionAsync(actor.Value, cancellationToken);
 		}

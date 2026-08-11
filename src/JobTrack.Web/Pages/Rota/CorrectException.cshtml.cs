@@ -18,7 +18,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 public sealed class CorrectExceptionModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	ILogger<CorrectExceptionModel> logger)
 	: PageModel
 {
 	[BindProperty(SupportsGet = true)] public long UserId { get; init; }
@@ -70,6 +71,8 @@ public sealed class CorrectExceptionModel(
 			return Page();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			var entry = new ScheduleExceptionEntry(
 				Input.Effect,
@@ -77,7 +80,7 @@ public sealed class CorrectExceptionModel(
 				Input.RateOverride.HasValue ? new HourlyRate(Input.RateOverride.Value) : null);
 
 			_ = await jobTrackClient.Schedules.CorrectScheduleExceptionAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				ExceptionId = new(ExceptionId),
 				UserId = new AppUserId(UserId),
 				Version = Exception.Version,
@@ -93,7 +96,8 @@ public sealed class CorrectExceptionModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That schedule exception no longer exists.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(CorrectExceptionModel), ex);
 			ErrorMessage = "Someone else changed this schedule exception since the form was loaded. Review and try again.";
 			await LoadExceptionAsync(actor.Value, cancellationToken);
 		}

@@ -21,7 +21,8 @@ using NodaTime;
 public sealed class CorrectSessionModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	ILogger<CorrectSessionModel> logger)
 	: PageModel
 {
 	[BindProperty(SupportsGet = true)] public long LeafNodeId { get; init; }
@@ -96,8 +97,9 @@ public sealed class CorrectSessionModel(
 			return Page();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
 		var request = new CorrectSessionRequest {
-			Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+			Context = context,
 			SessionId = new(SessionId),
 			StartedAt = startedAtInstant,
 			FinishedAt = finishedAtInstant,
@@ -117,7 +119,8 @@ public sealed class CorrectSessionModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That session no longer exists.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(CorrectSessionModel), ex);
 			ErrorMessage = "Someone else changed this session since the form was loaded. The latest values are shown below — review and try again.";
 			await LoadSessionAsync(actor.Value, cancellationToken);
 		}

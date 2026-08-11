@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 /// <summary>
 ///     Everything <see cref="JobBrowseQueryPort" /> cannot express in provider-agnostic LINQ/EF, and
-///     nothing else. Each provider implements these two members; the rest of the port is shared.
+///     nothing else. Each provider implements these members; the rest of the port is shared.
 /// </summary>
 /// <remarks>
 ///     Keeping the seam an explicit interface rather than a set of overrides is deliberate: this file
@@ -14,6 +14,13 @@ using Microsoft.EntityFrameworkCore;
 /// </remarks>
 internal interface IJobBrowseProviderOperations : IProviderReadOperations
 {
+	/// <summary>
+	///     Derives each requested branch's recursive success state in one round trip. The caller keeps
+	///     the returned map only for the current subtree request.
+	/// </summary>
+	Task<IReadOnlyDictionary<long, bool>> GetSubtreeSuccessesAsync(
+		DbContext context, IReadOnlyCollection<long> rootIds, CancellationToken cancellationToken);
+
 	/// <summary>
 	///     Answers whether every leaf beneath <paramref name="rootId" /> reached
 	///     <see cref="Achievement.Success" />. PostgreSQL resolves this with the source-controlled

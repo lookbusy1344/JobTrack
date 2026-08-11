@@ -501,6 +501,7 @@ internal sealed class JobQueries : IJobQueries
 					HasChildren = row.HasChildren,
 					HasLeafWork = row.HasLeafWork,
 					Achievement = row.Achievement,
+					BranchAchievement = row.BranchAchievement,
 					IsReady = ReadinessCalculator
 						.IsReady(row.Id, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
 					HasUnexpandedChildren = row.HasUnexpandedChildren,

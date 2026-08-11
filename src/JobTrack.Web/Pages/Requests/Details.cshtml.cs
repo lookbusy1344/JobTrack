@@ -23,7 +23,8 @@ using NodaTime;
 public sealed class DetailsModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	ILogger<DetailsModel> logger)
 	: PageModel
 {
 	[BindProperty] public AddNoteInput NoteInput { get; set; } = new();
@@ -100,9 +101,11 @@ public sealed class DetailsModel(
 			return Challenge();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			_ = await jobTrackClient.Requests.AcknowledgeAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, NodeId = new(id), Version = version },
+				new() { Context = context, NodeId = new(id), Version = version },
 				cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
@@ -111,7 +114,8 @@ public sealed class DetailsModel(
 		catch (EntityNotFoundException) {
 			return NotFound();
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(DetailsModel), ex);
 			ErrorMessage = "This request was changed by someone else. Reload and try again.";
 		}
 

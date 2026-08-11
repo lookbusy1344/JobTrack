@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using Persistence.Sqlite;
 using TestSupport;
 using Program = Program;
@@ -31,6 +33,7 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	private const string AdministratorPassword = "Bootstrap-Horse-Battery-77!";
 
 	private readonly SqliteDatabaseFixture database = new();
+	private readonly ConcurrentBag<string> capturedLogEntries = [];
 	private AppUserId administratorId;
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
@@ -53,7 +56,7 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 		rootId = bootstrapResult.RootJobNodeId;
 		administratorId = bootstrapResult.AdministratorId;
 
-		factory = new(database.ConnectionString);
+		factory = new(database.ConnectionString, capturedLogEntries);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
 	}
 
@@ -181,6 +184,36 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
 		var archivedBranch = await seedClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = branch.Id });
 		archivedBranch.Node.ArchivedAt.Should().NotBeNull();
+	}
+
+	[Fact]
+	public async Task A_stale_version_on_delete_is_reported_as_a_conflict_and_logged()
+	{
+		var adminId = await SeedEmployeeAsync("subtree.conflict-admin", EmployeeRole.Administrator);
+		var branch = await AddChildAsync(rootId, adminId, "Contested branch");
+		_ = await AddChildAsync(branch.Id, adminId, "Contested child");
+		var authCookie = await SignInAsync("subtree.conflict-admin");
+
+		var (antiforgeryCookie, token) = await GetFormAsync(authCookie, branch.Id);
+
+		// A concurrent edit lands after the form was loaded, advancing the row's version.
+		_ = await seedClient.Jobs.EditAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			NodeId = branch.Id,
+			Description = "Concurrently edited",
+			OwnerUserId = adminId,
+			Priority = Priority.Medium,
+			Version = branch.Version,
+		});
+
+		var response = await PostAsync(authCookie, antiforgeryCookie, token, "Delete", branch.Id, branch.Version, "Attempted anyway.");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Someone else changed this subtree");
+		capturedLogEntries.Should().Contain(entry =>
+			entry.Contains("page_concurrency_conflict", StringComparison.Ordinal)
+			&& entry.Contains("page=DeleteSubtreeModel", StringComparison.Ordinal));
 	}
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
@@ -341,13 +374,40 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
+	private sealed class TestWebApplicationFactory(string identityConnectionString, ConcurrentBag<string> capturedLogEntries)
+		: WebApplicationFactory<Program>
 	{
 		protected override void ConfigureWebHost(IWebHostBuilder builder)
 		{
 			_ = builder.UseEnvironment("Development");
 			_ = builder.UseSetting("Database:Provider", "Sqlite");
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
+			_ = builder.ConfigureLogging(logging => logging.AddProvider(new CapturingLoggerProvider(capturedLogEntries)));
+		}
+	}
+
+	private sealed class CapturingLoggerProvider(ConcurrentBag<string> capturedLogEntries) : ILoggerProvider
+	{
+		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
+
+		public void Dispose()
+		{
+		}
+
+		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
+		{
+			public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+			public bool IsEnabled(LogLevel logLevel) => true;
+
+			public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+				Func<TState, Exception?, string> formatter)
+			{
+				capturedLogEntries.Add(formatter(state, exception));
+				if (exception is not null) {
+					capturedLogEntries.Add(exception.ToString());
+				}
+			}
 		}
 	}
 }

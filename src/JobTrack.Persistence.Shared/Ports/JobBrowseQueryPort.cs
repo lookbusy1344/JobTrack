@@ -121,11 +121,29 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		var bounded = await JobNodeHierarchyQueries.GetBoundedSubtreeAsync(
 			context, rootId.Value, maxDepth, JobSubtreeLimits.BreadthCap, cancellationToken).ConfigureAwait(false);
 		var rows = await LoadSubtreeRowsAsync(context, rootId, bounded, ownership, archiveFilter, cancellationToken).ConfigureAwait(false);
-		var rootRow = rows.Single(row => row.Id == rootId);
-		var rootAchievement = rootRow.Kind == NodeKind.Leaf
-			? (BranchAchievement?)null
-			: await LoadSubtreeAchievementAsync(context, rootId, cancellationToken).ConfigureAwait(false);
-		return new() { Rows = EquatableArray.CopyOf(rows), RootAchievement = rootAchievement };
+		// Leaf achievements already ride on the bounded rows. Derive all displayed branches in one
+		// provider command and retain the compact map only for this request: rendering never recalculates
+		// a branch, no cache can outlive a transition, and an unbounded hierarchy never enters memory.
+		var branchIds = rows
+			.Where(row => row.Kind is not NodeKind.Leaf)
+			.Select(row => row.Id.Value)
+			.ToArray();
+		var succeededByBranchId = await provider
+			.GetSubtreeSuccessesAsync(context, branchIds, cancellationToken).ConfigureAwait(false);
+		BranchAchievement? BranchAchievementFor(JobNodeSubtreeRow row)
+		{
+			if (row.Kind is NodeKind.Leaf) {
+				return null;
+			}
+
+			return succeededByBranchId[row.Id.Value] ? BranchAchievement.Success : BranchAchievement.Unfinished;
+		}
+
+		var enrichedRows = rows.Select(row => row with {
+			BranchAchievement = BranchAchievementFor(row),
+		}).ToArray();
+		var rootAchievement = enrichedRows.Single(row => row.Id == rootId).BranchAchievement;
+		return new() { Rows = EquatableArray.CopyOf(enrichedRows), RootAchievement = rootAchievement };
 	}
 
 	public async Task<BranchAchievement> GetSubtreeAchievementAsync(JobNodeId rootId, CancellationToken cancellationToken = default)

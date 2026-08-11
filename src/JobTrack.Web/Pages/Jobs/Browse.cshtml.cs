@@ -33,7 +33,8 @@ public sealed class BrowseModel(
 	UserManager<JobTrackIdentityUser> userManager,
 	IViewerTimeZoneResolver viewerTimeZoneResolver,
 	IClock clock,
-	IDataProtectionProvider dataProtectionProvider)
+	IDataProtectionProvider dataProtectionProvider,
+	ILogger<BrowseModel> logger)
 	: PageModel
 {
 	// Browse-sessions filter memory: the owner selector's last "person or All owners" choice is
@@ -227,6 +228,18 @@ public sealed class BrowseModel(
 			: CurrentNodeAchievement is not (Achievement.Success or Achievement.Cancelled or Achievement.Unsuccessful);
 
 	/// <summary>
+	///     Whether one child-table node is still open. Branches use their recursive two-state roll-up;
+	///     leaves use the terminal states from the separate leaf achievement vocabulary.
+	/// </summary>
+	public static bool SubtreeNodeIsOpen(JobSubtreeNodeResult node)
+	{
+		ArgumentNullException.ThrowIfNull(node);
+		return node.BranchAchievement is BranchAchievement branchAchievement
+			? branchAchievement is BranchAchievement.Unfinished
+			: node.Achievement is not (Achievement.Success or Achievement.Cancelled or Achievement.Unsuccessful);
+	}
+
+	/// <summary>
 	///     The current leaf's Sessions panel (shared with <see cref="WorkModel" /> via
 	///     <c>_LeafWorkSessions</c>) — <see langword="null" /> for a branch/root, where the subtree table
 	///     renders instead (a node never has both children and leaf work, so the two are mutually
@@ -325,6 +338,7 @@ public sealed class BrowseModel(
 			StartForWorkerOptions = StartForWorkerOptions,
 			StartForLabelled = startForLabelled,
 			ReturnUrl = BrowseReturnUrl,
+			CompleteHandler = "Complete",
 		};
 
 	/// <summary>
@@ -453,6 +467,8 @@ public sealed class BrowseModel(
 			return Challenge();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
@@ -461,7 +477,7 @@ public sealed class BrowseModel(
 			}
 
 			_ = await jobTrackClient.Work.FinishSessionAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				SessionId = new(sessionId),
 				Version = version,
 				FinishedAt = finishedAtInstant,
@@ -474,11 +490,71 @@ public sealed class BrowseModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That session does not exist.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(BrowseModel), ex);
 			ErrorMessage = "Someone else changed this session since the page was loaded. The list below is refreshed.";
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+
+		return RedirectToPage(CurrentRouteValues());
+	}
+
+	/// <summary>
+	///     One-click "Complete": closes every currently active session on <paramref name="leafNodeId" />
+	///     and marks it <see cref="Achievement.Success" />, in the one atomic
+	///     <see cref="IWorkCommands.CompleteLeafAsync" /> composite <c>/Jobs/Work</c>'s own Complete
+	///     button uses. Unlike that page, this button offers no intervening review of which sessions will
+	///     close, so the active-session set and leaf version are read fresh here rather than replayed
+	///     from a page render the actor may have had open a while — the narrowest possible window for a
+	///     concurrent start/finish to race the click, reported as a conflict rather than silently
+	///     swept in or excluded.
+	/// </summary>
+	public async Task<IActionResult> OnPostCompleteAsync(long leafNodeId, CancellationToken cancellationToken)
+	{
+		var actor = await ResolveActorAsync();
+		if (actor is null) {
+			return Challenge();
+		}
+
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
+		try {
+			var jobNodeId = new JobNodeId(leafNodeId);
+
+			var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
+				new() { Context = context, JobNodeId = jobNodeId }, cancellationToken);
+			var activeSessions = await jobTrackClient.Query.GetActiveSessionsAsync(
+				new() { Context = context, LeafWorkIds = [jobNodeId] }, cancellationToken);
+
+			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
+				Context = context,
+				JobNodeId = jobNodeId,
+				Version = leafWork.Version,
+				ExpectedActiveSessions = [.. activeSessions.Select(session => new ExpectedActiveSession { Id = session.Id, Version = session.Version })],
+			}, cancellationToken);
+			SuccessMessage = result.FinishedSessions.Count switch {
+				0 => "Job marked complete.",
+				1 => "Job marked complete. Its one open session was closed.",
+				var count => $"Job marked complete. Its {count} open sessions were closed.",
+			};
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "This leaf has no work attached.";
+		}
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(BrowseModel), ex);
+			ErrorMessage = "Someone else changed this leaf, or one of its active sessions, since the page was loaded.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = "This job is blocked: a prerequisite it depends on is not complete, so it cannot be closed yet.";
 		}
 
 		return RedirectToPage(CurrentRouteValues());

@@ -347,6 +347,36 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	[Fact]
 	/// <summary>
+	///     A passed deadline remains an alarm only while that particular subtree row is open. Leaves
+	///     close on any terminal leaf achievement, while branches close on their distinct recursive
+	///     branch achievement once every leaf beneath them has succeeded.
+	/// </summary>
+	public async Task The_subtree_deadline_column_does_not_render_closed_leaf_or_branch_deadlines_red()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.subtree-closed-deadline");
+		var rootId = bootstrappedRootId!.Value;
+		var parentId = await AddChildAsync(rootId, workerId, "Deadline parent");
+		var closedLeafId = await AddChildWithDeadlineAsync(
+			parentId, workerId, "Closed leaf", Instant.FromUtc(2020, 1, 1, 12, 0));
+		var closedBranchId = await AddChildWithDeadlineAsync(
+			parentId, workerId, "Closed branch", Instant.FromUtc(2020, 1, 2, 12, 0));
+		var branchLeafId = await AddChildAsync(closedBranchId, workerId, "Closed branch leaf");
+		var openLeafId = await AddChildWithDeadlineAsync(
+			parentId, workerId, "Open leaf", Instant.FromUtc(2020, 1, 3, 12, 0));
+		await SetAchievementAsync(closedLeafId, adminId, Achievement.Cancelled);
+		await SetAchievementAsync(branchLeafId, adminId, Achievement.Success);
+		var authCookie = await SignInAsync("browse.subtree-closed-deadline");
+
+		var response = await GetAsync($"/Jobs/Browse?nodeId={parentId.Value}", authCookie);
+		var body = await response.Content.ReadAsStringAsync();
+
+		ExtractSubtreeRow(body, closedLeafId).Should().NotContain("jt-overdue");
+		ExtractSubtreeRow(body, closedBranchId).Should().NotContain("jt-overdue");
+		ExtractSubtreeRow(body, openLeafId).Should().Contain("jt-overdue");
+	}
+
+	[Fact]
+	/// <summary>
 	///     The record card's Deadline field turns red on a branch as well as a leaf: a branch whose
 	///     subtree has not all succeeded is still open, so its own missed deadline is still live.
 	/// </summary>
@@ -903,6 +933,25 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		BreadcrumbNavPattern().Match(body) is { Success: true } match
 			? match.Value
 			: throw new InvalidOperationException("No breadcrumb nav found in page body.");
+
+	private static string ExtractSubtreeRow(string body, JobNodeId nodeId)
+	{
+		const string RowStart = "<tr>";
+		const string RowEnd = "</tr>";
+		var nodeMarker = $"(ID {nodeId.Value.ToString(CultureInfo.InvariantCulture)})";
+		var markerIndex = body.IndexOf(nodeMarker, StringComparison.Ordinal);
+		if (markerIndex < 0) {
+			throw new InvalidOperationException($"No subtree row found for job node {nodeId.Value}.");
+		}
+
+		var rowStartIndex = body.LastIndexOf(RowStart, markerIndex, StringComparison.Ordinal);
+		var rowEndIndex = body.IndexOf(RowEnd, markerIndex, StringComparison.Ordinal);
+		if (rowStartIndex < 0 || rowEndIndex < 0) {
+			throw new InvalidOperationException($"Incomplete subtree row found for job node {nodeId.Value}.");
+		}
+
+		return body[rowStartIndex..(rowEndIndex + RowEnd.Length)];
+	}
 
 	private async Task<AppUserId> SeedWorkerEmployeeAsync(string userName)
 	{

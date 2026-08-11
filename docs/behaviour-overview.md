@@ -232,7 +232,12 @@ always states the scope before it is clicked.
 **One job** — `/Jobs/Delete`, offered on a job with no children. It never cascades: a job with
 children, a prerequisite edge, or the permanent root is refused (ADR 0036). A leaf whose work was
 never actually done deletes with its `LeafWork`; a leaf with real session history needs the
-Administrator role and a reason.
+Administrator role and a reason. What belongs to that one job goes with it (ADR 0068): its rate
+overrides, and — where the job arrived through client-request intake — the request and its whole note
+thread, recorded in the audit event since nothing else survives to describe them. It refuses the same
+one thing the branch deletion refuses: a request holding area anchored at the job, which is a
+department's intake configuration rather than the job's own data, and must be re-anchored or
+deactivated first.
 
 **A whole branch** — `/Jobs/DeleteSubtree`, offered only to an Administrator, and only on a job that
 has children (ADR 0061). It permanently destroys the job, every job beneath it, and their sessions,

@@ -17,7 +17,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 public sealed class CorrectNodeRateOverrideModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver) : PageModel
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	ILogger<CorrectNodeRateOverrideModel> logger) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long UserId { get; init; }
 
@@ -70,9 +71,11 @@ public sealed class CorrectNodeRateOverrideModel(
 			return Page();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			_ = await jobTrackClient.Rates.CorrectNodeRateOverrideAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				OverrideId = new(OverrideId),
 				UserId = new AppUserId(UserId),
 				Version = Override.Version,
@@ -88,7 +91,8 @@ public sealed class CorrectNodeRateOverrideModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That override or job node no longer exists.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(CorrectNodeRateOverrideModel), ex);
 			ErrorMessage = "Someone else changed this override since the form was loaded. Review and try again.";
 			await LoadOverrideAsync(actor.Value, cancellationToken);
 		}

@@ -45,4 +45,18 @@
 		</svg>
 		<span class="visually-hidden">Sessions</span>
 	</a>
+	@if (Model.CanComplete) {
+		<form method="post" asp-page-handler="@Model.CompleteHandler" class="inline-form">
+			@foreach (var field in Model.StartFields) {
+				<input type="hidden" name="@field.Key" value="@field.Value"/>
+			}
+			<button type="submit" class="jt-icon-button jt-icon-button--primary" title="Complete"
+			        data-jt-confirm="Complete this job? Every open session on it will be closed.">
+				<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-complete"></use>
+				</svg>
+				<span class="visually-hidden">Complete</span>
+			</button>
+		</form>
+	}
 </div>

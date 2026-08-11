@@ -29,7 +29,8 @@ public sealed class WorkModel(
 	UserManager<JobTrackIdentityUser> userManager,
 	IViewerTimeZoneResolver viewerTimeZoneResolver,
 	IClock clock,
-	IDataProtectionProvider dataProtectionProvider) : PageModel
+	IDataProtectionProvider dataProtectionProvider,
+	ILogger<WorkModel> logger) : PageModel
 {
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
 
@@ -315,6 +316,8 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
@@ -323,7 +326,7 @@ public sealed class WorkModel(
 			}
 
 			var result = await jobTrackClient.Work.FinishSessionAndUpdateWriteUpAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				SessionId = new(sessionId),
 				Version = version,
 				FinishedAt = finishedAtInstant,
@@ -341,7 +344,8 @@ public sealed class WorkModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That session or job node does not exist.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
 			ErrorMessage =
 				"Someone else changed this session or this job's details since the page was loaded. The latest state is shown below.";
 		}
@@ -383,6 +387,8 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(completionFinishedAt, zone, out var finishedAtInstant)) {
@@ -391,7 +397,7 @@ public sealed class WorkModel(
 			}
 
 			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				JobNodeId = new(LeafNodeId),
 				Version = leafWorkVersion,
 				ExpectedActiveSessions = confirmed,
@@ -413,7 +419,8 @@ public sealed class WorkModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "This leaf has no work attached.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
 			ErrorMessage =
 				"Someone else changed this leaf, one of its active sessions, or this job's details since the page was loaded. The latest state is shown below.";
 		}
@@ -457,6 +464,8 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(finishedAt, zone, out var finishedAtInstant)) {
@@ -465,7 +474,7 @@ public sealed class WorkModel(
 			}
 
 			var result = await jobTrackClient.Work.PauseLeafAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				JobNodeId = new(LeafNodeId),
 				ExpectedActiveSessions = confirmed,
 				FinishedAt = finishedAtInstant,
@@ -483,7 +492,8 @@ public sealed class WorkModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "This leaf has no work attached.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
 			ErrorMessage =
 				"Someone else changed one of this leaf's active sessions, or this job's details, since the page was loaded. The latest state is shown below.";
 		}
@@ -513,6 +523,8 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
@@ -521,7 +533,7 @@ public sealed class WorkModel(
 			}
 
 			_ = await jobTrackClient.Work.ReopenAndStartWorkAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				JobNodeId = new(LeafNodeId),
 				Version = leafWorkVersion,
 				Reason = reason,
@@ -536,7 +548,8 @@ public sealed class WorkModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "This leaf or worker does not exist.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
 			ErrorMessage = "Someone else changed this leaf since the page was loaded. The latest state is shown below.";
 		}
 		catch (InvariantViolationException ex) {
@@ -573,9 +586,11 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
 		try {
 			_ = await jobTrackClient.Work.SetAchievementAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = context,
 				JobNodeId = new(LeafNodeId),
 				NewAchievement = newAchievement,
 				Reason = reason,
@@ -591,7 +606,8 @@ public sealed class WorkModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "This leaf has no work attached.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
 			ErrorMessage =
 				"Someone else changed this leaf's achievement since the page was loaded. The latest state is shown below.";
 		}
@@ -686,7 +702,8 @@ public sealed class WorkModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
 		}
-		catch (ConcurrencyConflictException) {
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
 			ErrorMessage = "Someone else changed this job's details since you loaded this page. Reload and try again.";
 		}
 
