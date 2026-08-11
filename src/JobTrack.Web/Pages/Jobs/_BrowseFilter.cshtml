@@ -1,0 +1,38 @@
+@using JobTrack.Application
+@model BrowseModel
+
+@* Rendered on Browse's search-entry view (Model.ShowSearchEntry, reached via the toolbar's "Search"
+   link) and again above the results once a search runs (Model.IsSearch) -- search spans the whole
+   job tree (IJobQueries.SearchJobNodesAsync carries no subtree scoping), so this box is never shown
+   beside a browsed node's own record. *@
+<div class="jt-card jt-card--narrow">
+	<h3>Search jobs</h3>
+	<form method="get" asp-page="/Jobs/Browse">
+		<div class="form-group">
+			<label asp-for="SearchText"></label>
+			<input asp-for="SearchText" class="form-control"/>
+		</div>
+		<div class="form-group">
+			<label asp-for="OwnerUserId">Owner</label>
+			<select asp-for="OwnerUserId" class="form-select" asp-items="Model.OwnerFilterOptions"></select>
+		</div>
+		<div class="form-group">
+			<label asp-for="UnassignedOnly">
+				<input asp-for="UnassignedOnly"/>
+				Unassigned only (the pickup pool)
+			</label>
+		</div>
+		<div class="form-group">
+			<label asp-for="ArchiveFilter"></label>
+			<select asp-for="ArchiveFilter" class="form-select"
+			        asp-items="EnumDisplay.BuildOptions<JobArchiveFilter>()"></select>
+		</div>
+		<div class="d-flex gap-2">
+			<button type="submit" class="btn btn-primary">Search</button>
+			@* Search has no "current node" of its own (it spans the whole tree), so this is the one way
+			   back to browsing -- the node the viewer was on when they opened Search, remembered in
+			   session since the search form itself carries no node id. *@
+			<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.SearchOriginNodeId?.Value">Browse</a>
+		</div>
+	</form>
+</div>

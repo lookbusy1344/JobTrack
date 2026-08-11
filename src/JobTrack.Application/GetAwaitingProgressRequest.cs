@@ -1,0 +1,73 @@
+namespace JobTrack.Application;
+
+using Abstractions;
+using Domain.Hierarchy;
+
+/// <summary>
+///     Input to <see cref="IJobQueries.GetAwaitingProgressAsync" />. Carries no ownership-based
+///     authorization gate (see <see cref="GetJobNodeRequest" />) — <see cref="Ownership" /> is a plain
+///     result filter, not an access restriction.
+/// </summary>
+public sealed record GetAwaitingProgressRequest
+{
+	/// <summary>The acting user and correlation identifier.</summary>
+	public required CommandContext Context { get; init; }
+
+	/// <summary>Restricts the returned leaves by owner. Defaults to <see cref="OwnershipFilter.All" />.</summary>
+	public OwnershipFilter Ownership { get; init; } = OwnershipFilter.All;
+
+	/// <summary>When set, only leaves within this node's subtree (inclusive) are returned; otherwise the whole tree.</summary>
+	public JobNodeId? SubtreeRootId { get; init; }
+
+	/// <summary>
+	///     When non-blank, restricts to leaves whose description contains this text (case insensitive).
+	///     Unlike <see cref="SearchJobNodesRequest" />, this scopes the dashboard's own
+	///     owner/subtree-filtered candidate set, not a whole-tree query.
+	/// </summary>
+	public string? SearchText { get; init; }
+
+	/// <summary>
+	///     When <see langword="true" />, leaves blocked by an unsatisfied prerequisite — their own or one
+	///     inherited from an ancestor (spec §6) — are left out entirely rather than returned with
+	///     <see cref="AwaitingProgressEntry.IsReady" /> <see langword="false" />. Nothing can be done
+	///     about a blocked leaf, so a caller driving a work queue may not want to see it at all.
+	/// </summary>
+	public bool ExcludeBlocked { get; init; }
+
+	/// <summary>
+	///     When <see langword="true" />, restricts to leaves whose achievement is
+	///     <see cref="Achievement.InProgress" /> — work that has started and reached no closure, achieved
+	///     or otherwise. Deliberately says nothing about whether anyone is clocked on right now, so a
+	///     paused leaf (started, nobody working it) is included; a leaf still
+	///     <see cref="Achievement.Waiting" />, one with no <c>LeafWork</c> attached, and every terminal
+	///     outcome are excluded. Composes with <see cref="Ownership" /> and the other filters rather than
+	///     replacing them, and is applied by the port's own query, so an excluded leaf never consumes a
+	///     page slot.
+	/// </summary>
+	public bool InProgressOnly { get; init; }
+
+	/// <summary>
+	///     When set, restricts to leaves this employee is working <em>right now</em> — those carrying an
+	///     open (unfinished) session of theirs. Unlike <see cref="InProgressOnly" />, which asks what the
+	///     achievement says and so keeps a paused leaf, this asks who is clocked on: a leaf started and
+	///     since paused has no open session and drops out, and so does one someone else is working.
+	///     Independent of <see cref="InProgressOnly" /> — an open session already implies
+	///     <see cref="Achievement.InProgress" /> (ADR 0038), so setting both changes nothing — and
+	///     composes with <see cref="Ownership" /> and <see cref="SubtreeRootId" /> rather than replacing
+	///     them, answering "who is working what inside this subtree".
+	/// </summary>
+	public AppUserId? ActiveWorkerUserId { get; init; }
+
+	/// <summary>
+	///     Zero-based number of matching leaves (in the calculator's own readiness/priority/deadline order) to skip
+	///     before returning results. Must be non-negative.
+	/// </summary>
+	public int Offset { get; init; }
+
+	/// <summary>
+	///     Maximum number of leaves to return. An omitted value uses
+	///     <see cref="AwaitingProgressPaging.DefaultPageSize" />; larger values are clamped to
+	///     <see cref="AwaitingProgressPaging.MaxPageSize" />. Must be positive when set.
+	/// </summary>
+	public int? Limit { get; init; }
+}

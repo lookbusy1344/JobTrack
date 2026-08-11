@@ -1,0 +1,137 @@
+@using System.Globalization
+@using NodaTime
+@model LeafWorkSessionsPanelModel
+
+@if (Model.ShowWorkerFilter) {
+	<form method="get" class="jt-form-card">
+		@foreach (var field in Model.ExtraHiddenFields) {
+			<input type="hidden" name="@field.Key" value="@field.Value"/>
+		}
+		<div class="form-group">
+			<label for="WorkedByUserId">Filter by worker</label>
+			<select id="WorkedByUserId" name="WorkedByUserId" class="form-select" asp-items="Model.WorkedByOptions"></select>
+		</div>
+		<button type="submit" class="btn btn-secondary">Apply filter</button>
+	</form>
+}
+
+@if (Model.DisplayedWorkedByName is not null) {
+	<h2>Sessions worked by @Model.DisplayedWorkedByName</h2>
+} else {
+	<h2>Sessions</h2>
+}
+@if (Model.Sessions.Count == 0) {
+	<p class="jt-empty">@(Model.DisplayedWorkedByName is null ? "No sessions yet." : $"No sessions for {Model.DisplayedWorkedByName}.")</p>
+} else {
+	<div class="jt-table-block">
+		<table class="table">
+			<thead>
+			<tr>
+				<th class="col-5 col-md-3 col-lg-3">Worked by</th>
+				<th class="jt-session-started col-lg-2 d-none d-lg-table-cell">Started</th>
+				<th class="col-5 col-md-4 col-lg-2">
+					<span class="d-none d-lg-inline">Finished</span>
+					<span class="d-lg-none">Status</span>
+				</th>
+				@* Cost sits beside Actions, the same corner Browse's own node table puts it in relative to
+				   its row, and surfaces at md (col-md-3) holding col-lg-3 once Started returns at lg --
+				   the figure is the widest thing in the row (a &#163; amount plus its allocated hours), so
+				   it gets the same three-twelfths share as Worked by rather than the plain jt-col-cost
+				   allocation Browse's own node table uses for a bare amount. Narrows first: Started, whose
+				   day/time is one tap away via the row's own session, then Cost -- ADR 0042 gates it and it
+				   is not needed to act on a row. *@
+				<th class="jt-col-cost col-md-3 col-lg-3 text-end d-none d-md-table-cell">Cost</th>
+				<th class="col-2 text-end">Actions</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var session in Model.Sessions) {
+				var sessionBackdate = session.FinishedAt is null
+					? new BackdateDisclosureModel {
+						Handler = "Finish",
+						FieldName = "finishedAt",
+						Label = "Finished at",
+						SubmitText = "Finish at this time",
+						AccessibleName = "Backdate finish",
+						HiddenFields = Model.SessionFields(session),
+						RowId = $"backdate-finish-session-{session.Id.Value.ToString(CultureInfo.InvariantCulture)}",
+					}
+					: null;
+				<tr>
+					<td class="col-5 col-md-3 col-lg-3">@Model.DescribeWorker(session.WorkedByUserId)</td>
+					<td class="jt-session-started col-lg-2 d-none d-lg-table-cell">@InstantDisplay.Format(session.StartedAt, Model.ViewerZone)</td>
+					<td class="col-5 col-md-4 col-lg-2">
+						@* Below lg, Started (above) is hidden, so this is the only place a phone reader can
+						   see when the session opened or closed -- an open session gets a compact
+						   status-pill-active (amber) carrying the compact start time there, and a finished
+						   session gets a same status-pill--compact status-pill-closed (slate) carrying the
+						   compact finish time -- both --compact, so the two states render at the same size,
+						   distinguished only by colour. At lg+, Started already gives the full picture, so
+						   both fall back to their plain, unpilled lg+ presentation (Active keeps its
+						   full-size pill without --compact there). *@
+						@if (session.FinishedAt is Instant finishedAt) {
+							<span class="d-none d-lg-inline">@InstantDisplay.Format(finishedAt, Model.ViewerZone)</span>
+							<span
+								class="status-pill status-pill-closed status-pill--compact d-lg-none">@InstantDisplay.FormatCompact(finishedAt, Model.ViewerZone, Model.Now)</span>
+						} else {
+							<span class="status-pill status-pill-active d-none d-lg-inline-flex">Active</span>
+							<span
+								class="status-pill status-pill-active status-pill--compact d-lg-none">@InstantDisplay.FormatCompact(session.StartedAt, Model.ViewerZone, Model.Now)</span>
+						}
+					</td>
+					<td class="jt-col-cost col-md-3 col-lg-3 text-end d-none d-md-table-cell">
+						@if (Model.SessionCosts is not null && Model.SessionCosts.TryGetValue(session.Id, out var sessionCost)) {
+							@CostDisplay.FormatCell(sessionCost.Cost, sessionCost.Duration)
+						}
+					</td>
+					@* text-end only, never text-nowrap: nowrap on a cell is a hard floor under its column's
+					   width, which is what site.css's own table comment names as the usual reason a narrow
+					   viewport overflows -- it put this table 8px past a 320px viewport. The inner toolbar's
+					   flex-nowrap is what actually keeps the buttons on one line. *@
+					<td class="col-2 text-end">
+						@* On a phone (.jt-row-action-extra, site.css) exactly one button survives here: Pause
+						   for an active session, Correct for a finished one -- the backdate trigger, and
+						   Correct on an active row, are one tap away from the row's own worker/session, and
+						   piling them into a repeating cell forces the horizontal scroll this reflow avoids.
+						   Correct is only wrapped when Pause is also present -- a finished row has no Pause
+						   to fall back to, so its Correct button must never be the one thing this cell hides. *@
+						<div class="jt-toolbar d-flex flex-nowrap gap-2 align-items-center justify-content-end">
+							@if (sessionBackdate is not null) {
+								<form method="post" asp-page-handler="Finish" class="inline-form">
+									@foreach (var field in sessionBackdate.HiddenFields) {
+										<input type="hidden" name="@field.Key" value="@field.Value"/>
+									}
+									<button type="submit" class="jt-icon-button" title="Pause job">
+										<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+											<use href="#jt-icon-finish"></use>
+										</svg>
+										<span class="visually-hidden">Pause job</span>
+									</button>
+								</form>
+								<div class="jt-row-action-extra">
+									<partial name="_BackdateTrigger" model="sessionBackdate"/>
+									<partial name="_BackdatePanel" model="sessionBackdate"/>
+								</div>
+							}
+							@* The list can span several workers, so each row corrects its own worker's
+							   session, not whoever the panel happens to be filtered to. *@
+							<div class="@(sessionBackdate is not null ? "jt-row-action-extra" : null)">
+								<a class="jt-icon-button" asp-page="/Jobs/CorrectSession"
+								   asp-route-leafNodeId="@Model.LeafNodeId"
+								   asp-route-workedByUserId="@session.WorkedByUserId.Value"
+								   asp-route-sessionId="@session.Id.Value"
+								   asp-route-returnUrl="@Model.ReturnUrl" title="Correct">
+									<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+										<use href="#jt-icon-edit"></use>
+									</svg>
+									<span class="visually-hidden">Correct</span>
+								</a>
+							</div>
+						</div>
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

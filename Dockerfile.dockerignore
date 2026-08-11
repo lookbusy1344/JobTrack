@@ -1,0 +1,47 @@
+# Build context here is the monorepo root, not JobTrack/ — see the Dockerfile header
+# comment for why. Everything is ignored by default except .editorconfig and the JobTrack/ subtree
+# actually needed to build the three published apphosts (Web, Database, AdminCli); other sibling
+# monorepo projects (EnrolmentRules/, etc.) are irrelevant to this image and excluded to keep the
+# build context small.
+*
+!.editorconfig
+!JobTrack/
+
+# Build output and caches — rebuilt inside the image.
+JobTrack/**/bin/
+JobTrack/**/obj/
+JobTrack/TestResults/
+
+# LibMan-restored client libs (gitignored; restored during the build).
+JobTrack/src/JobTrack.Web/wwwroot/lib/
+
+# Not needed to build/run the published apps; keeps the build context small.
+JobTrack/tests/
+JobTrack/spikes/
+JobTrack/scripts/
+JobTrack/docs/
+
+# Sample projects are irrelevant to the image except JobTrack.UatSeed, which runs in the build stage
+# to create the requester scenario. Keep samples/job-tree-imports/ too; the demo seed imports those
+# small JSON trees as the demo account. Excluding the other projects by name rather than all of
+# samples/ sidesteps Docker's "cannot re-include a file whose parent directory is excluded" rule.
+JobTrack/samples/JobTrack.ExternalApiClient/
+JobTrack/samples/JobTrack.Sample.PostgreSql/
+JobTrack/samples/JobTrack.Sample.Sqlite/
+
+# SQLite/Postgres scratch data and dev-only artifacts.
+JobTrack/*.db
+JobTrack/*.db-shm
+JobTrack/*.db-wal
+JobTrack/jobtrack-web-dev.db*
+
+# IDE / OS / VCS noise.
+JobTrack/.git/
+JobTrack/.github/
+JobTrack/.idea/
+JobTrack/.vs/
+JobTrack/.vscode/
+JobTrack/.cursor/
+JobTrack/.claude/
+JobTrack/**/*.user
+JobTrack/**/.DS_Store

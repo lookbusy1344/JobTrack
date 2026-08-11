@@ -1,0 +1,189 @@
+@page "/Requests/{id:long}"
+@using JobTrack.Abstractions
+@using NodaTime
+@model DetailsModel
+@{
+	ViewData["Title"] = "Request detail";
+
+	static string KindIconId(NodeKind kind) => kind switch {
+		NodeKind.Root => "jt-icon-root",
+		NodeKind.Branch => "jt-icon-branch",
+		NodeKind.Leaf => "jt-icon-leaf",
+		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	};
+
+	static string KindNoun(NodeKind kind) => kind switch {
+		NodeKind.Root => "root",
+		NodeKind.Branch => "branch",
+		NodeKind.Leaf => "leaf",
+		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	};
+}
+
+@{
+	var detail = Model.Detail;
+}
+
+@* Mirrors /Jobs/Work's head: an h1 naming what kind of page this is, with the job it acts on as the
+   h2 beneath. Unlinked here, unlike Work's -- this page is already the request's own home, so a link
+   on the title would only point back at itself. *@
+<div class="jt-page-head">
+	<h1>Job request</h1>
+	@if (detail is not null) {
+		<h2 class="jt-preserve-whitespace">@JobNodeDisplay.Title(detail.Description, detail.JobNodeId.Value)</h2>
+	}
+</div>
+
+<p><a href="@Model.BackUrl">&larr; Back</a></p>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+@if (detail is not null) {
+	@* Same record card as /Jobs/Browse's node detail (ADR 0044): two field columns on wide screens,
+	   one on phones, each field its own <div class="col"> holding one dt/dd pair directly -- what
+	   HTML5's <dl> content model permits and what axe's definition-list rule requires. The fields
+	   themselves are Browse's too, so a request and the job it anchors read the same way. *@
+	<dl class="row row-cols-1 row-cols-md-2 g-2 jt-record--full">
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Requester</dt>
+			<dd class="col-12 col-sm-8 mb-0"><span class="jt-tag">@Model.RequesterLabel</span></dd>
+		</div>
+		@* The rollup, not the requester status vocabulary: the anchor may be a leaf or (after triage
+		   decomposes it) a branch, and only this two-value form is defined for both. *@
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Achievement</dt>
+			<dd class="col-12 col-sm-8 mb-0">
+				<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel { Achievement = detail.SubtreeAchievement })"/>
+			</dd>
+		</div>
+		@* Only a leaf carries the six-value achievement vocabulary the rollup above collapses away, so
+		   this field appears only when there is a finer state to show. *@
+		@if (detail.Kind == NodeKind.Leaf && detail.LeafAchievement is Achievement leafAchievement) {
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Status</dt>
+				<dd class="col-12 col-sm-8 mb-0">
+					<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = leafAchievement })"/>
+				</dd>
+			</div>
+		}
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Readiness</dt>
+			<dd class="col-12 col-sm-8 mb-0">
+				@if (detail.IsReady) {
+					<span class="status-pill status-pill-ready" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+					                                                               aria-hidden="true" focusable="false"><use
+								href="#jt-icon-go"></use></svg>No blocks</span>
+				} else {
+					<span class="status-pill status-pill-blocked" role="status"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+					                                                                 aria-hidden="true" focusable="false"><use
+								href="#jt-icon-stop"></use></svg>Blocked</span>
+				}
+			</dd>
+		</div>
+		<div class="col row g-1">
+			<dt class="col-12 col-sm-4">Submitted</dt>
+			<dd class="col-12 col-sm-8 mb-0">@InstantDisplay.Format(detail.SubmittedAt, Model.ViewerZone)</dd>
+		</div>
+		@if (detail.AcknowledgedAt is Instant acknowledgedAt) {
+			@* "Acknow", not "Acknowledged": kept as the chosen copy. The layout reason is gone -- the label is a
+			   real grid column now and wraps like any other -- so the full word would fit if wanted. *@
+			<div class="col row g-1">
+				<dt class="col-12 col-sm-4">Acknow</dt>
+				<dd class="col-12 col-sm-8 mb-0">@InstantDisplay.Format(acknowledgedAt, Model.ViewerZone)</dd>
+			</div>
+		}
+	</dl>
+
+	@if (Model.CanAcknowledge && detail.AcknowledgedAt is null) {
+		<form method="post" asp-page-handler="Acknowledge">
+			<input type="hidden" name="version" value="@detail.Version"/>
+			<input type="hidden" name="returnUrl" value="@Model.SafeReturnUrl"/>
+			<button type="submit" class="btn btn-secondary">Acknowledge request</button>
+		</form>
+	}
+
+	<h2>Progress</h2>
+	<div class="jt-table-block">
+		<table class="table">
+			<thead>
+			<tr>
+				<th scope="col" class="col-6">Description</th>
+				<th scope="col" class="col-2 text-end">Time worked</th>
+				<th scope="col" class="col-4">Last updated</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var row in Model.OrderedSubtree) {
+				<tr>
+					<td class="jt-tree-cell col-6" data-jt-depth="@row.Depth">
+						@if (row.Depth > 0) {
+							<span class="jt-tree-guide" aria-hidden="true">
+								@for (var railLevel = 1; railLevel < row.Depth; ++railLevel) {
+									<span class="jt-tree-rail"></span>
+								}
+								<span class="jt-tree-elbow"></span>
+							</span>
+						}
+						<span class="jt-tree-label">
+							<svg class="jt-tree-icon jt-tree-icon--@KindNoun(row.Kind)" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+								<use href="#@KindIconId(row.Kind)"></use>
+							</svg>
+							<span class="jt-tree-text">
+								<span class="visually-hidden">Level @row.Depth, @KindNoun(row.Kind).</span>
+								@* Description then node id, clipped at the shared row budget — the same title form
+								   Browse's child nodes and Awaiting Progress use, so a requester quoting a job in a
+								   ticket or a phone call names it exactly as staff do. *@
+								<span class="jt-preserve-whitespace">@JobNodeDisplay.Title(
+										row.Node.Description, row.Node.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</span>&#x2060;
+								@* Keep the requester-status marker attached to the title's final word as the
+								   Bootstrap column allocation changes across breakpoints. *@
+								<partial name="_RequesterStatusIcon"
+								         model="@(new RequesterStatusIconModel { Status = row.Node.Status, ShowLabel = false })"/>
+							</span>
+						</span>
+					</td>
+					<td class="col-2 text-end">@row.Node.AllocatedDuration</td>
+					<td class="col-4">@InstantDisplay.Format(row.Node.LastUpdatedAt, Model.ViewerZone)</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+
+	<h2>Notes</h2>
+	@if (detail.Notes.Count == 0) {
+		<p>No notes yet.</p>
+	} else {
+		<ul class="list-unstyled">
+			@foreach (var note in detail.Notes) {
+				<li class="jt-form-card">
+					<p class="jt-preserve-whitespace">@note.Content</p>
+					<p class="text-muted mb-0 d-flex flex-wrap align-items-center gap-2">
+						<span>@InstantDisplay.Format(note.CreatedAt, Model.ViewerZone)</span>
+						@if (note.VisibleToRequester) {
+							<span class="status-pill status-pill-ready status-pill--compact">Public</span>
+						} else {
+							<span class="status-pill status-pill-closed status-pill--compact">Private</span>
+						}
+					</p>
+				</li>
+			}
+		</ul>
+	}
+
+	<form method="post" asp-page-handler="AddNote" class="jt-form-card">
+		<input type="hidden" name="returnUrl" value="@Model.SafeReturnUrl"/>
+		<div class="form-group mb-2">
+			<label asp-for="NoteInput.Content"></label>
+			<textarea asp-for="NoteInput.Content" class="form-control" placeholder="Add a note or ask a question"></textarea>
+			<span asp-validation-for="NoteInput.Content" class="text-danger"></span>
+		</div>
+		@if (Model.CanAcknowledge) {
+			<div class="form-check">
+				<input asp-for="NoteInput.VisibleToRequester" class="form-check-input"/>
+				<label asp-for="NoteInput.VisibleToRequester" class="form-check-label">Visible to requester</label>
+			</div>
+		}
+		<button type="submit" class="btn btn-primary">Add note</button>
+	</form>
+}

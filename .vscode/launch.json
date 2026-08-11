@@ -1,0 +1,61 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "JobTrack.Web (http, sqlite)",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "build web",
+			"program": "${workspaceFolder}/src/JobTrack.Web/bin/Debug/net10.0/JobTrack.Web.dll",
+			"args": [],
+			"cwd": "${workspaceFolder}/src/JobTrack.Web",
+			"stopAtEntry": false,
+			"launchSettingsProfile": "http",
+			"launchSettingsFilePath": "${workspaceFolder}/src/JobTrack.Web/Properties/launchSettings.json",
+			"serverReadyAction": {
+				"action": "openExternally",
+				"pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+			},
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "JobTrack.Web (https, sqlite)",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "build web",
+			"program": "${workspaceFolder}/src/JobTrack.Web/bin/Debug/net10.0/JobTrack.Web.dll",
+			"args": [],
+			"cwd": "${workspaceFolder}/src/JobTrack.Web",
+			"stopAtEntry": false,
+			"launchSettingsProfile": "https",
+			"launchSettingsFilePath": "${workspaceFolder}/src/JobTrack.Web/Properties/launchSettings.json",
+			"serverReadyAction": {
+				"action": "openExternally",
+				"pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+			},
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "JobTrack.Web (https, jobtrack_live/postgresql)",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "build web",
+			"program": "${workspaceFolder}/src/JobTrack.Web/bin/Debug/net10.0/JobTrack.Web.dll",
+			"args": [],
+			"cwd": "${workspaceFolder}/src/JobTrack.Web",
+			"stopAtEntry": false,
+			"launchSettingsProfile": "https (jobtrack_live)",
+			"launchSettingsFilePath": "${workspaceFolder}/src/JobTrack.Web/Properties/launchSettings.json",
+			"serverReadyAction": {
+				"action": "openExternally",
+				"pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+			},
+			"console": "integratedTerminal"
+		},
+		{
+			"name": ".NET Core Attach",
+			"type": "coreclr",
+			"request": "attach"
+		}
+	]
+}

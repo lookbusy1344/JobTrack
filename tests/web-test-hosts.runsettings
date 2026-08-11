@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shared by JobTrack.Web.IntegrationTests and JobTrack.Web.EndToEndTests (each references it via
+  RunSettingsFilePath). Both host JobTrack.Web: in-memory through WebApplicationFactory, and, in the
+  end-to-end project, as real child `dotnet JobTrack.Web.dll` processes. Those children inherit this
+  test host's environment, so the same variable covers them.
+
+  Without this, every request logs an Information `api_request` line from ApiTelemetryFilter and
+  every rejected bearer token logs two more from PersonalAccessTokenAuthenticationHandler, burying a
+  failing run's real diagnostics (and scripts/all-test.sh's output) in noise.
+
+  The filter is deliberately provider-scoped (`Logging:Console:...`) rather than a blanket
+  `Logging:LogLevel:Default`: ApiOperationalQualitiesTests and SensitiveLoggingTests attach their own
+  capturing ILoggerProvider and assert on Information-level entries, so the pipeline itself must stay
+  at Information; only the console writer goes quiet. Those two suites are what fails if this is ever
+  widened to `Logging:LogLevel:Default`.
+
+  Neither appsettings.json nor appsettings.Development.json is touched, so a real deployment and
+  `dotnet run` keep their console logging unchanged.
+-->
+<RunSettings>
+  <RunConfiguration>
+    <EnvironmentVariables>
+      <Logging__Console__LogLevel__Default>Warning</Logging__Console__LogLevel__Default>
+    </EnvironmentVariables>
+  </RunConfiguration>
+</RunSettings>

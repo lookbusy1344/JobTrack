@@ -1,0 +1,48 @@
+@model WorkRowActionsModel
+@* One leaf row's work controls, shared by every table listing leaves. Icon-only because this cell
+   repeats once per row and labelled buttons in each would out-shout the row's own name; the
+   standalone toolbar on Browse's node detail page keeps its labels.
+
+   The "Active since"/count pill is deliberately *not* here — it has its own column
+   (`_ActiveSincePill`). Sharing this cell made the buttons shift horizontally from row to row
+   depending on whether a session happened to be running, so the one control a reader is aiming for
+   never sat still.
+
+   Never infers a target worker from collection order (plan §2.4): the viewer's own action always
+   comes from Model.ViewerSession, and "Start for…" is a distinct disclosure from the viewer's own
+   one-click Start. Ending a session never finishes inline here (unified-leaf-workflow plan §5.3) —
+   it is always decided on the leaf's own Sessions page (/Jobs/Work, the always-present link below),
+   where pause-vs-complete is actually decided and every session has its own control. *@
+<div class="jt-toolbar d-flex flex-nowrap justify-content-end gap-2 align-items-center">
+	@* Below phone width (.jt-row-action-extra, site.css) only Sessions survives in this cell — the
+	   row's own page is one tap away for everything else, and Start/Backdate/"Start for…" squeezed
+	   into a repeating table cell at that width is the thing that forces horizontal scroll. *@
+	@if (Model.ViewerSession is null && !Model.IsStartClosed) {
+		<div class="jt-row-action-extra">
+			<form method="post" asp-page-handler="@Model.StartHandler" class="inline-form">
+				@foreach (var field in Model.StartFields) {
+					<input type="hidden" name="@field.Key" value="@field.Value"/>
+				}
+				<button type="submit" class="jt-icon-button jt-icon-button--primary" title="Start session">
+					<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+						<use href="#jt-icon-start"></use>
+					</svg>
+					<span class="visually-hidden">Start session</span>
+				</button>
+			</form>
+			<partial name="_BackdateTrigger" model="Model.StartBackdate"/>
+			<partial name="_BackdatePanel" model="Model.StartBackdate"/>
+		</div>
+	}
+	@if (Model.CanManage && !Model.IsStartClosed) {
+		<div class="jt-row-action-extra">
+			<partial name="_StartForTrigger" model="Model.StartFor"/>
+		</div>
+	}
+	<a class="jt-icon-button" asp-page="/Jobs/Work" asp-route-leafNodeId="@Model.LeafNodeId" asp-route-returnUrl="@Model.ReturnUrl" title="Sessions">
+		<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+			<use href="#jt-icon-sessions"></use>
+		</svg>
+		<span class="visually-hidden">Sessions</span>
+	</a>
+</div>

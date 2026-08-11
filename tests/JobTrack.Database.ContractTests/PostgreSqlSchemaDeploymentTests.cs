@@ -1,0 +1,17 @@
+namespace JobTrack.Database.ContractTests;
+
+using System.Data.Common;
+using Npgsql;
+using TestSupport;
+
+public sealed class PostgreSqlSchemaDeploymentTests()
+	: SchemaDeploymentContractTestsBase(new PostgreSqlDatabaseFixture())
+{
+	protected override SchemaProvider Provider => SchemaProvider.PostgreSql;
+
+	protected override DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);
+
+	protected override ISchemaVersionStore CreateStore() => new PostgreSqlSchemaVersionStore();
+
+	protected override IDeploymentLockStrategy CreateLockStrategy() => new PostgreSqlDeploymentLockStrategy();
+}

@@ -1,0 +1,97 @@
+@page
+@using JobTrack.Identity
+@model PersonalAccessTokensModel
+@{
+	ViewData["Title"] = "Personal access tokens";
+}
+
+<div class="jt-page-head">
+	<h1>Personal access tokens</h1>
+</div>
+
+@if (User.IsInRole(EmployeeRoleNames.Requester)) {
+	<p><a asp-page="/Requests/Index">&larr; Back to your requests</a></p>
+} else {
+	<p><a asp-page="/Jobs/Browse">&larr; Back to Browse</a></p>
+}
+
+<p>
+	A personal access token authenticates the external HTTP API as you, with your own permissions —
+	nothing more. Store it somewhere secure; it cannot be retrieved again once you leave this page.
+</p>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+@if (Model.IssuedPlaintextToken is not null) {
+	@* flex-column, not the alert partials' row: the secret is an opaque unbreakable string, and beside
+	   the sentence it gets a fraction of the width to render in. Stacked it has the full alert. *@
+	<div class="alert alert-warning d-flex flex-column align-items-start gap-2" role="alert">
+		<p class="mb-0"><strong>Copy this token now — it will not be shown again.</strong></p>
+		<code>@Model.IssuedPlaintextToken</code>
+	</div>
+}
+
+<h2>Create a token</h2>
+<form method="post" asp-page-handler="Issue" class="jt-form-card">
+	<div class="form-group">
+		<label asp-for="Issue.Label"></label>
+		<input asp-for="Issue.Label" class="form-control" placeholder="e.g. laptop CLI"/>
+		<span asp-validation-for="Issue.Label" class="text-danger"></span>
+	</div>
+	<div class="form-group">
+		<label asp-for="Issue.LifetimeDays"></label>
+		<input asp-for="Issue.LifetimeDays" class="form-control"/>
+		<span asp-validation-for="Issue.LifetimeDays" class="text-danger"></span>
+	</div>
+	<button type="submit" class="btn btn-primary">Create</button>
+</form>
+
+<h2>Your tokens</h2>
+@if (Model.Tokens.Count == 0) {
+	<p>You have no personal access tokens.</p>
+} else {
+	<div class="jt-table-block">
+		<table class="table">
+			<thead>
+			@* Reflow policy (CLAUDE.md, docs/design-language.md): six columns of formatted timestamps do
+			   not fit a phone, and a table that will not fit reflows rather than scrolls. A phone keeps
+			   what the row is (Label), what state it is in (Status), and its one action; Expires returns at
+			   md because it is the field a token is judged on, and the two audit timestamps at lg. *@
+			<tr>
+				<th class="col-7 col-md-5 col-lg-3">Label</th>
+				<th class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">Created</th>
+				<th class="jt-col-cost col-md-3 col-lg-2 d-none d-md-table-cell">Expires</th>
+				<th class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">Last used</th>
+				<th class="col-3 col-md-2">Status</th>
+				<th class="col-2 col-md-2 col-lg-1"></th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var token in Model.Tokens) {
+				<tr>
+					<td class="col-7 col-md-5 col-lg-3">@token.Label</td>
+					<td class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">@InstantDisplay.Format(token.CreatedAt, Model.ViewerZone)</td>
+					<td class="jt-col-cost col-md-3 col-lg-2 d-none d-md-table-cell">@InstantDisplay.Format(token.ExpiresAt, Model.ViewerZone)</td>
+					<td class="jt-col-secondary col-lg-2 d-none d-lg-table-cell">@(token.LastUsedAt.HasValue ? InstantDisplay.Format(token.LastUsedAt.Value, Model.ViewerZone) : "Never")</td>
+					<td class="col-3 col-md-2">@(token.RevokedAt is not null ? "Revoked" : "Active")</td>
+					<td class="col-2 col-md-2 col-lg-1">
+						@if (token.RevokedAt is null) {
+							<form method="post" asp-page-handler="Revoke" class="inline-form">
+								<input type="hidden" name="tokenId" value="@token.Id.Value"/>
+								<button type="submit" class="jt-icon-button jt-icon-button--danger" title="Revoke token">
+									<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+										<use href="#jt-icon-remove"></use>
+									</svg>
+									<span class="visually-hidden">Revoke token @token.Label</span>
+								</button>
+							</form>
+						}
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

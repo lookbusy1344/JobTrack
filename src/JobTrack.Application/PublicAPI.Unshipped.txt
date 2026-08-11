@@ -1,0 +1,3 @@
+#nullable enable
+JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.get -> JobTrack.Abstractions.AppUserId?
+JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.init -> void

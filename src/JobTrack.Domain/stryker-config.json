@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-net/master/src/Stryker.Core/Stryker.Core/Testing/schema/stryker-config-schema.json",
+  "stryker-config": {
+    "mutate": [
+      "Intervals/IntervalAlgebra.cs",
+      "Intervals/IntervalIndex.cs",
+      "Intervals/WorkInterval.cs",
+      "Schedules/WeeklyInterval.cs",
+      "Schedules/CivilTimeResolver.cs",
+      "Schedules/ScheduleExceptionResolver.cs",
+      "Schedules/ScheduleExceptionValidator.cs",
+      "Schedules/ScheduleExpander.cs",
+      "Schedules/ScheduleZoneId.cs",
+      "Authorization/*.cs",
+      "Hierarchy/PrerequisiteEdge.cs",
+      "Hierarchy/UnsatisfiedPrerequisite.cs",
+      "Hierarchy/ReadinessResult.cs",
+      "Hierarchy/ReadinessCalculator.cs",
+      "Hierarchy/AchievementCalculator.cs",
+      "Hierarchy/AchievementTransitions.cs",
+      "Hierarchy/AwaitingProgressCalculator.cs",
+      "Hierarchy/NodeClassifier.cs",
+      "Hierarchy/OwnershipFilter.cs",
+      "Hierarchy/RequesterStatusCalculator.cs",
+      "Costing/*.cs",
+      "Rates/UserCostRate.cs",
+      "Rates/RateResolver.cs"
+    ],
+    "test-projects": [
+      "../../tests/JobTrack.Domain.Tests/JobTrack.Domain.Tests.csproj"
+    ],
+    "reporters": [
+      "html",
+      "progress",
+      "cleartext"
+    ],
+    "thresholds": {
+      "high": 80,
+      "low": 75,
+      "break": 75
+    }
+  }
+}

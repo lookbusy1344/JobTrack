@@ -1,0 +1,39 @@
+[
+	{ "id": 1, "parentId": null, "title": "Organise college election" },
+
+	{ "id": 2, "parentId": 1, "title": "Set election rules and timeline" },
+	{ "id": 3, "parentId": 1, "title": "Candidate nominations" },
+	{ "id": 4, "parentId": 1, "title": "Campaign period" },
+	{ "id": 5, "parentId": 1, "title": "Voting" },
+	{ "id": 6, "parentId": 1, "title": "Results and handover" },
+
+	{ "id": 7, "parentId": 2, "title": "Draft election rules", "open": "13 days", "closed": "11 days" },
+	{ "id": 8, "parentId": 2, "title": "Get rules approved by student union committee", "prerequisiteIds": [7], "open": "10 days", "closed": "7 days" },
+	{ "id": 9, "parentId": 2, "title": "Publish election calendar", "prerequisiteIds": [8], "open": "6 days", "closed": "5 days" },
+
+	{ "id": 10, "parentId": 3, "title": "Open nomination window", "prerequisiteIds": [9], "open": "4 days", "closed": "2 days" },
+	{ "id": 11, "parentId": 3, "title": "Collect nomination forms and candidate ID photos", "prerequisiteIds": [10], "open": "1 day" },
+	{ "id": 12, "parentId": 3, "title": "Verify candidate eligibility", "prerequisiteIds": [11] },
+	{ "id": 13, "parentId": 3, "title": "Publish candidate list", "prerequisiteIds": [12] },
+
+	{ "id": 14, "parentId": 12, "title": "Check academic standing" },
+	{ "id": 15, "parentId": 12, "title": "Check disciplinary record", "prerequisiteIds": [14] },
+
+	{ "id": 16, "parentId": 4, "title": "Book venue and brief candidates on campaign rules", "prerequisiteIds": [13, 8] },
+	{ "id": 17, "parentId": 4, "title": "Candidates distribute campaign materials", "prerequisiteIds": [16] },
+	{ "id": 18, "parentId": 4, "title": "Organise hustings/debate event", "prerequisiteIds": [16] },
+	{ "id": 19, "parentId": 4, "title": "Publish candidate manifestos online", "prerequisiteIds": [13] },
+
+	{ "id": 20, "parentId": 5, "title": "Set up ballot system (online and paper)", "prerequisiteIds": [9], "open": "4 days" },
+	{ "id": 21, "parentId": 5, "title": "Register eligible voters", "prerequisiteIds": [9] },
+	{ "id": 22, "parentId": 5, "title": "Test ballot system", "prerequisiteIds": [20] },
+	{ "id": 23, "parentId": 5, "title": "Open polling", "prerequisiteIds": [18, 22, 21] },
+	{ "id": 24, "parentId": 5, "title": "Close polling", "prerequisiteIds": [23] },
+
+	{ "id": 25, "parentId": 6, "title": "Count votes", "prerequisiteIds": [24] },
+	{ "id": 26, "parentId": 6, "title": "Verify count (independent scrutineer)", "prerequisiteIds": [25] },
+	{ "id": 27, "parentId": 6, "title": "Announce results", "prerequisiteIds": [26] },
+	{ "id": 28, "parentId": 6, "title": "Handle any appeals or recounts", "prerequisiteIds": [27] },
+	{ "id": 29, "parentId": 6, "title": "Handover briefing with outgoing officers", "prerequisiteIds": [27] },
+	{ "id": 30, "parentId": 6, "title": "New officers induction", "prerequisiteIds": [29] }
+]

@@ -1,0 +1,399 @@
+# JobTrack web design language — "Console"
+
+This document describes the visual design language of the JobTrack ASP.NET Core front end. It is
+descriptive, not normative: the authoritative behaviour spec remains `jobtrack_spec_codex.md`, and
+this file explains *how* the browser UI looks and *why*, so future changes stay coherent.
+
+The entire system lives in two places:
+
+- `src/JobTrack.Web/wwwroot/css/site.css` — the design tokens and every component style, layered
+  over the pinned Bootstrap 5.3 CSS-custom-property theming (`--bs-*`). Bootstrap's vendored files
+  under `wwwroot/lib/bootstrap` are never edited or forked (see `CLAUDE.md`).
+- `src/JobTrack.Web/Pages/**` — Razor markup composed from the small primitive vocabulary below.
+
+## Concept
+
+JobTrack is an operations console for tracked labour and dynamically-calculated cost. The design
+reads as a **modern, faintly futuristic control surface**: a light working canvas of layered white
+cards over a warm neutral paper ground, under a deep espresso command header, driven by a single
+burnt-orange accent. Data is the hero — money and identifiers render in tabular monospace, and the
+cost figure is treated as an instrument read-out rather than body text.
+
+The burnt-orange-over-warm-neutral palette is a deliberate identity choice: it reads as a workshop
+/ foundry costing tool and steps away from the generic indigo/blue SaaS default. The look is also
+*not* a flat broadsheet ledger (hairline rules, uppercase everything, monospace body). Boldness is
+spent in one place — the command header and the metric read-out — and everything around them stays
+quiet.
+
+## Tokens
+
+All tokens are CSS custom properties on `:root` in `site.css`. Do not hard-code these values in
+markup or scoped CSS; reference the token.
+
+### Colour
+
+| Role | Token | Value |
+|---|---|---|
+| Ink (body text) | `--jt-ink` | `#241c14` |
+| Ink soft (labels) | `--jt-ink-soft` | `#3d3226` |
+| Muted text | `--jt-muted` | `#6a5c4b` |
+| Faint text / meta | `--jt-faint` | `#7c6c57` |
+| Primary accent | `--jt-orange-600` | `#cf4409` |
+| Primary hover/active | `--jt-orange-700` | `#b23808` |
+| Bright fill (on dark / behind white text) | `--jt-orange-500` | `#f9640f` |
+| Secondary glow accent | `--jt-gold-400` | `#fbbf24` |
+| Canvas (page bg) | `--jt-canvas` | `#f1ece5` |
+| Surface (cards) | `--jt-surface` | `#ffffff` |
+| Hairline | `--jt-line` | `#e7ded2` |
+| Command header | `--jt-console-900/800` | `#1a1109` / `#241812` |
+
+The accent lives on a named ramp (`--jt-orange-50 … -700`): `-600` is the text/link/fill workhorse,
+`-500` is the brighter fill used only behind white text or on the dark console, `-700` is
+hover/active, and the tints (`-50`/`-100`/`-200`) back chips, hovers, and soft fills. The gold
+(`--jt-gold-400`) is a secondary accent only — never load-bearing text on light surfaces.
+
+Status colours use a paired background/foreground for AA contrast: green (`--jt-green-700` on
+`--jt-green-100`), amber (`--jt-amber-700` on `--jt-amber-100`), red (`--jt-red-700` on
+`--jt-red-100`).
+
+**Accessibility is a hard constraint, not a preference.** Every page is scanned by axe-core in the
+end-to-end suite (`tests/JobTrack.Web.EndToEndTests`, `RunAxe()`), which fails the build on any
+critical/serious violation — including colour contrast below WCAG AA (4.5:1). The chosen values are
+picked to clear that bar: `--jt-orange-600` is pushed as bright as AA allows for pop — ≈4.7:1 as
+text/links on **white**, so any orange text must sit on a white surface (this is why `fieldset` is
+white: its bright-orange `<legend>` dips to ≈4.35:1 on the off-white `--jt-surface-2`). `--jt-muted`
+on white is ≈6.4:1 and `--jt-faint` (the smallest 11px labels) ≈5.1:1. Brighter fills that carry
+white text (the primary button) stay at `--jt-orange-600`; `--jt-orange-500`/`-400` are used only
+for glows, gradients, and the dark console, never as text on light. When adjusting any colour,
+re-check contrast before committing.
+
+### Typography
+
+Body and mono are system stacks. The display face is the one webfont: **Mulish** (SIL OFL),
+self-hosted from `wwwroot/lib/mulish` and pinned via `libman.json` like every other client asset —
+four weights, latin subset, `font-display: swap`. Nothing is fetched from a CDN at runtime, so the
+front end stays self-contained; see the `@font-face` block at the top of `site.css` for why the
+commercial Avenir Next is named in the stack but never shipped.
+
+- **Display** (`--jt-font-display`): `"Avenir Next"` → `"Mulish"` → `ui-rounded` / SF Pro Rounded /
+  Hiragino Maru Gothic ProN → Segoe UI / system-ui. Titles (`h1`/`h2`), the brand wordmark, and
+  metric labels. Apple platforms render their bundled Avenir Next; everywhere else (and in CI) the
+  self-hosted Mulish gives the same geometric-humanist voice, so headings look the same on a phone,
+  a Linux desktop, and a screenshot in a test artefact.
+- **Sans** (`--bs-font-sans-serif`): Segoe UI / system-ui stack. Body, controls, labels.
+- **Mono** (`--bs-font-monospace`): SF Mono / JetBrains Mono / Consolas stack. Identifiers, money,
+  metric read-outs, and eyebrows — anything that benefits from tabular alignment or a "machine"
+  register. The brand emblem itself is a spanner glyph (inline SVG) on a bright-orange chip.
+
+Scale: `h1` 2.15rem / 800 weight / tight negative tracking; `h2` 1.45rem / 750; `h3`/`h4` are
+**not** full headings but small uppercase console section-labels with a short orange→gold accent
+tick. Body is 0.9375rem at 1.6 line-height. The root font-size steps from 14px to 16px at the 768px
+breakpoint.
+
+**One step down, one class.** Secondary text that should read a size below its surroundings takes
+`.jt-text-sm` (`--jt-font-size-sm`) — most visibly a list of people shown together, such as the
+active-worker preview beside the "N active" pill ("You, Demo User (demo)"), wherever
+`_ActiveSincePill` renders it: Browse's record card and subtree table, Work, Awaiting Progress.
+`.jt-value-aside` shares that one declaration under a name of its own for a link qualifying the value
+it follows. Don't add a third "small text" class; a genuinely smaller step is `--jt-font-size-xs`/
+`-xxs`, and those belong to the components that own them (record labels, pills), not to a utility.
+
+Every sub-body size is a token — no rem literals. `--jt-font-size-label` (`0.75rem`) is the label
+register shared by the `h3`/`h4` section-labels, `.status-pill` and the build revision: named for the
+voice rather than a step letter, because it falls between `-sm` and `-xs`. The handful of remaining
+literals are single-component sizes above body (the brand wordmark, the metric read-out, the lede).
+
+### Measures and target size
+
+Every `max-width` in `site.css` references one of five named content measures, so a width is a stated
+decision rather than a rem literal repeated across unrelated rules:
+
+| Measure | Token | Value | Used by |
+|---|---|---|---|
+| Page content column | `--jt-measure-page` | `70rem` | `.container` |
+| Running text | `--jt-measure-prose` | `52rem` | `p`, `.alert` |
+| Narrow panel | `--jt-measure-panel` | `44rem` | `<dl>`, `.jt-list`, `.jt-empty`, `.jt-page-narrow`, `.jt-card--narrow`, `.jt-history` |
+| Field column | `--jt-measure-field` | `40rem` | `.form-control`, `.form-select`, `textarea`, `.jt-notice` |
+| Sign-in column | `--jt-measure-auth` | `26rem` | `.jt-auth` |
+
+The field measure sits on the **controls**, not on `<form>`: a form also wraps toolbars, single
+buttons, filter grids and tables, none of which want a readable-text cap, and as an element rule it
+needed five `max-width: none` escapes to undo it. A control inside a grid column or a compact panel is
+already narrower than the cap, so on the control the rule simply never binds where it shouldn't.
+
+`--jt-target-min` (`24px`) is WCAG 2.2 SC 2.5.8's AA minimum target size, used as a floor via
+`max(1.75rem, var(--jt-target-min))` on `.jt-icon-button` — a rem-sized control must not fall under a
+normative px minimum when the root font-size scales down.
+
+### Shape, elevation, motion
+
+- Radius: cards `--jt-radius-lg` (1.375rem, tightening to 1rem at xxl with the rest of the density
+  block), panels `--bs-border-radius` (0.875rem), controls `--bs-border-radius-sm` (0.625rem).
+- Shadows are soft, layered, warm-tinted (`--jt-shadow-sm/md/lg`, plus `--jt-glow` for accents).
+- Motion is minimal and subject-serving: a 6px page-load rise on `main`, hover lift on the primary
+  button, and focus glow rings. All motion collapses to `0ms` under
+  `prefers-reduced-motion: reduce`.
+
+## Layout primitives
+
+The markup composes these classes; styling lives entirely in `site.css`.
+
+| Primitive | Purpose |
+|---|---|
+| `.app-header` | The deep, glowing command header. Sticky, with brand emblem, active-nav underlight, and a user status chip. |
+| `.jt-page-head` | Page title block: the page's `h1`, with the record it acts on as an `h2` beneath. |
+| `.jt-page-narrow` | Centres a single-purpose, one-action page (create/edit/move/decompose, change password, assign a role…) as one narrow column, so it doesn't hug the left edge of the wide `.container` on large screens. Not for pages that mix a form with a wide table or list. |
+| `.jt-context` | A quiet subtitle line naming the record/context a page acts on (`label` + `strong` value). |
+| `.jt-card` | Generic white surface card. |
+| `.jt-metric` (+ `-label`, `-value`, `-sub`) | The signature metric read-out: a large tabular number under a mono label, with an orange→gold baseline. Used for cost figures. Multi-card layout is Bootstrap's own grid on the markup (`row row-cols-1 row-cols-sm-3 g-3`, each metric a `.col`), not a bespoke grid here. |
+| `.jt-form-card` | Framed card wrapping a primary form (login, create, edit, filters). |
+| `.jt-toolbar` | A wrapping cluster of action buttons/forms, so actions read as a control group. |
+| `.status-pill` (`-ready` / `-blocked`) | A pill for readiness/achievement state, led by a stop/go sign — see below. Add `.status-pill--icon` for the sign alone. |
+| `_IconSprite.cshtml` | Every `<symbol>` in the app, rendered once by `_Layout`. Draw a glyph with `<svg><use href="#jt-icon-…"></use></svg>`; never redefine a symbol in a page. |
+| `.jt-list` | Bare `<ul>` rendered as a stack of chip rows (prerequisites, siblings, blockers). |
+| `.jt-tag` | Inline mono chip for an identifier outside a table. |
+| `.jt-empty` | Dashed empty-state panel ("None.", "No jobs to show."). |
+| `.jt-notice` | Framed informational/denied panel. |
+| `.jt-auth` | Centred column for sign-in / sign-out / access screens. |
+| `.table` | Ledger table — firm header rule, hairline rows, a warm orange hover wash. Never a scrolling box: a table that will not fit reflows (see "Responsiveness"). Wrap it in `.jt-table-block` for spacing. Add `.jt-id` / `.jt-amount` to cells for mono tabular rendering. |
+| `<dl>` | Record card — a label/value grid with a burnt-orange spine, collapsing to one column below 30em. |
+| `.jt-tree-cell` (+ `.jt-tree-guide`, `.jt-tree-label`, `.jt-tree-icon`) | The Browse subtree's description cell, styled as a file-manager listing — see below. |
+| `.jt-col-secondary` | A table column that is dropped below 768px. See "The tree row" for what qualifies. |
+| `.jt-icon-button` (+ `.jt-backdate-trigger`) | A small square glyph button, for an action repeated once per row or list item, or a rare action sitting beside a common one (Backdate, next to Start/Finish). Always carries a visually-hidden name. Add `.jt-icon-button--primary` for the action a row exists for, `.jt-icon-button--danger` for one whose consequence is not undoable in the UI. A `.jt-backdate-trigger` toggles the matching `.jt-backdate-row`/`.jt-backdate-panel` open via `aria-expanded`/`aria-controls` (site.js), rather than opening a floating popup. |
+| `_PickUpButton.cshtml` | The one claim-this-node control (Browse's record card, search rows, subtree rows), always icon-only. Posts `PickUpButtonModel.NodeFieldName`, never `nodeId` — see below. |
+| `.jt-backdate-row` / `.jt-backdate-panel` | The tinted, hidden-by-default expansion a backdate trigger reveals: a full-width table row (`.jt-backdate-row`, one cell spanning the table via `colspan`) or a block under a toolbar (`.jt-backdate-panel`), each wrapping the shared `.jt-backdate-form` (label + `datetime-local` input + submit). |
+
+### Vertical rhythm
+
+**A block-level component owns its own gap to the block below it, in `site.css`, on the
+`--jt-space-*` scale — never as an `mb-*` in the markup.** One shared rule at the top of the
+stylesheet gives every member of the family (`.jt-card`, `.jt-notice`, `.jt-toolbar`,
+`.jt-form-card`, `.jt-table-block`, `.jt-list`, `.jt-empty`, `.jt-page-head`, `.jt-lede`,
+`.jt-context`, `fieldset`, `dl`) the same `margin-bottom`, and drops it for the one that visibly ends
+its container, so a trailing action row never pads out the card it closes. Adding a component to the
+family means adding it to that rule and to `BlockComponentSpacingArchitectureTests`, which enforces
+both halves: the stylesheet must declare the margin, and no markup may restate it.
+
+Two mechanisms for one decision is what made this unguessable before: `.jt-form-card` spaced itself
+while `.jt-card` relied on an `mb-4` at three of its five uses, `<dl>` declared a margin *and* carried
+an `mb-4` at both call sites, `.jt-toolbar` had four different answers across sixteen uses, and
+`.jt-notice` declared nothing — which is how a blocked job's notice came to sit flush against the pill
+below it. The tokens are also breakpoint-scaled where Bootstrap's utilities are fixed `rem`, so a
+utility silently opts its element out of the responsive scale.
+
+A markup utility remains correct for a deliberate per-instance deviation: `mb-0` to cancel the gap, or
+an `mt-*` to add a *top* margin, which is a different decision from the component's own trailing gap.
+
+### Stop and go
+
+Readiness reads as a crossing signal, everywhere it appears: a **red raised palm** when a job is
+blocked, a **green go sign** when it is ready. This is the app's whole vocabulary for "may this
+proceed" — Browse's readiness field, each prerequisite in the Requires list, inherited blockers,
+Awaiting-progress rows, and the `_Readiness` partial all use the same pair, and any new surface
+reporting the same fact must use it too rather than inventing a word or a colour.
+
+Two rules keep it compact and honest:
+
+- **A worded pill where there is room, the sign alone where there is not.** A record card or a
+  standalone statement keeps its label ("Blocked", "Ready — every prerequisite is satisfied");
+  a marker repeated once per row or list item uses `.status-pill--icon`, which drops the word to a
+  visually-hidden span. A state costs a glyph's width per row, never a column.
+- **Blocked is red** (`--jt-red-*`), not the amber it used to be: the pill carries a red palm, and a
+  red hand on an amber ground reads as two states at once. Red is otherwise the error colour, but a
+  blocked job is the nearest thing to a stop the domain has, and the error components
+  (`.jt-notice--error`, `.jt-eyebrow--error`) never sit beside a status pill.
+
+The plain dot lead survives only on pills that report something *other* than readiness — "Active
+since…", which is a running session, not a state that stops or permits work.
+
+### Sessions and the eye icon
+
+**Sessions** is the browser noun for a leaf's work-session collection everywhere it is named or
+linked — page title, heading, links, buttons, empty states — never "Leaf work" or "Work sessions",
+which are retired browser copy (the underlying `WorkSession`/`LeafWork` domain types, `/Jobs/Work`
+route, and JSON field names are unaffected; this is a display-copy rule only).
+
+`jt-icon-sessions` (an outline eye, drawn in the same stroke-outline family as Start/Backdate since
+it is an affordance the viewer takes, not a state) means **only** "view this leaf's sessions." It is
+never repurposed for start, finish, active state, or generic visibility elsewhere — one glyph, one
+meaning, everywhere in the sprite. A standalone toolbar action (Browse's current-leaf toolbar) shows
+the icon plus the word "Sessions"; a dense per-row action (`_WorkRowActions`, used by every leaf row
+in Browse and Awaiting Progress) is icon-only with a `title` and a visually-hidden name, matching the
+existing Start/Finish icon-button convention in that partial.
+
+Multiple simultaneous active workers on one leaf are never collapsed to a single row candidate: the
+Active column reports the total count and a stable, capped worker preview (never readiness red/green
+— active time is operational state, not the stop/go prerequisite vocabulary this section documents
+above), and the neighbouring Sessions action always opens the complete history.
+
+`.status-pill-active` (amber — `--jt-amber-100`/`--jt-amber-700`) is the dedicated colour for this,
+replacing the green `.status-pill-ready` an active-session pill used to borrow before this rule was
+written down: amber is otherwise unclaimed (blocked moved from amber to red, per "Stop and go"
+above), so "someone is clocked in right now" never visually doubles as "this may proceed." Zero
+active workers renders nothing in the column; exactly one keeps the familiar compact stopwatch pill
+(worker named only when it is not the viewer); two or more render a `status-pill-active` "N active"
+pill followed by a stable, wrapping (`d-inline-flex flex-wrap`) name list — the viewer's own session
+labelled "You" first, then every other worker in start order, capped at
+`ActiveSessionSummaryModel.PreviewLimit` in the dense per-row form only (the toolbar/Sessions-page
+summary always names everyone, since it has the width).
+
+Zero active workers is two different facts, and the column distinguishes them. A leaf nobody has
+started renders nothing. A leaf that is `InProgress` with nobody clocked on is **paused** —
+`LeafActivity.IsPaused`, the one place that predicate lives — and gets `.status-pill-paused` via the
+`_PausedPill` partial, carrying the same pause sign as the Pause job button. It is amber ink
+(`--jt-amber-700`, the same "someone is working this job" thread as `.status-pill-active`) on the
+neutral `--jt-slate-50` ground, so "started, nobody on it" reads as neither "running right now" nor
+the settled slate-on-slate "Closed". It is deliberately not a warning colour: ADR 0045 makes zero
+active sessions a valid state from `InProgress`, and Pause job produces it every time. `Closed` wins
+over `Paused` when both apply (an archived leaf can be `InProgress`, and "you cannot start here" is
+the more consequential fact).
+
+### Row actions are glyphs, never words
+
+**Any action repeated once per row or list item is an icon button, never a labelled `.btn`.** A word
+in every row out-shouts the row's own name and pushes the control people are aiming for off a
+stable column. The glyph comes from `_IconSprite.cshtml`, the accessible name from a
+visually-hidden span plus a `title` — never from the glyph alone, and never a bare verb repeated
+identically down the column when the row can name its own target ("Remove dependency on Pour
+foundation (ID 12)", "Revoke token workshop-laptop"). A page's *single* primary action has no
+repetition to earn an icon alone, so a standalone toolbar keeps the glyph **and** the word.
+
+The affordance glyphs are one family — outlined strokes at 1.5–1.6, taking the button's own colour
+— deliberately unlike the filled discs and signs, which report a state rather than offering an
+action:
+
+| Glyph | Means | Where |
+| --- | --- | --- |
+| `jt-icon-start` / `jt-icon-finish` | Start a session / pause-or-finish one | `_WorkRowActions`, Browse toolbar |
+| `jt-icon-backdate` | Reveal the backdate pane | beside Start/Finish |
+| `jt-icon-sessions` | View this leaf's sessions | `_WorkRowActions`, Browse toolbar |
+| `jt-icon-edit` | Correct a recorded session | `_LeafWorkSessions` |
+| `jt-icon-pick-up` | Claim an unassigned node for yourself | `_PickUpButton` |
+| `jt-icon-remove` | Detach a thing from a list (a prerequisite edge, a live token) | Prerequisites, Personal access tokens |
+
+`jt-icon-pick-up` is a **person with a plus** ("assign this to me"), not a hand: `jt-icon-stop`
+already owns the hand silhouette, and a second hand glyph would read as a readiness sign at the
+~14px both actually render at. It sits on each unassigned row, and on the Owner field of Browse's
+record card — the field the action changes — never additionally in the page toolbar: one node's
+claim action appears exactly once, or the reader has to resolve a choice between two identical
+controls before acting.
+
+`jt-icon-remove` is a plain cross, and one glyph covers both "remove" and "revoke": the difference
+is consequence, not kind, so revoke is the same cross tinted with `.jt-icon-button--danger` rather
+than a glyph of its own. It is never a diagonal slash through a disc — that shape belongs to
+`jt-icon-achievement-closed`, which reports a state.
+
+### The claim control's field name
+
+`_PickUpButton` posts its target as `pickUpNodeId` (`PickUpButtonModel.NodeFieldName`), not
+`nodeId`. Model binding is case-insensitive and every form on Browse replays the page's own `NodeId`
+browsing state as a hidden field, so a handler parameter named `nodeId` binds the *first* posted
+value — the node being browsed — and claims that instead of the row that was clicked. Any new
+row-scoped handler on a page with bound route state needs a parameter name that cannot collide the
+same way (`OnPostSetHomeNodeAsync`'s `homeNodeId` is the other instance).
+
+### The tree row
+
+Browse's subtree table is the one place hierarchy is drawn rather than described, so it reads like a
+file manager's list view: each row is indented one `--jt-tree-indent` step per level, an `└` elbow
+connects it to its parent, and a 16px glyph names its kind — an opened container for a root, a
+closed one for a branch, a leaf for a leaf. Same Root/Branch/Leaf vocabulary as the `.jt-kind` chip,
+drawn instead of spelled.
+
+Containers are `--jt-folder-600` (the container blue, used nowhere else) and a leaf is
+`--jt-green-700`, taking the metaphor literally so structure and terminal work separate at a glance.
+Neither is a state: both are glyphs beside a name, and the status pill remains the only thing that
+reports state.
+
+The row carries facts a column used to: there is no Kind column (the glyph names it) and no Archived
+column (a `.jt-tree-flag` archive glyph sits beside the name on the few rows that are archived,
+rather than a column of "no" against every row that isn't).
+
+**Reflow.** Below 768px the table keeps only the name and the work controls; `.jt-col-secondary`
+marks owner, priority, cost, and the span bar, and they are `display: none` at that width. Six
+columns at 320px would squeeze the name to a couple of characters per line and push the page into
+the horizontal scroll WCAG 1.4.10 forbids. Every dropped column is one tap away on the row's own
+page, and the same class does the same job in the flat search-results table. Use it for any column
+that is genuinely redundant at phone width — not for content that assistive tech still needs, which
+belongs in a visually-hidden span instead.
+
+**Row geometry never uses a `style` attribute.** The CSP is `style-src 'self'` with no
+`'unsafe-inline'`, so an inline style is dropped by the browser and whatever it positioned renders
+at zero size — silently, with only a console warning. The span bar carries its per-row geometry as
+SVG `x`/`width` presentation attributes on a rect inside a `viewBox="0 0 100 6"`, which the CSP does
+not police.
+
+Three details are load-bearing:
+
+- **The guide is absolutely positioned** inside the cell, so its rails run the full row height and
+  meet the rows above and below as one unbroken line per ancestor level. The indent is therefore the
+  cell's `padding-left`, set by a per-depth attribute rule bounded by `JobSubtreeLimits.HardMaxDepth`.
+- **Glyphs are drawn with `<use>` from one per-page sprite**, and a `<use>` clone lives in a shadow
+  tree that document CSS cannot select into. Colour reaches it only by inheriting `fill` from the
+  host `<svg>`; every other paint is a presentation attribute on the symbol itself.
+- **Rails, elbows, and glyphs are `aria-hidden` decoration** in the slate leg (the reserved
+  hierarchy-scaffolding colour), so no contrast floor applies to them. Depth and kind reach a screen
+  reader through each row's visually-hidden "Level N, `<kind>`." label instead.
+
+## Responsiveness
+
+Mobile-first and verified down to phone widths:
+
+- The header collapses to the Bootstrap toggler below the `sm` breakpoint.
+- Card rows (the cost metrics) use Bootstrap's `row-cols-*` and collapse to a single column below `sm`.
+- `<dl>` record cards drop to a single stacked column below 30em.
+- **A page scrolls as one unit.** Nothing inside it is its own scrolling region — no `overflow:
+  auto`/`scroll` in `site.css`, no `.table-responsive`/`overflow-auto` in markup
+  (`NestedScrollingRegionArchitectureTests` enforces both). A nested scroller swallows the page's own
+  scroll gesture on a touch device, hides content behind a scrollbar nobody sees, clips popovers, and
+  gives `position: sticky` an inner box to stick to instead of the viewport.
+- A `.table` that will not fit therefore **reflows**: secondary columns drop out at their breakpoints
+  via Bootstrap display utilities (`d-none d-md-table-cell`, `.jt-col-secondary`) and headings wrap.
+  Table headings are not sticky — the only thing they could stick to is the viewport, where the
+  opaque sticky `.app-header` already sits.
+- Type and spacing scale up at the 768px breakpoint.
+
+### Hand-written `@media` rules are a defect until proven otherwise
+
+Every responsive show/hide belongs in the markup as a Bootstrap display utility — `d-none
+d-lg-table-cell`, `d-none d-md-block`, `d-sm-inline` — never as a `display: none` inside a
+hand-written breakpoint in `site.css`. A hand-written breakpoint whose value is one of Bootstrap's
+own (`575.98`/`576`, `767.98`/`768`, `991.98`/`992`, `1199.98`/`1200`, `1399.98`/`1400`)
+reimplements a utility that already exists, and re-stating those numbers as literals also breaks the
+no-magic-numbers rule. Never apply both mechanisms to one element: a custom breakpoint class *and*
+`d-none d-*-…` on the same cell is two systems fighting over one decision. A custom class may still
+carry that element's *visual* treatment (`.jt-col-owner`'s font size) or serve as a test/semantic
+hook; it just must not own the visibility.
+
+The narrow, documented exceptions currently in `site.css` are **seven** `@media` blocks, each with a
+comment saying why, and this list is the whole of them:
+
+1. Root `font-size` scaling (768px).
+2. The xxl whitespace-density token block (1400px).
+3. The phone `.form-control` 16px floor (767.98px — iOS auto-zoom).
+4. The below-lg hiding of `.jt-kind-icon-label--collapsible` (991.98px) — a visually-hidden label
+   with a breakpoint, which Bootstrap ships no variant of and which `d-none d-lg-*` cannot express,
+   because `display: none` would take the text out of the accessibility tree.
+5. The tablet-and-up scale-down of `.jt-backdate-form`'s own controls (768px) — a visual size
+   change, scoped above the 16px floor so it never fights it.
+6. The `--jt-icon-size-kind`/`.jt-tree-cell` token adjustments (991.98px).
+7. The `display: contents` toggle for `.jt-row-action-extra` (767.98px) — Bootstrap ships no
+   `d-*-contents` utility.
+
+Adding an eighth means adding it to this list too.
+
+## Working on the UI
+
+1. Prefer a token or an existing primitive over new bespoke CSS. If a page needs something new,
+   add a named component to `site.css` with a comment, and reuse it.
+2. **Use the class Bootstrap means for the control.** A `<select>` is `.form-select`, not
+   `.form-control` — the Bootstrap 4 spelling loses the caret and the room reserved for it. Site
+   overrides on these controls stay off the right-hand edge (`padding-inline-start`, never the
+   `padding` shorthand) and off the `background` shorthand, both of which would paint over the caret
+   Bootstrap draws there.
+3. Keep Bootstrap vendored files untouched; theme through `--bs-*` overrides and explicit
+   `.btn-*` custom properties (Bootstrap 5.3 compiles some values to literal hex at build time, so
+   the `--bs-primary`/`--bs-link-color` overrides do not reach `a` and `.btn-primary` on their own —
+   those two carry explicit rules; see the comments in `site.css`).
+4. Re-run the end-to-end axe scan after any colour, contrast, or structural change.
+5. No real PII in screenshots or fixtures (`CLAUDE.md`).

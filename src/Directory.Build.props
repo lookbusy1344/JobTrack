@@ -1,0 +1,18 @@
+<Project>
+
+    <!-- MSBuild stops at the first Directory.Build.props found walking up, so the solution-wide one
+         must be imported explicitly rather than inherited. -->
+    <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props"/>
+
+    <PropertyGroup>
+        <!-- Dockerfile.postgresql restores in locked mode against the linux-x64 RID, which NuGet can
+             satisfy only from a RID-specific section of packages.lock.json. Declaring the RID here makes a
+             plain, RID-less restore resolve the same graph, so the committed lock files are stable
+             whichever way they are regenerated. Without it the two restores fight: a solution build
+             rewrites the files without the section and the container build then fails NU1004. Scoped to
+             src/ because those are the projects that carry committed lock files and are published into
+             the image. -->
+        <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    </PropertyGroup>
+
+</Project>

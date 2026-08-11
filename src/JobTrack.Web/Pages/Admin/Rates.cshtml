@@ -1,0 +1,150 @@
+@page
+@using System.Globalization
+@model RatesModel
+@{
+	ViewData["Title"] = "Employee rates";
+}
+
+<div class="jt-page-head">
+	<h1>Rates for @Model.DisplayedUserName</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+<form method="get" asp-page="/Admin/Rates" class="jt-form-card">
+	<div class="form-group">
+		<label asp-for="UserId">Viewing rates for</label>
+		<select asp-for="UserId" class="form-select" asp-items="Model.UserOptions"></select>
+	</div>
+	<button type="submit" class="btn btn-secondary">View</button>
+</form>
+
+@if (Model.Snapshot is not null) {
+	<h2>User cost rates</h2>
+	@if (Model.Snapshot.UserCostRates.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<div class="jt-table-block">
+			<table class="table">
+				<thead>
+				<tr>
+					@* A rate's own figure and the date it took effect are what a phone needs; when it stops
+					   applying (usually "current") comes back on a wider viewport, and Correct shows the
+					   whole record either way. *@
+					<th class="col-4 col-md-3">Amount per hour</th>
+					<th class="col-6 col-md-3">Effective start</th>
+					<th class="col-md-4 d-none d-md-table-cell">Effective end</th>
+					@if (Model.CanManageRates) {
+						<th class="col-2">Actions</th>
+					}
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var rate in Model.Snapshot.UserCostRates) {
+					<tr>
+						<td class="col-4 col-md-3">@rate.Rate.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+						<td class="col-6 col-md-3">@InstantDisplay.Format(rate.Rate.EffectiveStart, Model.ViewerZone)</td>
+						<td class="col-md-4 d-none d-md-table-cell">@(rate.Rate.EffectiveEnd.HasValue ? InstantDisplay.Format(rate.Rate.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
+						@if (Model.CanManageRates) {
+							<td class="col-2">
+								<a asp-page="/Admin/CorrectUserCostRate" asp-route-userId="@Model.UserId"
+								   asp-route-rateId="@rate.Id.Value">Correct</a>
+							</td>
+						}
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+
+	<h2>Node rate overrides</h2>
+	@if (Model.Snapshot.NodeRateOverrides.Count == 0) {
+		<p class="jt-empty">None.</p>
+	} else {
+		<div class="jt-table-block">
+			<table class="table">
+				<thead>
+				<tr>
+					@* Same reflow as the user cost rates above, with the node the override applies to
+					   leading the row. *@
+					<th class="col-3 col-md-2">Node</th>
+					<th class="col-7 col-md-2">Amount per hour</th>
+					<th class="col-md-3 d-none d-md-table-cell">Effective start</th>
+					<th class="col-md-3 d-none d-md-table-cell">Effective end</th>
+					@if (Model.CanManageRates) {
+						<th class="col-2">Actions</th>
+					}
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var overrideResult in Model.Snapshot.NodeRateOverrides) {
+					<tr>
+						<td class="col-3 col-md-2">@overrideResult.Override.NodeId.Value</td>
+						<td class="col-7 col-md-2">@overrideResult.Override.Rate.AmountPerHour.ToString("0.00", CultureInfo.InvariantCulture)</td>
+						<td class="col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(overrideResult.Override.EffectiveStart, Model.ViewerZone)</td>
+						<td class="col-md-3 d-none d-md-table-cell">@(overrideResult.Override.EffectiveEnd.HasValue ? InstantDisplay.Format(overrideResult.Override.EffectiveEnd.Value, Model.ViewerZone) : "current")</td>
+						@if (Model.CanManageRates) {
+							<td class="col-2">
+								<a asp-page="/Admin/CorrectNodeRateOverride" asp-route-userId="@Model.UserId"
+								   asp-route-overrideId="@overrideResult.Id.Value">Correct</a>
+							</td>
+						}
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+} else if (!Model.CanViewRates) {
+	<p class="jt-notice">Current rates are hidden for your role.</p>
+}
+
+@if (Model.CanManageRates) {
+	<h2>Add a user cost rate</h2>
+	<form method="post" asp-page-handler="AddUserCostRate" class="jt-form-card">
+		<input type="hidden" asp-for="UserId"/>
+		<div class="form-group">
+			<label asp-for="UserCostRateInput.AmountPerHour"></label>
+			<input asp-for="UserCostRateInput.AmountPerHour" class="form-control"/>
+			<span asp-validation-for="UserCostRateInput.AmountPerHour" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="UserCostRateInput.EffectiveStart"></label>
+			<input asp-for="UserCostRateInput.EffectiveStart" type="datetime-local" step="60" class="form-control"/>
+			<span asp-validation-for="UserCostRateInput.EffectiveStart" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="UserCostRateInput.EffectiveEnd">Effective end (leave blank if still current)</label>
+			<input asp-for="UserCostRateInput.EffectiveEnd" type="datetime-local" step="60" class="form-control"/>
+		</div>
+		<button type="submit" class="btn btn-primary">Add user cost rate</button>
+	</form>
+
+	<h2>Add a node rate override</h2>
+	<form method="post" asp-page-handler="AddNodeRateOverride" class="jt-form-card">
+		<input type="hidden" asp-for="UserId"/>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.NodeId"></label>
+			<input asp-for="NodeRateOverrideInput.NodeId" class="form-control"/>
+			<span asp-validation-for="NodeRateOverrideInput.NodeId" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.AmountPerHour"></label>
+			<input asp-for="NodeRateOverrideInput.AmountPerHour" class="form-control"/>
+			<span asp-validation-for="NodeRateOverrideInput.AmountPerHour" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.EffectiveStart"></label>
+			<input asp-for="NodeRateOverrideInput.EffectiveStart" type="datetime-local" step="60" class="form-control"/>
+			<span asp-validation-for="NodeRateOverrideInput.EffectiveStart" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="NodeRateOverrideInput.EffectiveEnd">Effective end (leave blank if still current)</label>
+			<input asp-for="NodeRateOverrideInput.EffectiveEnd" type="datetime-local" step="60" class="form-control"/>
+		</div>
+		<button type="submit" class="btn btn-primary">Add node rate override</button>
+	</form>
+}

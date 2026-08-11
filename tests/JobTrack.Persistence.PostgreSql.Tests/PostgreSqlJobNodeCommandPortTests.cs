@@ -1,0 +1,386 @@
+namespace JobTrack.Persistence.PostgreSql.Tests;
+
+using System.Data.Common;
+using System.Globalization;
+using Abstractions;
+using Application;
+using Application.Ports;
+using AwesomeAssertions;
+using Database;
+using NodaTime;
+using Npgsql;
+using Shared.Ports;
+using TestSupport;
+
+public sealed class PostgreSqlJobNodeCommandPortTests()
+	: JobNodeCommandPortContractTestsBase(new PostgreSqlDatabaseFixture())
+{
+	private static readonly TimeSpan RowLockObservationTimeout = TimeSpan.FromSeconds(1);
+
+	protected override SchemaProvider Provider => SchemaProvider.PostgreSql;
+
+	protected override DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);
+
+	protected override ISchemaVersionStore CreateStore() => new PostgreSqlSchemaVersionStore();
+
+	protected override IDeploymentLockStrategy CreateLockStrategy() => new PostgreSqlDeploymentLockStrategy();
+
+	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
+
+	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
+		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+
+	internal override IJobNodeCommandPort CreateCommandPort(string connectionString) =>
+		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+
+	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
+		new AuditQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
+
+	protected override object EncodeInstant(DateTimeOffset value) => value;
+
+	/// <summary>
+	///     ADR 0012's race, exercised through the real command port rather than raw SQL (unlike
+	///     <c>HierarchyMoveSchemaContractTestsBase</c>'s schema-level equivalent): two concurrent
+	///     opposing moves that would each close a cycle acquire schema version 0016's
+	///     <c>move_job_node</c> advisory locks in the same ascending order regardless of which port
+	///     instance calls it, so exactly one commits and the other's deferred cycle trigger rejects
+	///     its move at commit.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_opposing_moves_that_would_create_a_cycle_allow_exactly_one_to_succeed()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var portA = CreateCommandPort(ConnectionString);
+		var portB = CreateCommandPort(ConnectionString);
+
+		var firstParent = await portA.AddChildAsync(CreateRequest(jobManagerId, rootId));
+		var secondParent = await portA.AddChildAsync(CreateRequest(jobManagerId, rootId));
+		var firstChild = await portA.AddChildAsync(CreateRequest(jobManagerId, firstParent.Id));
+		var secondChild = await portA.AddChildAsync(CreateRequest(jobManagerId, secondParent.Id));
+
+		var results = await Task.WhenAll(
+			TryMoveAsync(portA, jobManagerId, firstParent, secondChild.Id),
+			TryMoveAsync(portB, jobManagerId, secondParent, firstChild.Id));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+	}
+
+	/// <summary>
+	///     ADR 0061's cascade spans six tables and must be one ACID transaction: two administrators
+	///     concurrently deleting the same subtree must leave exactly one winner, and the loser must not
+	///     have half-removed anything. Proves the whole subtree is gone (no orphaned
+	///     <c>leaf_work</c>/<c>work_session</c> row survives its <c>job_node</c>) rather than merely that
+	///     one call threw.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_deletions_of_the_same_subtree_allow_exactly_one_to_succeed_and_leave_nothing_behind()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.subtree-race", EmployeeRole.Administrator);
+		var portA = CreateCommandPort(ConnectionString);
+		var portB = CreateCommandPort(ConnectionString);
+
+		var branch = await portA.AddChildAsync(CreateRequest(jobManagerId, rootId));
+		var child = await portA.AddChildAsync(CreateRequest(jobManagerId, branch.Id));
+
+		// Seeded directly rather than through the ports: the base class's session helper is private,
+		// and this test only needs the rows to exist so the cascade has more than one table to span.
+		await using (var seedConnection = new NpgsqlConnection(ConnectionString)) {
+			await seedConnection.OpenAsync();
+			await using var seed = seedConnection.CreateCommand();
+			seed.CommandText = """
+							   INSERT INTO leaf_work (job_node_id) VALUES (@jobNodeId);
+							   INSERT INTO work_session (leaf_work_id, worked_by_user_id, started_at, finished_at)
+							   VALUES (@jobNodeId, @workerId, '2026-01-01T09:00:00Z', '2026-01-01T10:00:00Z');
+							   """;
+			seed.Parameters.AddWithValue("jobNodeId", child.Id.Value);
+			seed.Parameters.AddWithValue("workerId", workerId.Value);
+			_ = await seed.ExecuteNonQueryAsync();
+		}
+
+		var results = await Task.WhenAll(
+			TryDeleteSubtreeAsync(portA, administratorId, branch),
+			TryDeleteSubtreeAsync(portB, administratorId, branch));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+
+		await using var connection = new NpgsqlConnection(ConnectionString);
+		await connection.OpenAsync();
+		foreach (var (table, column) in new[] { ("job_node", "id"), ("leaf_work", "job_node_id"), ("work_session", "leaf_work_id") }) {
+			await using var command = connection.CreateCommand();
+			command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {column} = @id;";
+			command.Parameters.AddWithValue("id", child.Id.Value);
+			Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture)
+				.Should().Be(0, $"{table} must not outlive the deleted subtree");
+		}
+	}
+
+	private static async Task<bool> TryDeleteSubtreeAsync(
+		IJobNodeCommandPort port, AppUserId actorId, JobNodeResult subtreeRoot)
+	{
+		try {
+			_ = await port.DeleteSubtreeAsync(new() {
+				Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() },
+				RootId = subtreeRoot.Id,
+				Version = subtreeRoot.Version,
+				Reason = "Concurrent subtree deletion race.",
+			});
+			return true;
+		}
+		catch (JobTrackException) {
+			return false;
+		}
+	}
+
+	/// <summary>
+	///     job_node_parent_has_no_leaf_work (schema version 0006) is a <c>DEFERRABLE INITIALLY DEFERRED</c>
+	///     constraint trigger: it only fires at <c>COMMIT</c>, after <c>SaveChangesAsync</c> has already
+	///     succeeded. This proves the port translates that commit-time failure into a
+	///     <see cref="JobTrackException" /> rather than letting a raw provider exception cross the facade.
+	/// </summary>
+	[Fact]
+	public async Task Creating_a_child_under_a_node_that_holds_leaf_work_throws_an_invariant_violation()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(ConnectionString);
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, rootId));
+		await using var connection = new NpgsqlConnection(ConnectionString);
+		await connection.OpenAsync();
+		await using (var command = connection.CreateCommand()) {
+			command.CommandText = "INSERT INTO leaf_work (job_node_id) VALUES (@jobNodeId);";
+			command.Parameters.AddWithValue("jobNodeId", leaf.Id.Value);
+			_ = await command.ExecuteNonQueryAsync();
+		}
+
+		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, leaf.Id));
+
+		await act.Should().ThrowAsync<InvariantViolationException>();
+	}
+
+	/// <summary>
+	///     ADR 0012's other proven race (spike 02-prerequisite-cycle.sql): two concurrent edge inserts
+	///     that are each individually acyclic from their own transaction's point of view (A-&gt;B and
+	///     B-&gt;A submitted at the same time) can otherwise both commit and jointly create a cycle. The
+	///     <c>jobtrack:prerequisite-graph-writes</c> advisory lock inside <c>add_job_prerequisite</c>
+	///     serializes them, so exactly one commits and the other's deferred cycle trigger rejects it.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_opposing_prerequisite_edges_that_would_create_a_cycle_allow_exactly_one_to_succeed()
+	{
+		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
+		var portA = CreateCommandPort(ConnectionString);
+		var portB = CreateCommandPort(ConnectionString);
+		var a = await portA.AddChildAsync(CreateRequest(jobManagerId, rootId));
+		var b = await portA.AddChildAsync(CreateRequest(jobManagerId, rootId));
+
+		var results = await Task.WhenAll(
+			TryAddPrerequisiteAsync(portA, jobManagerId, a.Id, b.Id),
+			TryAddPrerequisiteAsync(portB, jobManagerId, b.Id, a.Id));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+	}
+
+	/// <summary>
+	///     Ownership model §4.3: pickup's correctness mechanism is the conditional
+	///     <c>WHERE owner_user_id IS NULL</c> update, not a lock -- two concurrent claimants racing the
+	///     same unassigned node must have exactly one win, the other seeing zero rows affected and
+	///     throwing <c>job-node-already-claimed</c> rather than silently overwriting the winner's claim.
+	/// </summary>
+	[Fact]
+	public Task Concurrent_imports_naming_one_home_node_account_leave_a_committed_home_node() =>
+		AssertConcurrentHomeNodeImportsLeaveOneCommittedHomeNodeAsync();
+
+	[Fact]
+	public async Task Concurrent_pickups_of_the_same_unassigned_node_allow_exactly_one_to_succeed()
+	{
+		var (rootId, jobManagerId, workerA) = await SeedRootAndUsersAsync();
+		var workerB = await SeedEmployeeAsync("Other Worker", "other.worker.pickup-race", EmployeeRole.Worker);
+		var portA = CreateCommandPort(ConnectionString);
+		var portB = CreateCommandPort(ConnectionString);
+		var unassigned = await portA.AddChildAsync(new() {
+			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Unassigned pool leaf",
+			OwnerUserId = null,
+			Priority = Priority.Medium,
+		});
+
+		var results = await Task.WhenAll(
+			TryPickUpAsync(portA, workerA, unassigned.Id),
+			TryPickUpAsync(portB, workerB, unassigned.Id));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+	}
+
+	[Fact]
+	public async Task Assigning_an_owner_serializes_with_a_concurrent_requester_role_grant()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(ConnectionString);
+
+		await using var roleConnection = new NpgsqlConnection(ConnectionString);
+		await roleConnection.OpenAsync();
+		await using var roleTransaction = await roleConnection.BeginTransactionAsync();
+		await using (var lockCommand = roleConnection.CreateCommand()) {
+			lockCommand.Transaction = roleTransaction;
+			lockCommand.CommandText = "SELECT id FROM identity_user WHERE app_user_id = @appUserId FOR UPDATE;";
+			lockCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			_ = await lockCommand.ExecuteScalarAsync();
+		}
+
+		var assignment = port.AddChildAsync(new() {
+			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootId,
+			Description = "Concurrently assigned node",
+			OwnerUserId = workerId,
+			Priority = Priority.Medium,
+		});
+
+		var firstCompleted = await Task.WhenAny(assignment, Task.Delay(RowLockObservationTimeout));
+		firstCompleted.Should().NotBe(assignment, "owner eligibility must wait for the target account's role lock");
+
+		await using (var grantCommand = roleConnection.CreateCommand()) {
+			grantCommand.Transaction = roleTransaction;
+			grantCommand.CommandText = """
+									   INSERT INTO identity_user_role (identity_user_id, identity_role_id)
+									   SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
+									   """;
+			grantCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			grantCommand.Parameters.AddWithValue("roleId", (short)EmployeeRole.Requester);
+			_ = await grantCommand.ExecuteNonQueryAsync();
+		}
+
+		await roleTransaction.CommitAsync();
+
+		var completed = await Task.WhenAny(assignment, Task.Delay(RowLockObservationTimeout));
+		completed.Should().Be(assignment);
+		assignment.IsFaulted.Should().BeTrue();
+		assignment.Exception!.InnerExceptions.Should().ContainSingle()
+			.Which.Should().BeOfType<InvariantViolationException>()
+			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
+	}
+
+	/// <summary>
+	///     The begin-work target's eligibility is checked in the create's own transaction, so a role grant
+	///     that would disqualify the worker cannot slip between the check and the write: the create blocks
+	///     on the target account's row lock, then fails once the concurrent grant commits — and, because
+	///     the node and its session share one transaction, leaves no half-created node behind.
+	/// </summary>
+	[Fact]
+	public async Task Beginning_work_on_a_new_node_serializes_with_a_concurrent_requester_role_grant()
+	{
+		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
+		var port = CreateCommandPort(ConnectionString);
+		var childrenBefore = await CountChildrenAsync(rootId);
+
+		await using var roleConnection = new NpgsqlConnection(ConnectionString);
+		await roleConnection.OpenAsync();
+		await using var roleTransaction = await roleConnection.BeginTransactionAsync();
+		await using (var lockCommand = roleConnection.CreateCommand()) {
+			lockCommand.Transaction = roleTransaction;
+			lockCommand.CommandText = "SELECT id FROM identity_user WHERE app_user_id = @appUserId FOR UPDATE;";
+			lockCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			_ = await lockCommand.ExecuteScalarAsync();
+		}
+
+		var creation = port.AddChildAsync(CreateRequest(jobManagerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
+
+		var firstCompleted = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
+		firstCompleted.Should().NotBe(creation, "begin-work eligibility must wait for the target account's role lock");
+
+		await using (var grantCommand = roleConnection.CreateCommand()) {
+			grantCommand.Transaction = roleTransaction;
+			grantCommand.CommandText = """
+									   INSERT INTO identity_user_role (identity_user_id, identity_role_id)
+									   SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
+									   """;
+			grantCommand.Parameters.AddWithValue("appUserId", workerId.Value);
+			grantCommand.Parameters.AddWithValue("roleId", (short)EmployeeRole.Requester);
+			_ = await grantCommand.ExecuteNonQueryAsync();
+		}
+
+		await roleTransaction.CommitAsync();
+
+		var completed = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
+		completed.Should().Be(creation);
+		creation.IsFaulted.Should().BeTrue();
+		creation.Exception!.InnerExceptions.Should().ContainSingle()
+			.Which.Should().BeOfType<InvariantViolationException>()
+			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
+		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
+	}
+
+	private async Task<long> CountChildrenAsync(JobNodeId parentId)
+	{
+		await using var connection = new NpgsqlConnection(ConnectionString);
+		await connection.OpenAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT COUNT(*) FROM job_node WHERE parent_id = @parentId;";
+		command.Parameters.AddWithValue("parentId", parentId.Value);
+		return (long)(await command.ExecuteScalarAsync())!;
+	}
+
+	/// <summary>
+	///     The loser of the race can surface either exception depending on interleaving: the conditional
+	///     <c>WHERE owner_user_id IS NULL</c> update losing after passing a stale authorization check
+	///     (<see cref="InvariantViolationException" />, "job-node-already-claimed"), or a fresh
+	///     authorization re-check already seeing the winner's committed claim
+	///     (<see cref="AuthorizationDeniedException" />) if it starts after the winner has already
+	///     committed. Both mean "did not win the race" -- <see cref="JobPickupPolicy" /> denies pickup of
+	///     an already-owned node identically regardless of which side of the race caused it.
+	/// </summary>
+	private static async Task<bool> TryPickUpAsync(IJobNodeCommandPort port, AppUserId actor, JobNodeId nodeId)
+	{
+		try {
+			_ = await port.PickUpAsync(new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = nodeId });
+			return true;
+		}
+		catch (InvariantViolationException) {
+			return false;
+		}
+		catch (AuthorizationDeniedException) {
+			return false;
+		}
+	}
+
+	private static async Task<bool> TryAddPrerequisiteAsync(
+		IJobNodeCommandPort port, AppUserId actor, JobNodeId requiredJobId, JobNodeId dependentJobId)
+	{
+		try {
+			await port.AddPrerequisiteAsync(new() {
+				Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+				RequiredJobId = requiredJobId,
+				DependentJobId = dependentJobId,
+			});
+			return true;
+		}
+		catch (InvariantViolationException) {
+			return false;
+		}
+	}
+
+	private static CreateJobNodeRequest CreateRequest(AppUserId actor, JobNodeId parentId) => new() {
+		Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+		ParentId = parentId,
+		Description = "Do the thing",
+		OwnerUserId = actor,
+		Priority = Priority.Medium,
+	};
+
+	private static async Task<bool> TryMoveAsync(
+		IJobNodeCommandPort port, AppUserId actor, JobNodeResult node, JobNodeId newParentId)
+	{
+		try {
+			_ = await port.MoveAsync(new() {
+				Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+				NodeId = node.Id,
+				NewParentId = newParentId,
+				Version = node.Version,
+			});
+			return true;
+		}
+		catch (InvariantViolationException) {
+			return false;
+		}
+	}
+}

@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <!-- §2.3 of the 2026-07-28 fresh-eyes review: this project's latency ceilings are measured
+             and enforced against scripts/perf-test.sh's isolated, serialized invocation only, never
+             against a `dotnet test JobTrack.slnx` run where other PostgreSQL-backed projects'
+             residual database housekeeping (hundreds of disposable databases created/dropped) still
+             contends for the same local instance. IsTestProject=false makes a solution-wide
+             `dotnet test` skip this project's test execution entirely (it still builds normally, so
+             a compile error here still fails `dotnet build JobTrack.slnx`); scripts/perf-test.sh
+             overrides it back to true with `-p:IsTestProject=true` for its own deliberate, direct
+             invocation. -->
+        <IsTestProject>false</IsTestProject>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Test method names use underscores by convention (Method_does_thing); CA1707 covers
+             that. IDE0058 is suppressed only here: AwesomeAssertions .Should()... chains are
+             expression statements whose value is intentionally discarded. Source projects do not
+             suppress IDE0058 — they use explicit discards instead. -->
+        <NoWarn>$(NoWarn);CA1707;IDE0058</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AwesomeAssertions"/>
+        <PackageReference Include="coverlet.collector">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+        <PackageReference Include="xunit"/>
+        <PackageReference Include="xunit.runner.visualstudio">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\JobTrack.TestSupport\JobTrack.TestSupport.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Database\JobTrack.Database.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Persistence.PostgreSql\JobTrack.Persistence.PostgreSql.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
+</Project>

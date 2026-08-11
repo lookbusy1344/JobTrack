@@ -1,0 +1,341 @@
+namespace JobTrack.Domain.Tests.Costing;
+
+using System.Diagnostics;
+using Abstractions;
+using AwesomeAssertions;
+using Domain.Costing;
+using Domain.Hierarchy;
+using Domain.Intervals;
+using Domain.Rates;
+using Domain.Schedules;
+using NodaTime;
+
+public sealed class CostEngineTests
+{
+	private static readonly JobNodeId RootId = new(1);
+	private static readonly JobNodeId LeafId = new(2);
+	private static readonly JobNodeId OtherLeafId = new(3);
+	private static readonly WorkSessionId Session1 = new(1);
+	private static readonly WorkSessionId Session2 = new(2);
+
+	private static readonly WorkInterval FullDay = new(At(0), At(24));
+
+	private static Instant At(int hour) => hour == 24 ? Instant.FromUtc(2024, 1, 2, 0, 0) : Instant.FromUtc(2024, 1, 1, hour, 0);
+
+	private static Dictionary<JobNodeId, HierarchyNode> SingleLeafUnderRoot()
+	{
+		var root = new HierarchyNode(RootId, null, [LeafId], null);
+		var leaf = new HierarchyNode(LeafId, RootId, [], Achievement.InProgress);
+		return new() { [RootId] = root, [LeafId] = leaf };
+	}
+
+	private static Dictionary<JobNodeId, HierarchyNode> TwoLeavesUnderRoot()
+	{
+		var root = new HierarchyNode(RootId, null, [LeafId, OtherLeafId], null);
+		var first = new HierarchyNode(LeafId, RootId, [], Achievement.InProgress);
+		var second = new HierarchyNode(OtherLeafId, RootId, [], Achievement.InProgress);
+		return new() { [RootId] = root, [LeafId] = first, [OtherLeafId] = second };
+	}
+
+	[Fact]
+	public void A_single_uncontested_session_costs_its_full_duration_at_the_default_rate()
+	{
+		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(11))) };
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], SingleLeafUnderRoot(), [], [], FullDay);
+
+		var costs = CostEngine.AggregateExactCosts(RootId, allocations, SingleLeafUnderRoot(), [FullDay], [], [], [], new HourlyRate(60m));
+
+		costs[LeafId].Should().Be(new(120m));
+		costs[RootId].Should().Be(new(120m));
+	}
+
+	[Fact]
+	public void The_spec_worked_example_produces_the_hand_calculated_leaf_and_root_cost()
+	{
+		// [09:00,11:00) session1 alone: 2h @ 60 = 120.
+		// [11:00,12:00) both sessions share 1h: each 0.5h @ 60 = 30 + 30.
+		// [12:00,13:00) session2 alone: 1h @ 60 = 60.
+		// Total: 120 + 30 + 30 + 60 = 240.
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(12))), new CostableSession(Session2, OtherLeafId, new(At(11), At(13))),
+		};
+		var nodes = TwoLeavesUnderRoot();
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], FullDay);
+
+		var costs = CostEngine.AggregateExactCosts(RootId, allocations, nodes, [FullDay], [], [], [], new HourlyRate(60m));
+
+		costs[LeafId].Should().Be(new(150m));
+		costs[OtherLeafId].Should().Be(new(90m));
+		costs[RootId].Should().Be(new(240m));
+	}
+
+	[Fact]
+	public void Concurrent_sessions_produce_a_deterministically_ordered_trace_and_active_session_ids()
+	{
+		// Same overlap as the spec worked example: [11:00,12:00) has both sessions active in one
+		// segment. The trace is a canonical explanation surfaced to callers (audit/display), so its
+		// entry order (by segment start, then session id) and each segment's ActiveSessionIds order
+		// (ascending session id) must be deterministic rather than an artifact of allocation order.
+		var sessions = new[] {
+			new CostableSession(Session2, OtherLeafId, new(At(11), At(13))), new CostableSession(Session1, LeafId, new(At(9), At(12))),
+		};
+		var nodes = TwoLeavesUnderRoot();
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], FullDay);
+
+		var result = CostEngine.Calculate(RootId, allocations, nodes, [FullDay], [], [], [], new HourlyRate(60m));
+
+		result.Trace.Select(entry => entry.Segment.Start).Should().BeInAscendingOrder();
+		var overlapSegmentIds = result.Trace
+			.Where(entry => entry.Segment == new WorkInterval(At(11), At(12)))
+			.Select(entry => entry.SessionId)
+			.ToArray();
+		overlapSegmentIds.Should().Equal(Session1, Session2);
+
+		var overlapActiveSessionIds = result.Trace
+			.Single(entry => entry.Segment == new WorkInterval(At(11), At(12)) && entry.SessionId == Session1)
+			.ActiveSessionIds;
+		overlapActiveSessionIds.Should().Equal(Session1, Session2);
+	}
+
+	[Fact]
+	public void A_node_override_boundary_changes_the_rate_applied_to_each_side_of_the_split()
+	{
+		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(0), At(24))) };
+		var rootOverride = new NodeRateOverride(RootId, new(100m), At(12), null);
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], SingleLeafUnderRoot(), [rootOverride], [], FullDay);
+
+		var costs = CostEngine.AggregateExactCosts(RootId, allocations, SingleLeafUnderRoot(), [FullDay], [], [rootOverride], [],
+			new HourlyRate(60m));
+
+		// [00:00,12:00): no override yet, default rate 60 -> 12h * 60 = 720.
+		// [12:00,24:00): root override applies, rate 100 -> 12h * 100 = 1200.
+		costs[LeafId].Should().Be(new(1920m));
+	}
+
+	[Fact]
+	public void Calculation_returns_the_canonical_explainable_segment_trace()
+	{
+		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(11))) };
+		var nodes = SingleLeafUnderRoot();
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], FullDay);
+
+		var result = CostEngine.Calculate(RootId, allocations, nodes, [FullDay], [], [], [], new HourlyRate(60m));
+
+		result.ExactCosts[RootId].Should().Be(new(120m));
+		result.AllocatedDurations[LeafId].ToHours().Should().Be(2m);
+		result.AllocatedDurations[RootId].ToHours().Should().Be(2m);
+		result.Trace.Should().ContainSingle();
+		result.Trace[0].Should().Be(new CostSegmentTrace(
+			new(At(9), At(11)),
+			true,
+			[Session1],
+			Session1,
+			LeafId,
+			new(Duration.FromHours(2).BclCompatibleTicks, 1),
+			new(new(60m), RateSource.UserDefault),
+			new(120m)));
+	}
+
+	[Fact]
+	public void A_foreign_sessions_concurrency_contribution_influences_cost_without_leaking_its_identity()
+	{
+		// Root has two sibling branches: BranchA (containing LeafId) and OtherLeafId (a leaf
+		// directly under root). Both sessions belong to one worker and overlap [10:00,11:00),
+		// so they share the concurrency divisor even though OtherLeafId sits outside BranchA's
+		// subtree — the scenario ADR 0017 exists for.
+		var branchId = new JobNodeId(4);
+		var root = new HierarchyNode(RootId, null, [branchId, OtherLeafId], null);
+		var branch = new HierarchyNode(branchId, RootId, [LeafId], null);
+		var leaf = new HierarchyNode(LeafId, branchId, [], Achievement.InProgress);
+		var otherLeaf = new HierarchyNode(OtherLeafId, RootId, [], Achievement.InProgress);
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RootId] = root,
+			[branchId] = branch,
+			[LeafId] = leaf,
+			[OtherLeafId] = otherLeaf,
+		};
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(11))), new CostableSession(Session2, OtherLeafId, new(At(10), At(12))),
+		};
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], FullDay);
+
+		var result = CostEngine.Calculate(branchId, allocations, nodes, [FullDay], [], [], [], new HourlyRate(60m));
+
+		// [09:00,10:00) session1 alone: 1h @ 60 = 60.
+		// [10:00,11:00) both sessions share: session1 gets 0.5h @ 60 = 30.
+		result.ExactCosts.Should().ContainKeys(branchId, LeafId);
+		result.ExactCosts.Should().NotContainKey(OtherLeafId);
+		result.ExactCosts[branchId].Should().Be(new(90m));
+		result.AllocatedDurations.Should().ContainKeys(branchId, LeafId);
+		result.AllocatedDurations.Should().NotContainKey(OtherLeafId);
+		result.AllocatedDurations[branchId].ToHours().Should().Be(1.5m);
+
+		result.Trace.Should().OnlyContain(entry => entry.NodeId == LeafId);
+		result.Trace.SelectMany(entry => entry.ActiveSessionIds).Should().NotContain(Session2);
+	}
+
+	[Fact]
+	public void A_priced_additive_exception_inside_normal_working_time_is_costed_at_its_override_rate()
+	{
+		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(12))) };
+		var overtime = new ScheduleExceptionEntry(
+			ScheduleExceptionEffect.AddWorkingTime, new(At(10), At(11)), new HourlyRate(100m));
+		var nodes = SingleLeafUnderRoot();
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [overtime], [], [], FullDay);
+
+		var result = CostEngine.Calculate(RootId, allocations, nodes, [FullDay], [overtime], [], [], new HourlyRate(60m));
+
+		result.ExactCosts[RootId].Should().Be(new(220m));
+		result.Trace.Select(entry => entry.ResolvedRate.Rate).Should().Equal(new HourlyRate(60m), new HourlyRate(100m), new HourlyRate(60m));
+	}
+
+	[Fact]
+	public void Trace_marks_exception_only_time_as_not_scheduled_working_time()
+	{
+		var scheduled = new[] { new WorkInterval(At(9), At(17)) };
+		var overtime = new ScheduleExceptionEntry(
+			ScheduleExceptionEffect.AddWorkingTime, new(At(18), At(20)), null);
+		var effective = ScheduleExceptionResolver.Apply(scheduled, [overtime]);
+		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(18), At(19))) };
+		var nodes = SingleLeafUnderRoot();
+		var allocations = CostSegmentPartitioner.Partition(sessions, effective, nodes, [overtime], [], [], FullDay);
+
+		var result = CostEngine.Calculate(RootId, allocations, nodes, scheduled, [overtime], [], [], new HourlyRate(60m));
+
+		result.Trace.Should().ContainSingle().Which.IsWorkingTime.Should().BeFalse();
+	}
+
+	/// <summary>
+	///     The trace's scheduled-working-time stamp is a pure "does this segment intersect any scheduled
+	///     interval" predicate, so it cannot depend on the order — or the overlap structure — of the
+	///     scheduled set. Pins that across the binary-search optimisation, since
+	///     <see cref="CostEngine.Calculate" /> is public API and cannot require a normalized set.
+	/// </summary>
+	[Fact]
+	public void Trace_scheduled_working_time_stamps_are_independent_of_scheduled_interval_order()
+	{
+		WorkInterval[] scheduled = [new(At(9), At(12)), new(At(13), At(17)), new(At(20), At(22))];
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(10), At(11))), new CostableSession(Session2, OtherLeafId, new(At(18), At(19))),
+		};
+		var nodes = TwoLeavesUnderRoot();
+		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], [], FullDay);
+
+		var inOrder = CostEngine.Calculate(RootId, allocations, nodes, scheduled, [], [], [], new HourlyRate(60m));
+		var reversed = CostEngine.Calculate(
+			RootId, allocations, nodes, scheduled.Reverse().ToArray(), [], [], [], new HourlyRate(60m));
+		var overlapping = CostEngine.Calculate(
+			RootId, allocations, nodes, [new(At(9), At(14)), new(At(11), At(17)), new(At(20), At(22))], [], [], [],
+			new HourlyRate(60m));
+
+		var expected = inOrder.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).ToArray();
+		expected.Should().BeEquivalentTo([(Session1.Value, true), (Session2.Value, false)]);
+		reversed.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).Should().Equal(expected);
+		overlapping.Trace.Select(entry => (entry.SessionId.Value, entry.IsWorkingTime)).Should().Equal(expected);
+	}
+
+	private static CostScenario BuildDailyExceptionScenario(int days)
+	{
+		var sessions = new List<CostableSession>(days);
+		var workingIntervals = new List<WorkInterval>(days);
+		var exceptions = new List<ScheduleExceptionEntry>(days);
+		for (var day = 0; day < days; ++day) {
+			var dayStart = Instant.FromUtc(2021, 1, 1, 0, 0) + Duration.FromDays(day);
+			sessions.Add(new(new(day + 1), LeafId, new(dayStart + Duration.FromHours(9), dayStart + Duration.FromHours(10))));
+			workingIntervals.Add(new(dayStart, dayStart + Duration.FromHours(24)));
+			exceptions.Add(new(
+				ScheduleExceptionEffect.RemoveWorkingTime,
+				new(dayStart + Duration.FromHours(12), dayStart + Duration.FromHours(13)),
+				null));
+		}
+
+		var nodes = SingleLeafUnderRoot();
+		var bounds = new WorkInterval(
+			Instant.FromUtc(2021, 1, 1, 0, 0), Instant.FromUtc(2021, 1, 1, 0, 0) + Duration.FromDays(days));
+		var allocations = CostSegmentPartitioner.Partition(sessions, workingIntervals, nodes, exceptions, [], [], bounds);
+		return new(RootId, allocations, nodes, workingIntervals, exceptions, days * 60m);
+	}
+
+	private static TimeSpan FastestCalculate(CostScenario scenario, int workerCount, int attempts)
+	{
+		var fastest = TimeSpan.MaxValue;
+		for (var attempt = 0; attempt < attempts; ++attempt) {
+			var stopwatch = Stopwatch.StartNew();
+			CostCalculation calculation = null!;
+			for (var worker = 0; worker < workerCount; ++worker) {
+				calculation = CostEngine.Calculate(
+					scenario.RootId, scenario.Allocations, scenario.Nodes, scenario.WorkingIntervals,
+					scenario.Exceptions, [], [], new HourlyRate(60m));
+			}
+
+			stopwatch.Stop();
+			calculation.ExactCosts[scenario.RootId].Should().Be(new(scenario.ExpectedCost));
+			if (stopwatch.Elapsed < fastest) {
+				fastest = stopwatch.Elapsed;
+			}
+		}
+
+		return fastest;
+	}
+
+	/// <summary>
+	///     The long-history scale's engine-side shape (performance-budgets.md §1: 5 years of daily
+	///     sessions and daily unpriced schedule exceptions per worker, 20 workers), isolated from any
+	///     database. Rate resolution runs once per allocation, and each resolution must not scan the
+	///     worker's full exception list — that is O(allocations × exceptions) across a shape where every
+	///     exception here is an unpriced <see cref="ScheduleExceptionEffect.RemoveWorkingTime" /> entry
+	///     that can never resolve a rate.
+	///     <para>
+	///         Asserted as a growth-rate comparison (full scale against a tenth-scale baseline) rather than
+	///         an absolute wall-clock ceiling: the fast lane runs alongside dozens of other parallelized
+	///         test assemblies, so an absolute-millisecond budget is a false-failure trap under contention.
+	///         An O(exceptions) scan grows with input size roughly in step with it; an O(exceptions²) scan
+	///         grows roughly with its square, so the two shapes stay separated by orders of magnitude
+	///         regardless of machine load — each scenario also keeps its fastest of several attempts, which
+	///         filters out contention spikes on either side. The serialized perf lane's
+	///         <c>LongHistoryScalePerformanceTests</c> owns the tight end-to-end absolute ceilings.
+	///     </para>
+	/// </summary>
+	[Fact]
+	public void Costing_twenty_workers_of_five_year_daily_sessions_against_daily_exceptions_stays_fast()
+	{
+		const int fullScaleDays = 5 * 365;
+		const int baselineScaleDays = fullScaleDays / 10;
+		const int workerCount = 20;
+		const int attemptsPerScale = 5;
+		const double maxAllowedGrowthMultiplier = 4;
+
+		var baselineScenario = BuildDailyExceptionScenario(baselineScaleDays);
+		var fullScenario = BuildDailyExceptionScenario(fullScaleDays);
+
+		FastestCalculate(baselineScenario, workerCount, attemptsPerScale);
+		var baselineElapsed = FastestCalculate(baselineScenario, workerCount, attemptsPerScale);
+		var fullElapsed = FastestCalculate(fullScenario, workerCount, attemptsPerScale);
+
+		var sizeRatio = (double)fullScaleDays / baselineScaleDays;
+		var maxAllowedFullElapsed = TimeSpan.FromTicks(
+			(long)(Math.Max(baselineElapsed.Ticks, 1) * sizeRatio * maxAllowedGrowthMultiplier));
+		fullElapsed.Should().BeLessThan(
+			maxAllowedFullElapsed,
+			"rate resolution must not scan every schedule exception per allocation: at {0}x the input size, " +
+			"an O(n) scan should stay within a generous multiple of {0}x the baseline time, while an O(n²) " +
+			"scan would grow by roughly {0}x² and blow through it",
+			sizeRatio);
+	}
+
+	private sealed class CostScenario(
+		JobNodeId rootId,
+		IReadOnlyList<SessionSegmentAllocation> allocations,
+		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodes,
+		IReadOnlyList<WorkInterval> workingIntervals,
+		IReadOnlyList<ScheduleExceptionEntry> exceptions,
+		decimal expectedCost)
+	{
+		public JobNodeId RootId => rootId;
+		public IReadOnlyList<SessionSegmentAllocation> Allocations => allocations;
+		public IReadOnlyDictionary<JobNodeId, HierarchyNode> Nodes => nodes;
+		public IReadOnlyList<WorkInterval> WorkingIntervals => workingIntervals;
+		public IReadOnlyList<ScheduleExceptionEntry> Exceptions => exceptions;
+		public decimal ExpectedCost => expectedCost;
+	}
+}

@@ -1,0 +1,14 @@
+@model bool
+@* "Paused": In Progress with nobody clocked on (LeafActivity.IsPaused). Carries the same pause sign
+   as the Pause job button, and its own neutral-ground colour -- not the amber "someone is working
+   now", not the slate "Closed", and emphatically not a warning: this is a valid, ordinary state.
+
+   The model is Compact (default false, so Work.cshtml's own unparameterised usage renders exactly as
+   before): a table cell (via _ActiveSincePill) has no worker-name list competing for room the way the
+   active-count pill does, so it keeps the full word too, just sized down (status-pill--compact). *@
+<span class="status-pill status-pill-paused@(Model ? " status-pill--compact" : string.Empty)">
+	<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+		<use href="#jt-icon-finish"></use>
+	</svg>
+	Paused
+</span>

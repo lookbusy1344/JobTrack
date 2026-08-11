@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <PackageId>JobTrack.AdminCli</PackageId>
+        <Description>Narrowly scoped administrative CLI: schema deployment invocation, one-time bootstrap, and emergency password reset. Invokes library commands; does not reimplement them.</Description>
+        <!-- Application host, not a consumed library surface — no public API doc requirement. -->
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\JobTrack.Application\JobTrack.Application.csproj"/>
+        <ProjectReference Include="..\JobTrack.Identity\JobTrack.Identity.csproj"/>
+        <ProjectReference Include="..\JobTrack.Persistence.PostgreSql\JobTrack.Persistence.PostgreSql.csproj"/>
+        <ProjectReference Include="..\JobTrack.Persistence.Sqlite\JobTrack.Persistence.Sqlite.csproj"/>
+    </ItemGroup>
+
+</Project>

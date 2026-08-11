@@ -1,0 +1,179 @@
+@page
+@using JobTrack.Abstractions
+@using NodaTime
+@model AwaitingProgressModel
+@{
+	ViewData["Title"] = "Jobs awaiting progress";
+}
+
+<div class="jt-page-head">
+	<h1>Jobs awaiting progress</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+@* The dashboard is always scoped to exactly one node -- the whole tree is simply the root being that
+   node -- so the line names it, links it into Browse, and offers the other places worth going. *@
+@if (Model.SubtreeRoot is not null) {
+	@* Already at the root: the whole tree is what is listed, so the link to it has nothing to offer. *@
+	var rootScoped = Model.SubtreeRoot.Node.ParentId is null;
+	<p class="jt-context d-flex flex-wrap align-items-baseline gap-2">
+		<span>Scoped to <strong><a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+		                           asp-route-nodeId="@Model.SubtreeRoot.Node.Id.Value">@JobNodeDisplay.Title(Model.SubtreeRoot.Node)</a></strong></span>
+		@* Each alternative scope reads "Show <place>", with only the place itself a link -- the verb is
+		   the same for both, so it stays out of the click target. *@
+		@if (!rootScoped) {
+			<span class="jt-value-aside">Show <a asp-page="/Jobs/AwaitingProgress" asp-route-ownerUserId="@Model.OwnerUserId"
+			                                     asp-route-showWholeTree="true">whole tree</a></span>
+		}
+		@if (Model.OffersHomeNodeScope) {
+			<span class="jt-value-aside">Show <a asp-page="/Jobs/AwaitingProgress" asp-route-ownerUserId="@Model.OwnerUserId"
+			                                     asp-route-subtreeRootId="@Model.HomeNodeId">home node</a></span>
+		}
+	</p>
+}
+
+<form method="get" asp-page="/Jobs/AwaitingProgress" class="jt-form-card jt-filter-form">
+	<input type="hidden" asp-for="SubtreeRootId"/>
+	<input type="hidden" asp-for="ShowWholeTree"/>
+	<div class="row g-3">
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="OwnerUserId">Owner</label>
+			<select asp-for="OwnerUserId" class="form-select" asp-items="Model.OwnerOptions"></select>
+		</div>
+		@* Who is clocked on, not what the achievement says: an open session for the chosen person.
+		   A paused leaf has no open session, so choosing a name narrows past the "In progress only"
+		   checkbox below regardless of whether it is ticked. *@
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="ActiveWorkerUserId">Working now</label>
+			<select asp-for="ActiveWorkerUserId" class="form-select" asp-items="Model.ActiveWorkerOptions"></select>
+		</div>
+		<div class="form-group col-12 col-md-6">
+			<label asp-for="SearchText"></label>
+			<input asp-for="SearchText" class="form-control"/>
+		</div>
+		@* The three narrowing toggles are one control, not three fields: stacked inside a single grid
+		   cell on Bootstrap's own `form-check` rhythm, rather than each claiming a cell of its own and
+		   inheriting the row's `g-3` gutter as the gap between them. Not a `form-group`, so `site.css`'s
+		   block field label doesn't apply to a check label sitting beside its box. *@
+		<div class="col-12 col-md-6">
+			<div class="form-check">
+				<input asp-for="UnassignedOnly" class="form-check-input"/>
+				<label asp-for="UnassignedOnly" class="form-check-label">Unassigned only (the pickup pool)</label>
+			</div>
+			<div class="form-check">
+				<input asp-for="ExcludeBlocked" class="form-check-input"/>
+				<label asp-for="ExcludeBlocked" class="form-check-label">Hide blocked jobs (unsatisfied prerequisites)</label>
+			</div>
+			@* Narrows by achievement, not by who is clocked on: a paused leaf is still in progress, so
+			   it stays in. "Working now" above is the who-is-clocked-on half of this pair. *@
+			<div class="form-check">
+				<input asp-for="InProgressOnly" class="form-check-input"/>
+				<label asp-for="InProgressOnly" class="form-check-label">In progress only (started, not closed &mdash; includes paused)</label>
+			</div>
+		</div>
+	</div>
+	@* The grid row's bottom edge sits flush against its last cell, so once the fields stack into one
+	   column the actions butt straight under "In progress only" with only the checkbox's own line
+	   spacing between. `mt-3` up to `md` separates the actions from the last toggle; from `md` the
+	   fields are two columns again and the row already carries the gap. Responsive in the markup, per
+	   the design language, rather than a `@@media` rule in `site.css`. *@
+	<div class="mt-3 mt-md-0">
+		<button type="submit" class="btn btn-primary">Apply</button>
+		<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.SubtreeRootId">Browse</a>
+	</div>
+</form>
+
+@if (Model.Entries.Count == 0) {
+	<p class="jt-empty">No jobs are awaiting progress.</p>
+} else {
+	<div class="jt-table-block">
+		<table class="table">
+			<thead>
+			<tr>
+				@* No achievement column: at one twelfth it was narrower than the word heading it, so the
+				   state trails the row's name instead, exactly as it does on Browse's subtree tables.
+				   Its share goes to the description, the only column that can always use more.
+				   Column allowance mirrors Browse's own child-nodes table (Description/Pri/Due/Active/
+				   Cost/Actions) so the same row reads at the same width on either page. *@
+				<th class="col-10 col-md-5 col-lg-5 col-xxl-3" aria-label="Description">Desc</th>
+				<th class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell" aria-label="Priority">Pri</th>
+				<th class="jt-col-secondary col-lg-1 d-none d-lg-table-cell" aria-label="Deadline">Due</th>
+				@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
+				   workers' names (the preview list below the count pill) need more than a twelfth of the
+				   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
+				   the column, staying at its "at least 3 of 12" floor rather than the 5 it held before. *@
+				<th class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">Active</th>
+				<th class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
+				<th class="col-2 text-end">Actions</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var entry in Model.Entries) {
+				var entryActions = Model.WorkRowActionsFor(entry.Id, entry.Achievement);
+				<tr>
+					<td class="col-10 col-md-5 col-lg-5 col-xxl-3">
+						@if (!entry.IsReady) {
+							<span class="status-pill status-pill--icon status-pill-blocked"><svg class="status-pill-glyph" viewBox="0 0 16 16"
+							                                                                     aria-hidden="true" focusable="false"><use
+										href="#jt-icon-stop"></use></svg><span class="visually-hidden">Blocked</span></span>
+						}
+						<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+						   asp-route-nodeId="@entry.Id.Value">@JobNodeDisplay.Title(entry, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>&#x2060;
+						@* Trails the name, as on Browse's subtree tables: the word-joiner keeps the marker
+						   attached to the title's final word at every width, and no achievement recorded
+						   draws nothing rather than a word standing in for the absence. *@
+						<partial name="_AchievementIcon"
+						         model="@(new AchievementIconModel { Achievement = entry.Achievement, ShowLabel = false })"/>
+					</td>
+					<td class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell">
+						<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = entry.Priority })"/>
+					</td>
+					<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = entry.NeededFinish ?? entry.NeededStart; }
+						@if (needed is Instant neededInstant) {
+							<span
+								class="@(InstantDisplay.IsPast(neededInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
+						}
+					</td>
+					<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">
+						<partial name="_ActiveSincePill"
+						         model="@(new ActiveSessionSummaryModel {
+							                ActiveSessions = entryActions.ActiveSessions,
+							                ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+							                DescribeWorker = id => Model.DescribeOwner(id),
+							                ViewerZone = Model.ViewerZone,
+							                Now = Model.Now,
+							                StartClosed = entryActions.IsStartClosed,
+							                Paused = entryActions.IsPaused,
+						                })"/>
+					</td>
+					<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">@(entry.Cost.HasValue && entry.AllocatedDuration is not null
+							? CostDisplay.FormatCell(entry.Cost.Value, entry.AllocatedDuration)
+							: null)</td>
+					<td class="col-2">
+						<partial name="_WorkRowActions" model="entryActions"/>
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+
+	@if (Model.HasMore) {
+		<a class="btn btn-outline-secondary"
+		   asp-page="/Jobs/AwaitingProgress"
+		   asp-route-OwnerUserId="@Model.OwnerUserId"
+		   asp-route-UnassignedOnly="@Model.UnassignedOnly"
+		   asp-route-SubtreeRootId="@Model.SubtreeRootId"
+		   asp-route-ShowWholeTree="@Model.ShowWholeTree"
+		   asp-route-SearchText="@Model.SearchText"
+		   asp-route-ExcludeBlocked="@Model.ExcludeBlocked"
+		   asp-route-InProgressOnly="@Model.InProgressOnly"
+		   asp-route-ActiveWorkerUserId="@Model.ActiveWorkerUserId"
+		   asp-route-Offset="@(Model.Offset + AwaitingProgressModel.PageSize)">
+			Next page
+		</a>
+	}
+}

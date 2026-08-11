@@ -1,0 +1,83 @@
+@page
+@model IndexModel
+@{
+	ViewData["Title"] = "My requests";
+}
+
+<div class="jt-page-head">
+	<h1>My requests</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+<h2>New request</h2>
+@if (Model.EligibleHoldingAreas.Count == 0) {
+	<p>There is no holding area you are currently eligible to submit a request into. Contact an administrator.</p>
+} else {
+	<form method="post" asp-page-handler="Submit" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Submit.Description"></label>
+			<textarea asp-for="Submit.Description" class="form-control" placeholder="Describe the problem"></textarea>
+			<span asp-validation-for="Submit.Description" class="text-danger"></span>
+		</div>
+		<div class="form-group">
+			<label asp-for="Submit.HoldingAreaId"></label>
+			<select asp-for="Submit.HoldingAreaId" class="form-select">
+				@* The page model preselects a sole eligible area, so offering the placeholder here would
+				   only let the requester unselect the one value the form accepts. *@
+				@if (Model.EligibleHoldingAreas.Count > 1) {
+					<option value="">Choose where to send this</option>
+				}
+				@foreach (var holdingArea in Model.EligibleHoldingAreas) {
+					<option value="@holdingArea.Id.Value">@holdingArea.JobNodeDescription</option>
+				}
+			</select>
+			<span asp-validation-for="Submit.HoldingAreaId" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Submit request</button>
+	</form>
+}
+
+<h2>Your requests</h2>
+@if (Model.MyRequests.Count == 0) {
+	<p>You have not submitted any requests yet.</p>
+} else {
+	<div class="jt-table-block">
+		<table class="table">
+			<thead>
+			<tr>
+				<th scope="col" class="col-8 col-md-6">Description</th>
+				<th scope="col" class="col-4 col-md-3">Status</th>
+				<th scope="col" class="col-md-3 d-none d-md-table-cell">Submitted</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var request in Model.MyRequests) {
+				<tr>
+					<td class="col-8 col-md-6"><span class="d-inline-flex align-items-start gap-2">
+						@if (!request.IsReady) {
+								@* Same leading stop hand as a blocked Browse child: readiness is orthogonal to
+							   public status, so the status column remains present alongside it. *@
+								<svg class="jt-tree-flag jt-tree-blocked jt-tree-flag--leading" viewBox="0 0 16 16" aria-hidden="true"
+								     focusable="false">
+								<use href="#jt-icon-stop"></use>
+							</svg>
+								<span class="visually-hidden">Blocked by a prerequisite.</span>
+							}
+							<a class="jt-preserve-whitespace" asp-page="Details"
+							   asp-route-id="@request.JobNodeId.Value">@JobNodeDisplay.Title(request.Description, request.JobNodeId.Value, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+					</span>
+					</td>
+					<td class="col-4 col-md-3">
+						<partial name="_RequesterStatusIcon"
+						         model="@(new RequesterStatusIconModel { Status = request.Status })"/>
+					</td>
+					<td class="col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(request.SubmittedAt, Model.ViewerZone)</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}

@@ -1,0 +1,63 @@
+@page
+@using JobTrack.Abstractions
+@model EditModel
+@{
+	ViewData["Title"] = "Edit job node";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<h1>Edit job node</h1>
+	</div>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	@if (Model.CurrentNode is not null) {
+		<p class="jt-context d-flex flex-wrap align-items-baseline gap-2"><span>Job node</span><a
+				class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+				asp-route-nodeId="@Model.NodeId">@JobNodeDisplay.Title(Model.CurrentNode.Node)</a></p>
+
+		<form method="post" class="jt-form-card">
+			<input type="hidden" asp-for="NodeId"/>
+			<input type="hidden" asp-for="OriginalVersion"/>
+			<div class="form-group">
+				<label asp-for="Input.Description"></label>
+				<input asp-for="Input.Description" class="form-control"/>
+				<span asp-validation-for="Input.Description" class="text-danger"></span>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.WriteUp"></label>
+				<textarea asp-for="Input.WriteUp" class="form-control"></textarea>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.OwnerUserId"></label>
+				<select asp-for="Input.OwnerUserId" class="form-select" asp-items="Model.OwnerOptions"></select>
+				<span asp-validation-for="Input.OwnerUserId" class="text-danger"></span>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.Priority"></label>
+				<select asp-for="Input.Priority" class="form-select" asp-items="EnumDisplay.BuildOptions<Priority>()"></select>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.ExpectedDurationHours"></label>
+				<input asp-for="Input.ExpectedDurationHours" class="form-control"/>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.ExpectedCost"></label>
+				<input asp-for="Input.ExpectedCost" class="form-control"/>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.NeededStart"></label>
+				<input asp-for="Input.NeededStart" type="datetime-local" step="60" class="form-control"/>
+			</div>
+			<div class="form-group">
+				<label asp-for="Input.NeededFinish"></label>
+				<input asp-for="Input.NeededFinish" type="datetime-local" step="60" class="form-control"/>
+			</div>
+			<div class="jt-toolbar d-flex flex-wrap gap-2 align-items-center">
+				<button type="submit" class="btn btn-primary">Save</button>
+				<a class="btn btn-secondary" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId">Cancel</a>
+			</div>
+		</form>
+	}
+</div>

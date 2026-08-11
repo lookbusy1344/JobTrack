@@ -1,0 +1,36 @@
+<Solution>
+    <Folder Name="/src/">
+        <Project Path="src/JobTrack.Abstractions/JobTrack.Abstractions.csproj"/>
+        <Project Path="src/JobTrack.AdminCli/JobTrack.AdminCli.csproj"/>
+        <Project Path="src/JobTrack.Application/JobTrack.Application.csproj"/>
+        <Project Path="src/JobTrack.Database/JobTrack.Database.csproj"/>
+        <Project Path="src/JobTrack.Domain/JobTrack.Domain.csproj"/>
+        <Project Path="src/JobTrack.Identity/JobTrack.Identity.csproj"/>
+        <Project Path="src/JobTrack.Persistence.PostgreSql/JobTrack.Persistence.PostgreSql.csproj"/>
+        <Project Path="src/JobTrack.Persistence.Shared/JobTrack.Persistence.Shared.csproj"/>
+        <Project Path="src/JobTrack.Persistence.Sqlite/JobTrack.Persistence.Sqlite.csproj"/>
+        <Project Path="src/JobTrack.Web/JobTrack.Web.csproj"/>
+    </Folder>
+    <Folder Name="/samples/">
+        <Project Path="samples/JobTrack.ExternalApiClient/JobTrack.ExternalApiClient.csproj"/>
+        <Project Path="samples/JobTrack.Sample.PostgreSql/JobTrack.Sample.PostgreSql.csproj"/>
+        <Project Path="samples/JobTrack.Sample.Sqlite/JobTrack.Sample.Sqlite.csproj"/>
+        <Project Path="samples/JobTrack.UatSeed/JobTrack.UatSeed.csproj"/>
+    </Folder>
+    <Folder Name="/tests/">
+        <Project Path="tests/JobTrack.AdminCli.Tests/JobTrack.AdminCli.Tests.csproj"/>
+        <Project Path="tests/JobTrack.ArchitectureTests/JobTrack.ArchitectureTests.csproj"/>
+        <Project Path="tests/JobTrack.Application.Tests/JobTrack.Application.Tests.csproj"/>
+        <Project Path="tests/JobTrack.Database.ContractTests/JobTrack.Database.ContractTests.csproj"/>
+        <Project Path="tests/JobTrack.Database.PerformanceTests/JobTrack.Database.PerformanceTests.csproj"/>
+        <Project Path="tests/JobTrack.Domain.Tests/JobTrack.Domain.Tests.csproj"/>
+        <Project Path="tests/JobTrack.Identity.Tests/JobTrack.Identity.Tests.csproj"/>
+        <Project Path="tests/JobTrack.Persistence.PostgreSql.Tests/JobTrack.Persistence.PostgreSql.Tests.csproj"/>
+        <Project Path="tests/JobTrack.Persistence.Shared.Tests/JobTrack.Persistence.Shared.Tests.csproj"/>
+        <Project Path="tests/JobTrack.Persistence.Sqlite.Tests/JobTrack.Persistence.Sqlite.Tests.csproj"/>
+        <Project Path="tests/JobTrack.PublicApi.Tests/JobTrack.PublicApi.Tests.csproj"/>
+        <Project Path="tests/JobTrack.TestSupport/JobTrack.TestSupport.csproj"/>
+        <Project Path="tests/JobTrack.Web.EndToEndTests/JobTrack.Web.EndToEndTests.csproj"/>
+        <Project Path="tests/JobTrack.Web.IntegrationTests/JobTrack.Web.IntegrationTests.csproj"/>
+    </Folder>
+</Solution>

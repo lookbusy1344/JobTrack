@@ -1,0 +1,151 @@
+# Opt-in local multi-instance topology (ADR 0066 Stage 7, plan §"Stage 7 -- OrbStack/Docker Compose
+# proof"). Proves the same MultiInstance configuration Stage 8 deploys to Cloud Run actually starts
+# and behaves correctly on a real container runtime: one PostgreSQL database, two independent
+# JobTrack.Web instances with separate filesystems sharing nothing but the database, and a
+# TLS-terminating proxy alternating between them with no session affinity.
+#
+# Separate from the Homebrew PostgreSQL developer default (docs/developer-guide.md) -- this stack
+# brings up its own disposable PostgreSQL container and disposable named volume, never touching the
+# local postgresql@18 service, jobtrack_dev, or jobtrack-web-dev.db.
+#
+# Opt-in only, driven by scripts/multi-instance-test.sh -- never added to fast-test.sh, since image
+# builds and a PostgreSQL container exceed that lane's contract (CLAUDE.md commit gate).
+#
+# Unix-domain socket to PostgreSQL, not TCP+TLS: PostgreSqlTransportSecurity.Validate (security
+# review remediation §2.9) requires 'SSL Mode=VerifyFull' with a trusted root certificate for any
+# *remote* PostgreSQL host, exempting only a loopback or Unix-socket connection. Standing up a
+# throwaway CA and server certificate for an ephemeral local proof would add real complexity for no
+# correctness value this stack needs to demonstrate, so postgres's socket directory is a named volume
+# shared with every service that talks to it -- exactly how Cloud Run's own Unix-socket connection to
+# its Cloud SQL Auth Proxy sidecar is exempt (docker/provision.sh's JOBTRACK_DB_HOST=/cloudsql/...).
+# unix_socket_permissions=0777 (PostgreSQL's own historical default) is passed explicitly rather than
+# relied upon, since each container connecting to the socket runs as a different, non-root UID.
+name: jobtrack-multi-instance
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    command: ["postgres", "-c", "unix_socket_permissions=0777"]
+    environment:
+      POSTGRES_DB: jobtrack
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_admin_password
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    volumes:
+      # PostgreSQL 18's docker-library image places data in a major-version-specific subdirectory
+      # under this single mount point (pg_ctlcluster-compatible layout), not at .../data as earlier
+      # major versions did.
+      - jobtrack-multi-instance-pgdata:/var/lib/postgresql
+      - jobtrack-multi-instance-pgsocket:/var/run/postgresql
+      - ${JOBTRACK_MULTI_INSTANCE_SECRET_DIR}/db-admin-password:/run/secrets/db_admin_password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U postgres -d jobtrack"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    networks: [jobtrack-multi-instance]
+
+  # One-shot: schema, the five PostgreSQL login roles, and the three synthetic accounts
+  # (docker/provision.sh, unmodified -- identical to the image Stage 8 deploys to Cloud Run). Exits
+  # 0 and stays stopped; web-a/web-b wait on service_completed_successfully.
+  provision:
+    build:
+      context: ../..
+      dockerfile: JobTrack/Dockerfile.postgresql
+      target: provision
+      args:
+        SOURCE_REVISION_ID: multi-instance-compose
+    # linux/amd64, not the build host's native platform: JobTrack.Web's NuGet packages.lock.json
+    # (--locked-mode restore) is pinned to linux-x64 only, matching how
+    # scripts/deploy-cloudrun-postgresql.sh's docker buildx build always targets linux/amd64 -- the
+    # same image this compose file builds, just run under OrbStack's/Docker Engine's emulation on an
+    # arm64 build host instead of pushed to Cloud Run.
+    platform: linux/amd64
+    image: jobtrack-multi-instance-provision
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ${JOBTRACK_MULTI_INSTANCE_SECRET_DIR}/provision.env
+    volumes:
+      - jobtrack-multi-instance-pgsocket:/var/run/postgresql
+    networks: [jobtrack-multi-instance]
+
+  web-a:
+    build: &web-build
+      context: ../..
+      dockerfile: JobTrack/Dockerfile.postgresql
+      args:
+        SOURCE_REVISION_ID: multi-instance-compose
+    image: jobtrack-multi-instance-web
+    # See provision's own platform comment above -- same reason, same pin.
+    platform: linux/amd64
+    depends_on:
+      provision:
+        condition: service_completed_successfully
+    env_file: &web-env-file
+      - ${JOBTRACK_MULTI_INSTANCE_SECRET_DIR}/web.env
+    volumes: &web-volumes
+      - jobtrack-multi-instance-pgsocket:/var/run/postgresql
+      - ${JOBTRACK_MULTI_INSTANCE_SECRET_DIR}/data-protection.pfx:/var/run/secrets/jobtrack/certificate/data-protection.pfx:ro
+      - ${JOBTRACK_MULTI_INSTANCE_SECRET_DIR}/data-protection-password:/var/run/secrets/jobtrack/certificate-password/data-protection-password:ro
+    # Direct host-A port, alongside the proxy below -- deterministic cross-host assertions (plan
+    # §Stage 7) need a client able to address one instance without relying on round-robin luck.
+    ports:
+      - "8081:8080"
+    networks: [jobtrack-multi-instance]
+
+  web-b:
+    build: *web-build
+    image: jobtrack-multi-instance-web
+    platform: linux/amd64
+    depends_on:
+      provision:
+        condition: service_completed_successfully
+    env_file: *web-env-file
+    volumes: *web-volumes
+    ports:
+      - "8082:8080"
+    networks: [jobtrack-multi-instance]
+
+  # Gates the proxy on both web hosts actually being ready to serve, not merely started -- the
+  # chiseled serve image (Dockerfile.postgresql) has no shell/curl/wget, so a Docker HEALTHCHECK
+  # cannot exec inside it; this sidecar polls each host's own /health/ready (ADR 0066 Stage 6) from
+  # outside instead, and the proxy's own depends_on waits on this container exiting 0.
+  wait-for-web:
+    image: curlimages/curl:8.11.1
+    depends_on: [web-a, web-b]
+    command:
+      - sh
+      - -c
+      - |
+        until curl --silent --fail --max-time 2 http://web-a:8080/health/ready \
+          && curl --silent --fail --max-time 2 http://web-b:8080/health/ready; do
+          sleep 1
+        done
+    networks: [jobtrack-multi-instance]
+
+  # Deterministic round-robin HTTPS entry point (nginx's default upstream balancing with no
+  # affinity directive) -- proves the no-session-affinity requirement (plan §1) rather than only the
+  # two direct-host ports. TLS terminates here with an ephemeral, script-generated self-signed
+  # certificate; traffic to web-a/web-b behind it stays plain HTTP, matching Cloud Run's own
+  # front-end-terminates-TLS shape (Dockerfile.postgresql's ASPNETCORE_HTTP_PORTS=8080 comment).
+  proxy:
+    image: nginx:1.27-alpine
+    depends_on:
+      wait-for-web:
+        condition: service_completed_successfully
+    volumes:
+      - ./nginx-multi-instance.conf:/etc/nginx/nginx.conf:ro
+      - ${JOBTRACK_MULTI_INSTANCE_SECRET_DIR}/proxy-tls.crt:/etc/nginx/tls/proxy-tls.crt:ro
+      - ${JOBTRACK_MULTI_INSTANCE_SECRET_DIR}/proxy-tls.key:/etc/nginx/tls/proxy-tls.key:ro
+    ports:
+      - "8443:8443"
+    networks: [jobtrack-multi-instance]
+
+volumes:
+  jobtrack-multi-instance-pgdata:
+  jobtrack-multi-instance-pgsocket:
+
+networks:
+  jobtrack-multi-instance:

@@ -1,0 +1,30 @@
+@model StartForDisclosureModel
+@* Native progressive disclosure for starting a session on behalf of another worker (plan §2.5).
+   The complete form is a child of details, so it remains operable without JavaScript -- unlike the
+   backdate panel, this one is never moved to <body>, since that would break the native
+   details/summary disclosure relationship assistive tech relies on. Instead it floats via plain CSS
+   (`jt-backdate-panel--anchored`, positioned absolute against this <details> element), which pushes
+   nothing else on the page down. The icon-only per-row variant anchors to the trigger's *right* edge
+   and grows left (`--anchor-end`) since it sits at a table's rightmost column, where growing right
+   risks the panel running past the viewport; the labelled toolbar variant anchors left and grows
+   right, where there is more room. *@
+<details class="jt-start-for-disclosure" id="@Model.RowId">
+	@if (Model.Labelled) {
+		<summary class="btn btn-secondary jt-start-for-summary">
+			<svg class="jt-btn-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-start"></use>
+			</svg>
+			Start for…
+		</summary>
+	} else {
+		<summary class="jt-icon-button jt-backdate-trigger" title="Start for…">
+			<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-start"></use>
+			</svg>
+			<span class="visually-hidden">Start for…</span>
+		</summary>
+	}
+	<div class="jt-backdate-panel jt-backdate-panel--anchored@(Model.Labelled ? null : " jt-backdate-panel--anchor-end")">
+		<partial name="_StartForForm" model="Model"/>
+	</div>
+</details>

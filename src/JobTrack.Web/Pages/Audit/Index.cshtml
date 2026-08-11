@@ -1,0 +1,118 @@
+@page
+@using JobTrack.Abstractions
+@model IndexModel
+@{
+	ViewData["Title"] = "Audit history";
+}
+
+<div class="jt-page-head">
+	<h1>Audit history</h1>
+</div>
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<form method="get" asp-page="/Audit/Index" class="jt-form-card">
+	<div class="form-group row">
+		<label asp-for="ActorId" class="col-md-3 col-form-label"></label>
+		<div class="col-md-9">
+			<select asp-for="ActorId" class="form-select" asp-items="Model.ActorOptions"></select>
+		</div>
+	</div>
+	<div class="form-group row">
+		<label asp-for="EntityType" class="col-md-3 col-form-label"></label>
+		<div class="col-md-9">
+			<input asp-for="EntityType" class="form-control"/>
+		</div>
+	</div>
+	<div class="form-group row">
+		<label asp-for="EntityId" class="col-md-3 col-form-label"></label>
+		<div class="col-md-9">
+			<input asp-for="EntityId" class="form-control"/>
+		</div>
+	</div>
+	<div class="form-group row">
+		<label asp-for="CorrelationId" class="col-md-3 col-form-label"></label>
+		<div class="col-md-9">
+			<input asp-for="CorrelationId" class="form-control"/>
+		</div>
+	</div>
+	<div class="form-group row">
+		<label asp-for="From" class="col-md-3 col-form-label"></label>
+		<div class="col-md-9">
+			<input asp-for="From" type="datetime-local" step="60" class="form-control"/>
+		</div>
+	</div>
+	<div class="form-group row">
+		<label asp-for="To" class="col-md-3 col-form-label"></label>
+		<div class="col-md-9">
+			<input asp-for="To" type="datetime-local" step="60" class="form-control"/>
+		</div>
+	</div>
+	<button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+@if (Model.Events.Count == 0) {
+	<p class="jt-empty">No matching audit events.</p>
+} else {
+	<div class="jt-table-block">
+		<table class="table">
+			<thead>
+			@* Eight columns never fit a phone, and the widest of them (a 36-character correlation id, a
+			   whole before/after field dump) are the least likely to be what someone is scanning for.
+			   When the event happened, what happened, and to which entity survive at every width; the
+			   forensic detail returns as the viewport grows, and every column stays filterable from the
+			   form above regardless of whether it is currently painted. *@
+			<tr>
+				<th class="col-5 col-md-3 col-lg-3 col-xl-2">Occurred at</th>
+				<th class="col-md-1 d-none d-md-table-cell">Actor</th>
+				<th class="col-7 col-md-3 col-lg-2 col-xxl-1">Operation</th>
+				<th class="col-md-2 col-lg-1 d-none d-md-table-cell">Entity type</th>
+				<th class="col-md-3 col-lg-2 col-xl-1 d-none d-md-table-cell">Entity id</th>
+				<th class="col-xxl-2 d-none d-xxl-table-cell">Correlation id</th>
+				<th class="col-lg-3 col-xl-2 d-none d-lg-table-cell">Reason</th>
+				<th class="col-xl-3 col-xxl-2 d-none d-xl-table-cell">Detail</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var auditEvent in Model.Events) {
+				<tr>
+					<td class="col-5 col-md-3 col-lg-3 col-xl-2">@InstantDisplay.Format(auditEvent.OccurredAt, Model.ViewerZone)</td>
+					<td class="col-md-1 d-none d-md-table-cell">@Model.DescribeActor(auditEvent.ActorId)</td>
+					<td class="col-7 col-md-3 col-lg-2 col-xxl-1">@auditEvent.Operation</td>
+					<td class="col-md-2 col-lg-1 d-none d-md-table-cell">@auditEvent.EntityType</td>
+					<td class="jt-id col-md-3 col-lg-2 col-xl-1 d-none d-md-table-cell">@auditEvent.EntityId</td>
+					<td class="jt-id col-xxl-2 d-none d-xxl-table-cell">@auditEvent.CorrelationId</td>
+					<td class="col-lg-3 col-xl-2 d-none d-lg-table-cell">@auditEvent.Reason</td>
+					<td class="col-xl-3 col-xxl-2 d-none d-xl-table-cell">
+						@if (auditEvent.IsRedacted) {
+							<span>redacted</span>
+						} else {
+							@if (auditEvent.BeforeData is EquatableDictionary<string, string?> before) {
+								<p>Before: @string.Join(", ", before.Select(field => $"{field.Key}={field.Value}"))</p>
+							}
+
+							@if (auditEvent.AfterData is EquatableDictionary<string, string?> after) {
+								<p>After: @string.Join(", ", after.Select(field => $"{field.Key}={field.Value}"))</p>
+							}
+						}
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+
+	@if (Model.NextCursor is not null) {
+		<a class="btn btn-outline-secondary"
+		   asp-page="/Audit/Index"
+		   asp-route-ActorId="@Model.ActorId"
+		   asp-route-EntityType="@Model.EntityType"
+		   asp-route-EntityId="@Model.EntityId"
+		   asp-route-CorrelationId="@Model.CorrelationId"
+		   asp-route-From="@Model.From"
+		   asp-route-To="@Model.To"
+		   asp-route-Cursor="@Model.NextCursor">
+			Next page
+		</a>
+	}
+}

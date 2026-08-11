@@ -1,0 +1,32 @@
+@page
+@model ConfirmAccessModel
+@{
+	ViewData["Title"] = "Confirm access";
+}
+
+<div class="jt-page-narrow">
+	<div class="jt-page-head">
+		<h1>Confirm access</h1>
+	</div>
+
+	<p>This action needs a fresh confirmation of your identity. Enter your current password
+		@(Model.RequiresTwoFactorCode ? "and a code from your authenticator app " : "")to continue.</p>
+
+	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+	<form method="post" class="jt-form-card" asp-route-returnUrl="@Model.ReturnUrl">
+		<div class="form-group">
+			<label asp-for="Input.CurrentPassword"></label>
+			<input asp-for="Input.CurrentPassword" type="password" class="form-control" autocomplete="current-password"/>
+			<span asp-validation-for="Input.CurrentPassword" class="text-danger"></span>
+		</div>
+		@if (Model.RequiresTwoFactorCode) {
+			<div class="form-group">
+				<label asp-for="Input.TwoFactorCode">Authenticator code</label>
+				<input asp-for="Input.TwoFactorCode" class="form-control" inputmode="numeric" autocomplete="one-time-code"/>
+				<span asp-validation-for="Input.TwoFactorCode" class="text-danger"></span>
+			</div>
+		}
+		<button type="submit" class="btn btn-primary">Confirm</button>
+	</form>
+</div>

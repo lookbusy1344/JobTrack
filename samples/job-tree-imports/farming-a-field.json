@@ -1,0 +1,24 @@
+[
+	{ "id": 1, "parentId": null, "title": "Farm a field" },
+
+	{ "id": 2, "parentId": 1, "title": "Prepare ground" },
+	{ "id": 3, "parentId": 1, "title": "Plant crop", "prerequisiteIds": [2] },
+	{ "id": 4, "parentId": 1, "title": "Maintain crop", "prerequisiteIds": [3] },
+	{ "id": 5, "parentId": 1, "title": "Harvest", "prerequisiteIds": [4] },
+
+	{ "id": 6, "parentId": 2, "title": "Clear field of debris", "open": "3 days", "closed": "2 days" },
+	{ "id": 7, "parentId": 2, "title": "Plough field", "prerequisiteIds": [6], "open": "1 day" },
+	{ "id": 8, "parentId": 2, "title": "Apply fertiliser", "prerequisiteIds": [7] },
+
+	{ "id": 9, "parentId": 3, "title": "Select seed variety" },
+	{ "id": 10, "parentId": 3, "title": "Sow seed", "prerequisiteIds": [9] },
+
+	{ "id": 11, "parentId": 4, "title": "Irrigate" },
+	{ "id": 12, "parentId": 4, "title": "Weed control" },
+	{ "id": 13, "parentId": 4, "title": "Pest and disease monitoring", "prerequisiteIds": [11, 12] },
+
+	{ "id": 14, "parentId": 5, "title": "Cut and collect crop" },
+	{ "id": 15, "parentId": 5, "title": "Transport to storage", "prerequisiteIds": [10, 14] },
+
+	{ "id": 16, "parentId": 10, "title": "Water in seed" }
+]

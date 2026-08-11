@@ -1,0 +1,13 @@
+@model WriteUpFieldModel
+@* Prominent and multi-line, never tucked inside a disclosure -- the writeup is the main way a worker
+   documents how a leaf's work went, whether it succeeded or failed (spec). Always optional: no
+   required attribute, no validation. *@
+@* id="writeUpNodeVersion" pairs with #writeUp below -- site.js reads both by id to carry the
+   current write-up onto whichever other action form on the page is actually submitted (Jobs/Work
+   only ever renders one write-up textarea per page, so the id is safely unique). *@
+<input type="hidden" id="writeUpNodeVersion" name="nodeVersion" value="@Model.NodeVersion"/>
+<div class="form-group">
+	<label for="writeUp">Write-up</label>
+	<textarea id="writeUp" name="writeUp" class="form-control" rows="6"
+	          placeholder="What happened -- how the work went, why it succeeded or failed, anything the next person needs to know.">@Model.WriteUp</textarea>
+</div>

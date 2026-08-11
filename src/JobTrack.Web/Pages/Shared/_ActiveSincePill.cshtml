@@ -1,0 +1,77 @@
+@model ActiveSessionSummaryModel
+@* Renders nothing when there is no running session: the column is empty for that row rather than
+   carrying a placeholder, since "not currently being worked on" is the ordinary case and a mark on
+   every such row would bury the few rows that are live.
+
+   Zero/one/several are three distinct presentations (plan §2.4), never a collapsed "pick one":
+   - zero: nothing here (the outer @if below), unless the leaf is closed -- then a neutral "Closed"
+     pill, so a done/archived leaf reads as settled rather than merely idle. The verbose "reopen it
+     before starting another session" sentence this replaces never belonged in the Actions cell.
+     Zero sessions on an *In Progress* leaf is the third case: paused, someone stopped part-way, and
+     it gets its own pill rather than reading identically to a leaf nobody has ever started.
+   - one: the familiar compact stopwatch pill, icon plus the bare timestamp (data, not a word) --
+     worker named only when it is not the viewer.
+   - two or more: a prominent active-count pill, followed by the stable preview (You first, then every
+     other worker by start order), capped at ActiveSessionSummaryModel.PreviewLimit only in the dense
+     per-row form -- the full collection is always still reachable via Sessions, never truly lost.
+
+   A table cell (Compact) drops a *word* competing for room against the worker names that follow it
+   on the same line ("N active" wrapped mid-word beside its own name preview) down to the glyph plus
+   whatever data it carries -- a bare count. Closed and Paused have no such neighbour, so they keep
+   their full word at every width, just sized down (status-pill--compact) in a table cell; a record
+   display (Work's own status field, Browse's toolbar summary) never compacts at all. *@
+@if (Model.Count == 1) {
+	var entry = Model.PreviewEntries[0];
+	var since = InstantDisplay.FormatCompact(entry.Session.StartedAt, Model.ViewerZone, Model.Now);
+	var workedBy = entry.IsViewer ? string.Empty : $" · worked by {entry.DisplayName}";
+	@if (Model.Compact) {
+		<span class="status-pill status-pill-active status-pill--compact" title="Active since @since@workedBy">
+			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-active"></use>
+			</svg>
+			<span class="visually-hidden">Active since</span>
+			@since
+			@if (!string.IsNullOrEmpty(workedBy)) {
+				<span class="visually-hidden">@workedBy</span>
+			}
+		</span>
+	} else {
+		<span class="status-pill status-pill-active">
+			<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+				<use href="#jt-icon-active"></use>
+			</svg>
+			Active since @since@workedBy
+		</span>
+	}
+} else if (Model.Count > 1) {
+	<span class="d-inline-flex flex-wrap align-items-center gap-1">
+		@if (Model.Compact) {
+			<span class="status-pill status-pill-active status-pill--compact" title="@Model.Count active">
+				<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-active"></use>
+				</svg>
+				<span class="visually-hidden">Active count</span>
+				@Model.Count
+			</span>
+		} else {
+			<span class="status-pill status-pill-active">
+				<svg class="status-pill-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+					<use href="#jt-icon-active"></use>
+				</svg>
+				@Model.Count active
+			</span>
+		}
+		@* A size down (.jt-text-sm, the app's one smaller step): the names support the count pill beside
+		   them rather than competing with it, and the run grows with every extra worker. *@
+		<span class="jt-muted jt-text-sm">
+			<span class="visually-hidden">Active workers:</span>
+			@string.Join(", ", Model.PreviewEntries.Select(e => e.DisplayName))@(Model.HiddenCount > 0 ? $" +{Model.HiddenCount} more" : "")
+		</span>
+	</span>
+} else if (Model.StartClosed) {
+	<span class="status-pill status-pill-closed@(Model.Compact ? " status-pill--compact" : string.Empty)">Closed</span>
+} else if (Model.Paused) {
+	@* Closed wins over Paused: an archived leaf can be InProgress, and "you cannot start here" is the
+	   more consequential fact of the two. *@
+	<partial name="_PausedPill" model="Model.Compact"/>
+}
