@@ -6,15 +6,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the job-node decompose workflow (plan §8.5 slice 3, spec §3.5, ADR 0067):
@@ -53,7 +46,10 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -129,7 +125,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_who_does_not_own_the_leaf_is_denied_on_save()
 	{
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.owner-manager", EmployeeRole.JobManager);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.denied-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.denied-worker");
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Owned by manager");
 		var authCookie = await client.SignInAsync("decompose.denied-worker");
 
@@ -180,7 +176,13 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		saveResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Browse");
 
 		var current = await seedClient.Query.GetJobNodeAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = bareLeaf.Id }, CancellationToken.None);
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = bareLeaf.Id,
+			}, CancellationToken.None);
 		current.Node.HasChildren.Should().BeTrue();
 		current.Node.HasLeafWork.Should().BeFalse();
 
@@ -206,7 +208,13 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		saveBody.Should().Contain("Name at least one new child");
 
 		var current = await seedClient.Query.GetJobNodeAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = bareLeaf.Id }, CancellationToken.None);
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = bareLeaf.Id,
+			}, CancellationToken.None);
 		current.Node.HasChildren.Should().BeFalse("the decompose must not have run");
 	}
 
@@ -216,7 +224,10 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.branch-manager", EmployeeRole.JobManager);
 		var branch = await AddBareLeafAsync(managerId, "Already a branch");
 		_ = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = branch.Id,
 			Description = "Existing child",
 			OwnerUserId = managerId,
@@ -242,12 +253,17 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	{
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.explains-manager", EmployeeRole.JobManager);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Leaf under way",
 			OwnerUserId = managerId,
 			Priority = Priority.Medium,
-			BeginWork = new() { WorkedByUserId = managerId },
+			BeginWork = new() {
+				WorkedByUserId = managerId,
+			},
 		});
 		var authCookie = await client.SignInAsync("decompose.explains-manager");
 
@@ -309,7 +325,10 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 
 	private async Task<JobNodeResult> AddBareLeafAsync(AppUserId ownerId, string description) =>
 		await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -327,7 +346,10 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 
 		// A concurrent edit lands after the form was loaded, advancing the row's version.
 		_ = await seedClient.Jobs.EditAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = leaf.Id,
 			Description = "Concurrently edited",
 			OwnerUserId = managerId,
@@ -366,14 +388,23 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		saveBody.Should().Contain("Enter a valid date and time");
 
 		var current = await seedClient.Query.GetJobNodeAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id }, CancellationToken.None);
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = leaf.Id,
+			}, CancellationToken.None);
 		current.Node.HasChildren.Should().BeFalse("the decompose must not have run");
 	}
 
 	private async Task<JobNodeResult> AddWorkedLeafAsync(JobNodeId parentId, AppUserId? ownerId, string description)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -381,7 +412,10 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		});
 
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 
@@ -442,9 +476,4 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
-
-
 }

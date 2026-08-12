@@ -60,7 +60,10 @@ public sealed class MoveModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var request = new MoveJobNodeRequest {
 			Context = context,
 			NodeId = new(NodeId),
@@ -70,7 +73,10 @@ public sealed class MoveModel(
 
 		try {
 			var result = await jobTrackClient.Jobs.MoveAsync(request, cancellationToken);
-			return RedirectToPage("/Jobs/Browse", new { nodeId = result.Id.Value });
+			return RedirectToPage("/Jobs/Browse", new
+			{
+				nodeId = result.Id.Value,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -108,7 +114,13 @@ public sealed class MoveModel(
 	{
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(NodeId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new JobNodeId(NodeId),
+				}, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";

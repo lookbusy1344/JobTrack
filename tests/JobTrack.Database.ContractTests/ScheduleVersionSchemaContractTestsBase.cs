@@ -211,7 +211,7 @@ public abstract class ScheduleVersionSchemaContractTestsBase : IAsyncLifetime
 	///     <paramref name="effectiveStart" />/<paramref name="effectiveEnd" />.
 	/// </summary>
 	protected virtual Task AssertEffectiveRangeAsync(DbConnection connection, long scheduleVersionId, DateOnly effectiveStart,
-		DateOnly? effectiveEnd) =>
+													 DateOnly? effectiveEnd) =>
 		Task.CompletedTask;
 
 	private async Task<DbConnection> OpenDeployedConnectionAsync()

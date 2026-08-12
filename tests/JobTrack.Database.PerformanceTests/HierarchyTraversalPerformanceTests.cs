@@ -52,8 +52,7 @@ public sealed class HierarchyTraversalPerformanceTests : IAsyncLifetime
 			parameter.Value = leafId;
 			command.Parameters.Add(parameter);
 			await using var reader = await command.ExecuteReaderAsync();
-			while (await reader.ReadAsync()) {
-			}
+			while (await reader.ReadAsync()) { }
 		}
 
 		stopwatch.Elapsed.Should().BeLessThan(AncestryTraversalBudget);
@@ -87,8 +86,7 @@ public sealed class HierarchyTraversalPerformanceTests : IAsyncLifetime
 			parameter.Value = branchId;
 			command.Parameters.Add(parameter);
 			await using var reader = await command.ExecuteReaderAsync();
-			while (await reader.ReadAsync()) {
-			}
+			while (await reader.ReadAsync()) { }
 		}
 
 		stopwatch.Elapsed.Should().BeLessThan(BranchListingBudget);

@@ -34,7 +34,10 @@ public sealed class WorkCommandsTests
 		return (nodePort, new(nodePort));
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static async Task<JobNodeId> CreateReadyLeafAsync(FakeJobNodeCommandPort nodePort)
 	{
@@ -47,7 +50,10 @@ public sealed class WorkCommandsTests
 			Priority = Priority.Medium,
 		});
 		await jobCommands.AttachLeafWorkAsync(
-			new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+			new() {
+				Context = ContextFor(JobManagerId),
+				JobNodeId = leaf.Id,
+			});
 
 		return leaf.Id;
 	}
@@ -59,7 +65,11 @@ public sealed class WorkCommandsTests
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var result = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var result = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		result.LeafWorkId.Should().Be(leafId);
 		result.WorkedByUserId.Should().Be(WorkerId);
@@ -73,7 +83,11 @@ public sealed class WorkCommandsTests
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var act = () => sut.StartSessionAsync(new() { Context = ContextFor(OtherWorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var act = () => sut.StartSessionAsync(new() {
+			Context = ContextFor(OtherWorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -92,7 +106,11 @@ public sealed class WorkCommandsTests
 		});
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var act = () => sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leaf.Id, WorkedByUserId = WorkerId });
+		var act = () => sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = WorkerId,
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -103,9 +121,17 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
-		var act = () => sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var act = () => sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("work-session-already-active");
@@ -125,7 +151,11 @@ public sealed class WorkCommandsTests
 		});
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var act = () => sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = dependentLeaf, WorkedByUserId = WorkerId });
+		var act = () => sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = dependentLeaf,
+			WorkedByUserId = WorkerId,
+		});
 
 		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
 	}
@@ -212,7 +242,11 @@ public sealed class WorkCommandsTests
 		});
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var result = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leaf.Id, WorkedByUserId = WorkerId });
+		var result = await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leaf.Id,
+			WorkedByUserId = WorkerId,
+		});
 
 		result.LeafWorkId.Should().Be(leaf.Id);
 		result.FinishedAt.Should().BeNull();
@@ -226,7 +260,11 @@ public sealed class WorkCommandsTests
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		_ = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		_ = await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		nodePort.FindLeafWork(leafId)!.Achievement.Should().Be(Achievement.InProgress);
 	}
@@ -237,10 +275,18 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 		var achievementAfterFirstStart = nodePort.FindLeafWork(leafId)!;
 
-		var result = await sut.StartWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leafId, WorkedByUserId = OtherWorkerId });
+		var result = await sut.StartWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			WorkedByUserId = OtherWorkerId,
+		});
 
 		result.WorkedByUserId.Should().Be(OtherWorkerId);
 		nodePort.FindLeafWork(leafId)!.Version.Should().Be(achievementAfterFirstStart.Version);
@@ -266,7 +312,11 @@ public sealed class WorkCommandsTests
 		});
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var act = () => sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = dependentLeaf.Id, WorkedByUserId = WorkerId });
+		var act = () => sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = dependentLeaf.Id,
+			WorkedByUserId = WorkerId,
+		});
 
 		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
 	}
@@ -277,9 +327,17 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
-		var act = () => sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		var act = () => sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("work-session-already-active");
@@ -292,7 +350,11 @@ public sealed class WorkCommandsTests
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var act = () => sut.StartWorkAsync(new() { Context = ContextFor(OtherWorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		var act = () => sut.StartWorkAsync(new() {
+			Context = ContextFor(OtherWorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -303,7 +365,11 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 
-		var act = () => sut.StartWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = RootId, WorkedByUserId = JobManagerId });
+		var act = () => sut.StartWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = RootId,
+			WorkedByUserId = JobManagerId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-is-root-cannot-attach-leaf-work");
@@ -351,7 +417,11 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var act = () => sut.FinishSessionAsync(new() {
 			Context = ContextFor(WorkerId),
@@ -370,7 +440,11 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var act = () => sut.FinishSessionAsync(new() {
 			Context = ContextFor(WorkerId),
@@ -389,10 +463,18 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var result = await sut.FinishSessionAsync(
-			new() { Context = ContextFor(WorkerId), SessionId = session.Id, Version = session.Version });
+			new() {
+				Context = ContextFor(WorkerId),
+				SessionId = session.Id,
+				Version = session.Version,
+			});
 
 		result.FinishedAt.Should().Be(sessionPort.NowToReturn);
 		result.Version.Should().Be(2);
@@ -404,9 +486,17 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
-		var act = () => sut.FinishSessionAsync(new() { Context = ContextFor(OtherWorkerId), SessionId = session.Id, Version = session.Version });
+		var act = () => sut.FinishSessionAsync(new() {
+			Context = ContextFor(OtherWorkerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -417,9 +507,17 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
-		var act = () => sut.FinishSessionAsync(new() { Context = ContextFor(WorkerId), SessionId = session.Id, Version = session.Version + 1 });
+		var act = () => sut.FinishSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			SessionId = session.Id,
+			Version = session.Version + 1,
+		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
 	}
@@ -430,7 +528,11 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 		var correctedStart = session.StartedAt.Minus(Duration.FromHours(1));
 		var correctedFinish = session.StartedAt;
 
@@ -453,7 +555,11 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var act = () => sut.CorrectSessionAsync(new() {
 			Context = ContextFor(WorkerId),
@@ -476,9 +582,17 @@ public sealed class WorkCommandsTests
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
 		var firstStart = Instant.FromUtc(2026, 1, 1, 9, 0);
 		var firstFinish = Instant.FromUtc(2026, 1, 1, 10, 0);
-		var first = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var first = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 		await sut.FinishSessionAsync(
-			new() { Context = ContextFor(WorkerId), SessionId = first.Id, Version = first.Version });
+			new() {
+				Context = ContextFor(WorkerId),
+				SessionId = first.Id,
+				Version = first.Version,
+			});
 		first = await sut.CorrectSessionAsync(new() {
 			Context = ContextFor(WorkerId),
 			SessionId = first.Id,
@@ -487,7 +601,11 @@ public sealed class WorkCommandsTests
 			Reason = "Establish a fixed historical interval",
 			Version = first.Version + 1,
 		});
-		var second = await sut.StartSessionAsync(new() { Context = ContextFor(WorkerId), LeafWorkId = leafId, WorkedByUserId = WorkerId });
+		var second = await sut.StartSessionAsync(new() {
+			Context = ContextFor(WorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var act = () => sut.CorrectSessionAsync(new() {
 			Context = ContextFor(WorkerId),
@@ -725,13 +843,21 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var result = await sut.CompleteLeafAsync(new() {
 			Context = ContextFor(JobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 		});
 
 		result.Achievement.Should().Be(Achievement.Success);
@@ -745,13 +871,21 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var result = await sut.CompleteLeafAsync(new() {
 			Context = ContextFor(JobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 			FinalAchievement = Achievement.Unsuccessful,
 		});
 
@@ -809,13 +943,21 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var act = () => sut.CompleteLeafAsync(new() {
 			Context = ContextFor(OtherWorkerId),
 			JobNodeId = leafId,
 			Version = 1,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
@@ -827,13 +969,21 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var session = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
+		var session = await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
 
 		var act = () => sut.CompleteLeafAsync(new() {
 			Context = ContextFor(JobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version + 1 }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version + 1,
+				},
+			],
 		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
@@ -845,15 +995,28 @@ public sealed class WorkCommandsTests
 		var (nodePort, sessionPort) = CreateSeededPorts();
 		var leafId = await CreateReadyLeafAsync(nodePort);
 		var sut = new WorkCommands(sessionPort, new FakeAchievementCommandPort(nodePort));
-		var first = await sut.StartWorkAsync(new() { Context = ContextFor(WorkerId), JobNodeId = leafId, WorkedByUserId = WorkerId });
-		var second = await sut.StartWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leafId, WorkedByUserId = OtherWorkerId });
+		var first = await sut.StartWorkAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = leafId,
+			WorkedByUserId = WorkerId,
+		});
+		var second = await sut.StartWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leafId,
+			WorkedByUserId = OtherWorkerId,
+		});
 
 		var result = await sut.CompleteLeafAsync(new() {
 			Context = ContextFor(JobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
 			ExpectedActiveSessions = [
-				new() { Id = first.Id, Version = first.Version }, new() { Id = second.Id, Version = second.Version },
+				new() {
+					Id = first.Id, Version = first.Version,
+				},
+				new() {
+					Id = second.Id, Version = second.Version,
+				},
 			],
 		});
 
@@ -875,8 +1038,16 @@ public sealed class WorkCommandsTests
 	private static async Task<JobNodeId> CreateTerminalLeafAsync(FakeJobNodeCommandPort nodePort, WorkCommands sut, AppUserId workedBy)
 	{
 		var leafId = await CreateReadyLeafAsync(nodePort);
-		var session = await sut.StartWorkAsync(new() { Context = ContextFor(workedBy), JobNodeId = leafId, WorkedByUserId = workedBy });
-		await sut.FinishSessionAsync(new() { Context = ContextFor(workedBy), SessionId = session.Id, Version = session.Version });
+		var session = await sut.StartWorkAsync(new() {
+			Context = ContextFor(workedBy),
+			JobNodeId = leafId,
+			WorkedByUserId = workedBy,
+		});
+		await sut.FinishSessionAsync(new() {
+			Context = ContextFor(workedBy),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 		await sut.SetAchievementAsync(new() {
 			Context = ContextFor(JobManagerId),
 			JobNodeId = leafId,

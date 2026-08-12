@@ -13,12 +13,10 @@ internal sealed class SqliteWorkSessionQueryOperations(string connectionString, 
 {
 	/// <summary>Creates the seam over the given SQLite connection string.</summary>
 	public SqliteWorkSessionQueryOperations(string connectionString)
-		: this(connectionString, [])
-	{
-	}
+		: this(connectionString, []) { }
 
 	public async Task<IReadOnlyList<long>> GetControlledLeafIdsAsync(
 		DbContext context, long actorId, IReadOnlyList<long> leafWorkIds, CancellationToken cancellationToken) =>
 		await SqliteControlledLeafQuery.GetControlledLeafIdsAsync(context, actorId, leafWorkIds, cancellationToken)
-			.ConfigureAwait(false);
+									   .ConfigureAwait(false);
 }

@@ -1,7 +1,6 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -39,7 +38,10 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 
 	private static Instant At(int hour) => Instant.FromUtc(2026, 1, 1, hour, 0);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	[Fact]
 	public async Task An_auditor_without_cost_visibility_sees_a_rate_events_metadata_but_not_its_payload()
@@ -47,7 +49,12 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		var (auditorId, _, _) = await SeedEventsAsync();
 		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
 
-		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(auditorId), Filter = new() { EntityType = "user_cost_rate" } });
+		var results = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(auditorId),
+			Filter = new() {
+				EntityType = "user_cost_rate",
+			},
+		});
 
 		results.Events.Should().ContainSingle();
 		results.Events[0].EntityType.Should().Be("user_cost_rate");
@@ -64,7 +71,9 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 
 		var results = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(costViewerAuditorId),
-			Filter = new() { EntityType = "user_cost_rate" },
+			Filter = new() {
+				EntityType = "user_cost_rate",
+			},
 		});
 
 		results.Events.Should().ContainSingle();
@@ -78,7 +87,12 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		var (auditorId, _, _) = await SeedEventsAsync();
 		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
 
-		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(auditorId), Filter = new() { EntityType = "job_node" } });
+		var results = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(auditorId),
+			Filter = new() {
+				EntityType = "job_node",
+			},
+		});
 
 		results.Events.Should().ContainSingle();
 		results.Events[0].IsRedacted.Should().BeFalse();
@@ -91,7 +105,10 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		var (_, _, workerId) = await SeedEventsAsync();
 		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
 
-		var act = () => sut.SearchAuditEventsAsync(new() { Context = ContextFor(workerId), Filter = new() });
+		var act = () => sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(workerId),
+			Filter = new(),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -102,7 +119,10 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		var (auditorId, _, _) = await SeedEventsAsync();
 		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
 
-		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(auditorId), Filter = new() });
+		var results = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(auditorId),
+			Filter = new(),
+		});
 
 		results.Events.Should().HaveCount(2);
 		results.Events[0].OccurredAt.Should().BeGreaterThan(results.Events[1].OccurredAt);
@@ -121,7 +141,9 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		do {
 			var page = await sut.SearchAuditEventsAsync(new() {
 				Context = ContextFor(auditorId),
-				Filter = new() { EntityType = "job_node" },
+				Filter = new() {
+					EntityType = "job_node",
+				},
 				PageSize = 2,
 				Cursor = cursor,
 			});
@@ -145,12 +167,16 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 
 		var firstPage = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(auditorId),
-			Filter = new() { EntityType = "job_node" },
+			Filter = new() {
+				EntityType = "job_node",
+			},
 			PageSize = 2,
 		});
 		var secondPage = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(auditorId),
-			Filter = new() { EntityType = "job_node" },
+			Filter = new() {
+				EntityType = "job_node",
+			},
 			PageSize = 2,
 			Cursor = firstPage.ContinuationCursor,
 		});
@@ -167,13 +193,15 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 	public async Task The_entity_type_filter_narrows_before_the_page_limit_is_applied()
 	{
 		var (auditorId, jobNodeEntityIds) = await SeedAuditorAndManyEventsAsync(
-			3, index => At(1 + (index * 2)), index => "job_node", index => 300 + index,
-			index => (At(2 + (index * 2)), "user_schedule_version", 900 + index));
+			3, index => At(1 + index * 2), index => "job_node", index => 300 + index,
+			index => (At(2 + index * 2), "user_schedule_version", 900 + index));
 		var sut = new AuditQueries(CreateAuditQueryPort(database.ConnectionString));
 
 		var page = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(auditorId),
-			Filter = new() { EntityType = "job_node" },
+			Filter = new() {
+				EntityType = "job_node",
+			},
 			PageSize = 10,
 		});
 
@@ -192,7 +220,9 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 
 		var page = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(auditorId),
-			Filter = new() { EntityType = "job_node" },
+			Filter = new() {
+				EntityType = "job_node",
+			},
 			PageSize = 10,
 		});
 
@@ -342,12 +372,4 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		command.AddParameter("@afterData", afterDataJson);
 		_ = await command.ExecuteNonQueryAsync();
 	}
-
-
-
-
-
-
-
-
 }

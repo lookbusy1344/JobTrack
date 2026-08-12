@@ -37,7 +37,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\JobTrack.Application\JobTrack.Application.csproj"/>
         <ProjectReference Include="..\..\src\JobTrack.Database\JobTrack.Database.csproj"/>
-		<ProjectReference Include="..\..\src\JobTrack.Identity\JobTrack.Identity.csproj"/>
+        <ProjectReference Include="..\..\src\JobTrack.Identity\JobTrack.Identity.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

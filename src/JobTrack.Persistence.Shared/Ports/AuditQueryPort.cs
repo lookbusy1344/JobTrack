@@ -39,21 +39,23 @@ internal sealed class AuditQueryPort(IProviderReadOperations provider, IClock cl
 
 		var events = await AuditQueryAssembly.SearchAsync(context, filter, before, limit, cancellationToken).ConfigureAwait(false);
 
-		return new() { Events = EquatableArray.CopyOf(events) };
+		return new() {
+			Events = EquatableArray.CopyOf(events),
+		};
 	}
 
 	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		DbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}
@@ -106,14 +108,14 @@ internal static class AuditQueryAssembly
 		if (before is not null) {
 			query = query.Where(e =>
 				e.OccurredAt < before.OccurredAt
-				|| (e.OccurredAt == before.OccurredAt && e.Id < before.Id));
+				|| e.OccurredAt == before.OccurredAt && e.Id < before.Id);
 		}
 
 		var rows = await query
-			.OrderByDescending(e => e.OccurredAt)
-			.ThenByDescending(e => e.Id)
-			.Take(limit)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+						 .OrderByDescending(e => e.OccurredAt)
+						 .ThenByDescending(e => e.Id)
+						 .Take(limit)
+						 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. rows.Select(ToRecord)];
 	}

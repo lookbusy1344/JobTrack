@@ -25,6 +25,10 @@ public sealed record ResetPasswordCommandOptions
 		var username = pico.GetParam("--username");
 		pico.Finished();
 
-		return new() { Provider = provider, ConnectionString = connectionString, Username = username };
+		return new() {
+			Provider = provider,
+			ConnectionString = connectionString,
+			Username = username,
+		};
 	}
 }

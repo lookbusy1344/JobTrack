@@ -31,9 +31,9 @@ internal sealed class FakePrerequisiteQueryPort : IPrerequisiteQueryPort
 		}
 
 		var edges = _edges
-			.Where(e => e.RequiredJobId == nodeId || e.DependentJobId == nodeId)
-			.OrderBy(e => e.RequiredJobId.Value).ThenBy(e => e.DependentJobId.Value)
-			.Skip(offset);
+					.Where(e => e.RequiredJobId == nodeId || e.DependentJobId == nodeId)
+					.OrderBy(e => e.RequiredJobId.Value).ThenBy(e => e.DependentJobId.Value)
+					.Skip(offset);
 		return Task.FromResult<EquatableArray<PrerequisiteEdge>>([.. limit.HasValue ? edges.Take(limit.Value) : edges]);
 	}
 

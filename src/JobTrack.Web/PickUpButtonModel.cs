@@ -29,5 +29,7 @@ public sealed class PickUpButtonModel
 
 	/// <summary>Every hidden field the form posts: the page's state plus this control's target.</summary>
 	public IReadOnlyDictionary<string, string?> Fields =>
-		new Dictionary<string, string?>(PageStateFields) { [NodeFieldName] = NodeId.ToString(CultureInfo.InvariantCulture) };
+		new Dictionary<string, string?>(PageStateFields) {
+			[NodeFieldName] = NodeId.ToString(CultureInfo.InvariantCulture),
+		};
 }

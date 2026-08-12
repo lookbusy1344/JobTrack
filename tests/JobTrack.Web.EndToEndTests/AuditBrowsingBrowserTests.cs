@@ -2,7 +2,6 @@ namespace JobTrack.Web.EndToEndTests;
 
 using System.Globalization;
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -34,7 +33,15 @@ public abstract class AuditBrowsingBrowserTestsBase
 	protected AuditBrowsingBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -66,7 +73,9 @@ public abstract class AuditBrowsingBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Search" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "Search",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -119,20 +128,14 @@ public abstract class AuditBrowsingBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqliteAuditBrowsingBrowserTests : AuditBrowsingBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteAuditBrowsingBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteAuditBrowsingBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlAuditBrowsingBrowserTests : AuditBrowsingBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlAuditBrowsingBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlAuditBrowsingBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

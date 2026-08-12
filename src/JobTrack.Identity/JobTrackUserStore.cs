@@ -108,12 +108,15 @@ public sealed class JobTrackUserStore :
 					 ?? throw new ArgumentException($"Role '{roleName}' does not exist.", nameof(roleName));
 
 		var alreadyAssigned = await dbContext.Set<JobTrackIdentityUserRole>().AsNoTracking()
-			.AnyAsync(ur => ur.IdentityUserId == user.Id && ur.IdentityRoleId == roleId, cancellationToken).ConfigureAwait(false);
+											 .AnyAsync(ur => ur.IdentityUserId == user.Id && ur.IdentityRoleId == roleId, cancellationToken).ConfigureAwait(false);
 		if (alreadyAssigned) {
 			return;
 		}
 
-		_ = dbContext.Add(new JobTrackIdentityUserRole { IdentityUserId = user.Id, IdentityRoleId = roleId });
+		_ = dbContext.Add(new JobTrackIdentityUserRole {
+			IdentityUserId = user.Id,
+			IdentityRoleId = roleId,
+		});
 		_ = await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 	}
 
@@ -125,7 +128,7 @@ public sealed class JobTrackUserStore :
 		}
 
 		var existing = await dbContext.Set<JobTrackIdentityUserRole>()
-			.FirstOrDefaultAsync(ur => ur.IdentityUserId == user.Id && ur.IdentityRoleId == roleId, cancellationToken).ConfigureAwait(false);
+									  .FirstOrDefaultAsync(ur => ur.IdentityUserId == user.Id && ur.IdentityRoleId == roleId, cancellationToken).ConfigureAwait(false);
 		if (existing is null) {
 			return;
 		}
@@ -137,12 +140,12 @@ public sealed class JobTrackUserStore :
 	public async Task<IList<string>> GetRolesAsync(JobTrackIdentityUser user, CancellationToken cancellationToken)
 	{
 		var roleIds = await dbContext.Set<JobTrackIdentityUserRole>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == user.Id)
-			.Select(ur => ur.IdentityRoleId)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+									 .Where(ur => ur.IdentityUserId == user.Id)
+									 .Select(ur => ur.IdentityRoleId)
+									 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var roles = await dbContext.Set<JobTrackIdentityRole>().AsNoTracking()
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+								   .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles.Where(r => roleIds.Contains(r.Id)).Select(r => r.Name)];
 	}
@@ -155,7 +158,7 @@ public sealed class JobTrackUserStore :
 		}
 
 		return await dbContext.Set<JobTrackIdentityUserRole>().AsNoTracking()
-			.AnyAsync(ur => ur.IdentityUserId == user.Id && ur.IdentityRoleId == roleId, cancellationToken).ConfigureAwait(false);
+							  .AnyAsync(ur => ur.IdentityUserId == user.Id && ur.IdentityRoleId == roleId, cancellationToken).ConfigureAwait(false);
 	}
 
 	public async Task<IList<JobTrackIdentityUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
@@ -166,13 +169,13 @@ public sealed class JobTrackUserStore :
 		}
 
 		var userIds = await dbContext.Set<JobTrackIdentityUserRole>().AsNoTracking()
-			.Where(ur => ur.IdentityRoleId == roleId)
-			.Select(ur => ur.IdentityUserId)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+									 .Where(ur => ur.IdentityRoleId == roleId)
+									 .Select(ur => ur.IdentityUserId)
+									 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return await dbContext.Users.AsNoTracking()
-			.Where(u => userIds.Contains(u.Id))
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+							  .Where(u => userIds.Contains(u.Id))
+							  .ToListAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	public Task SetSecurityStampAsync(JobTrackIdentityUser user, string stamp, CancellationToken cancellationToken)
@@ -184,9 +187,7 @@ public sealed class JobTrackUserStore :
 	public Task<string?> GetSecurityStampAsync(JobTrackIdentityUser user, CancellationToken cancellationToken) =>
 		Task.FromResult<string?>(user.SecurityStamp);
 
-	public void Dispose()
-	{
-	}
+	public void Dispose() { }
 
 	public Task<string> GetUserIdAsync(JobTrackIdentityUser user, CancellationToken cancellationToken) =>
 		Task.FromResult(user.Id.ToString(CultureInfo.InvariantCulture));
@@ -281,7 +282,7 @@ public sealed class JobTrackUserStore :
 	private async Task<short?> FindRoleIdAsync(string roleName, CancellationToken cancellationToken)
 	{
 		var roles = await dbContext.Set<JobTrackIdentityRole>().AsNoTracking()
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+								   .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return roles.FirstOrDefault(r => string.Equals(r.Name, roleName, StringComparison.OrdinalIgnoreCase))?.Id;
 	}

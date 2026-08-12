@@ -27,17 +27,17 @@ public sealed class PostgreSqlApiRateLimitStore(
 		using var acquisition = metrics.MeasureAcquisition(Purpose);
 		try {
 			var result = await context
-				.RateLimitTryConsume(
-					Purpose,
-					Digest(partitionKey),
-					null,
-					timeProvider.GetUtcNow(),
-					(int)window.TotalSeconds,
-					permitLimit,
-					0,
-					maxPartitionCount)
-				.SingleAsync(cancellationToken)
-				.ConfigureAwait(false);
+							   .RateLimitTryConsume(
+								   Purpose,
+								   Digest(partitionKey),
+								   null,
+								   timeProvider.GetUtcNow(),
+								   (int)window.TotalSeconds,
+								   permitLimit,
+								   0,
+								   maxPartitionCount)
+							   .SingleAsync(cancellationToken)
+							   .ConfigureAwait(false);
 
 			metrics.RecordRowsPruned(Purpose, result.OutRowsPruned);
 			var outcome = result.OutAllowed ? RateLimitOutcome.Allowed : RateLimitOutcome.Denied;

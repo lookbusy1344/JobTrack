@@ -25,8 +25,8 @@ public sealed class HierarchyDisplayReconcilerPropertyTests
 		// Values are constructed to numeric(19,6) micro-pound granularity (ADR 0009), matching the
 		// precision the real cost engine carries before the reporting boundary.
 		var children = childMicroPoundAmounts
-			.Select((value, index) => (ChildId: new JobNodeId(index + 1), ExactAmount: new Money(value.Get / 1_000_000m)))
-			.ToArray();
+					   .Select((value, index) => (ChildId: new JobNodeId(index + 1), ExactAmount: new Money(value.Get / 1_000_000m)))
+					   .ToArray();
 
 		// The exact parent total is always the sum of its children's exact amounts (spec §10.4) --
 		// never an independently chosen value -- so the property mirrors HierarchicalCostAggregator's

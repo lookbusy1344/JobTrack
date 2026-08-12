@@ -22,8 +22,8 @@ public static class PostgreSqlTestInfrastructure
 		}
 
 		await PostgreSqlRolesAndGrants.ApplyAsync(connection, RepositoryPaths.PostgreSqlRolesAndGrantsScriptPath(), cancellationToken)
-			.ConfigureAwait(false);
+									  .ConfigureAwait(false);
 		await PostgreSqlRolesAndGrants.ApplyAsync(connection, RepositoryPaths.PostgreSqlFunctionsScriptPath(), cancellationToken)
-			.ConfigureAwait(false);
+									  .ConfigureAwait(false);
 	}
 }

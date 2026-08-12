@@ -4,20 +4,14 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
 using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the JSON API surface (plan §8.4): OpenAPI publication,
@@ -26,7 +20,7 @@ using Program = Program;
 ///     tests for the external HTTP API surface (plan §4.1/§4.3, ADR 0030) that is not implemented
 ///     yet — those tests turn green one at a time as each vertical slice lands.
 /// </summary>
-public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
+public sealed class HttpApiTests : IAsyncLifetime, IDisposable
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
@@ -58,7 +52,10 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		rootJobNodeId = bootstrap.RootJobNodeId;
 		await IdentityTestSupport.ClearRequiresPasswordChangeAsync(SchemaProvider.Sqlite, database.ConnectionString);
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -81,10 +78,13 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_cost_viewer_can_get_rates_as_json()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.viewer", EmployeeRole.CostViewer);
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
@@ -102,7 +102,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_cannot_get_rates_and_receives_problem_details_instead_of_a_redirect()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.denied", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.denied");
 		var authCookie = await client.SignInAsync("api.rates.denied", KnownPassword);
 
 		var response = await client.GetAuthenticatedAsync($"/api/employees/{workerId.Value}/rates", authCookie);
@@ -122,7 +122,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_rate_manager_can_add_a_user_cost_rate_via_the_api()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.target");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.manager", EmployeeRole.RateManager);
 		var authCookie = await client.SignInAsync("api.rates.manager", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
@@ -147,7 +147,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_rate_manager_can_correct_a_user_cost_rate_via_the_api()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-target");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-manager", EmployeeRole.RateManager);
 		var authCookie = await client.SignInAsync("api.rates.correct-manager", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
@@ -189,7 +189,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Correcting_a_user_cost_rate_with_a_stale_version_is_rejected_as_a_conflict()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-stale-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-stale-target");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-stale-manager", EmployeeRole.RateManager);
 		var authCookie = await client.SignInAsync("api.rates.correct-stale-manager", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
@@ -228,7 +228,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Retrying_an_identical_add_user_cost_rate_request_is_rejected_as_a_conflict_not_duplicated()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.retry", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.retry");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.retry-manager", EmployeeRole.RateManager);
 		var authCookie = await client.SignInAsync("api.rates.retry-manager", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
@@ -254,7 +254,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Adding_a_user_cost_rate_without_an_antiforgery_token_is_rejected()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.csrf", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.csrf");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.csrf-manager", EmployeeRole.RateManager);
 		var authCookie = await client.SignInAsync("api.rates.csrf-manager", KnownPassword);
 
@@ -281,7 +281,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Adding_a_node_rate_override_without_an_antiforgery_token_is_rejected()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.override-csrf", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.override-csrf");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.override-csrf-manager", EmployeeRole.RateManager);
 		var authCookie = await client.SignInAsync("api.rates.override-csrf-manager", KnownPassword);
 
@@ -302,7 +302,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_administrator_can_correct_a_node_rate_override_via_the_api()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-override-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.correct-override-target");
 		var authCookie = await client.SignInAsync("admin.api-tests", AdministratorPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var addResponse = await client.PostJsonAsync(
@@ -344,7 +344,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Adding_a_schedule_version_without_an_antiforgery_token_is_rejected()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.csrf-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.csrf-worker");
 		var authCookie = await client.SignInAsync("api.schedule.csrf-worker", KnownPassword);
 
 		var response = await client.PostJsonWithoutAntiforgeryAsync(
@@ -370,7 +370,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Adding_a_schedule_exception_without_an_antiforgery_token_is_rejected()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.csrf-exception", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.csrf-exception");
 		var authCookie = await client.SignInAsync("api.schedule.csrf-exception", KnownPassword);
 
 		var response = await client.PostJsonWithoutAntiforgeryAsync(
@@ -391,7 +391,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Adding_a_user_cost_rate_with_an_invalid_antiforgery_token_is_rejected()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.bad-token", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.bad-token");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.bad-token-manager", EmployeeRole.RateManager);
 		var authCookie = await client.SignInAsync("api.rates.bad-token-manager", KnownPassword);
 		var (antiforgeryCookie, _) = await client.GetAntiforgeryTokenAsync(authCookie);
@@ -414,11 +414,14 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_overlapping_rate_returns_problem_details_without_provider_leakage()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.overlap", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.rates.overlap");
 		var authCookie = await client.SignInAsync("admin.api-tests", AdministratorPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
@@ -441,7 +444,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
 		jsonDocument.RootElement.GetProperty("type").GetString().Should().Be("/problems/invariant-violation");
 		jsonDocument.RootElement.GetProperty("detail").GetString()
-			.Should().Be("The request conflicts with an existing record or violates a data constraint.");
+					.Should().Be("The request conflicts with an existing record or violates a data constraint.");
 		body.Should().NotContain("SQLITE");
 		body.Should().NotContain("sqlite");
 		body.Should().NotContain("25.00");
@@ -451,7 +454,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_add_their_own_schedule_version_via_the_api()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.worker");
 		var authCookie = await client.SignInAsync("api.schedule.worker", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 
@@ -483,7 +486,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_correct_their_own_schedule_version_via_the_api()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.correct-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.correct-worker");
 		var authCookie = await client.SignInAsync("api.schedule.correct-worker", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var addResponse = await client.PostJsonAsync(
@@ -538,7 +541,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Adding_a_schedule_version_with_a_retired_tzdb_alias_persists_the_canonical_zone_id()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.alias-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.alias-worker");
 		var authCookie = await client.SignInAsync("api.schedule.alias-worker", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 
@@ -569,7 +572,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_stored_but_now_unrecognized_schedule_zone_is_a_server_fault_not_a_bad_request()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.zone-rot-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.zone-rot-worker");
 		var authCookie = await client.SignInAsync("api.schedule.zone-rot-worker", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		_ = await client.PostJsonAsync(
@@ -610,7 +613,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Retrying_an_identical_add_schedule_version_request_is_rejected_as_a_conflict_not_duplicated()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.retry-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.retry-worker");
 		var authCookie = await client.SignInAsync("api.schedule.retry-worker", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		const string requestBody = """
@@ -642,7 +645,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Retrying_an_identical_add_schedule_exception_request_is_rejected_as_a_conflict_not_duplicated()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.exception-retry-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.exception-retry-worker");
 		var authCookie = await client.SignInAsync("api.schedule.exception-retry-worker", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		const string requestBody = """
@@ -666,7 +669,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_correct_their_own_schedule_exception_via_the_api()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.correct-exception-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.schedule.correct-exception-worker");
 		var authCookie = await client.SignInAsync("api.schedule.correct-exception-worker", KnownPassword);
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var addResponse = await client.PostJsonAsync(
@@ -717,10 +720,13 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_cost_viewer_can_get_rates_as_json_via_a_bearer_token()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.worker");
 		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.viewer", EmployeeRole.CostViewer);
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
@@ -734,7 +740,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_with_a_valid_bearer_token_is_still_denied_rates_access()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.denied", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.denied");
 		var token = await IssueTokenAsync(workerId);
 
 		var response = await client.GetWithBearerAsync($"/api/employees/{workerId.Value}/rates", token);
@@ -745,7 +751,7 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_rate_manager_can_add_a_user_cost_rate_via_a_bearer_token_without_an_antiforgery_token()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.mutate-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.mutate-worker");
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.mutate-manager", EmployeeRole.RateManager);
 		var token = await IssueTokenAsync(managerId);
 
@@ -813,13 +819,19 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	{
 		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.revoked", EmployeeRole.CostViewer);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = viewerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = viewerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			Label = "test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
 		});
 		await seedClient.Tokens.RevokeAsync(new() {
-			Context = new() { Actor = viewerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = viewerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			TokenId = issued.Id,
 		});
@@ -835,7 +847,10 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.bearer.disabled", EmployeeRole.CostViewer);
 		var token = await IssueTokenAsync(viewerId);
 		_ = await seedClient.Employees.SetEnabledAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			Enabled = false,
 		});
@@ -852,12 +867,18 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		var token = await IssueTokenAsync(viewerId);
 
 		_ = await seedClient.Employees.SetEnabledAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			Enabled = false,
 		});
 		_ = await seedClient.Employees.SetEnabledAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			Enabled = true,
 		});
@@ -873,7 +894,10 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		var token = await IssueTokenAsync(viewerId);
 
 		_ = await seedClient.Employees.AssignRoleAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			Role = EmployeeRole.RateManager,
 		});
@@ -889,7 +913,10 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		var token = await IssueTokenAsync(viewerId);
 
 		_ = await seedClient.Employees.RevokeRoleAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			Role = EmployeeRole.CostViewer,
 		});
@@ -905,7 +932,10 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		var token = await IssueTokenAsync(viewerId);
 
 		_ = await seedClient.Employees.ResetPasswordAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			TargetUserName = "api.bearer.password-reset-revokes",
 			NewPassword = "Reset-Horse-Battery-99!",
@@ -937,7 +967,10 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 	private async Task<string> IssueTokenAsync(AppUserId userId)
 	{
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = userId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = userId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = userId,
 			Label = "test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -963,9 +996,4 @@ public sealed partial class HttpApiTests : IAsyncLifetime, IDisposable
 		_ = command.Parameters.AddWithValue("$userId", userId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
-
-
-
-
-
 }

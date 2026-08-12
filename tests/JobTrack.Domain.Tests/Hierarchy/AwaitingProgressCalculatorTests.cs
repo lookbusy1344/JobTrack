@@ -40,7 +40,9 @@ public sealed class AwaitingProgressCalculatorTests
 	/// </summary>
 	private static Dictionary<JobNodeId, HierarchyNode> NodesWithParent(params ReadOnlySpan<HierarchyNode> leaves)
 	{
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [BranchId] = Node(BranchId, null, [], null) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[BranchId] = Node(BranchId, null, [], null),
+		};
 		foreach (var leaf in leaves) {
 			nodes[leaf.Id] = leaf;
 		}
@@ -57,7 +59,10 @@ public sealed class AwaitingProgressCalculatorTests
 	public void A_leaf_awaiting_or_in_progress_is_included()
 	{
 		var nodes = NodesWithParent(Leaf(LeafAId, Achievement.Waiting), Leaf(LeafBId, Achievement.InProgress));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId), [LeafBId] = Facts(LeafBId) };
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId),
+			[LeafBId] = Facts(LeafBId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
@@ -71,7 +76,9 @@ public sealed class AwaitingProgressCalculatorTests
 	public void A_leaf_in_a_terminal_state_is_excluded(Achievement achievement)
 	{
 		var nodes = NodesWithParent(Leaf(LeafAId, achievement));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId) };
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
@@ -82,7 +89,9 @@ public sealed class AwaitingProgressCalculatorTests
 	public void A_leaf_with_no_leaf_work_attached_is_included_with_a_null_achievement()
 	{
 		var nodes = NodesWithParent(Leaf(LeafAId, null));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId) };
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
@@ -111,8 +120,12 @@ public sealed class AwaitingProgressCalculatorTests
 	[Fact]
 	public void A_childless_root_is_never_included_even_though_it_has_no_leaf_work()
 	{
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RootId] = Node(RootId, null, [], null) };
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [RootId] = Facts(RootId) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RootId] = Node(RootId, null, [], null),
+		};
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[RootId] = Facts(RootId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, []);
 
@@ -123,8 +136,13 @@ public sealed class AwaitingProgressCalculatorTests
 	public void A_leaf_blocked_by_an_unsatisfied_prerequisite_stays_on_the_list_marked_not_ready()
 	{
 		var nodes = NodesWithParent(Leaf(RequiredId, Achievement.InProgress), Leaf(LeafAId, Achievement.Waiting));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [RequiredId] = Facts(RequiredId), [LeafAId] = Facts(LeafAId) };
-		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId) };
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[RequiredId] = Facts(RequiredId),
+			[LeafAId] = Facts(LeafAId),
+		};
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, LeafAId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
 
@@ -135,8 +153,13 @@ public sealed class AwaitingProgressCalculatorTests
 	public void A_leaf_whose_prerequisite_has_succeeded_is_included_and_ready()
 	{
 		var nodes = NodesWithParent(Leaf(RequiredId, Achievement.Success), Leaf(LeafAId, Achievement.Waiting));
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [RequiredId] = Facts(RequiredId), [LeafAId] = Facts(LeafAId) };
-		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId) };
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[RequiredId] = Facts(RequiredId),
+			[LeafAId] = Facts(LeafAId),
+		};
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, LeafAId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
 
@@ -198,7 +221,9 @@ public sealed class AwaitingProgressCalculatorTests
 			[BranchId] = Node(BranchId, null, [LeafAId], null),
 			[LeafAId] = Node(LeafAId, BranchId, [], Achievement.Waiting),
 		};
-		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> { [LeafAId] = Facts(LeafAId, "Fit cabinets") };
+		var facts = new Dictionary<JobNodeId, AwaitingProgressNodeFacts> {
+			[LeafAId] = Facts(LeafAId, "Fit cabinets"),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, [], OwnershipFilter.All, null, "doors");
 
@@ -232,7 +257,9 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafAId] = Facts(LeafAId, priority: Priority.Urgent),
 			[LeafBId] = Facts(LeafBId, priority: Priority.Low),
 		};
-		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId) };
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, LeafAId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
 
@@ -250,7 +277,9 @@ public sealed class AwaitingProgressCalculatorTests
 			[LeafAId] = Facts(LeafAId, priority: Priority.Low),
 			[LeafBId] = Facts(LeafBId, priority: Priority.Urgent),
 		};
-		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafAId), new PrerequisiteEdge(RequiredId, LeafBId) };
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, LeafAId), new PrerequisiteEdge(RequiredId, LeafBId),
+		};
 
 		var result = AwaitingProgressCalculator.GetAwaitingProgress(nodes, facts, edges);
 

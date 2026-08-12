@@ -43,7 +43,9 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	private const int TotpStepSeconds = 30;
 
 	private static readonly FrozenDictionary<string, string?> PostgreSqlDataProtectionStoreSetting =
-		new Dictionary<string, string?> { ["DataProtection:Store"] = "PostgreSql" }.ToFrozenDictionary();
+		new Dictionary<string, string?> {
+			["DataProtection:Store"] = "PostgreSql",
+		}.ToFrozenDictionary();
 
 	private readonly PostgreSqlDatabaseFixture database = new();
 
@@ -82,8 +84,14 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		// Stage 3-5 remediations have not landed yet.
 		hostA = new(database.ConnectionString, CreateTemporaryDirectory("host-a"), PostgreSqlDataProtectionStoreSetting);
 		hostB = new(database.ConnectionString, CreateTemporaryDirectory("host-b"), PostgreSqlDataProtectionStoreSetting);
-		clientA = hostA.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
-		clientB = hostB.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		clientA = hostA.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
+		clientB = hostB.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -160,7 +168,7 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var enrolCode = GenerateTotpCode(secret, DateTimeOffset.UtcNow);
 		var confirmResponse = await PostConfirmAsync(clientA, refreshedAuthCookieA, antiforgeryCookieA, tokenA, enrolCode);
 		confirmResponse.StatusCode.Should()
-			.Be(HttpStatusCode.Redirect, "the enrolment step itself must succeed on host A before the cross-host check is meaningful");
+					   .Be(HttpStatusCode.Redirect, "the enrolment step itself must succeed on host A before the cross-host check is meaningful");
 
 		var loginResponse = await PostLoginAsync(clientB, "totp.crosshost", KnownPassword);
 
@@ -210,7 +218,9 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var (logoutAntiforgeryCookie, logoutToken) = await GetFormAsync(clientA, "/Account/Logout", $"{authCookieA}; {idSessionCookie}");
 		using var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/Account/Logout");
 		logoutRequest.Headers.Add("Cookie", $"{authCookieA}; {idSessionCookie}; {logoutAntiforgeryCookie}");
-		logoutRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = logoutToken });
+		logoutRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["__RequestVerificationToken"] = logoutToken,
+		});
 		_ = await clientA.SendAsync(logoutRequest);
 
 		// The filter cookie's state now travels in the cookie value itself (ADR 0066 Stage 3), rather
@@ -240,8 +250,14 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 			database.ConnectionString, CreateTemporaryDirectory("rl-a"), LoginPermitLimitSetting(PermitLimit));
 		using var limitedHostB = new TestWebApplicationFactory(
 			database.ConnectionString, CreateTemporaryDirectory("rl-b"), LoginPermitLimitSetting(PermitLimit));
-		using var limitedClientA = limitedHostA.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
-		using var limitedClientB = limitedHostB.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		using var limitedClientA = limitedHostA.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
+		using var limitedClientB = limitedHostB.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 
 		var successCount = 0;
 		for (var attempt = 0; attempt < AttemptCount; ++attempt) {
@@ -276,7 +292,10 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		const int AttemptCount = 5;
 		var workerId = await CreateEmployeeAsync("ratelimit.api");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "rate-limit-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -286,8 +305,14 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 			database.ConnectionString, CreateTemporaryDirectory("api-rl-a"), ApiPermitLimitSetting(PermitLimit));
 		using var limitedHostB = new TestWebApplicationFactory(
 			database.ConnectionString, CreateTemporaryDirectory("api-rl-b"), ApiPermitLimitSetting(PermitLimit));
-		using var limitedClientA = limitedHostA.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
-		using var limitedClientB = limitedHostB.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		using var limitedClientA = limitedHostA.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
+		using var limitedClientB = limitedHostB.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 
 		var successCount = 0;
 		HttpResponseMessage? lastResponse = null;
@@ -351,13 +376,19 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var workerBId = await CreateEmployeeAsync("race.workerB");
 		var leafId = await AddUnassignedLeafAsync("Race leaf");
 		var tokenA = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerAId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerAId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerAId,
 			Label = "race-a",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
 		});
 		var tokenB = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerBId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerBId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerBId,
 			Label = "race-b",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -372,7 +403,9 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var responseBTask = clientB.SendAsync(requestB);
 		await Task.WhenAll(responseATask, responseBTask);
 
-		var statusCodes = new[] { (await responseATask).StatusCode, (await responseBTask).StatusCode };
+		var statusCodes = new[] {
+			(await responseATask).StatusCode, (await responseBTask).StatusCode,
+		};
 
 		// Domain writes already commit through one PostgreSQL transaction per compound command
 		// regardless of which host issues it (plan §2.1) -- this is a regression guard, not a red
@@ -385,10 +418,16 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	// ADR 0066 Stage 5: both rate-limit tests opt into the shared PostgreSQL counter store so the
 	// two-host fixture proves the *global* limit, not each host's own independent in-process one.
 	private static Dictionary<string, string?> LoginPermitLimitSetting(int permitLimit) =>
-		new() { ["RateLimiting:LoginPermitLimit"] = permitLimit.ToString(CultureInfo.InvariantCulture), ["RateLimiting:Store"] = "PostgreSql" };
+		new() {
+			["RateLimiting:LoginPermitLimit"] = permitLimit.ToString(CultureInfo.InvariantCulture),
+			["RateLimiting:Store"] = "PostgreSql",
+		};
 
 	private static Dictionary<string, string?> ApiPermitLimitSetting(int permitLimit) =>
-		new() { ["RateLimiting:ApiPermitLimit"] = permitLimit.ToString(CultureInfo.InvariantCulture), ["RateLimiting:Store"] = "PostgreSql" };
+		new() {
+			["RateLimiting:ApiPermitLimit"] = permitLimit.ToString(CultureInfo.InvariantCulture),
+			["RateLimiting:Store"] = "PostgreSql",
+		};
 
 	private static async Task<string> EstablishSessionCookieAsync(HttpClient client, string authCookie, string queryString)
 	{
@@ -413,7 +452,10 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	private async Task<AppUserId> CreateEmployeeAsync(string userName, EmployeeRole role = EmployeeRole.Worker)
 	{
 		var result = await seedClient.Employees.CreateEmployeeAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			DisplayName = userName,
 			IanaTimeZone = "Etc/UTC",
 			UserName = userName,
@@ -428,7 +470,10 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	private async Task<JobNodeId> AddUnassignedLeafAsync(string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = description,
 			OwnerUserId = null,
@@ -441,14 +486,23 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	private async Task<JobNodeId> AddLeafWithWorkAsync(AppUserId? ownerId, string description)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
 		var attached = await seedClient.Jobs.AttachLeafWorkAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id });
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = leaf.Id,
+			});
 
 		return attached.JobNodeId;
 	}
@@ -556,7 +610,7 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	}
 
 	private static async Task<HttpResponseMessage> PostConfirmAsync(HttpClient client, string authCookie, string antiforgeryCookie, string token,
-		string code)
+																	string code)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/ManageTwoFactor?handler=Confirm");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -617,10 +671,10 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var hash = hmac.ComputeHash(counterBytes);
 		var offset = hash[^1] & 0x0F;
 		var binaryCode =
-			((hash[offset] & 0x7F) << 24) |
-			((hash[offset + 1] & 0xFF) << 16) |
-			((hash[offset + 2] & 0xFF) << 8) |
-			(hash[offset + 3] & 0xFF);
+			(hash[offset] & 0x7F) << 24 |
+			(hash[offset + 1] & 0xFF) << 16 |
+			(hash[offset + 2] & 0xFF) << 8 |
+			hash[offset + 3] & 0xFF;
 		var truncated = binaryCode % (int)Math.Pow(10, TotpDigits);
 
 		return truncated.ToString(CultureInfo.InvariantCulture).PadLeft(TotpDigits, '0');
@@ -634,10 +688,10 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var bitCount = 0;
 
 		foreach (var c in trimmed) {
-			bitBuffer = (bitBuffer << 5) | Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
+			bitBuffer = bitBuffer << 5 | Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
 			bitCount += 5;
 			if (bitCount >= 8) {
-				output.Add((byte)((bitBuffer >> (bitCount - 8)) & 0xFF));
+				output.Add((byte)(bitBuffer >> bitCount - 8 & 0xFF));
 				bitCount -= 8;
 			}
 		}

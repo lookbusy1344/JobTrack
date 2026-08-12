@@ -91,16 +91,19 @@ public sealed class IndexModel(
 			try {
 				var zone = ScheduleZoneId.Resolve(VersionInput.IanaTimeZone);
 				var weeklyIntervals = VersionInput.WeeklyIntervals
-					.Where(slot => slot.Day is not null && slot.Start is not null && slot.End is not null)
-					.Select(slot => new WeeklyInterval(
-						slot.Day!.Value, new(slot.Start!.Value.Hour, slot.Start.Value.Minute),
-						new(slot.End!.Value.Hour, slot.End.Value.Minute)))
-					.ToArray();
+												  .Where(slot => slot.Day is not null && slot.Start is not null && slot.End is not null)
+												  .Select(slot => new WeeklyInterval(
+													  slot.Day!.Value, new(slot.Start!.Value.Hour, slot.Start.Value.Minute),
+													  new(slot.End!.Value.Hour, slot.End.Value.Minute)))
+												  .ToArray();
 				var effectiveStart = ToLocalDate(VersionInput.EffectiveStart);
 				LocalDate? effectiveEnd = VersionInput.EffectiveEnd.HasValue ? ToLocalDate(VersionInput.EffectiveEnd.Value) : null;
 
 				_ = await jobTrackClient.Schedules.AddScheduleVersionAsync(new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					UserId = targetUserId,
 					Schedule = new(
 						zone, effectiveStart, effectiveEnd, [.. weeklyIntervals]),
@@ -120,7 +123,10 @@ public sealed class IndexModel(
 				ErrorMessage = "That is not a recognized IANA time zone.";
 			}
 
-			return RedirectToPage(new { userId = UserId });
+			return RedirectToPage(new
+			{
+				userId = UserId,
+			});
 		}
 
 		for (var i = VersionInput.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; ++i) {
@@ -161,7 +167,10 @@ public sealed class IndexModel(
 					ExceptionInput.RateOverride.HasValue ? new HourlyRate(ExceptionInput.RateOverride.Value) : null);
 
 				_ = await jobTrackClient.Schedules.AddScheduleExceptionAsync(new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					UserId = targetUserId,
 					Entry = entry,
 					Reason = ExceptionInput.Reason,
@@ -181,7 +190,10 @@ public sealed class IndexModel(
 				ErrorMessage = ex.Message;
 			}
 
-			return RedirectToPage(new { userId = UserId });
+			return RedirectToPage(new
+			{
+				userId = UserId,
+			});
 		}
 
 		for (var i = VersionInput.WeeklyIntervals.Count; i < MaxWeeklyIntervalSlots; ++i) {
@@ -203,7 +215,13 @@ public sealed class IndexModel(
 
 		try {
 			Snapshot = await jobTrackClient.Query.GetScheduleAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, UserId = targetUserId }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					UserId = targetUserId,
+				}, cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "You may not view that employee's schedule.";
@@ -225,11 +243,21 @@ public sealed class IndexModel(
 	{
 		try {
 			return await jobTrackClient.Query.GetAllEmployeesAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+				}, cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
 			return await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+				}, cancellationToken);
 		}
 	}
 

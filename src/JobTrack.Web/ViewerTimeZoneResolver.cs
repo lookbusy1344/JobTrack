@@ -10,7 +10,13 @@ public sealed class ViewerTimeZoneResolver(IJobTrackClient jobTrackClient) : IVi
 	public async Task<DateTimeZone> ResolveAsync(AppUserId actorId, CancellationToken cancellationToken = default)
 	{
 		var profile = await jobTrackClient.Query.GetEmployeeProfileAsync(
-			new() { Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() }, TargetUserId = actorId },
+			new() {
+				Context = new() {
+					Actor = actorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				TargetUserId = actorId,
+			},
 			cancellationToken);
 
 		return DateTimeZoneProviders.Tzdb.GetZoneOrNull(profile.IanaTimeZone)

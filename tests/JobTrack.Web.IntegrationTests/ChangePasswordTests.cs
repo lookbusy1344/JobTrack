@@ -4,16 +4,12 @@ using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     TC-WEB-AUTHN-005 (threat model row 3): self-service password change revokes every other live
@@ -39,7 +35,10 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -214,7 +213,10 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		var appUserId = await SeedUserAsync("wilma", KnownPassword);
 		var seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = appUserId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = appUserId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = appUserId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -249,7 +251,10 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		var appUserId = await SeedUserAsync("gracie", KnownPassword);
 		var seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = appUserId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = appUserId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = appUserId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -330,7 +335,7 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		return WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(response, "Identity.Application") ??
-								 throw new InvalidOperationException("Sign-in did not set the authentication cookie."));
+											 throw new InvalidOperationException("Sign-in did not set the authentication cookie."));
 	}
 
 
@@ -424,7 +429,4 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 
 		return new(appUserId);
 	}
-
-
-
 }

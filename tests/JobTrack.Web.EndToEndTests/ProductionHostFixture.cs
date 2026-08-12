@@ -108,7 +108,9 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 		var webAssemblyPath = typeof(Program).Assembly.Location;
 		var startInfo = new ProcessStartInfo {
 			FileName = "dotnet",
-			ArgumentList = { webAssemblyPath },
+			ArgumentList = {
+				webAssemblyPath,
+			},
 			UseShellExecute = false,
 			RedirectStandardOutput = true,
 			RedirectStandardError = true,
@@ -133,7 +135,10 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 			startInfo.EnvironmentVariables[$"ForwardedHeaders__KnownProxies__{i}"] = knownProxies[i];
 		}
 
-		webProcess = new() { StartInfo = startInfo, EnableRaisingEvents = true };
+		webProcess = new() {
+			StartInfo = startInfo,
+			EnableRaisingEvents = true,
+		};
 		webProcess.OutputDataReceived += (_, args) => {
 			if (args.Data is not null) {
 				lock (processOutput) {
@@ -156,7 +161,9 @@ public class ProductionHostFixture : IAsyncLifetime, IDisposable
 
 	private async Task WaitForReadinessAsync()
 	{
-		using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+		using var handler = new HttpClientHandler {
+			ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+		};
 		using var probeClient = new HttpClient(handler);
 		var deadline = DateTime.UtcNow + ReadinessTimeout;
 

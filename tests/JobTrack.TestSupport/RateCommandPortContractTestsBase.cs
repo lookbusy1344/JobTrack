@@ -1,7 +1,6 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -62,7 +61,10 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "user_cost_rate", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "user_cost_rate",
+				EntityId = result.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("add-user-cost-rate");
@@ -237,7 +239,10 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "user_cost_rate", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "user_cost_rate",
+				EntityId = added.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-user-cost-rate" && e.ActorId == rateManagerId);
 	}
@@ -364,7 +369,10 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "node_rate_override", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "node_rate_override",
+				EntityId = added.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-node-rate-override" && e.ActorId == administratorId);
 	}
@@ -437,7 +445,10 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>
 	///     Seeds a deployed schema, an administrator via the real bootstrap port (which also
@@ -468,12 +479,4 @@ public abstract class RateCommandPortContractTestsBase : IAsyncLifetime
 
 		return (result.RootJobNodeId, result.AdministratorId, rateManagerId, workerId);
 	}
-
-
-
-
-
-
-
-
 }

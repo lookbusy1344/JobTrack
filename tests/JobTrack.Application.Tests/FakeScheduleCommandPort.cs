@@ -121,7 +121,11 @@ internal sealed class FakeScheduleCommandPort : IScheduleCommandPort
 				"schedule-version-overlap", "This schedule version's effective range overlaps another for this employee.");
 		}
 
-		var result = existing with { Schedule = request.Schedule, ChangedAt = NowToReturn, Version = existing.Version + 1 };
+		var result = existing with {
+			Schedule = request.Schedule,
+			ChangedAt = NowToReturn,
+			Version = existing.Version + 1,
+		};
 		_versions[index] = result;
 
 		return Task.FromResult(result);

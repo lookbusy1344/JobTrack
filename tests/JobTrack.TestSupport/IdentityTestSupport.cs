@@ -44,13 +44,13 @@ public static class IdentityTestSupport
 
 		await using var insertIdentityUser = connection.CreateCommand();
 		insertIdentityUser.CommandText = """
-			INSERT INTO identity_user
-				(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-				 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-			VALUES
-				($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-				 $concurrencyStamp, 0, 1, 1, 0);
-			""";
+										 INSERT INTO identity_user
+										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
+										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
+										 VALUES
+										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
+										 	 $concurrencyStamp, 0, 1, 1, 0);
+										 """;
 		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
 		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
 		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", identityUser.NormalizedUserName);

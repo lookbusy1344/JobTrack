@@ -2,14 +2,9 @@ namespace JobTrack.Web.IntegrationTests;
 
 using System.Net;
 using System.Text;
-using Abstractions;
 using AwesomeAssertions;
-using Database;
-using Identity;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using TestSupport;
 using Program = Program;
 
@@ -35,7 +30,11 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString, true);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, BaseAddress = new("https://localhost"), HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			BaseAddress = new("https://localhost"),
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -104,7 +103,10 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 	public async Task Single_instance_demo_preserves_same_as_request_cookie_transport_policy()
 	{
 		using var demoFactory = new TestWebApplicationFactory(database.ConnectionString, false);
-		using var demoClient = demoFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		using var demoClient = demoFactory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 
 		var response = await demoClient.GetAsync("/Account/Login");
 
@@ -122,7 +124,7 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_authenticated_navigation_after_sign_in_carries_no_store_cache_control()
 	{
-		await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cache.worker", EmployeeRole.Worker);
+		await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cache.worker");
 		var authCookie = await client.SignInAsync("cache.worker");
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");

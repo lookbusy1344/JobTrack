@@ -36,7 +36,7 @@ internal sealed class SqliteInstallationBootstrapPort : IInstallationBootstrapPo
 		await using var context = await SqliteDbContextFactory.CreateOpenContextAsync(connectionString, cancellationToken).ConfigureAwait(false);
 
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		if (await context.Set<InitialisedMarkerEntity>().AnyAsync(cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
@@ -80,7 +80,10 @@ internal sealed class SqliteInstallationBootstrapPort : IInstallationBootstrapPo
 		// (not app_user.id), so it needs that generated id assigned before it can be constructed.
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-		_ = context.Add(new IdentityUserRoleEntity { IdentityUserId = identityUser.Id, IdentityRoleId = (short)EmployeeRole.Administrator });
+		_ = context.Add(new IdentityUserRoleEntity {
+			IdentityUserId = identityUser.Id,
+			IdentityRoleId = (short)EmployeeRole.Administrator,
+		});
 
 		var root = new JobNodeEntity {
 			Id = default,
@@ -94,7 +97,10 @@ internal sealed class SqliteInstallationBootstrapPort : IInstallationBootstrapPo
 		};
 		_ = context.Add(root);
 
-		_ = context.Add(new InitialisedMarkerEntity { Id = 1, InitialisedAt = now });
+		_ = context.Add(new InitialisedMarkerEntity {
+			Id = 1,
+			InitialisedAt = now,
+		});
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

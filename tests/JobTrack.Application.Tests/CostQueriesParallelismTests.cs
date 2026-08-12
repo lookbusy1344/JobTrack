@@ -36,7 +36,10 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		return port;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>Seeds <paramref name="workerCount" /> workers, each with one non-overlapping ten-minute session on <see cref="LeafId" />.</summary>
 	private static void SeedIndependentTenMinuteWorkers(FakeCostQueryPort port, int workerCount)
@@ -62,7 +65,11 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		SeedIndependentTenMinuteWorkers(port, workerCount);
 		var sut = new CostQueries(port);
 
-		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var result = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		// Each worker's ten minutes never overlaps another worker's own sessions, so nothing divides:
 		// workerCount * 10 minutes at £60/hr.
@@ -80,7 +87,11 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		SeedIndependentTenMinuteWorkers(port, workerCount);
 		var sut = new CostQueries(port);
 
-		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var result = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		result.ExactCosts[LeafId].Should().Be(new(workerCount * 10m));
 	}
@@ -111,9 +122,17 @@ public sealed class CostQueriesWorkerOrchestrationTests
 
 		var sut = new CostQueries(port);
 
-		var first = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var first = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 		for (var attempt = 0; attempt < 15; ++attempt) {
-			var repeat = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+			var repeat = await sut.GetHierarchyTotalsAsync(new() {
+				Context = ContextFor(CostViewerId),
+				NodeId = BranchId,
+				AsOf = At(24),
+			});
 			repeat.ExactCosts[LeafId].Should().Be(first.ExactCosts[LeafId]);
 			repeat.AllocatedDurations[LeafId].Should().Be(first.AllocatedDurations[LeafId]);
 		}
@@ -141,7 +160,11 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		});
 		var sut = new CostQueries(port);
 
-		var act = () => sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var act = () => sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<InvariantViolationException>();
 	}
@@ -156,7 +179,11 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		await cancellation.CancelAsync();
 
 		var act = () => sut.GetHierarchyTotalsAsync(
-			new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) }, cancellation.Token);
+			new() {
+				Context = ContextFor(CostViewerId),
+				NodeId = BranchId,
+				AsOf = At(24),
+			}, cancellation.Token);
 
 		await act.Should().ThrowAsync<OperationCanceledException>();
 	}
@@ -178,7 +205,9 @@ public sealed class CostQueriesWorkerOrchestrationTests
 	public async Task GetBulkNodeCostsAsync_with_many_workers_honors_cancellation_after_materialization()
 	{
 		using var cancellation = new CancellationTokenSource();
-		var port = new FakeCostQueryPort { AfterGetBulkCostInputs = cancellation.Cancel };
+		var port = new FakeCostQueryPort {
+			AfterGetBulkCostInputs = cancellation.Cancel,
+		};
 		port.SeedRoles(CostViewerId, EmployeeRole.CostViewer);
 		port.SeedNode(new(RootId, null, [BranchId], null));
 		port.SeedNode(new(BranchId, RootId, [LeafId], null));
@@ -187,7 +216,11 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		var sut = new CostQueries(port);
 
 		var act = () => sut.GetBulkNodeCostsAsync(
-			new() { Context = ContextFor(CostViewerId), NodeIds = [BranchId], AsOf = At(24) }, cancellation.Token);
+			new() {
+				Context = ContextFor(CostViewerId),
+				NodeIds = [BranchId],
+				AsOf = At(24),
+			}, cancellation.Token);
 
 		await act.Should().ThrowAsync<OperationCanceledException>();
 	}
@@ -202,7 +235,11 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		var sut = new CostQueries(port);
 
 		var act = () => sut.GetHierarchyTotalsAsync(
-			new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) }, cancellation.Token);
+			new() {
+				Context = ContextFor(CostViewerId),
+				NodeId = BranchId,
+				AsOf = At(24),
+			}, cancellation.Token);
 
 		await act.Should().ThrowAsync<OperationCanceledException>();
 	}
@@ -217,7 +254,11 @@ public sealed class CostQueriesWorkerOrchestrationTests
 		var sut = new CostQueries(port);
 
 		var act = () => sut.GetCostDetailsAsync(
-			new() { Context = ContextFor(CostViewerId), NodeId = LeafId, AsOf = At(24) }, cancellation.Token);
+			new() {
+				Context = ContextFor(CostViewerId),
+				NodeId = LeafId,
+				AsOf = At(24),
+			}, cancellation.Token);
 
 		await act.Should().ThrowAsync<OperationCanceledException>();
 	}

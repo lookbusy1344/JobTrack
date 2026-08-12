@@ -62,7 +62,10 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "user_schedule_version", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "user_schedule_version",
+				EntityId = result.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("add-schedule-version");
@@ -331,7 +334,10 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "user_schedule_version", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "user_schedule_version",
+				EntityId = added.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-schedule-version" && e.ActorId == workerId);
 	}
@@ -474,7 +480,10 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "user_schedule_exception", EntityId = added.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "user_schedule_exception",
+				EntityId = added.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "correct-schedule-exception" && e.ActorId == workerId);
 	}
@@ -564,7 +573,10 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static ScheduleVersion CreateWeekdayScheduleVersion(LocalDate effectiveStart, LocalDate? effectiveEnd = null) =>
 		new(
@@ -608,12 +620,4 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 		command.AddParameter("@scheduleVersionId", scheduleVersionId.Value);
 		return Convert.ToString(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture)!;
 	}
-
-
-
-
-
-
-
-
 }

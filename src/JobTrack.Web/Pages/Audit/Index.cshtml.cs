@@ -79,7 +79,10 @@ public sealed class IndexModel(
 		}
 
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.AppUserId, cancellationToken);
-		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.AppUserId,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		var directory = await LoadEmployeeDirectoryAsync(actor.AppUserId, cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
@@ -137,11 +140,21 @@ public sealed class IndexModel(
 	{
 		try {
 			return await jobTrackClient.Query.GetAllEmployeesAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+				}, cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
 			return await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+				}, cancellationToken);
 		}
 	}
 }

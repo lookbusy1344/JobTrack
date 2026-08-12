@@ -72,7 +72,9 @@
 					</td>
 					<td class="col-4 col-md-3">
 						<partial name="_RequesterStatusIcon"
-						         model="@(new RequesterStatusIconModel { Status = request.Status })"/>
+						         model="@(new RequesterStatusIconModel {
+							                Status = request.Status,
+						                })"/>
 					</td>
 					<td class="col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(request.SubmittedAt, Model.ViewerZone)</td>
 				</tr>

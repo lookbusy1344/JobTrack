@@ -15,8 +15,7 @@ public sealed class ScheduleExceptionValidatorTests
 	public void Two_overlapping_priced_additive_exceptions_are_rejected()
 	{
 		var exceptions = new[] {
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 22), new HourlyRate(50m)),
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(20, 23), new HourlyRate(75m)),
+			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 22), new HourlyRate(50m)), new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(20, 23), new HourlyRate(75m)),
 		};
 
 		var act = () => ScheduleExceptionValidator.EnsureNoOverlappingPricedAdditiveExceptions(exceptions);
@@ -28,8 +27,7 @@ public sealed class ScheduleExceptionValidatorTests
 	public void Two_adjacent_priced_additive_exceptions_are_accepted()
 	{
 		var exceptions = new[] {
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 20), new HourlyRate(50m)),
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(20, 23), new HourlyRate(75m)),
+			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 20), new HourlyRate(50m)), new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(20, 23), new HourlyRate(75m)),
 		};
 
 		var act = () => ScheduleExceptionValidator.EnsureNoOverlappingPricedAdditiveExceptions(exceptions);
@@ -41,8 +39,7 @@ public sealed class ScheduleExceptionValidatorTests
 	public void Overlapping_unpriced_additive_exceptions_are_accepted()
 	{
 		var exceptions = new[] {
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 22), null),
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(20, 23), null),
+			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 22), null), new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(20, 23), null),
 		};
 
 		var act = () => ScheduleExceptionValidator.EnsureNoOverlappingPricedAdditiveExceptions(exceptions);
@@ -54,8 +51,7 @@ public sealed class ScheduleExceptionValidatorTests
 	public void A_priced_additive_exception_overlapping_a_subtractive_exception_is_accepted()
 	{
 		var exceptions = new[] {
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 22), new HourlyRate(50m)),
-			new ScheduleExceptionEntry(ScheduleExceptionEffect.RemoveWorkingTime, Interval(20, 23), null),
+			new ScheduleExceptionEntry(ScheduleExceptionEffect.AddWorkingTime, Interval(18, 22), new HourlyRate(50m)), new ScheduleExceptionEntry(ScheduleExceptionEffect.RemoveWorkingTime, Interval(20, 23), null),
 		};
 
 		var act = () => ScheduleExceptionValidator.EnsureNoOverlappingPricedAdditiveExceptions(exceptions);
@@ -66,7 +62,9 @@ public sealed class ScheduleExceptionValidatorTests
 	[Fact]
 	public void EnsureNoOverlappingPricedAdditiveExceptions_throws_for_an_unknown_effect_value()
 	{
-		var exceptions = new[] { ScheduleExceptionEntryTestSupport.WithEffect((ScheduleExceptionEffect)(-1), Interval(18, 22)) };
+		var exceptions = new[] {
+			ScheduleExceptionEntryTestSupport.WithEffect((ScheduleExceptionEffect)(-1), Interval(18, 22)),
+		};
 
 		var act = () => ScheduleExceptionValidator.EnsureNoOverlappingPricedAdditiveExceptions(exceptions);
 

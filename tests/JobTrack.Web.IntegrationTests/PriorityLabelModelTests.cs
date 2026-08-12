@@ -16,7 +16,9 @@ public sealed class PriorityLabelModelTests
 	[InlineData(Priority.Urgent, "Urgt")]
 	public void Text_abbreviates_by_default(Priority priority, string expected)
 	{
-		var model = new PriorityLabelModel { Priority = priority };
+		var model = new PriorityLabelModel {
+			Priority = priority,
+		};
 
 		model.Text.Should().Be(expected);
 	}
@@ -28,7 +30,10 @@ public sealed class PriorityLabelModelTests
 	[InlineData(Priority.Urgent, "Urgent")]
 	public void Text_spells_out_the_full_name_when_Full_is_set(Priority priority, string expected)
 	{
-		var model = new PriorityLabelModel { Priority = priority, Full = true };
+		var model = new PriorityLabelModel {
+			Priority = priority,
+			Full = true,
+		};
 
 		model.Text.Should().Be(expected);
 	}

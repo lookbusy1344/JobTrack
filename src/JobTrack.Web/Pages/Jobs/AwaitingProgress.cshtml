@@ -143,10 +143,14 @@
 						   attached to the title's final word at every width, and no achievement recorded
 						   draws nothing rather than a word standing in for the absence. *@
 						<partial name="_AchievementIcon"
-						         model="@(new AchievementIconModel { Achievement = entry.Achievement, ShowLabel = false })"/>
+						         model="@(new AchievementIconModel {
+							                Achievement = entry.Achievement, ShowLabel = false,
+						                })"/>
 					</td>
 					<td class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell">
-						<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = entry.Priority })"/>
+						<partial name="_PriorityLabel" model="@(new PriorityLabelModel {
+							                                      Priority = entry.Priority,
+						                                      })"/>
 					</td>
 					<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = entry.NeededFinish ?? entry.NeededStart; }
 						@if (needed is Instant neededInstant) {

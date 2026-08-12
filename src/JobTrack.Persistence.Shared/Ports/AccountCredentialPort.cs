@@ -22,7 +22,7 @@ internal sealed class AccountCredentialPort(
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
 
 		var identityUser = await context.Set<IdentityUserEntity>()
-							   .FirstOrDefaultAsync(user => user.Id == request.IdentityUserId, cancellationToken).ConfigureAwait(false)
+										.FirstOrDefaultAsync(user => user.Id == request.IdentityUserId, cancellationToken).ConfigureAwait(false)
 						   ?? throw new EntityNotFoundException($"Identity user {request.IdentityUserId} does not exist.");
 		if (identityUser.AppUserId != request.ActorUserId) {
 			throw new AuthorizationDeniedException(
@@ -45,7 +45,7 @@ internal sealed class AccountCredentialPort(
 		identityUser.ConcurrencyStamp = Guid.NewGuid().ToString("N");
 
 		_ = await provider.RevokeAllTokensForUserAsync(context, request.ActorUserId, now, cancellationToken)
-			.ConfigureAwait(false);
+						  .ConfigureAwait(false);
 		AuditEventWriter.Add(
 			context,
 			request.ActorUserId,
@@ -71,7 +71,7 @@ internal sealed class AccountCredentialPort(
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
 
 		var identityUser = await context.Set<IdentityUserEntity>()
-							   .FirstOrDefaultAsync(user => user.Id == request.IdentityUserId, cancellationToken).ConfigureAwait(false)
+										.FirstOrDefaultAsync(user => user.Id == request.IdentityUserId, cancellationToken).ConfigureAwait(false)
 						   ?? throw new EntityNotFoundException($"Identity user {request.IdentityUserId} does not exist.");
 		if (identityUser.AppUserId != request.ActorUserId) {
 			throw new AuthorizationDeniedException(
@@ -90,7 +90,7 @@ internal sealed class AccountCredentialPort(
 		identityUser.ConcurrencyStamp = Guid.NewGuid().ToString("N");
 
 		_ = await provider.RevokeAllTokensForUserAsync(context, request.ActorUserId, now, cancellationToken)
-			.ConfigureAwait(false);
+						  .ConfigureAwait(false);
 		AuditEventWriter.Add(
 			context, request.ActorUserId, now, "authentication.password-change", "identity_user", identityUser.Id,
 			request.CorrelationId, null, null, null);
@@ -98,7 +98,10 @@ internal sealed class AccountCredentialPort(
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-		return new() { SecurityStamp = identityUser.SecurityStamp, ConcurrencyStamp = identityUser.ConcurrencyStamp };
+		return new() {
+			SecurityStamp = identityUser.SecurityStamp,
+			ConcurrencyStamp = identityUser.ConcurrencyStamp,
+		};
 	}
 
 	private static SetTwoFactorStateResult ToResult(IdentityUserEntity identityUser) =>

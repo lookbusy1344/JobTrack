@@ -7,14 +7,11 @@ using Application;
 using AwesomeAssertions;
 using Database;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for <c>/Jobs/ConcurrentWork</c>: which other jobs a leaf's own workers were
@@ -52,7 +49,10 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -258,7 +258,10 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId)
 	{
 		var node = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -273,12 +276,21 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var leafId = await AddChildAsync(parentId, ownerId, description, adminId);
 
 		return await seedClient.Jobs.AttachLeafWorkAsync(
-			new() { Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() }, JobNodeId = leafId });
+			new() {
+				Context = new() {
+					Actor = adminId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = leafId,
+			});
 	}
 
 	private async Task AddActiveSessionAsync(AppUserId workerId, JobNodeId leafId, Instant startedAt) =>
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = startedAt,
@@ -287,14 +299,20 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 	private async Task AddFinishedSessionAsync(AppUserId workerId, JobNodeId leafId, Instant startedAt, Instant finishedAt)
 	{
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = startedAt,
 		});
 
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 			FinishedAt = finishedAt,
@@ -379,5 +397,4 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 			connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 	}
-
 }

@@ -27,7 +27,9 @@ internal sealed class AuthenticationAuditPort(IProviderWriteOperations provider,
 			: KnownEntityType;
 		var entityId = request.IdentityUserId ?? UnknownSubjectEntityId;
 		var afterData = request.IdentityUserId is null
-			? new Dictionary<string, string?> { ["subject"] = "redacted" }
+			? new Dictionary<string, string?> {
+				["subject"] = "redacted",
+			}
 			: null;
 
 		AuditEventWriter.Add(

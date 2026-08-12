@@ -13,9 +13,9 @@ internal static class JobSubtreeOrdinals
 	public static Dictionary<JobNodeId, (int Lft, int Rgt)> Compute(IReadOnlyList<JobNodeSubtreeRow> rows, JobNodeId rootId)
 	{
 		var childrenByParent = rows
-			.Where(r => r.ParentId is not null)
-			.GroupBy(r => r.ParentId!.Value)
-			.ToDictionary(g => g.Key, g => g.Select(r => r.Id).OrderBy(id => id.Value).ToList());
+							   .Where(r => r.ParentId is not null)
+							   .GroupBy(r => r.ParentId!.Value)
+							   .ToDictionary(g => g.Key, g => g.Select(r => r.Id).OrderBy(id => id.Value).ToList());
 
 		var spans = new Dictionary<JobNodeId, (int Lft, int Rgt)>();
 		var counter = 0;

@@ -25,9 +25,7 @@ internal sealed class PostgreSqlJobTrackDbContext : DbContext
 		new(rate => rate.AmountPerHour, amount => new(amount));
 
 	public PostgreSqlJobTrackDbContext(DbContextOptions<PostgreSqlJobTrackDbContext> options)
-		: base(options)
-	{
-	}
+		: base(options) { }
 
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{

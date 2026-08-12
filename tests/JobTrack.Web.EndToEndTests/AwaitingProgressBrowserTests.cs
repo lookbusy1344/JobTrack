@@ -60,7 +60,13 @@ public abstract class AwaitingProgressBrowserTestsBase
 
 	protected AwaitingProgressBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
-	public static TheoryData<int, int> WideViewportMatrix => new() { { DesktopWidth, DesktopHeight }, { WideDesktopWidth, WideDesktopHeight } };
+	public static TheoryData<int, int> WideViewportMatrix => new() {
+		{
+			DesktopWidth, DesktopHeight
+		}, {
+			WideDesktopWidth, WideDesktopHeight
+		},
+	};
 
 	[Fact]
 	public async Task The_achievement_column_is_gone_and_its_share_widens_description_without_overflow()
@@ -74,10 +80,16 @@ public abstract class AwaitingProgressBrowserTestsBase
 
 		var table = page.Locator("table.table");
 		var achievementHeadings = await table
-			.GetByRole(AriaRole.Columnheader, new() { Name = "Achievement", Exact = true })
-			.CountAsync();
+										.GetByRole(AriaRole.Columnheader, new() {
+											Name = "Achievement",
+											Exact = true,
+										})
+										.CountAsync();
 		achievementHeadings.Should().Be(0, "the achievement is drawn beside the row's name, not in a column of its own");
-		var description = table.GetByRole(AriaRole.Columnheader, new() { Name = "Description", Exact = true });
+		var description = table.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Description",
+			Exact = true,
+		});
 		var tableWidth = await WidthAsync(table);
 		var descriptionWidth = await WidthAsync(description);
 		(descriptionWidth / tableWidth).Should().BeInRange(DescriptionMinimumShare, DescriptionMaximumShare,
@@ -117,7 +129,9 @@ public abstract class AwaitingProgressBrowserTestsBase
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, $"a long title with two active workers should not overflow at {width}x{height}");
 
 		var table = page.Locator("table.table");
-		var row = table.Locator("tbody tr", new() { HasTextString = TwoActiveWorkerRowTitle }).First;
+		var row = table.Locator("tbody tr", new() {
+			HasTextString = TwoActiveWorkerRowTitle,
+		}).First;
 		var activePill = row.Locator(".jt-col-active .status-pill-active.status-pill--compact");
 		(await activePill.GetAttributeAsync("title")).Should().Be($"{TwoActiveWorkerCount} active");
 		(await VisibleTextOfAsync(activePill)).Should().Be(TwoActiveWorkerCount.ToString(CultureInfo.InvariantCulture));
@@ -128,8 +142,14 @@ public abstract class AwaitingProgressBrowserTestsBase
 			$"the active-count pill must stay a single line at {width}x{height}, not wrap its glyph or digit");
 
 		var tableWidth = await WidthAsync(table);
-		var descriptionWidth = await WidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Description", Exact = true }));
-		var activeWidth = await WidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Active", Exact = true }));
+		var descriptionWidth = await WidthAsync(table.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Description",
+			Exact = true,
+		}));
+		var activeWidth = await WidthAsync(table.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Active",
+			Exact = true,
+		}));
 		(descriptionWidth / tableWidth).Should().BeGreaterThanOrEqualTo(LargeDescriptionMinimumShare,
 			$"Description must keep at least three of twelve columns at {width}x{height}");
 		(activeWidth / tableWidth).Should().BeGreaterThanOrEqualTo(LargeActiveMinimumShare,
@@ -147,7 +167,9 @@ public abstract class AwaitingProgressBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}");
 
-		var row = page.Locator("tbody tr", new() { HasTextString = "Awaiting responsive active worker leaf" }).First;
+		var row = page.Locator("tbody tr", new() {
+			HasTextString = "Awaiting responsive active worker leaf",
+		}).First;
 		var activeCell = row.Locator(".jt-col-active");
 		var activeIcon = activeCell.Locator(".status-pill-active.status-pill--icon");
 		(await activeCell.IsVisibleAsync()).Should().BeTrue();
@@ -175,20 +197,14 @@ public abstract class AwaitingProgressBrowserTestsBase
 		box.Should().NotBeNull();
 		return box!.Width;
 	}
-
-
 }
 
 public sealed class SqliteAwaitingProgressBrowserTests : AwaitingProgressBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteAwaitingProgressBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteAwaitingProgressBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlAwaitingProgressBrowserTests : AwaitingProgressBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlAwaitingProgressBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlAwaitingProgressBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

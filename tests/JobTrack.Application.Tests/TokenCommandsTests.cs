@@ -22,7 +22,10 @@ public sealed class TokenCommandsTests
 
 	private static TokenCommands CreateSut(FakePersonalAccessTokenPort port, IClock? clock = null) => new(port, clock ?? SystemClock.Instance);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static Instant OneYearFromNow() => SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(30);
 
@@ -117,7 +120,9 @@ public sealed class TokenCommandsTests
 			ExpiresAt = OneYearFromNow(),
 		});
 
-		var authenticated = await sut.TryAuthenticateAsync(new() { Token = issued.Token });
+		var authenticated = await sut.TryAuthenticateAsync(new() {
+			Token = issued.Token,
+		});
 
 		authenticated.Should().NotBeNull();
 		authenticated!.UserId.Should().Be(WorkerId);
@@ -128,7 +133,9 @@ public sealed class TokenCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var authenticated = await sut.TryAuthenticateAsync(new() { Token = "jtpat_not-a-real-token" });
+		var authenticated = await sut.TryAuthenticateAsync(new() {
+			Token = "jtpat_not-a-real-token",
+		});
 
 		authenticated.Should().BeNull();
 	}
@@ -145,8 +152,14 @@ public sealed class TokenCommandsTests
 			ExpiresAt = OneYearFromNow(),
 		});
 
-		await sut.RevokeAsync(new() { Context = ContextFor(WorkerId), TargetUserId = WorkerId, TokenId = issued.Id });
-		var authenticated = await sut.TryAuthenticateAsync(new() { Token = issued.Token });
+		await sut.RevokeAsync(new() {
+			Context = ContextFor(WorkerId),
+			TargetUserId = WorkerId,
+			TokenId = issued.Id,
+		});
+		var authenticated = await sut.TryAuthenticateAsync(new() {
+			Token = issued.Token,
+		});
 
 		authenticated.Should().BeNull();
 	}
@@ -164,7 +177,9 @@ public sealed class TokenCommandsTests
 		});
 
 		port.SetEnabled(WorkerId, false);
-		var authenticated = await sut.TryAuthenticateAsync(new() { Token = issued.Token });
+		var authenticated = await sut.TryAuthenticateAsync(new() {
+			Token = issued.Token,
+		});
 
 		authenticated.Should().BeNull();
 	}
@@ -181,8 +196,13 @@ public sealed class TokenCommandsTests
 			ExpiresAt = OneYearFromNow(),
 		});
 
-		await sut.RevokeAllAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = WorkerId });
-		var authenticated = await sut.TryAuthenticateAsync(new() { Token = issued.Token });
+		await sut.RevokeAllAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+		});
+		var authenticated = await sut.TryAuthenticateAsync(new() {
+			Token = issued.Token,
+		});
 
 		authenticated.Should().BeNull();
 	}
@@ -192,7 +212,10 @@ public sealed class TokenCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.ListAsync(new() { Context = ContextFor(WorkerId), TargetUserId = OtherWorkerId });
+		var act = () => sut.ListAsync(new() {
+			Context = ContextFor(WorkerId),
+			TargetUserId = OtherWorkerId,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}

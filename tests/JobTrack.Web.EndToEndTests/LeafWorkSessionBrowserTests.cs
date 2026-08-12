@@ -1,7 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -42,7 +41,15 @@ public abstract class LeafWorkSessionBrowserTestsBase
 	protected LeafWorkSessionBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -78,7 +85,9 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Start session" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "Start session",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	/// <summary>
@@ -113,14 +122,18 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
-		await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
+		await page.EmulateMediaAsync(new() {
+			ReducedMotion = ReducedMotion.Reduce,
+		});
 
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		var mainAnimationName = await page.Locator("main[role=\"main\"]").EvaluateAsync<string>(
 			"element => window.getComputedStyle(element).animationName");
-		var buttonTransitionDuration = await page.GetByRole(AriaRole.Button, new() { Name = "Start session" }).EvaluateAsync<string>(
+		var buttonTransitionDuration = await page.GetByRole(AriaRole.Button, new() {
+			Name = "Start session",
+		}).EvaluateAsync<string>(
 			"element => window.getComputedStyle(element).transitionDuration");
 
 		mainAnimationName.Should().Be("none");
@@ -167,7 +180,9 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.Locator("#writeUp").FillAsync("Materials delivered; starting install.");
-		await page.GetByRole(AriaRole.Button, new() { Name = "Start session" }).ClickAsync();
+		await page.GetByRole(AriaRole.Button, new() {
+			Name = "Start session",
+		}).ClickAsync();
 
 		await page.WaitForSelectorAsync("text=Session started.");
 		(await page.Locator("#writeUp").InputValueAsync()).Should().Be("Materials delivered; starting install.");
@@ -189,7 +204,9 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 		await page.Locator("#writeUp").FillAsync("Reopened after client follow-up.");
 		await page.Locator("#reopenReason").FillAsync("More work was found");
-		await page.GetByRole(AriaRole.Button, new() { Name = "Reopen and start session" }).ClickAsync();
+		await page.GetByRole(AriaRole.Button, new() {
+			Name = "Reopen and start session",
+		}).ClickAsync();
 
 		await page.WaitForSelectorAsync("text=Job reopened. Session started.");
 		(await page.Locator("#writeUp").InputValueAsync()).Should().Be("Reopened after client follow-up.");
@@ -228,12 +245,18 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
-		(await page.GetByText($"{RequiredSimultaneousWorkerCount} active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByText($"{RequiredSimultaneousWorkerCount} active", new() {
+			Exact = true,
+		}).IsVisibleAsync()).Should().BeTrue();
 		foreach (var workerName in workerNames) {
-			(await page.GetByText(workerName, new() { Exact = false }).First.IsVisibleAsync()).Should().BeTrue();
+			(await page.GetByText(workerName, new() {
+				Exact = false,
+			}).First.IsVisibleAsync()).Should().BeTrue();
 		}
 
-		(await page.GetByText("more", new() { Exact = false }).CountAsync()).Should().Be(0, "the Sessions summary must not cap its worker list");
+		(await page.GetByText("more", new() {
+			Exact = false,
+		}).CountAsync()).Should().Be(0, "the Sessions summary must not cap its worker list");
 		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work with three active workers");
 	}
 
@@ -309,9 +332,11 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
-		(await page.GetByText("Archived", new() { Exact = false }).First.IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByText("Archived", new() {
+			Exact = false,
+		}).First.IsVisibleAsync()).Should().BeTrue();
 		(await page.Locator("form[action*='handler=ReopenAndStart']").CountAsync()).Should()
-			.Be(0, "an archived leaf cannot start a new session regardless of achievement");
+																				   .Be(0, "an archived leaf cannot start a new session regardless of achievement");
 		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for an archived terminal leaf");
 	}
 
@@ -360,9 +385,11 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
-		(await page.GetByText("Completed.", new() { Exact = false }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByText("Completed.", new() {
+			Exact = false,
+		}).IsVisibleAsync()).Should().BeTrue();
 		(await page.Locator("form[action*='handler=ReopenAndStart']").CountAsync()).Should()
-			.Be(0, "a worker with no ownership or management capability must not see a reopen form (rendering hint follows server authorization)");
+																				   .Be(0, "a worker with no ownership or management capability must not see a reopen form (rendering hint follows server authorization)");
 		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for a bystander viewing a terminal leaf");
 	}
 
@@ -377,20 +404,35 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
-		await page.GetByRole(AriaRole.Button, new() { Name = "Start session", Exact = true }).PressAsync("Enter");
-		await page.GetByText("Session started.", new() { Exact = true }).WaitForAsync();
+		await page.GetByRole(AriaRole.Button, new() {
+			Name = "Start session",
+			Exact = true,
+		}).PressAsync("Enter");
+		await page.GetByText("Session started.", new() {
+			Exact = true,
+		}).WaitForAsync();
 
 		// Pause and Complete both end the worker's turn on this leaf, so each returns to Browse rooted
 		// at it (ADR 0044) -- the workflow continues by coming back to /Jobs/Work, exactly as a user
 		// would through the node link there.
 		await page.Locator("#end-session")
-			.GetByRole(AriaRole.Button, new() { Name = "Pause job", Exact = true }).PressAsync("Enter");
-		await page.GetByText("Ends this session; the job stays In Progress.", new() { Exact = true }).WaitForAsync();
+				  .GetByRole(AriaRole.Button, new() {
+					  Name = "Pause job",
+					  Exact = true,
+				  }).PressAsync("Enter");
+		await page.GetByText("Ends this session; the job stays In Progress.", new() {
+			Exact = true,
+		}).WaitForAsync();
 		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
-		await page.GetByRole(AriaRole.Button, new() { Name = "Complete job", Exact = true }).PressAsync("Enter");
-		await page.GetByText("Job completed.", new() { Exact = true }).WaitForAsync();
+		await page.GetByRole(AriaRole.Button, new() {
+			Name = "Complete job",
+			Exact = true,
+		}).PressAsync("Enter");
+		await page.GetByText("Job completed.", new() {
+			Exact = true,
+		}).WaitForAsync();
 		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
@@ -400,8 +442,12 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await reason.FillAsync("More work was found");
 		await reason.PressAsync("Enter");
 
-		await page.GetByText("Job reopened. Session started.", new() { Exact = true }).WaitForAsync();
-		(await page.GetByText("In Progress", new() { Exact = true }).First.IsVisibleAsync()).Should().BeTrue();
+		await page.GetByText("Job reopened. Session started.", new() {
+			Exact = true,
+		}).WaitForAsync();
+		(await page.GetByText("In Progress", new() {
+			Exact = true,
+		}).First.IsVisibleAsync()).Should().BeTrue();
 		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after the complete reopen workflow");
 	}
 
@@ -421,15 +467,22 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 		await page.GetByRole(
 			AriaRole.Button,
-			new() { Name = $"Finish {RequiredSimultaneousWorkerCount} sessions and complete job", Exact = true }).PressAsync("Enter");
+			new() {
+				Name = $"Finish {RequiredSimultaneousWorkerCount} sessions and complete job",
+				Exact = true,
+			}).PressAsync("Enter");
 
 		await page.GetByText(
 			$"Job completed and {RequiredSimultaneousWorkerCount} sessions finished.",
-			new() { Exact = true }).WaitForAsync();
+			new() {
+				Exact = true,
+			}).WaitForAsync();
 		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
-		(await page.GetByText("Closed", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByText("Closed", new() {
+			Exact = true,
+		}).IsVisibleAsync()).Should().BeTrue();
 		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker completion");
 	}
 
@@ -446,15 +499,24 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.Locator("#end-session")
-			.GetByRole(AriaRole.Button, new() { Name = "Pause job", Exact = true }).PressAsync("Enter");
+				  .GetByRole(AriaRole.Button, new() {
+					  Name = "Pause job",
+					  Exact = true,
+				  }).PressAsync("Enter");
 		await page.GetByText(
-			$"Job paused and {RequiredSimultaneousWorkerCount} sessions finished.", new() { Exact = true }).WaitForAsync();
+			$"Job paused and {RequiredSimultaneousWorkerCount} sessions finished.", new() {
+				Exact = true,
+			}).WaitForAsync();
 		page.Url.Should().Contain($"/Jobs/Browse?nodeId={leafId.Value}");
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
-		(await page.GetByText("Paused", new() { Exact = true }).First.IsVisibleAsync()).Should()
-			.BeTrue("no worker is left clocked on, so the leaf reads as paused");
-		(await page.GetByText("Active since", new() { Exact = false }).CountAsync()).Should().Be(0);
+		(await page.GetByText("Paused", new() {
+			Exact = true,
+		}).First.IsVisibleAsync()).Should()
+									  .BeTrue("no worker is left clocked on, so the leaf reads as paused");
+		(await page.GetByText("Active since", new() {
+			Exact = false,
+		}).CountAsync()).Should().Be(0);
 		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker pause");
 	}
 
@@ -489,20 +551,14 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached the '{buttonText}' button.");
 	}
-
-
 }
 
 public sealed class SqliteLeafWorkSessionBrowserTests : LeafWorkSessionBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteLeafWorkSessionBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteLeafWorkSessionBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlLeafWorkSessionBrowserTests : LeafWorkSessionBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlLeafWorkSessionBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlLeafWorkSessionBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

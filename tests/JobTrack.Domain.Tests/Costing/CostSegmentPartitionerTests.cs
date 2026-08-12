@@ -25,7 +25,10 @@ public sealed class CostSegmentPartitionerTests
 	{
 		var root = new HierarchyNode(RootId, null, [LeafId], null);
 		var leaf = new HierarchyNode(LeafId, RootId, [], Achievement.InProgress);
-		return new() { [RootId] = root, [LeafId] = leaf };
+		return new() {
+			[RootId] = root,
+			[LeafId] = leaf,
+		};
 	}
 
 	private static Dictionary<JobNodeId, HierarchyNode> TwoLeavesUnderRoot()
@@ -33,7 +36,11 @@ public sealed class CostSegmentPartitionerTests
 		var root = new HierarchyNode(RootId, null, [LeafId, OtherLeafId], null);
 		var first = new HierarchyNode(LeafId, RootId, [], Achievement.InProgress);
 		var second = new HierarchyNode(OtherLeafId, RootId, [], Achievement.InProgress);
-		return new() { [RootId] = root, [LeafId] = first, [OtherLeafId] = second };
+		return new() {
+			[RootId] = root,
+			[LeafId] = first,
+			[OtherLeafId] = second,
+		};
 	}
 
 	[Fact]
@@ -68,7 +75,9 @@ public sealed class CostSegmentPartitionerTests
 	[Fact]
 	public void Every_session_share_carries_the_exact_segment_tick_count()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(12))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(12))),
+		};
 
 		var allocations = CostSegmentPartitioner.Partition(
 			sessions, [FullDay], SingleLeafUnderRoot(), [], [], FullDay);
@@ -85,13 +94,13 @@ public sealed class CostSegmentPartitionerTests
 	{
 		const int concurrentSessionCount = 25;
 		var sessions = Enumerable.Range(0, concurrentSessionCount)
-			.Select(i => new CostableSession(new(i), new(i + 2), new(At(9), At(10))))
-			.ToArray();
+								 .Select(i => new CostableSession(new(i), new(i + 2), new(At(9), At(10))))
+								 .ToArray();
 		var leafIds = sessions.Select(session => session.NodeId).ToArray();
 		var nodes = leafIds
-			.Select(id => new HierarchyNode(id, RootId, [], Achievement.InProgress))
-			.Append(new(RootId, null, [.. leafIds], null))
-			.ToDictionary(node => node.Id);
+					.Select(id => new HierarchyNode(id, RootId, [], Achievement.InProgress))
+					.Append(new(RootId, null, [.. leafIds], null))
+					.ToDictionary(node => node.Id);
 
 		var allocations = CostSegmentPartitioner.Partition(
 			sessions, [FullDay], nodes, [], [], FullDay);
@@ -109,23 +118,29 @@ public sealed class CostSegmentPartitionerTests
 		};
 
 		var allocations = CostSegmentPartitioner.PartitionBounded(
-			sessions, [FullDay], TwoLeavesUnderRoot(), [], [], [], FullDay, new HashSet<JobNodeId> { LeafId }, 2);
+			sessions, [FullDay], TwoLeavesUnderRoot(), [], [], [], FullDay, new HashSet<JobNodeId> {
+				LeafId,
+			}, 2);
 
 		allocations.Should().HaveCount(2);
 		allocations.Select(allocation => allocation.SessionId).Should().OnlyContain(sessionId => sessionId == Session1);
 		allocations.Single(allocation => allocation.Segment == new WorkInterval(At(10), At(11)))
-			.Share.ConcurrencyDivisor.Should().Be(2);
+				   .Share.ConcurrencyDivisor.Should().Be(2);
 	}
 
 	[Fact]
 	public void Bounded_partition_rejects_before_emitting_more_than_the_allocation_limit()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(12))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(12))),
+		};
 		var overtime = new ScheduleExceptionEntry(
 			ScheduleExceptionEffect.AddWorkingTime, new(At(10), At(11)), new HourlyRate(100m));
 
 		var act = () => CostSegmentPartitioner.PartitionBounded(
-			sessions, [FullDay], SingleLeafUnderRoot(), [overtime], [], [], FullDay, new HashSet<JobNodeId> { LeafId }, 2);
+			sessions, [FullDay], SingleLeafUnderRoot(), [overtime], [], [], FullDay, new HashSet<JobNodeId> {
+				LeafId,
+			}, 2);
 
 		act.Should().Throw<ArgumentOutOfRangeException>();
 	}
@@ -133,7 +148,9 @@ public sealed class CostSegmentPartitionerTests
 	[Fact]
 	public void A_node_override_on_an_ancestor_introduces_a_boundary_even_though_it_is_not_the_active_session_edge()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(0), At(24))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(0), At(24))),
+		};
 		var rootOverride = new NodeRateOverride(RootId, new(50m), At(12), null);
 
 		var allocations = CostSegmentPartitioner.Partition(
@@ -147,7 +164,9 @@ public sealed class CostSegmentPartitionerTests
 	[Fact]
 	public void A_user_cost_rate_boundary_introduces_a_cut_independent_of_hierarchy()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(0), At(24))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(0), At(24))),
+		};
 		var userRate = new UserCostRate(new(30m), At(15), null);
 
 		var allocations = CostSegmentPartitioner.Partition(
@@ -160,7 +179,9 @@ public sealed class CostSegmentPartitionerTests
 	[Fact]
 	public void A_priced_additive_exception_inside_existing_working_time_introduces_rate_boundaries()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(12))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(12))),
+		};
 		var overtime = new ScheduleExceptionEntry(
 			ScheduleExceptionEffect.AddWorkingTime, new(At(10), At(11)), new HourlyRate(100m));
 
@@ -182,13 +203,15 @@ public sealed class CostSegmentPartitionerTests
 			sessions, [FullDay], SingleLeafUnderRoot(), [], [], [], FullDay);
 
 		act.Should().Throw<InvariantViolationException>()
-			.Where(exception => exception.ConstraintId == "work-session.same-user-leaf-overlap");
+		   .Where(exception => exception.ConstraintId == "work-session.same-user-leaf-overlap");
 	}
 
 	[Fact]
 	public void A_session_entirely_outside_the_effective_working_set_produces_no_allocation()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(1), At(2))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(1), At(2))),
+		};
 		var workingHours = new WorkInterval(At(9), At(17));
 
 		var allocations = CostSegmentPartitioner.Partition(
@@ -200,7 +223,9 @@ public sealed class CostSegmentPartitionerTests
 	[Fact]
 	public void A_session_is_clipped_to_the_reporting_bounds()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(0), At(24))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(0), At(24))),
+		};
 		var bounds = new WorkInterval(At(9), At(17));
 
 		var allocations = CostSegmentPartitioner.Partition(

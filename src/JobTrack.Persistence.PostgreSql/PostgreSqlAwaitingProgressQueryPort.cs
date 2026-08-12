@@ -100,9 +100,13 @@ internal static class AwaitingProgressQueryAssembly
 
 		var inScopeIds = nodesById.Keys.ToList();
 		var edges = await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-			.Where(edge => inScopeIds.Contains(edge.ToId))
-			.Select(edge => new { edge.FromId, edge.ToId })
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(edge => inScopeIds.Contains(edge.ToId))
+								 .Select(edge => new
+								 {
+									 edge.FromId,
+									 edge.ToId,
+								 })
+								 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		// A required job already represented as a genuine unfinished-leaf candidate keeps its own real
 		// entry (correct by construction: an unfinished leaf never satisfies a prerequisite) -- only a
@@ -226,16 +230,16 @@ internal static class AwaitingProgressQueryAssembly
 		}
 
 		var ordered = query
-			.OrderBy(candidate => candidate.IsBlocked)
-			.ThenByDescending(candidate => candidate.Priority)
-			.ThenBy(candidate => (candidate.NeededFinish ?? candidate.NeededStart) == null)
-			.ThenBy(candidate => candidate.NeededFinish ?? candidate.NeededStart)
-			.ThenBy(candidate => candidate.Id)
-			.Skip(filter.Offset)
-			.Take(filter.Limit)
-			.Select(candidate => new AwaitingProgressCandidate(
-				candidate.Id, candidate.ParentId, candidate.Description, candidate.OwnerUserId, candidate.Priority,
-				candidate.NeededStart, candidate.NeededFinish, candidate.ArchivedAt, candidate.Achievement));
+					  .OrderBy(candidate => candidate.IsBlocked)
+					  .ThenByDescending(candidate => candidate.Priority)
+					  .ThenBy(candidate => (candidate.NeededFinish ?? candidate.NeededStart) == null)
+					  .ThenBy(candidate => candidate.NeededFinish ?? candidate.NeededStart)
+					  .ThenBy(candidate => candidate.Id)
+					  .Skip(filter.Offset)
+					  .Take(filter.Limit)
+					  .Select(candidate => new AwaitingProgressCandidate(
+						  candidate.Id, candidate.ParentId, candidate.Description, candidate.OwnerUserId, candidate.Priority,
+						  candidate.NeededStart, candidate.NeededFinish, candidate.ArchivedAt, candidate.Achievement));
 
 		return await ordered.ToListAsync(cancellationToken).ConfigureAwait(false);
 	}
@@ -249,7 +253,9 @@ internal static class AwaitingProgressQueryAssembly
 	/// </summary>
 	private static IQueryable<JobNodeEntity> LoadSubtreeNodes(DbContext context, JobNodeId rootId)
 	{
-		var rootIdValues = new[] { rootId.Value };
+		var rootIdValues = new[] {
+			rootId.Value,
+		};
 		return context.Set<JobNodeEntity>().FromSql(
 			$"""
 			 SELECT node.*

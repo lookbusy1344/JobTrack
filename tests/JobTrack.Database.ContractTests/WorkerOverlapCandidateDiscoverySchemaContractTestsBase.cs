@@ -122,7 +122,7 @@ public abstract class WorkerOverlapCandidateDiscoverySchemaContractTestsBase : I
 		var candidates = await OverlapCandidatesAsync(connection, userId);
 
 		candidates.Should().ContainSingle(s => s.SessionId == sessionId)
-			.Which.EffectiveFinishedAt.Should().Be(AsOfInstant);
+				  .Which.EffectiveFinishedAt.Should().Be(AsOfInstant);
 	}
 
 	[Fact]

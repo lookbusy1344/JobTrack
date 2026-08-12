@@ -70,7 +70,10 @@ public sealed class CorrectUserCostRateModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			_ = await jobTrackClient.Rates.CorrectUserCostRateAsync(new() {
@@ -82,7 +85,10 @@ public sealed class CorrectUserCostRateModel(
 				Rate = new(new(Input.AmountPerHour), effectiveStart, effectiveEnd),
 			}, cancellationToken);
 
-			return RedirectToPage("/Admin/Rates", new { userId = UserId });
+			return RedirectToPage("/Admin/Rates", new
+			{
+				userId = UserId,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -109,7 +115,13 @@ public sealed class CorrectUserCostRateModel(
 	{
 		try {
 			var snapshot = await jobTrackClient.Query.GetRatesAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, UserId = new(UserId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					UserId = new(UserId),
+				}, cancellationToken);
 
 			Rate = snapshot.UserCostRates.FirstOrDefault(r => r.Id == new UserCostRateId(RateId));
 			if (Rate is null) {

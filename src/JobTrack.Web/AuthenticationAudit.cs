@@ -23,6 +23,9 @@ internal static class AuthenticationAudit
 		IJobTrackClient jobTrackClient,
 		CancellationToken cancellationToken = default) =>
 		jobTrackClient.AuthenticationAudit.RecordAsync(
-			new() { Kind = AuthenticationAuditEventKind.LoginFailed, CorrelationId = Guid.NewGuid() },
+			new() {
+				Kind = AuthenticationAuditEventKind.LoginFailed,
+				CorrelationId = Guid.NewGuid(),
+			},
 			cancellationToken);
 }

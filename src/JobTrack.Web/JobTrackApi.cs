@@ -97,323 +97,323 @@ internal static partial class JobTrackApi
 		_ = app.MapOpenApi($"/openapi/{OpenApiDocumentName}.json").RequireAuthorization(JobTrackPolicyNames.AnyEmployee);
 
 		var api = app.MapGroup(ApiPathPrefix)
-			.WithTags("JobTrack API")
-			.AddEndpointFilter<ApiTelemetryFilter>()
-			.AddEndpointFilter<RequiresPasswordChangeEndpointFilter>()
-			.ProducesProblem(StatusCodes.Status429TooManyRequests)
-			.ProducesProblem(StatusCodes.Status503ServiceUnavailable)
-			.ProducesProblem(StatusCodes.Status403Forbidden);
+					 .WithTags("JobTrack API")
+					 .AddEndpointFilter<ApiTelemetryFilter>()
+					 .AddEndpointFilter<RequiresPasswordChangeEndpointFilter>()
+					 .ProducesProblem(StatusCodes.Status429TooManyRequests)
+					 .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+					 .ProducesProblem(StatusCodes.Status403Forbidden);
 
 		_ = api.MapGet("/antiforgery-token", GetAntiforgeryToken)
-			.RequireAuthorization(JobTrackPolicyNames.AnyAuthenticatedUser)
-			.WithName("GetAntiforgeryToken")
-			.WithSummary($"Get a CSRF token to send back in the '{AntiforgeryHeaderName}' header on state-changing API requests.")
-			.Produces<AntiforgeryTokenResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyAuthenticatedUser)
+			   .WithName("GetAntiforgeryToken")
+			   .WithSummary($"Get a CSRF token to send back in the '{AntiforgeryHeaderName}' header on state-changing API requests.")
+			   .Produces<AntiforgeryTokenResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized);
 
 		_ = api.MapGet("/employees/{userId:long}/rates", GetRatesAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RateRead)
-			.WithName("GetEmployeeRates")
-			.WithSummary("Get one employee's user cost rates and node rate overrides (bounded; see plan §3.1).")
-			.Produces<RatesResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
+			   .WithName("GetEmployeeRates")
+			   .WithSummary("Get one employee's user cost rates and node rate overrides (bounded; see plan §3.1).")
+			   .Produces<RatesResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates", AddUserCostRateAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.RateWrite, "AddUserCostRate", "Add an effective-dated user cost rate for one employee.")
-			.Produces<UserCostRateResponse>(StatusCodes.Status201Created);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite, "AddUserCostRate", "Add an effective-dated user cost rate for one employee.")
+			   .Produces<UserCostRateResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides", AddNodeRateOverrideAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.RateWrite, "AddNodeRateOverride", "Add an effective-dated node rate override for one employee.")
-			.Produces<NodeRateOverrideResponse>(StatusCodes.Status201Created);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite, "AddNodeRateOverride", "Add an effective-dated node rate override for one employee.")
+			   .Produces<NodeRateOverrideResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates/{rateId:long}/correct", CorrectUserCostRateAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.RateWrite,
-				"CorrectUserCostRate",
-				"Correct a historical user cost rate's effective range and amount, with an audited reason.")
-			.Produces<UserCostRateResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite,
+				   "CorrectUserCostRate",
+				   "Correct a historical user cost rate's effective range and amount, with an audited reason.")
+			   .Produces<UserCostRateResponse>();
 
 		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides/{overrideId:long}/correct", CorrectNodeRateOverrideAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.RateWrite,
-				"CorrectNodeRateOverride",
-				"Correct a historical node rate override's effective range and amount, with an audited reason.")
-			.Produces<NodeRateOverrideResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite,
+				   "CorrectNodeRateOverride",
+				   "Correct a historical node rate override's effective range and amount, with an audited reason.")
+			   .Produces<NodeRateOverrideResponse>();
 
 		_ = api.MapGet("/jobs/root", GetRootJobNodeAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("GetRootJobNode")
-			.WithSummary("Get the permanent root node's detail.")
-			.Produces<JobNodeDetailResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetRootJobNode")
+			   .WithSummary("Get the permanent root node's detail.")
+			   .Produces<JobNodeDetailResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized);
 
 		_ = api.MapGet("/jobs/search", SearchJobNodesAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("SearchJobNodes")
-			.WithSummary("Search every node's description for a case-insensitive substring match, paged (offset/pageSize).")
-			.Produces<PagedResponse<JobNodeSummaryResponse>>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("SearchJobNodes")
+			   .WithSummary("Search every node's description for a case-insensitive substring match, paged (offset/pageSize).")
+			   .Produces<PagedResponse<JobNodeSummaryResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized);
 
 		_ = api.MapGet("/jobs/{nodeId:long}", GetJobNodeAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("GetJobNode")
-			.WithSummary("Get a node's full detail and root-first ancestor breadcrumb.")
-			.Produces<JobNodeDetailResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobNode")
+			   .WithSummary("Get a node's full detail and root-first ancestor breadcrumb.")
+			   .Produces<JobNodeDetailResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/children", GetJobChildrenAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("GetJobChildren")
-			.WithSummary("Get a node's direct children, filtered by owner and archive scope, paged (offset/pageSize).")
-			.Produces<PagedResponse<JobNodeSummaryResponse>>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobChildren")
+			   .WithSummary("Get a node's direct children, filtered by owner and archive scope, paged (offset/pageSize).")
+			   .Produces<PagedResponse<JobNodeSummaryResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/jobs/{nodeId:long}/pickup", PickUpJobNodeAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("PickUpJobNode")
-			.WithSummary("Claim an unassigned node from the pickup pool, setting its direct owner to the acting user.")
-			.Produces<JobNodeResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict);
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("PickUpJobNode")
+			   .WithSummary("Claim an unassigned node from the pickup pool, setting its direct owner to the acting user.")
+			   .Produces<JobNodeResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status409Conflict);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/readiness", GetReadinessAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("GetJobReadiness")
-			.WithSummary("Get whether a node's prerequisites are satisfied, and the diagnostic set of blockers if not.")
-			.Produces<ReadinessResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobReadiness")
+			   .WithSummary("Get whether a node's prerequisites are satisfied, and the diagnostic set of blockers if not.")
+			   .Produces<ReadinessResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/sessions", GetLeafSessionsAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.WithName("GetLeafSessions")
-			.WithSummary("Get one worker's sessions on a leaf, most recent first, paged (offset/pageSize).")
-			.Produces<PagedResponse<WorkSessionResponse>>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .WithName("GetLeafSessions")
+			   .WithSummary("Get one worker's sessions on a leaf, most recent first, paged (offset/pageSize).")
+			   .Produces<PagedResponse<WorkSessionResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions", StartSessionAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow,
-				"StartSession",
-				"Start a new work session on a leaf. Calling this again for an already-active worker/leaf pair is how a UI \"resume\" action is expressed.")
-			.Produces<WorkSessionResponse>(StatusCodes.Status201Created);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "StartSession",
+				   "Start a new work session on a leaf. Calling this again for an already-active worker/leaf pair is how a UI \"resume\" action is expressed.")
+			   .Produces<WorkSessionResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/finish", FinishSessionAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow,
-				"FinishSession",
-				"Finish the active session. \"Pause\" and \"stop\" are UI descriptions of this same operation.")
-			.Produces<WorkSessionResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "FinishSession",
+				   "Finish the active session. \"Pause\" and \"stop\" are UI descriptions of this same operation.")
+			   .Produces<WorkSessionResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/finish-and-update-write-up", FinishSessionAndUpdateWriteUpAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow,
-				"FinishSessionAndUpdateWriteUp",
-				"Atomic composite (remediation plan §2.1): finish the active session and, optionally, apply a write-up change to its leaf's node, in one commit. The plain finish endpoint above remains for a caller with no write-up to change.")
-			.Produces<FinishSessionAndUpdateWriteUpResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "FinishSessionAndUpdateWriteUp",
+				   "Atomic composite (remediation plan §2.1): finish the active session and, optionally, apply a write-up change to its leaf's node, in one commit. The plain finish endpoint above remains for a caller with no write-up to change.")
+			   .Produces<FinishSessionAndUpdateWriteUpResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/correct", CorrectSessionAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow,
-				"CorrectSession",
-				"Correct a historical session's start and/or finish instants, with an audited reason.")
-			.Produces<WorkSessionResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "CorrectSession",
+				   "Correct a historical session's start and/or finish instants, with an audited reason.")
+			   .Produces<WorkSessionResponse>();
 
 		_ = api.MapGet("/jobs/{nodeId:long}/prerequisites", GetPrerequisitesAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("GetPrerequisites")
-			.WithSummary("Get every prerequisite edge touching a node, in either direction, paged (offset/pageSize).")
-			.Produces<PagedResponse<PrerequisiteEdgeResponse>>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetPrerequisites")
+			   .WithSummary("Get every prerequisite edge touching a node, in either direction, paged (offset/pageSize).")
+			   .Produces<PagedResponse<PrerequisiteEdgeResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/jobs/{nodeId:long}/prerequisites", AddPrerequisiteAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow,
-				"AddPrerequisite",
-				"Add a prerequisite edge: the given job must reach Success before this node is ready.")
-			.Produces(StatusCodes.Status204NoContent);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "AddPrerequisite",
+				   "Add a prerequisite edge: the given job must reach Success before this node is ready.")
+			   .Produces(StatusCodes.Status204NoContent);
 
 		_ = api.MapDelete("/jobs/{nodeId:long}/prerequisites/{requiredJobId:long}", RemovePrerequisiteAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("RemovePrerequisite")
-			.WithSummary("Remove a prerequisite edge.")
-			.Produces(StatusCodes.Status204NoContent)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("RemovePrerequisite")
+			   .WithSummary("Remove a prerequisite edge.")
+			   .Produces(StatusCodes.Status204NoContent)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/achievement", GetLeafWorkAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("GetLeafWork")
-			.WithSummary("Get a leaf's current achievement state.")
-			.Produces<LeafWorkResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetLeafWork")
+			   .WithSummary("Get a leaf's current achievement state.")
+			   .Produces<LeafWorkResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPut("/jobs/{nodeId:long}/achievement", SetAchievementAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow, "SetAchievement", "Transition a leaf's achievement state, with an audited reason.")
-			.Produces<LeafWorkResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow, "SetAchievement", "Transition a leaf's achievement state, with an audited reason.")
+			   .Produces<LeafWorkResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/complete", CompleteLeafAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow,
-				"CompleteLeaf",
-				"Atomically finish the exact confirmed active-session set and record an achievement -- Success by default, or Cancelled/Unsuccessful (ADR 0045/0047). Composite of finish-session(s) and set-achievement.")
-			.Produces<CompleteLeafResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "CompleteLeaf",
+				   "Atomically finish the exact confirmed active-session set and record an achievement -- Success by default, or Cancelled/Unsuccessful (ADR 0045/0047). Composite of finish-session(s) and set-achievement.")
+			   .Produces<CompleteLeafResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/reopen-and-start-session", ReopenAndStartWorkAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.JobWorkflow,
-				"ReopenAndStartWork",
-				"Atomically reopen a terminal leaf to Waiting, auto-advance to InProgress (ADR 0038), and start the target worker's session (ADR 0045).")
-			.Produces<ReopenAndStartWorkResponse>(StatusCodes.Status201Created);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "ReopenAndStartWork",
+				   "Atomically reopen a terminal leaf to Waiting, auto-advance to InProgress (ADR 0038), and start the target worker's session (ADR 0045).")
+			   .Produces<ReopenAndStartWorkResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/cost", GetCostDetailsAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RateRead)
-			.WithName("GetCostDetails")
-			.WithSummary("Get one node's exact and displayed cost, with its rate-provenance segment trace (bounded; see plan §3.1).")
-			.Produces<CostDetailsResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
+			   .WithName("GetCostDetails")
+			   .WithSummary("Get one node's exact and displayed cost, with its rate-provenance segment trace (bounded; see plan §3.1).")
+			   .Produces<CostDetailsResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/cost/hierarchy", GetHierarchyTotalsAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RateRead)
-			.WithName("GetHierarchyTotals")
-			.WithSummary("Get reconciled cost totals for a node and its entire subtree (bounded; see plan §3.1).")
-			.Produces<HierarchyTotalsResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
+			   .WithName("GetHierarchyTotals")
+			   .WithSummary("Get reconciled cost totals for a node and its entire subtree (bounded; see plan §3.1).")
+			   .Produces<HierarchyTotalsResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/subtree", GetJobSubtreeAsync)
-			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			.WithName("GetJobSubtree")
-			.WithSummary(
-				"Get a bounded multi-level subtree rooted at a node (depth/breadth-capped, ADR 0039); " +
-				"the cost roll-up is included only when the actor may view it (ADR 0040), never a whole-request denial.")
-			.Produces<JobSubtreeResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobSubtree")
+			   .WithSummary(
+				   "Get a bounded multi-level subtree rooted at a node (depth/breadth-capped, ADR 0039); " +
+				   "the cost roll-up is included only when the actor may view it (ADR 0040), never a whole-request denial.")
+			   .Produces<JobSubtreeResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapGet("/employees/{userId:long}/schedule", GetScheduleAsync)
-			.RequireAuthorization(JobTrackPolicyNames.ScheduleAdministration)
-			.WithName("GetEmployeeSchedule")
-			.WithSummary("Get one employee's schedule versions and exceptions (bounded; see plan §3.1).")
-			.Produces<ScheduleResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound);
+			   .RequireAuthorization(JobTrackPolicyNames.ScheduleAdministration)
+			   .WithName("GetEmployeeSchedule")
+			   .WithSummary("Get one employee's schedule versions and exceptions (bounded; see plan §3.1).")
+			   .Produces<ScheduleResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/versions", AddScheduleVersionAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.ScheduleAdministration,
-				"AddScheduleVersion",
-				"Add an effective-dated schedule version for one employee.")
-			.Produces<ScheduleVersionResponse>(StatusCodes.Status201Created);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "AddScheduleVersion",
+				   "Add an effective-dated schedule version for one employee.")
+			   .Produces<ScheduleVersionResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/exceptions", AddScheduleExceptionAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.ScheduleAdministration,
-				"AddScheduleException",
-				"Add a dated schedule exception for one employee.")
-			.Produces<ScheduleExceptionResponse>(StatusCodes.Status201Created);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "AddScheduleException",
+				   "Add a dated schedule exception for one employee.")
+			   .Produces<ScheduleExceptionResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/versions/{versionId:long}/correct", CorrectScheduleVersionAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.ScheduleAdministration,
-				"CorrectScheduleVersion",
-				"Correct a historical schedule version's effective range, zone, and weekly intervals, with an audited reason.")
-			.Produces<ScheduleVersionResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "CorrectScheduleVersion",
+				   "Correct a historical schedule version's effective range, zone, and weekly intervals, with an audited reason.")
+			   .Produces<ScheduleVersionResponse>();
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/exceptions/{exceptionId:long}/correct", CorrectScheduleExceptionAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.ScheduleAdministration,
-				"CorrectScheduleException",
-				"Correct a historical schedule exception's effect, interval, and rate override, with an audited reason.")
-			.Produces<ScheduleExceptionResponse>();
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "CorrectScheduleException",
+				   "Correct a historical schedule exception's effect, interval, and rate override, with an audited reason.")
+			   .Produces<ScheduleExceptionResponse>();
 
 		_ = api.MapGet("/request-holding-areas", GetEligibleHoldingAreasAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
-			.WithName("GetEligibleHoldingAreas")
-			.WithSummary("Get the active holding areas the acting requester may currently submit a request into (ADR 0033).")
-			.Produces<HoldingAreaResponse[]>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden);
+			   .RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
+			   .WithName("GetEligibleHoldingAreas")
+			   .WithSummary("Get the active holding areas the acting requester may currently submit a request into (ADR 0033).")
+			   .Produces<HoldingAreaResponse[]>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden);
 
 		_ = api.MapPost("/requests", SubmitRequestAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("SubmitRequest")
-			.WithSummary("Submit a new request into a holding area the acting requester is eligible for (ADR 0033).")
-			.Produces<RequestResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			   .RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("SubmitRequest")
+			   .WithSummary("Submit a new request into a holding area the acting requester is eligible for (ADR 0033).")
+			   .Produces<RequestResponse>(StatusCodes.Status201Created)
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
 		_ = api.MapGet("/requests", GetMyRequestsAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
-			.WithName("GetMyRequests")
-			.WithSummary("Get the acting requester's own submitted requests, most recent first (ADR 0033).")
-			.Produces<RequestResponse[]>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden);
+			   .RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
+			   .WithName("GetMyRequests")
+			   .WithSummary("Get the acting requester's own submitted requests, most recent first (ADR 0033).")
+			   .Produces<RequestResponse[]>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden);
 
 		_ = api.MapGet("/requests/{jobNodeId:long}", GetRequestDetailAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RequestDetailAccess)
-			.WithName("GetRequestDetail")
-			.WithSummary(
-				"Get one permitted request's requester-safe detail: status, read-only subtree with allocated hours, and visible notes (ADR 0034/0054).")
-			.Produces<RequestDetailResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict);
+			   .RequireAuthorization(JobTrackPolicyNames.RequestDetailAccess)
+			   .WithName("GetRequestDetail")
+			   .WithSummary(
+				   "Get one permitted request's requester-safe detail: status, read-only subtree with allocated hours, and visible notes (ADR 0034/0054).")
+			   .Produces<RequestDetailResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status409Conflict);
 
 		_ = api.MapPost("/requests/{jobNodeId:long}/comments", AddRequestNoteAsync)
-			.WithStandardWriteContract(
-				JobTrackPolicyNames.RequestDetailAccess,
-				"AddRequestNote",
-				"Add a requester-visible note or clarification, posted by staff or by the request's own requester (ADR 0034).")
-			.Produces<RequestNoteResponse>(StatusCodes.Status201Created);
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RequestDetailAccess,
+				   "AddRequestNote",
+				   "Add a requester-visible note or clarification, posted by staff or by the request's own requester (ADR 0034).")
+			   .Produces<RequestNoteResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/requests/{jobNodeId:long}/acknowledge", AcknowledgeRequestAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("AcknowledgeRequest")
-			.WithSummary("Staff acknowledgement: sets the explicit Accepted signal a requester sees (ADR 0034).")
-			.Produces<RequestResponse>()
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict);
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("AcknowledgeRequest")
+			   .WithSummary("Staff acknowledgement: sets the explicit Accepted signal a requester sees (ADR 0034).")
+			   .Produces<RequestResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status409Conflict);
 	}
 
 	public static Task HandleRedirectAsync(
@@ -461,7 +461,9 @@ internal static partial class JobTrackApi
 	private static Ok<AntiforgeryTokenResponse> GetAntiforgeryToken(HttpContext httpContext, IAntiforgery antiforgery)
 	{
 		var tokens = antiforgery.GetAndStoreTokens(httpContext);
-		return TypedResults.Ok(new AntiforgeryTokenResponse { Token = tokens.RequestToken! });
+		return TypedResults.Ok(new AntiforgeryTokenResponse {
+			Token = tokens.RequestToken!,
+		});
 	}
 
 	private static async Task<IResult> ExecuteAsync(
@@ -481,7 +483,10 @@ internal static partial class JobTrackApi
 		var correlationId = httpContext.Items[ApiTelemetryFilter.CorrelationIdItemKey] as Guid? ?? Guid.NewGuid();
 
 		try {
-			return await action(new() { Actor = actor.AppUserId, CorrelationId = correlationId });
+			return await action(new() {
+				Actor = actor.AppUserId,
+				CorrelationId = correlationId,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Problem(

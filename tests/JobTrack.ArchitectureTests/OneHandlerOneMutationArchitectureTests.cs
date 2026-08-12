@@ -240,14 +240,14 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 		var compilation = CreateWebCompilation(solutionRoot);
 
 		var violations = compilation.SyntaxTrees
-			.Where(tree => tree.FilePath.EndsWith(".cshtml.cs", StringComparison.Ordinal))
-			.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
-				.Where(method => method.Identifier.ValueText.StartsWith("OnPost", StringComparison.Ordinal))
-				.Select(method => AnalyzeHandler(compilation, tree, method, solutionRoot)))
-			.Where(result => !HandlerAllowlist.Contains($"{result.Path}:{result.Name}"))
-			.Where(result => result.MutationCount > 1)
-			.Select(result => $"{result.Path}:{result.Name} ({result.MutationCount} mutations)")
-			.ToList();
+									.Where(tree => tree.FilePath.EndsWith(".cshtml.cs", StringComparison.Ordinal))
+									.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+															.Where(method => method.Identifier.ValueText.StartsWith("OnPost", StringComparison.Ordinal))
+															.Select(method => AnalyzeHandler(compilation, tree, method, solutionRoot)))
+									.Where(result => !HandlerAllowlist.Contains($"{result.Path}:{result.Name}"))
+									.Where(result => result.MutationCount > 1)
+									.Select(result => $"{result.Path}:{result.Name} ({result.MutationCount} mutations)")
+									.ToList();
 
 		violations.Should().BeEmpty(
 			"a Razor Page handler coordinating more than one IJobTrackClient mutation call belongs as one atomic " +
@@ -261,13 +261,13 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 		var compilation = CreateWebCompilation(solutionRoot);
 
 		var violations = compilation.SyntaxTrees
-			.Where(tree => tree.FilePath.EndsWith("JobTrackApi.cs", StringComparison.Ordinal))
-			.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
-				.Where(IsApiEndpointDelegate)
-				.Select(method => AnalyzeHandler(compilation, tree, method, solutionRoot)))
-			.Where(result => result.MutationCount > 1)
-			.Select(result => $"{result.Path}:{result.Name} ({result.MutationCount} mutations)")
-			.ToList();
+									.Where(tree => tree.FilePath.EndsWith("JobTrackApi.cs", StringComparison.Ordinal))
+									.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+															.Where(IsApiEndpointDelegate)
+															.Select(method => AnalyzeHandler(compilation, tree, method, solutionRoot)))
+									.Where(result => result.MutationCount > 1)
+									.Select(result => $"{result.Path}:{result.Name} ({result.MutationCount} mutations)")
+									.ToList();
 
 		violations.Should().BeEmpty(
 			"an external API endpoint delegate coordinating more than one IJobTrackClient mutation call belongs as " +
@@ -425,7 +425,7 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 		var tree = CSharpSyntaxTree.ParseText(source, CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview));
 		var compilation = CreateCompilation([tree]);
 		var method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
-			.Single(candidate => candidate.Identifier.ValueText == methodName);
+						 .Single(candidate => candidate.Identifier.ValueText == methodName);
 		var symbol = compilation.GetSemanticModel(tree).GetDeclaredSymbol(method)
 					 ?? throw new InvalidOperationException($"Could not resolve synthetic handler {methodName}.");
 
@@ -436,23 +436,23 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	{
 		var webRoot = Path.Combine(solutionRoot, "src", "JobTrack.Web");
 		var sourceTrees = Directory.EnumerateFiles(webRoot, "*.cs", SearchOption.AllDirectories)
-			.Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
-						   && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
-			.Select(path => CSharpSyntaxTree.ParseText(
-				File.ReadAllText(path),
-				CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview),
-				path))
-			.Prepend(CSharpSyntaxTree.ParseText(
-				"""
-				global using System;
-				global using System.Collections.Generic;
-				global using System.IO;
-				global using System.Linq;
-				global using System.Net.Http;
-				global using System.Threading;
-				global using System.Threading.Tasks;
-				""",
-				CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview)));
+								   .Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
+												  && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
+								   .Select(path => CSharpSyntaxTree.ParseText(
+									   File.ReadAllText(path),
+									   CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview),
+									   path))
+								   .Prepend(CSharpSyntaxTree.ParseText(
+									   """
+									   global using System;
+									   global using System.Collections.Generic;
+									   global using System.IO;
+									   global using System.Linq;
+									   global using System.Net.Http;
+									   global using System.Threading;
+									   global using System.Threading.Tasks;
+									   """,
+									   CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview)));
 
 		return CreateCompilation(sourceTrees);
 	}
@@ -469,12 +469,12 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 		var trustedPlatformAssemblies = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))
 			?.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries) ?? [];
 		var copiedDependencies = Directory.EnumerateFiles(AppContext.BaseDirectory, "*.dll")
-			.Where(path => !Path.GetFileName(path).Equals("JobTrack.Web.dll", StringComparison.Ordinal));
+										  .Where(path => !Path.GetFileName(path).Equals("JobTrack.Web.dll", StringComparison.Ordinal));
 
 		return trustedPlatformAssemblies
-			.Concat(copiedDependencies)
-			.Distinct(StringComparer.Ordinal)
-			.Select(path => MetadataReference.CreateFromFile(path));
+			   .Concat(copiedDependencies)
+			   .Distinct(StringComparer.Ordinal)
+			   .Select(path => MetadataReference.CreateFromFile(path));
 	}
 
 	private static bool IsApiEndpointDelegate(MethodDeclarationSyntax method) =>

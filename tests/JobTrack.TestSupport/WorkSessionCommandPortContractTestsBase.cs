@@ -45,7 +45,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var result = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var result = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		result.LeafWorkId.Should().Be(leafId);
 		result.WorkedByUserId.Should().Be(workerId);
@@ -58,11 +62,18 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var result = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var result = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "work_session", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "work_session",
+				EntityId = result.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("start-work-session");
@@ -77,10 +88,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString, clock);
 
-		var result = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var result = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "work_session", EntityId = result.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "work_session",
+				EntityId = result.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		clock.ReadCount.Should().Be(1);
 		result.StartedAt.Should().Be(operationInstant);
@@ -94,7 +112,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.session", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(otherWorkerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var act = () => port.StartSessionAsync(new() {
+			Context = ContextFor(otherWorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -106,7 +128,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.onbehalf", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var result = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = otherWorkerId });
+		var result = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = otherWorkerId,
+		});
 
 		result.WorkedByUserId.Should().Be(otherWorkerId);
 	}
@@ -118,7 +144,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.ownsession", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(otherWorkerId), LeafWorkId = leafId, WorkedByUserId = otherWorkerId });
+		var act = () => port.StartSessionAsync(new() {
+			Context = ContextFor(otherWorkerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = otherWorkerId,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -136,14 +166,24 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = unassignedLeaf.Id,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var result = await port.StartSessionAsync(
-			new() { Context = ContextFor(workerId), LeafWorkId = unassignedLeaf.Id, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				LeafWorkId = unassignedLeaf.Id,
+				WorkedByUserId = workerId,
+			});
 
 		result.WorkedByUserId.Should().Be(workerId);
-		var reclaim = () => jobNodePort.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassignedLeaf.Id });
+		var reclaim = () => jobNodePort.PickUpAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = unassignedLeaf.Id,
+		});
 		(await reclaim.Should().ThrowAsync<InvariantViolationException>()).Which.ConstraintId.Should().Be("job-node-already-claimed");
 	}
 
@@ -164,11 +204,18 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = unassignedLeaf.Id,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var act = () =>
-			port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = unassignedLeaf.Id, WorkedByUserId = otherWorkerId });
+			port.StartSessionAsync(new() {
+				Context = ContextFor(workerId),
+				LeafWorkId = unassignedLeaf.Id,
+				WorkedByUserId = otherWorkerId,
+			});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -186,7 +233,10 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = unassignedLeaf.Id,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var result = await port.StartSessionAsync(new() {
@@ -196,7 +246,10 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		});
 
 		result.WorkedByUserId.Should().Be(workerId);
-		var reclaim = () => jobNodePort.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassignedLeaf.Id });
+		var reclaim = () => jobNodePort.PickUpAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = unassignedLeaf.Id,
+		});
 		(await reclaim.Should().ThrowAsync<InvariantViolationException>()).Which.ConstraintId.Should().Be("job-node-already-claimed");
 	}
 
@@ -213,14 +266,24 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = unassignedLeaf.Id,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 
-		_ = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = unassignedLeaf.Id, WorkedByUserId = workerId });
+		_ = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = unassignedLeaf.Id,
+			WorkedByUserId = workerId,
+		});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_node", EntityId = unassignedLeaf.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_node",
+				EntityId = unassignedLeaf.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		var pickup = audit.Events.Should().ContainSingle(e => e.Operation == "pick-up-job-node").Which;
 		pickup.ActorId.Should().Be(workerId);
@@ -247,7 +310,10 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(branchOwnerId), JobNodeId = descendantLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(branchOwnerId),
+			JobNodeId = descendantLeaf.Id,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var result = await port.StartSessionAsync(new() {
@@ -272,12 +338,23 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(ownerId), LeafWorkId = leaf.Id, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(ownerId),
+			LeafWorkId = leaf.Id,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.FinishSessionAsync(
-			new() { Context = ContextFor(ownerId), SessionId = session.Id, Version = session.Version });
+			new() {
+				Context = ContextFor(ownerId),
+				SessionId = session.Id,
+				Version = session.Version,
+			});
 
 		result.FinishedAt.Should().NotBeNull();
 	}
@@ -296,7 +373,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		});
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = bareLeaf.Id, WorkedByUserId = workerId });
+		var act = () => port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = bareLeaf.Id,
+			WorkedByUserId = workerId,
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -306,9 +387,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		_ = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		_ = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var act = () => port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("work-session-already-active");
@@ -327,7 +416,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		});
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = dependentLeaf, WorkedByUserId = workerId });
+		var act = () => port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = dependentLeaf,
+			WorkedByUserId = workerId,
+		});
 
 		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
 	}
@@ -374,9 +467,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateSessionPort(database.ConnectionString);
 		var firstStart = Instant.FromUtc(2026, 1, 1, 9, 0);
 		var firstFinish = Instant.FromUtc(2026, 1, 1, 10, 0);
-		var first = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var first = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		first = await port.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = first.Id, Version = first.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = first.Id,
+				Version = first.Version,
+			});
 		_ = await port.CorrectSessionAsync(new() {
 			Context = ContextFor(workerId),
 			SessionId = first.Id,
@@ -408,9 +509,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateSessionPort(database.ConnectionString);
 		var firstStart = Instant.FromUtc(2026, 1, 1, 9, 0);
 		var firstFinish = Instant.FromUtc(2026, 1, 1, 10, 0);
-		var first = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var first = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		first = await port.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = first.Id, Version = first.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = first.Id,
+				Version = first.Version,
+			});
 		_ = await port.CorrectSessionAsync(new() {
 			Context = ContextFor(workerId),
 			SessionId = first.Id,
@@ -435,10 +544,18 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = session.Id,
+				Version = session.Version,
+			});
 
 		result.FinishedAt.Should().NotBeNull();
 		result.Version.Should().Be(2);
@@ -450,9 +567,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.finish", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
-		var act = () => port.FinishSessionAsync(new() { Context = ContextFor(otherWorkerId), SessionId = session.Id, Version = session.Version });
+		var act = () => port.FinishSessionAsync(new() {
+			Context = ContextFor(otherWorkerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -462,9 +587,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
-		var act = () => port.FinishSessionAsync(new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version + 1 });
+		var act = () => port.FinishSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version + 1,
+		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
 	}
@@ -478,7 +611,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		var otherLeafId = await CreateReadyLeafAsync(jobNodePort, rootId, jobManagerId, workerId);
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.FinishSessionAsync(new() {
 			Context = ContextFor(workerId),
@@ -519,7 +656,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.FinishSessionAsync(new() {
 			Context = ContextFor(workerId),
@@ -537,7 +678,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.FinishSessionAsync(new() {
 			Context = ContextFor(workerId),
@@ -555,7 +700,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		var correctedStart = session.StartedAt.Minus(Duration.FromHours(1));
 		var correctedFinish = session.StartedAt;
 
@@ -577,7 +726,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.CorrectSessionAsync(new() {
 			Context = ContextFor(workerId),
@@ -599,9 +752,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateSessionPort(database.ConnectionString);
 		var firstStart = Instant.FromUtc(2026, 1, 1, 9, 0);
 		var firstFinish = Instant.FromUtc(2026, 1, 1, 10, 0);
-		var first = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var first = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		first = await port.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = first.Id, Version = first.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = first.Id,
+				Version = first.Version,
+			});
 		first = await port.CorrectSessionAsync(new() {
 			Context = ContextFor(workerId),
 			SessionId = first.Id,
@@ -610,7 +771,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Reason = "Establish a fixed historical interval",
 			Version = first.Version,
 		});
-		var second = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var second = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.CorrectSessionAsync(new() {
 			Context = ContextFor(workerId),
@@ -632,9 +797,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateSessionPort(database.ConnectionString);
 		var firstStart = Instant.FromUtc(2026, 1, 1, 9, 0);
 		var firstFinish = Instant.FromUtc(2026, 1, 1, 10, 0);
-		var first = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var first = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		first = await port.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = first.Id, Version = first.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = first.Id,
+				Version = first.Version,
+			});
 		first = await port.CorrectSessionAsync(new() {
 			Context = ContextFor(workerId),
 			SessionId = first.Id,
@@ -643,7 +816,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Reason = "Establish a fixed historical interval",
 			Version = first.Version,
 		});
-		var second = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var second = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.CorrectSessionAsync(new() {
 			Context = ContextFor(workerId),
@@ -667,7 +844,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		await SetAchievementIdAsync(leafId, (short)Achievement.Success);
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var act = () => port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("work-session-leaf-closed");
@@ -678,10 +859,18 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
-		_ = await jobNodePort.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = leafId, Version = 1 });
+		_ = await jobNodePort.ArchiveAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = leafId,
+			Version = 1,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 
-		var act = () => port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var act = () => port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("work-session-leaf-closed");
@@ -692,8 +881,16 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
-		session = await port.FinishSessionAsync(new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
+		session = await port.FinishSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 		await SetAchievementIdAsync(leafId, (short)Achievement.Success);
 
 		var act = () => port.CorrectSessionAsync(new() {
@@ -715,7 +912,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var otherWorkerId = await SeedEmployeeAsync("New Owner", "new.owner.selffinish", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		_ = await jobNodePort.EditAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -726,7 +927,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Version = 1,
 		});
 
-		var result = await port.FinishSessionAsync(new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+		var result = await port.FinishSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 
 		result.FinishedAt.Should().NotBeNull();
 		_ = rootId;
@@ -739,7 +944,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var otherWorkerId = await SeedEmployeeAsync("New Owner", "new.owner.selffinish2", EmployeeRole.Worker);
 		var bystanderId = await SeedEmployeeAsync("Bystander", "bystander.selffinish", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		_ = await jobNodePort.EditAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -750,7 +959,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Version = 1,
 		});
 
-		var act = () => port.FinishSessionAsync(new() { Context = ContextFor(bystanderId), SessionId = session.Id, Version = session.Version });
+		var act = () => port.FinishSessionAsync(new() {
+			Context = ContextFor(bystanderId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -760,13 +973,21 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 		});
 
 		result.Achievement.Should().Be(Achievement.Success);
@@ -780,13 +1001,21 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 			FinalAchievement = finalAchievement,
 		});
 
@@ -799,7 +1028,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		_ = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		_ = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -818,22 +1051,36 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 		});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var leafAudit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "leaf_work", EntityId = leafId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "leaf_work",
+				EntityId = leafId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 		leafAudit.Events.Should().Contain(e => e.Operation == "set-achievement" && e.Reason == "Completed from the leaf work page");
 
 		var sessionAudit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "work_session", EntityId = session.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "work_session",
+				EntityId = session.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 		sessionAudit.Events.Should().Contain(e => e.Operation == "finish-work-session");
 		result.Achievement.Should().Be(Achievement.Success);
 	}
@@ -843,8 +1090,16 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
-		_ = await port.FinishSessionAsync(new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
+		_ = await port.FinishSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 
 		var result = await port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -880,13 +1135,21 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.complete", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.CompleteLeafAsync(new() {
 			Context = ContextFor(otherWorkerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
@@ -897,13 +1160,21 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version + 1 }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version + 1,
+				},
+			],
 		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
@@ -915,15 +1186,28 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.multicomplete", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var first = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
-		var second = await port.StartSessionAsync(new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = otherWorkerId });
+		var first = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
+		var second = await port.StartSessionAsync(new() {
+			Context = ContextFor(jobManagerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = otherWorkerId,
+		});
 
 		var result = await port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
 			ExpectedActiveSessions = [
-				new() { Id = first.Id, Version = first.Version }, new() { Id = second.Id, Version = second.Version },
+				new() {
+					Id = first.Id, Version = first.Version,
+				},
+				new() {
+					Id = second.Id, Version = second.Version,
+				},
 			],
 		});
 
@@ -937,14 +1221,27 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.multipause", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var first = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
-		var second = await port.StartSessionAsync(new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = otherWorkerId });
+		var first = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
+		var second = await port.StartSessionAsync(new() {
+			Context = ContextFor(jobManagerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = otherWorkerId,
+		});
 
 		var result = await port.PauseLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			ExpectedActiveSessions = [
-				new() { Id = first.Id, Version = first.Version }, new() { Id = second.Id, Version = second.Version },
+				new() {
+					Id = first.Id, Version = first.Version,
+				},
+				new() {
+					Id = second.Id, Version = second.Version,
+				},
 			],
 		});
 
@@ -959,12 +1256,20 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		_ = await port.PauseLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 		});
 
 		var achievementId = await ReadLeafAchievementAsync(leafId);
@@ -978,15 +1283,27 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.stalepause", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var first = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var first = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 		// The second worker clocked on after the caller read the page, so the confirmed set is short one
 		// session -- silently pausing only the session the caller knew about is exactly the bug here.
-		_ = await port.StartSessionAsync(new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = otherWorkerId });
+		_ = await port.StartSessionAsync(new() {
+			Context = ContextFor(jobManagerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = otherWorkerId,
+		});
 
 		var act = () => port.PauseLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
-			ExpectedActiveSessions = [new() { Id = first.Id, Version = first.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = first.Id, Version = first.Version,
+				},
+			],
 		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
@@ -998,16 +1315,28 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var bystanderId = await SeedEmployeeAsync("Bystander", "bystander.pause", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var owned = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var owned = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 		var bystanderSession = await port.StartSessionAsync(
-			new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = bystanderId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				LeafWorkId = leafId,
+				WorkedByUserId = bystanderId,
+			});
 
 		var act = () => port.PauseLeafAsync(new() {
 			Context = ContextFor(bystanderId),
 			JobNodeId = leafId,
 			ExpectedActiveSessions = [
-				new() { Id = owned.Id, Version = owned.Version },
-				new() { Id = bystanderSession.Id, Version = bystanderSession.Version },
+				new() {
+					Id = owned.Id, Version = owned.Version,
+				},
+				new() {
+					Id = bystanderSession.Id, Version = bystanderSession.Version,
+				},
 			],
 		});
 
@@ -1019,13 +1348,24 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.PauseLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
-			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Stopped for the day" },
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
+			WriteUpChange = new() {
+				NodeVersion = 1,
+				WriteUp = "Stopped for the day",
+			},
 		});
 
 		result.WriteUpChanged.Should().BeTrue();
@@ -1037,20 +1377,31 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.PauseLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
-			WriteUpChange = new() { NodeVersion = 99, WriteUp = "Stopped for the day" },
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
+			WriteUpChange = new() {
+				NodeVersion = 99,
+				WriteUp = "Stopped for the day",
+			},
 		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
 
 		var stored = await ReadLeafSessionStateAsync(leafId);
 		stored.Should().ContainSingle().Which.IsActive.Should()
-			.BeTrue("the rejected write-up change must roll the whole pause back");
+			  .BeTrue("the rejected write-up change must roll the whole pause back");
 	}
 
 	[Fact]
@@ -1058,12 +1409,20 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.PauseLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
 			FinishedAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromHours(1),
 		});
 
@@ -1076,14 +1435,25 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
-			WriteUpChange = new() { NodeVersion = 1, WriteUp = "All done" },
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
+			WriteUpChange = new() {
+				NodeVersion = 1,
+				WriteUp = "All done",
+			},
 		});
 
 		result.WriteUpChanged.Should().BeTrue();
@@ -1097,14 +1467,25 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
-			WriteUpChange = new() { NodeVersion = 1, WriteUp = null },
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
+			WriteUpChange = new() {
+				NodeVersion = 1,
+				WriteUp = null,
+			},
 		});
 
 		result.WriteUpChanged.Should().BeFalse();
@@ -1116,21 +1497,35 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var act = () => port.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
-			WriteUpChange = new() { NodeVersion = 99, WriteUp = "All done" },
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
+			WriteUpChange = new() {
+				NodeVersion = 99,
+				WriteUp = "All done",
+			},
 		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var leafAudit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "leaf_work", EntityId = leafId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "leaf_work",
+				EntityId = leafId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 		leafAudit.Events.Should().NotContain(
 			e => e.Operation == "set-achievement" && e.Reason != "Advanced automatically on session start",
 			"the rejected write-up change must roll back the completion's own achievement transition too");
@@ -1141,13 +1536,20 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.FinishSessionAndUpdateWriteUpAsync(new() {
 			Context = ContextFor(workerId),
 			SessionId = session.Id,
 			Version = session.Version,
-			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Paused for lunch" },
+			WriteUpChange = new() {
+				NodeVersion = 1,
+				WriteUp = "Paused for lunch",
+			},
 		});
 
 		result.Session.FinishedAt.Should().NotBeNull();
@@ -1161,7 +1563,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var result = await port.FinishSessionAndUpdateWriteUpAsync(new() {
 			Context = ContextFor(workerId),
@@ -1179,7 +1585,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
 		var session = await port.StartSessionAsync(
-			new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				LeafWorkId = leafId,
+				WorkedByUserId = workerId,
+			});
 		var before = await ReadFinishAndWriteUpStateAsync(leafId, session.Id);
 		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			await AuditFailureInjection.InstallAsync(connection, Provider);
@@ -1189,7 +1599,10 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(workerId),
 			SessionId = session.Id,
 			Version = session.Version,
-			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Must roll back" },
+			WriteUpChange = new() {
+				NodeVersion = 1,
+				WriteUp = "Must roll back",
+			},
 		});
 
 		await act.Should().ThrowAsync<DbUpdateException>();
@@ -1204,7 +1617,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
 		var session = await port.StartWorkAsync(
-			new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				JobNodeId = leafId,
+				WorkedByUserId = workerId,
+			});
 		var before = await ReadCompleteAndWriteUpStateAsync(leafId, session.Id);
 		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			await AuditFailureInjection.InstallAsync(connection, Provider);
@@ -1214,8 +1631,15 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(jobManagerId),
 			JobNodeId = leafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = session.Id, Version = session.Version }],
-			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Must all roll back" },
+			ExpectedActiveSessions = [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			],
+			WriteUpChange = new() {
+				NodeVersion = 1,
+				WriteUp = "Must all roll back",
+			},
 		});
 
 		await act.Should().ThrowAsync<DbUpdateException>();
@@ -1243,23 +1667,36 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = jobManagerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = managerOwnedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = managerOwnedLeaf.Id,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 		var session = await port.StartSessionAsync(
-			new() { Context = ContextFor(jobManagerId), LeafWorkId = managerOwnedLeaf.Id, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				LeafWorkId = managerOwnedLeaf.Id,
+				WorkedByUserId = workerId,
+			});
 
 		var act = () => port.FinishSessionAndUpdateWriteUpAsync(new() {
 			Context = ContextFor(workerId),
 			SessionId = session.Id,
 			Version = session.Version,
-			WriteUpChange = new() { NodeVersion = 1, WriteUp = "Trying to sneak this in" },
+			WriteUpChange = new() {
+				NodeVersion = 1,
+				WriteUp = "Trying to sneak this in",
+			},
 		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var sessionAudit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "work_session", EntityId = session.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "work_session",
+				EntityId = session.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 		sessionAudit.Events.Should().NotContain(
 			e => e.Operation == "finish-work-session", "the denied write-up change must roll back the session finish too");
 	}
@@ -1300,12 +1737,18 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var leafAudit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "leaf_work", EntityId = leafId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "leaf_work",
+				EntityId = leafId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 		leafAudit.Events.Should().Contain(e => e.Operation == "set-achievement" && e.Reason == "More work was found");
 		leafAudit.Events.Should().Contain(e => e.Operation == "set-achievement" && e.Reason == "Advanced automatically on session start");
 
 		var sessionAudit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "work_session", EntityId = result.Session.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "work_session",
+				EntityId = result.Session.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 		sessionAudit.Events.Should().Contain(e => e.Operation == "start-work-session");
 	}
 
@@ -1387,7 +1830,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, jobManagerId, _, leafId) = await SeedTerminalLeafAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
-		_ = await jobNodePort.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = leafId, Version = 1 });
+		_ = await jobNodePort.ArchiveAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = leafId,
+			Version = 1,
+		});
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var act = () => port.ReopenAndStartWorkAsync(new() {
@@ -1463,7 +1910,7 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		(await ReadLeafAchievementAsync(seeded.DependentLeafId)).Should().Be((short)Achievement.InProgress,
 			"reopening a prerequisite never reaches into the dependent's own achievement");
 		(await ReadLeafSessionStateAsync(seeded.DependentLeafId)).Should().ContainSingle()
-			.Which.IsActive.Should().BeTrue("the dependent's running session is left alone, not ended behind the worker's back");
+																 .Which.IsActive.Should().BeTrue("the dependent's running session is left alone, not ended behind the worker's back");
 	}
 
 	/// <summary>
@@ -1490,13 +1937,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(seeded.JobManagerId),
 			JobNodeId = seeded.DependentLeafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = seeded.DependentSessionId, Version = seeded.DependentSessionVersion }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = seeded.DependentSessionId, Version = seeded.DependentSessionVersion,
+				},
+			],
 		});
 
 		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
 		(await ReadLeafAchievementAsync(seeded.DependentLeafId)).Should().Be((short)Achievement.InProgress);
 		(await ReadLeafSessionStateAsync(seeded.DependentLeafId)).Should().ContainSingle()
-			.Which.IsActive.Should().BeTrue("the rejected completion must not finish the session it would have closed");
+																 .Which.IsActive.Should().BeTrue("the rejected completion must not finish the session it would have closed");
 	}
 
 	/// <summary>
@@ -1520,7 +1971,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(seeded.JobManagerId),
 			JobNodeId = seeded.RequiredLeafId,
 			Version = reopened.Version,
-			ExpectedActiveSessions = [new() { Id = reopened.Session.Id, Version = reopened.Session.Version }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = reopened.Session.Id, Version = reopened.Session.Version,
+				},
+			],
 			FinalAchievement = Achievement.Success,
 		});
 
@@ -1528,7 +1983,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(seeded.JobManagerId),
 			JobNodeId = seeded.DependentLeafId,
 			Version = 2,
-			ExpectedActiveSessions = [new() { Id = seeded.DependentSessionId, Version = seeded.DependentSessionVersion }],
+			ExpectedActiveSessions = [
+				new() {
+					Id = seeded.DependentSessionId, Version = seeded.DependentSessionVersion,
+				},
+			],
 		});
 
 		result.Achievement.Should().Be(Achievement.Success);
@@ -1545,9 +2004,17 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId, requiredLeafId) = await SeedReadyLeafAsync();
 		var sessionPort = CreateSessionPort(database.ConnectionString);
 		var requiredSession = await sessionPort.StartWorkAsync(
-			new() { Context = ContextFor(workerId), JobNodeId = requiredLeafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				JobNodeId = requiredLeafId,
+				WorkedByUserId = workerId,
+			});
 		_ = await sessionPort.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = requiredSession.Id, Version = requiredSession.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = requiredSession.Id,
+				Version = requiredSession.Version,
+			});
 		_ = await CreateAchievementPort(database.ConnectionString).SetAchievementAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = requiredLeafId,
@@ -1564,7 +2031,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			DependentJobId = dependentLeafId,
 		});
 		var dependentSession = await sessionPort.StartWorkAsync(
-			new() { Context = ContextFor(workerId), JobNodeId = dependentLeafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				JobNodeId = dependentLeafId,
+				WorkedByUserId = workerId,
+			});
 
 		return (jobManagerId, workerId, requiredLeafId, dependentLeafId, dependentSession.Id, dependentSession.Version);
 	}
@@ -1622,8 +2093,16 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (rootId, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var port = CreateSessionPort(database.ConnectionString);
-		var session = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
-		_ = await port.FinishSessionAsync(new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+		var session = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
+		_ = await port.FinishSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 		var achievementPort = CreateAchievementPort(database.ConnectionString);
 		_ = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -1667,7 +2146,10 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
-	protected static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	protected static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>
 	///     Runs remediation plan §2.1's provider race between a compound session-finish/write-up
@@ -1677,7 +2159,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var session = await CreateSessionPort(database.ConnectionString).StartSessionAsync(
-			new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				LeafWorkId = leafId,
+				WorkedByUserId = workerId,
+			});
 
 		var results = await Task.WhenAll(
 			TryFinishWithWriteUpAsync(
@@ -1700,7 +2186,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
 		var session = await CreateSessionPort(database.ConnectionString).StartSessionAsync(
-			new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				LeafWorkId = leafId,
+				WorkedByUserId = workerId,
+			});
 
 		var results = await Task.WhenAll(
 			TryFinishWithWriteUpAsync(
@@ -1725,10 +2215,23 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var mateId = await SeedEmployeeAsync("Pause Race Mate", "pause.race.mate", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
-		var first = await port.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
-		var second = await port.StartSessionAsync(new() { Context = ContextFor(jobManagerId), LeafWorkId = leafId, WorkedByUserId = mateId });
+		var first = await port.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
+		var second = await port.StartSessionAsync(new() {
+			Context = ContextFor(jobManagerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = mateId,
+		});
 		ExpectedActiveSession[] confirmed = [
-			new() { Id = first.Id, Version = first.Version }, new() { Id = second.Id, Version = second.Version },
+			new() {
+				Id = first.Id, Version = first.Version,
+			},
+			new() {
+				Id = second.Id, Version = second.Version,
+			},
 		];
 
 		var results = await Task.WhenAll(
@@ -1739,14 +2242,18 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		var stored = await ReadLeafSessionStateAsync(leafId);
 		stored.Should().HaveCount(2).And.OnlyContain(row => !row.IsActive);
 		stored.Select(row => row.FinishedAt).Distinct().Should()
-			.ContainSingle("the winning pause stops every clock at one instant");
+			  .ContainSingle("the winning pause stops every clock at one instant");
 	}
 
 	private static async Task<bool> TryPauseAsync(
 		IWorkSessionCommandPort port, AppUserId actorId, JobNodeId leafId, IReadOnlyList<ExpectedActiveSession> confirmed)
 	{
 		try {
-			_ = await port.PauseLeafAsync(new() { Context = ContextFor(actorId), JobNodeId = leafId, ExpectedActiveSessions = [.. confirmed] });
+			_ = await port.PauseLeafAsync(new() {
+				Context = ContextFor(actorId),
+				JobNodeId = leafId,
+				ExpectedActiveSessions = [.. confirmed],
+			});
 			return true;
 		}
 		catch (ConcurrencyConflictException) {
@@ -1765,7 +2272,10 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 				Context = ContextFor(actorId),
 				SessionId = sessionId,
 				Version = sessionVersion,
-				WriteUpChange = new() { NodeVersion = 1, WriteUp = "Compound write-up" },
+				WriteUpChange = new() {
+					NodeVersion = 1,
+					WriteUp = "Compound write-up",
+				},
 			});
 			return true;
 		}
@@ -1803,7 +2313,11 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 		long sessionVersion)
 	{
 		try {
-			_ = await port.FinishSessionAsync(new() { Context = ContextFor(actorId), SessionId = sessionId, Version = sessionVersion });
+			_ = await port.FinishSessionAsync(new() {
+				Context = ContextFor(actorId),
+				SessionId = sessionId,
+				Version = sessionVersion,
+			});
 			return true;
 		}
 		catch (ConcurrencyConflictException) {
@@ -1822,7 +2336,10 @@ public abstract class WorkSessionCommandPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 		_ = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = leaf.Id,
+			});
 
 		return leaf.Id;
 	}

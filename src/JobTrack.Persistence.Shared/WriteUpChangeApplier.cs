@@ -54,8 +54,12 @@ internal static class WriteUpChangeApplier
 
 		AuditEventWriter.Add(
 			context, actorId, now, "edit-job-node", "job_node", node.Id.Value, correlationId, null,
-			new Dictionary<string, string?> { ["write_up"] = before },
-			new Dictionary<string, string?> { ["write_up"] = node.WriteUp });
+			new Dictionary<string, string?> {
+				["write_up"] = before,
+			},
+			new Dictionary<string, string?> {
+				["write_up"] = node.WriteUp,
+			});
 
 		return (true, node);
 	}

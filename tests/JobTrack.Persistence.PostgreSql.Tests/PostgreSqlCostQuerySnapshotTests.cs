@@ -20,7 +20,7 @@ public sealed class PostgreSqlCostQuerySnapshotTests : IAsyncLifetime
 	{
 		await using var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, provider => provider.UseNodaTime()).Options;
+					  .UseNpgsql(dataSource, provider => provider.UseNodaTime()).Options;
 		await using var context = new PostgreSqlJobTrackDbContext(options);
 
 		await using var transaction = await PostgreSqlCostQuerySnapshot.BeginAsync(context, CancellationToken.None);

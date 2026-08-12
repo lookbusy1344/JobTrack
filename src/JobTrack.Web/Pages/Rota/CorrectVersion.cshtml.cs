@@ -74,16 +74,19 @@ public sealed class CorrectVersionModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var zone = ScheduleZoneId.Resolve(Input.IanaTimeZone);
 			var weeklyIntervals = Input.WeeklyIntervals
-				.Where(slot => slot.Day is not null && slot.Start is not null && slot.End is not null)
-				.Select(slot => new WeeklyInterval(
-					slot.Day!.Value, new(slot.Start!.Value.Hour, slot.Start.Value.Minute),
-					new(slot.End!.Value.Hour, slot.End.Value.Minute)))
-				.ToArray();
+									   .Where(slot => slot.Day is not null && slot.Start is not null && slot.End is not null)
+									   .Select(slot => new WeeklyInterval(
+										   slot.Day!.Value, new(slot.Start!.Value.Hour, slot.Start.Value.Minute),
+										   new(slot.End!.Value.Hour, slot.End.Value.Minute)))
+									   .ToArray();
 
 			_ = await jobTrackClient.Schedules.CorrectScheduleVersionAsync(new() {
 				Context = context,
@@ -96,7 +99,10 @@ public sealed class CorrectVersionModel(
 					Input.EffectiveEnd.HasValue ? ToLocalDate(Input.EffectiveEnd.Value) : null, [.. weeklyIntervals]),
 			}, cancellationToken);
 
-			return RedirectToPage("/Rota/Index", new { userId = UserId });
+			return RedirectToPage("/Rota/Index", new
+			{
+				userId = UserId,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -131,7 +137,13 @@ public sealed class CorrectVersionModel(
 	{
 		try {
 			var snapshot = await jobTrackClient.Query.GetScheduleAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, UserId = new(UserId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					UserId = new(UserId),
+				}, cancellationToken);
 
 			Version = snapshot.Versions.FirstOrDefault(v => v.Id == new ScheduleVersionId(VersionId));
 			if (Version is null) {

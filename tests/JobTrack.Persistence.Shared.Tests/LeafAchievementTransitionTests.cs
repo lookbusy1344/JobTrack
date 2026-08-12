@@ -29,7 +29,7 @@ public sealed class LeafAchievementTransitionTests
 	[MemberData(nameof(EveryAchievement))]
 	public void Trigger_set_is_in_progress_plus_every_domain_terminal_state(Achievement achievement) =>
 		LeafAchievementTransition.TriggersAcknowledgement(achievement)
-			.Should().Be(achievement == Achievement.InProgress || AchievementTransitions.IsCompletedState(achievement));
+								 .Should().Be(achievement == Achievement.InProgress || AchievementTransitions.IsCompletedState(achievement));
 
 	[Fact]
 	public void An_unrecognized_achievement_is_rejected_rather_than_silently_untriggered()

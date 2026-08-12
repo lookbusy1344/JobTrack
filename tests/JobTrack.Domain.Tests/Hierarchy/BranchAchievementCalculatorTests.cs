@@ -6,12 +6,14 @@ using Domain.Hierarchy;
 
 public sealed class BranchAchievementCalculatorTests
 {
-	private static RequesterSubtreeLeafState Leaf(Achievement? achievement) => new() { LeafAchievement = achievement };
+	private static RequesterSubtreeLeafState Leaf(Achievement? achievement) => new() {
+		LeafAchievement = achievement,
+	};
 
 	[Fact]
 	public void A_subtree_whose_every_childless_node_succeeded_is_success() =>
 		BranchAchievementCalculator.Derive([Leaf(Achievement.Success), Leaf(Achievement.Success)])
-			.Should().Be(BranchAchievement.Success);
+								   .Should().Be(BranchAchievement.Success);
 
 	[Fact]
 	public void A_single_succeeded_childless_node_is_success() =>
@@ -25,7 +27,7 @@ public sealed class BranchAchievementCalculatorTests
 	[InlineData(Achievement.None)]
 	public void Any_childless_node_short_of_success_leaves_the_subtree_unfinished(Achievement achievement) =>
 		BranchAchievementCalculator.Derive([Leaf(Achievement.Success), Leaf(achievement)])
-			.Should().Be(BranchAchievement.Unfinished);
+								   .Should().Be(BranchAchievement.Unfinished);
 
 	/// <summary>
 	///     Mirrors <c>node_succeeded</c>'s explicit case (schema version 0013): a childless node with no

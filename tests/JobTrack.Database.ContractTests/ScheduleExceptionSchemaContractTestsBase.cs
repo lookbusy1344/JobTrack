@@ -224,7 +224,7 @@ public abstract class ScheduleExceptionSchemaContractTestsBase : IAsyncLifetime
 	///     cover, unlike the effective-dated tables.
 	/// </summary>
 	protected virtual Task AssertExceptionRangeAsync(DbConnection connection, long exceptionId, DateTimeOffset startedAt,
-		DateTimeOffset finishedAt) =>
+													 DateTimeOffset finishedAt) =>
 		Task.CompletedTask;
 
 	private async Task<DbConnection> OpenDeployedConnectionAsync()

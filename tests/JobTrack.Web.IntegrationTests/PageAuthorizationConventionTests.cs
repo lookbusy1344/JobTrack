@@ -2,17 +2,12 @@ namespace JobTrack.Web.IntegrationTests;
 
 using System.Collections.Frozen;
 using AwesomeAssertions;
-using Database;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Security-audit finding 5: Razor Pages are anonymous unless a page opts in, so a page added
@@ -67,10 +62,10 @@ public sealed class PageAuthorizationConventionTests : IAsyncLifetime, IDisposab
 	public void Every_page_is_closed_by_the_folder_convention_independently_of_its_own_attribute()
 	{
 		var uncovered = PageEndpoints()
-			.Where(page => !page.Endpoint.Metadata.OfType<IAuthorizeData>().Any(IsConventionApplied))
-			.Select(page => page.ViewEnginePath)
-			.Distinct(StringComparer.Ordinal)
-			.ToList();
+						.Where(page => !page.Endpoint.Metadata.OfType<IAuthorizeData>().Any(IsConventionApplied))
+						.Select(page => page.ViewEnginePath)
+						.Distinct(StringComparer.Ordinal)
+						.ToList();
 
 		uncovered.Should().BeEmpty("AuthorizeFolder(\"/\") must close every page regardless of its own attribute");
 	}
@@ -79,10 +74,10 @@ public sealed class PageAuthorizationConventionTests : IAsyncLifetime, IDisposab
 	public void Exactly_the_expected_pages_are_marked_anonymous()
 	{
 		var anonymous = PageEndpoints()
-			.Where(page => page.Endpoint.Metadata.OfType<IAllowAnonymous>().Any())
-			.Select(page => page.ViewEnginePath)
-			.Distinct(StringComparer.Ordinal)
-			.ToList();
+						.Where(page => page.Endpoint.Metadata.OfType<IAllowAnonymous>().Any())
+						.Select(page => page.ViewEnginePath)
+						.Distinct(StringComparer.Ordinal)
+						.ToList();
 
 		anonymous.Should().BeEquivalentTo(ExpectedAnonymousPages);
 	}
@@ -96,10 +91,7 @@ public sealed class PageAuthorizationConventionTests : IAsyncLifetime, IDisposab
 
 	private IEnumerable<(string ViewEnginePath, Endpoint Endpoint)> PageEndpoints() =>
 		factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
-			.Select(endpoint => (Descriptor: endpoint.Metadata.GetMetadata<PageActionDescriptor>(), Endpoint: endpoint))
-			.Where(entry => entry.Descriptor is not null)
-			.Select(entry => (entry.Descriptor!.ViewEnginePath, entry.Endpoint));
-
-
-
+			   .Select(endpoint => (Descriptor: endpoint.Metadata.GetMetadata<PageActionDescriptor>(), Endpoint: endpoint))
+			   .Where(entry => entry.Descriptor is not null)
+			   .Select(entry => (entry.Descriptor!.ViewEnginePath, entry.Endpoint));
 }

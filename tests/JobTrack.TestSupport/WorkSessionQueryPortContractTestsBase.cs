@@ -44,7 +44,7 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		var result = await port.GetSessionsAsync(administratorId, leafId, workerId);
 
 		result.Sessions.Select(s => s.StartedAt).Should()
-			.ContainInOrder(Instant.FromUtc(2026, 1, 2, 8, 0), Instant.FromUtc(2026, 1, 1, 8, 0));
+			  .ContainInOrder(Instant.FromUtc(2026, 1, 2, 8, 0), Instant.FromUtc(2026, 1, 1, 8, 0));
 	}
 
 	[Fact]
@@ -94,7 +94,7 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		result.Sessions.Should().HaveCount(2);
 		result.Sessions.Select(s => s.WorkedByUserId).Should().Contain([workerId, administratorId]);
 		result.Sessions.Select(s => s.StartedAt).Should()
-			.ContainInOrder(Instant.FromUtc(2026, 1, 2, 8, 0), Instant.FromUtc(2026, 1, 1, 8, 0));
+			  .ContainInOrder(Instant.FromUtc(2026, 1, 2, 8, 0), Instant.FromUtc(2026, 1, 1, 8, 0));
 	}
 
 	[Fact]
@@ -271,7 +271,9 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		var (administratorId, workerId, firstLeafId) = await SeedWorkedLeafAsync();
 		var jobCommandPort = CreateJobCommandPort(database.ConnectionString);
 		var rootId = await FindRootAsync();
-		var leafIds = new List<JobNodeId> { firstLeafId };
+		var leafIds = new List<JobNodeId> {
+			firstLeafId,
+		};
 		for (var i = 0; i < 10; ++i) {
 			var node = await jobCommandPort.AddChildAsync(new() {
 				Context = ContextFor(administratorId),
@@ -280,7 +282,10 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 				OwnerUserId = workerId,
 				Priority = Priority.Medium,
 			});
-			_ = await jobCommandPort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = node.Id });
+			_ = await jobCommandPort.AttachLeafWorkAsync(new() {
+				Context = ContextFor(administratorId),
+				JobNodeId = node.Id,
+			});
 			leafIds.Add(node.Id);
 		}
 
@@ -411,7 +416,10 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 	/// <summary>Stage 4 efficiency-guard seam: a query port wired with <paramref name="interceptor" /> attached to its <c>DbContext</c>.</summary>
 	internal abstract IWorkSessionQueryPort CreateQueryPortWithCommandCounter(string connectionString, CommandCountInterceptor interceptor);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>Seeds root -&gt; leaf "Pour foundation" (worker-owned, LeafWork attached), owned and worked by a seeded worker.</summary>
 	private async Task<(AppUserId AdministratorId, AppUserId WorkerId, JobNodeId LeafId)> SeedWorkedLeafAsync()
@@ -442,7 +450,10 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobCommandPort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+		_ = await jobCommandPort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(administratorId),
+			JobNodeId = leaf.Id,
+		});
 
 		return (administratorId, workerId, leaf.Id);
 	}
@@ -458,7 +469,10 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobCommandPort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+		_ = await jobCommandPort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(administratorId),
+			JobNodeId = leaf.Id,
+		});
 
 		return leaf.Id;
 	}
@@ -508,8 +522,4 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		command.CommandText = "SELECT id FROM job_node WHERE parent_id IS NULL;";
 		return new(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
-
-
-
-
 }

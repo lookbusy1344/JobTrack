@@ -23,8 +23,8 @@ internal sealed class PostgreSqlWriteOperations(NpgsqlDataSource dataSource) : I
 	public Task<DbContext> CreateOpenContextAsync(CancellationToken cancellationToken)
 	{
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, o => o.UseNodaTime())
-			.Options;
+					  .UseNpgsql(dataSource, o => o.UseNodaTime())
+					  .Options;
 
 		// Npgsql opens lazily on first command and needs no per-connection setup, so there is nothing
 		// to await here -- unlike SQLite, which must open eagerly to apply its pragmas.
@@ -37,7 +37,7 @@ internal sealed class PostgreSqlWriteOperations(NpgsqlDataSource dataSource) : I
 	public async Task<int> RevokeAllTokensForUserAsync(
 		DbContext context, AppUserId userId, Instant now, CancellationToken cancellationToken) =>
 		await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, userId, now, cancellationToken)
-			.ConfigureAwait(false);
+													.ConfigureAwait(false);
 
 	/// <summary>Classifies a PostgreSQL write conflict from the SQLSTATEs in the exception chain.</summary>
 	/// <remarks>

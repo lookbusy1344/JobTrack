@@ -6,18 +6,18 @@
 	ViewData["Title"] = "Request detail";
 
 	static string KindIconId(NodeKind kind) => kind switch {
-		NodeKind.Root => "jt-icon-root",
-		NodeKind.Branch => "jt-icon-branch",
-		NodeKind.Leaf => "jt-icon-leaf",
-		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-	};
+		                                           NodeKind.Root => "jt-icon-root",
+		                                           NodeKind.Branch => "jt-icon-branch",
+		                                           NodeKind.Leaf => "jt-icon-leaf",
+		                                           _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                           };
 
 	static string KindNoun(NodeKind kind) => kind switch {
-		NodeKind.Root => "root",
-		NodeKind.Branch => "branch",
-		NodeKind.Leaf => "leaf",
-		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-	};
+		                                         NodeKind.Root => "root",
+		                                         NodeKind.Branch => "branch",
+		                                         NodeKind.Leaf => "leaf",
+		                                         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                         };
 }
 
 @{
@@ -53,7 +53,9 @@
 		<div class="col row g-1">
 			<dt class="col-12 col-sm-4">Achievement</dt>
 			<dd class="col-12 col-sm-8 mb-0">
-				<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel { Achievement = detail.SubtreeAchievement })"/>
+				<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel {
+					                                              Achievement = detail.SubtreeAchievement,
+				                                              })"/>
 			</dd>
 		</div>
 		@* Only a leaf carries the six-value achievement vocabulary the rollup above collapses away, so
@@ -62,7 +64,9 @@
 			<div class="col row g-1">
 				<dt class="col-12 col-sm-4">Status</dt>
 				<dd class="col-12 col-sm-8 mb-0">
-					<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = leafAchievement })"/>
+					<partial name="_AchievementIcon" model="@(new AchievementIconModel {
+						                                        Achievement = leafAchievement,
+					                                        })"/>
 				</dd>
 			</div>
 		}
@@ -138,7 +142,9 @@
 								@* Keep the requester-status marker attached to the title's final word as the
 								   Bootstrap column allocation changes across breakpoints. *@
 								<partial name="_RequesterStatusIcon"
-								         model="@(new RequesterStatusIconModel { Status = row.Node.Status, ShowLabel = false })"/>
+								         model="@(new RequesterStatusIconModel {
+									                Status = row.Node.Status, ShowLabel = false,
+								                })"/>
 							</span>
 						</span>
 					</td>

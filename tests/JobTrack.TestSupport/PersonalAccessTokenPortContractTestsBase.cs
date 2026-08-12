@@ -37,7 +37,10 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 
 	public Task DisposeAsync() => database.DisposeAsync();
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	[Fact]
 	public async Task An_enabled_actor_can_issue_a_token_for_themselves()
@@ -251,8 +254,4 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 
 		return appUserId;
 	}
-
-
-
-
 }

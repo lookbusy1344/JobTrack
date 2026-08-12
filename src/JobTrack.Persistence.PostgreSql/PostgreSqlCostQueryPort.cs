@@ -60,7 +60,10 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 		var ownerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-		return new() { ActorRoles = actorRoles, AncestorOwnerIds = EquatableArray.CopyOf(ownerIds.Select(id => new AppUserId(id))) };
+		return new() {
+			ActorRoles = actorRoles,
+			AncestorOwnerIds = EquatableArray.CopyOf(ownerIds.Select(id => new AppUserId(id))),
+		};
 	}
 
 	/// <inheritdoc />
@@ -86,7 +89,11 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 			context, subtree, asOf, cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-		return new() { NodesById = EquatableDictionaryFactory.CopyOf(subtree.NodesById), Bounds = bounds, Workers = EquatableArray.CopyOf(workers) };
+		return new() {
+			NodesById = EquatableDictionaryFactory.CopyOf(subtree.NodesById),
+			Bounds = bounds,
+			Workers = EquatableArray.CopyOf(workers),
+		};
 	}
 
 	/// <inheritdoc />
@@ -135,14 +142,14 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}
@@ -183,9 +190,9 @@ internal static class CostQueryAssembly
 
 		var distinctRows = rows.GroupBy(row => row.Id).Select(group => group.First()).ToList();
 		var childrenByParent = distinctRows
-			.Where(row => row.ParentId is not null)
-			.GroupBy(row => row.ParentId!.Value)
-			.ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(row => new JobNodeId(row.Id))));
+							   .Where(row => row.ParentId is not null)
+							   .GroupBy(row => row.ParentId!.Value)
+							   .ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(row => new JobNodeId(row.Id))));
 
 		var nodesById = distinctRows.ToDictionary(
 			row => new JobNodeId(row.Id),
@@ -250,35 +257,35 @@ internal static class CostQueryAssembly
 			var widenedStart = bounds.Start.InZone(DateTimeZone.Utc).Date.PlusDays(-1);
 			var widenedEnd = bounds.End.InZone(DateTimeZone.Utc).Date.PlusDays(1);
 			var scheduleVersions = await context.Set<ScheduleVersionEntity>().AsNoTracking()
-				.Where(v => workerIds.Contains(v.UserId) && v.EffectiveStart < widenedEnd
-														 && (v.EffectiveEnd == null || v.EffectiveEnd > widenedStart))
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
+												.Where(v => workerIds.Contains(v.UserId) && v.EffectiveStart < widenedEnd
+																						 && (v.EffectiveEnd == null || v.EffectiveEnd > widenedStart))
+												.ToListAsync(cancellationToken).ConfigureAwait(false);
 			var scheduleVersionIds = scheduleVersions.Select(v => v.Id).ToList();
 			var scheduleIntervals = await context.Set<ScheduleIntervalEntity>().AsNoTracking()
-				.Where(i => scheduleVersionIds.Contains(i.ScheduleVersionId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+												 .Where(i => scheduleVersionIds.Contains(i.ScheduleVersionId)).ToListAsync(cancellationToken).ConfigureAwait(false);
 			// Projected to the five columns CostQueryAssembly actually reads (2026-08-06-cost-read-
 			// materialisation-reduction-plan.md Stage 5): a wide-vs-narrow raw read of this table at the
 			// long-history scale (36,500 rows) measured 50.4 ms vs 9.7 ms -- the one worker-scoped load
 			// in this method with a row count large enough for entity-shaping cost to be visible next to
 			// the query itself; every other load here stays in the tens of rows.
 			var exceptions = await context.Set<ScheduleExceptionEntity>().AsNoTracking()
-				.Where(e => workerIds.Contains(e.UserId) && e.StartedAt < bounds.End && e.FinishedAt > bounds.Start)
-				.Select(e => new
-				{
-					e.UserId,
-					e.ScheduleExceptionEffectId,
-					e.StartedAt,
-					e.FinishedAt,
-					e.RateOverride,
-				})
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
+										  .Where(e => workerIds.Contains(e.UserId) && e.StartedAt < bounds.End && e.FinishedAt > bounds.Start)
+										  .Select(e => new
+										  {
+											  e.UserId,
+											  e.ScheduleExceptionEffectId,
+											  e.StartedAt,
+											  e.FinishedAt,
+											  e.RateOverride,
+										  })
+										  .ToListAsync(cancellationToken).ConfigureAwait(false);
 			var userCostRates = await context.Set<UserCostRateEntity>().AsNoTracking()
-				.Where(r => workerIds.Contains(r.UserId) && r.EffectiveStart < bounds.End
-														 && (r.EffectiveEnd == null || r.EffectiveEnd > bounds.Start))
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
+											 .Where(r => workerIds.Contains(r.UserId) && r.EffectiveStart < bounds.End
+																					  && (r.EffectiveEnd == null || r.EffectiveEnd > bounds.Start))
+											 .ToListAsync(cancellationToken).ConfigureAwait(false);
 			var appUsersById = await context.Set<AppUserEntity>().AsNoTracking()
-				.Where(u => workerIds.Contains(u.Id))
-				.ToDictionaryAsync(u => u.Id, cancellationToken).ConfigureAwait(false);
+											.Where(u => workerIds.Contains(u.Id))
+											.ToDictionaryAsync(u => u.Id, cancellationToken).ConfigureAwait(false);
 			var sessionsByWorkerId = await LoadWorkerSessionsAsync(context, workerIds, bounds, asOf, cancellationToken).ConfigureAwait(false);
 
 			var intervalsByVersion = scheduleIntervals.GroupBy(i => i.ScheduleVersionId).ToDictionary(group => group.Key, group => group.ToList());
@@ -292,7 +299,7 @@ internal static class CostQueryAssembly
 				var expandedScheduleIntervals = new List<WorkInterval>();
 				foreach (var version in versionsByWorker[workerId]) {
 					var weeklyIntervals = intervalsByVersion.GetValueOrDefault(version.Id, [])
-						.Select(i => new WeeklyInterval(i.DayOfWeek, i.StartTime, i.EndTime));
+															.Select(i => new WeeklyInterval(i.DayOfWeek, i.StartTime, i.EndTime));
 					var scheduleVersion = new ScheduleVersion(
 						StoredTimeZoneResolver.Resolve(version.IanaTimeZone, $"Schedule version {version.Id}"),
 						version.EffectiveStart, version.EffectiveEnd,
@@ -301,16 +308,16 @@ internal static class CostQueryAssembly
 				}
 
 				var workerExceptions = exceptionsByWorker[workerId]
-					.Select(e => new ScheduleExceptionEntry(
-						(ScheduleExceptionEffect)e.ScheduleExceptionEffectId, new(e.StartedAt, e.FinishedAt), e.RateOverride))
-					.ToArray();
+									   .Select(e => new ScheduleExceptionEntry(
+										   (ScheduleExceptionEffect)e.ScheduleExceptionEffectId, new(e.StartedAt, e.FinishedAt), e.RateOverride))
+									   .ToArray();
 
 				var normalizedScheduled = IntervalAlgebra.Normalize(expandedScheduleIntervals);
 				var effectiveWorkingIntervals = ScheduleExceptionResolver.Apply(expandedScheduleIntervals, workerExceptions);
 
 				var workerUserCostRates = ratesByWorker[workerId]
-					.Select(r => new UserCostRate(r.Rate, r.EffectiveStart, r.EffectiveEnd))
-					.ToArray();
+										  .Select(r => new UserCostRate(r.Rate, r.EffectiveStart, r.EffectiveEnd))
+										  .ToArray();
 
 				// NodeOverrides is filled in below, once ExtendAncestryAsync has determined the final
 				// node set (2026-07-25 scalability-follow-up plan §2.5: an override on a node outside
@@ -358,9 +365,11 @@ internal static class CostQueryAssembly
 
 			for (var index = 0; index < workers.Count; ++index) {
 				var workerNodeOverrides = overridesByWorker[workerIds[index]]
-					.Select(row => new NodeRateOverride(new(row.NodeId), new(row.Rate), row.EffectiveStart, row.EffectiveEnd))
-					.ToArray();
-				workers[index] = workers[index] with { NodeOverrides = EquatableArray.CopyOf(workerNodeOverrides) };
+										  .Select(row => new NodeRateOverride(new(row.NodeId), new(row.Rate), row.EffectiveStart, row.EffectiveEnd))
+										  .ToArray();
+				workers[index] = workers[index] with {
+					NodeOverrides = EquatableArray.CopyOf(workerNodeOverrides),
+				};
 			}
 		}
 
@@ -425,12 +434,12 @@ internal static class CostQueryAssembly
 			 """).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return rows
-			.GroupBy(row => new AppUserId(row.WorkerId))
-			.ToDictionary(
-				group => group.Key,
-				group => group.Select(row => new CostableSession(
-						new(row.SessionId), new(row.LeafWorkId), new(row.StartedAt, SessionEndClipping.ClipEnd(row.FinishedAt, asOf))))
-					.ToArray());
+			   .GroupBy(row => new AppUserId(row.WorkerId))
+			   .ToDictionary(
+				   group => group.Key,
+				   group => group.Select(row => new CostableSession(
+									 new(row.SessionId), new(row.LeafWorkId), new(row.StartedAt, SessionEndClipping.ClipEnd(row.FinishedAt, asOf))))
+								 .ToArray());
 	}
 }
 

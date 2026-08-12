@@ -18,7 +18,7 @@ internal sealed class LeafWorkQueryPort(IProviderReadOperations provider) : ILea
 		await using var context = provider.CreateContext();
 
 		var leafWork = await context.Set<LeafWorkEntity>().AsNoTracking()
-						   .FirstOrDefaultAsync(lw => lw.JobNodeId == jobNodeId, cancellationToken).ConfigureAwait(false)
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == jobNodeId, cancellationToken).ConfigureAwait(false)
 					   ?? throw new EntityNotFoundException($"Job node {jobNodeId} has no LeafWork attached.");
 
 		return new() {

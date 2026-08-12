@@ -175,8 +175,8 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 		};
 
 		var existingIntervals = await context.Set<ScheduleIntervalEntity>()
-			.Where(i => i.ScheduleVersionId == request.VersionId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+											 .Where(i => i.ScheduleVersionId == request.VersionId)
+											 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 		context.RemoveRange(existingIntervals);
 
 		version.EffectiveStart = schedule.EffectiveStart;
@@ -295,7 +295,7 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 		DbContext context, AppUserId userId, CancellationToken cancellationToken)
 	{
 		if (!await context.Set<AppUserEntity>().AsNoTracking()
-				.AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Employee {userId} does not exist.");
 		}
 	}
@@ -317,13 +317,13 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 		var effectId = (short)entry.Effect;
 		var rateOverride = entry.RateOverride;
 		var duplicateExists = await context.Set<ScheduleExceptionEntity>().AsNoTracking()
-			.AnyAsync(e => e.UserId == request.UserId
-						   && e.StartedAt == entry.Interval.Start
-						   && e.FinishedAt == entry.Interval.End
-						   && e.ScheduleExceptionEffectId == effectId
-						   && e.RateOverride == rateOverride
-						   && e.Reason == request.Reason,
-				cancellationToken).ConfigureAwait(false);
+										   .AnyAsync(e => e.UserId == request.UserId
+														  && e.StartedAt == entry.Interval.Start
+														  && e.FinishedAt == entry.Interval.End
+														  && e.ScheduleExceptionEffectId == effectId
+														  && e.RateOverride == rateOverride
+														  && e.Reason == request.Reason,
+											   cancellationToken).ConfigureAwait(false);
 		if (duplicateExists) {
 			throw new InvariantViolationException(
 				"schedule-exception-already-exists",

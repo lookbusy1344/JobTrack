@@ -23,20 +23,20 @@ internal sealed class ScheduleQueryPort(IProviderReadOperations provider, IClock
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
 		if (!await context.Set<AppUserEntity>().AsNoTracking()
-				.AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Employee {userId} does not exist.");
 		}
 
 		var versionEntities = await context.Set<ScheduleVersionEntity>().AsNoTracking()
-			.Where(v => v.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
+										   .Where(v => v.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
 		var versionIds = versionEntities.Select(v => v.Id).ToList();
 		var intervalEntities = await context.Set<ScheduleIntervalEntity>().AsNoTracking()
-			.Where(i => versionIds.Contains(i.ScheduleVersionId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+											.Where(i => versionIds.Contains(i.ScheduleVersionId)).ToListAsync(cancellationToken).ConfigureAwait(false);
 		var intervalsByVersion = intervalEntities.GroupBy(i => i.ScheduleVersionId).ToDictionary(g => g.Key, g => g.ToList());
 
 		var versions = versionEntities.Select(version => {
 			var weeklyIntervals = intervalsByVersion.GetValueOrDefault(version.Id, [])
-				.Select(i => new WeeklyInterval(i.DayOfWeek, i.StartTime, i.EndTime));
+													.Select(i => new WeeklyInterval(i.DayOfWeek, i.StartTime, i.EndTime));
 
 			return new ScheduleVersionResult {
 				Id = version.Id,
@@ -51,7 +51,7 @@ internal sealed class ScheduleQueryPort(IProviderReadOperations provider, IClock
 		}).ToArray();
 
 		var exceptionEntities = await context.Set<ScheduleExceptionEntity>().AsNoTracking()
-			.Where(e => e.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
+											 .Where(e => e.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var exceptions = exceptionEntities.Select(exception => new ScheduleExceptionResult {
 			Id = exception.Id,
@@ -66,21 +66,25 @@ internal sealed class ScheduleQueryPort(IProviderReadOperations provider, IClock
 			Version = exception.RowVersion,
 		}).ToArray();
 
-		return new() { ActorRoles = actorRoles, Versions = [.. versions], Exceptions = [.. exceptions] };
+		return new() {
+			ActorRoles = actorRoles,
+			Versions = [.. versions],
+			Exceptions = [.. exceptions],
+		};
 	}
 
 	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		DbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}

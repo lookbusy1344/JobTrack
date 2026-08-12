@@ -14,7 +14,10 @@ public sealed class AuditQueriesTests
 
 	private static Instant At(int hour) => Instant.FromUtc(2026, 1, 1, hour, 0);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static AuditEventRecord JobNodeEvent() => new() {
 		Id = new(1),
@@ -26,7 +29,9 @@ public sealed class AuditQueriesTests
 		CorrelationId = Guid.NewGuid(),
 		Reason = null,
 		BeforeData = null,
-		AfterData = EquatableDictionaryFactory.CopyOf(new Dictionary<string, string?> { ["description"] = "Do the thing" }),
+		AfterData = EquatableDictionaryFactory.CopyOf(new Dictionary<string, string?> {
+			["description"] = "Do the thing",
+		}),
 		IsSensitive = false,
 	};
 
@@ -40,7 +45,9 @@ public sealed class AuditQueriesTests
 		CorrelationId = Guid.NewGuid(),
 		Reason = null,
 		BeforeData = null,
-		AfterData = EquatableDictionaryFactory.CopyOf(new Dictionary<string, string?> { ["amount_per_hour"] = "60.00" }),
+		AfterData = EquatableDictionaryFactory.CopyOf(new Dictionary<string, string?> {
+			["amount_per_hour"] = "60.00",
+		}),
 		IsSensitive = true,
 	};
 
@@ -75,7 +82,12 @@ public sealed class AuditQueriesTests
 	{
 		var sut = new AuditQueries(CreateSeededPort());
 
-		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() { EntityType = "user_cost_rate" } });
+		var results = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new() {
+				EntityType = "user_cost_rate",
+			},
+		});
 
 		results.Events.Should().ContainSingle();
 		results.Events[0].EntityType.Should().Be("user_cost_rate");
@@ -91,7 +103,9 @@ public sealed class AuditQueriesTests
 
 		var results = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(CostViewerAuditorId),
-			Filter = new() { EntityType = "user_cost_rate" },
+			Filter = new() {
+				EntityType = "user_cost_rate",
+			},
 		});
 
 		results.Events.Should().ContainSingle();
@@ -104,7 +118,12 @@ public sealed class AuditQueriesTests
 	{
 		var sut = new AuditQueries(CreateSeededPort());
 
-		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() { EntityType = "job_node" } });
+		var results = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new() {
+				EntityType = "job_node",
+			},
+		});
 
 		results.Events.Should().ContainSingle();
 		results.Events[0].IsRedacted.Should().BeFalse();
@@ -117,7 +136,10 @@ public sealed class AuditQueriesTests
 		var port = CreateSeededPort();
 		var sut = new AuditQueries(port);
 
-		var act = () => sut.SearchAuditEventsAsync(new() { Context = ContextFor(WorkerId), Filter = new() });
+		var act = () => sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(WorkerId),
+			Filter = new(),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		port.GetActorRolesCallCount.Should().Be(1);
@@ -129,7 +151,10 @@ public sealed class AuditQueriesTests
 	{
 		var sut = new AuditQueries(CreateSeededPort());
 
-		var results = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() });
+		var results = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+		});
 
 		results.Events.Should().HaveCount(2);
 		results.Events[0].OccurredAt.Should().BeGreaterThan(results.Events[1].OccurredAt);
@@ -169,7 +194,10 @@ public sealed class AuditQueriesTests
 		var port = CreateSeededPort();
 		var sut = new AuditQueries(port);
 
-		_ = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new() });
+		_ = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+		});
 
 		port.ObservedLimits.Should().ContainSingle().Which.Should().Be(AuditSearchPaging.DefaultPageSize + 1);
 	}
@@ -181,7 +209,11 @@ public sealed class AuditQueriesTests
 		var sut = new AuditQueries(port);
 
 		_ = await sut.SearchAuditEventsAsync(
-			new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = AuditSearchPaging.MaxPageSize + 500 });
+			new() {
+				Context = ContextFor(AuditorId),
+				Filter = new(),
+				PageSize = AuditSearchPaging.MaxPageSize + 500,
+			});
 
 		port.ObservedLimits.Should().ContainSingle().Which.Should().Be(AuditSearchPaging.MaxPageSize + 1);
 	}
@@ -196,7 +228,11 @@ public sealed class AuditQueriesTests
 		port.SeedEvent(Event(3, At(3)));
 		var sut = new AuditQueries(port);
 
-		var page = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 2 });
+		var page = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+			PageSize = 2,
+		});
 
 		page.Events.Should().HaveCount(2);
 		page.Events[0].Id.Should().Be(new(3));
@@ -213,7 +249,11 @@ public sealed class AuditQueriesTests
 		port.SeedEvent(Event(2, At(2)));
 		var sut = new AuditQueries(port);
 
-		var page = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 5 });
+		var page = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+			PageSize = 5,
+		});
 
 		page.Events.Should().HaveCount(2);
 		page.ContinuationCursor.Should().BeNull();
@@ -229,7 +269,11 @@ public sealed class AuditQueriesTests
 		port.SeedEvent(Event(3, At(3)));
 		var sut = new AuditQueries(port);
 
-		var firstPage = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 2 });
+		var firstPage = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+			PageSize = 2,
+		});
 		var secondPage = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(AuditorId),
 			Filter = new(),
@@ -253,7 +297,11 @@ public sealed class AuditQueriesTests
 		port.SeedEvent(Event(3, tied));
 		var sut = new AuditQueries(port);
 
-		var firstPage = await sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), PageSize = 2 });
+		var firstPage = await sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+			PageSize = 2,
+		});
 		var secondPage = await sut.SearchAuditEventsAsync(new() {
 			Context = ContextFor(AuditorId),
 			Filter = new(),
@@ -271,7 +319,11 @@ public sealed class AuditQueriesTests
 		var port = CreateSeededPort();
 		var sut = new AuditQueries(port);
 
-		var act = () => sut.SearchAuditEventsAsync(new() { Context = ContextFor(AuditorId), Filter = new(), Cursor = "not-a-valid-cursor!!" });
+		var act = () => sut.SearchAuditEventsAsync(new() {
+			Context = ContextFor(AuditorId),
+			Filter = new(),
+			Cursor = "not-a-valid-cursor!!",
+		});
 
 		await act.Should().ThrowAsync<ArgumentException>();
 		port.SearchAuditEventsCallCount.Should().Be(0);

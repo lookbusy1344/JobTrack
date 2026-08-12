@@ -68,7 +68,10 @@ public sealed partial class DeleteModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var parentId = CurrentNode.Node.ParentId;
 
 		try {
@@ -79,7 +82,12 @@ public sealed partial class DeleteModel(
 				Reason = string.IsNullOrWhiteSpace(Input.Reason) ? null : Input.Reason,
 			}, cancellationToken);
 
-			return RedirectToPage("/Jobs/Browse", parentId.HasValue ? new { nodeId = parentId.Value.Value } : null);
+			return RedirectToPage("/Jobs/Browse", parentId.HasValue
+				? new
+				{
+					nodeId = parentId.Value.Value,
+				}
+				: null);
 		}
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "This node has worked session history; deleting it requires the Administrator role.";
@@ -125,7 +133,13 @@ public sealed partial class DeleteModel(
 	{
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(NodeId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new JobNodeId(NodeId),
+				}, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";

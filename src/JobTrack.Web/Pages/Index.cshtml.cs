@@ -36,11 +36,24 @@ public sealed class IndexModel(IJobTrackClient jobTrackClient, UserManager<JobTr
 		}
 
 		var profile = await jobTrackClient.Query.GetEmployeeProfileAsync(
-			new() { Context = new() { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() }, TargetUserId = actor.AppUserId },
+			new() {
+				Context = new() {
+					Actor = actor.AppUserId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				TargetUserId = actor.AppUserId,
+			},
 			cancellationToken);
 
 		return profile.HomeNodeId is JobNodeId homeNodeId
-			? RedirectToPage("/Jobs/Browse", new { NodeId = homeNodeId.Value, ArchiveFilter = JobArchiveFilter.ActiveOnly })
-			: RedirectToPage("/Jobs/Browse", new { ArchiveFilter = JobArchiveFilter.ActiveOnly });
+			? RedirectToPage("/Jobs/Browse", new
+			{
+				NodeId = homeNodeId.Value,
+				ArchiveFilter = JobArchiveFilter.ActiveOnly,
+			})
+			: RedirectToPage("/Jobs/Browse", new
+			{
+				ArchiveFilter = JobArchiveFilter.ActiveOnly,
+			});
 	}
 }

@@ -4,7 +4,5 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 public sealed class AccessDeniedModel : PageModel
 {
-	public void OnGet()
-	{
-	}
+	public void OnGet() { }
 }

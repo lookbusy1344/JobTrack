@@ -94,7 +94,10 @@ internal static partial class JobTrackApi
 				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
 				LeafWorkId = new JobNodeId(nodeId),
 				WriteUpChange = writeUpChange is not null
-					? new() { NodeVersion = writeUpChange.NodeVersion, WriteUp = writeUpChange.WriteUp }
+					? new() {
+						NodeVersion = writeUpChange.NodeVersion,
+						WriteUp = writeUpChange.WriteUp,
+					}
 					: null,
 			}, cancellationToken);
 
@@ -134,7 +137,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Query.GetLeafWorkAsync(new() { Context = context, JobNodeId = new(nodeId) }, cancellationToken);
+			var result = await jobTrackClient.Query.GetLeafWorkAsync(new() {
+				Context = context,
+				JobNodeId = new(nodeId),
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -176,13 +182,18 @@ internal static partial class JobTrackApi
 				JobNodeId = new(nodeId),
 				Version = request.Version,
 				ExpectedActiveSessions = [
-					.. request.ExpectedActiveSessions.Select(s => new ExpectedActiveSession { Id = new(s.Id), Version = s.Version }),
+					.. request.ExpectedActiveSessions.Select(s => new ExpectedActiveSession {
+						Id = new(s.Id), Version = s.Version,
+					}),
 				],
 				FinishedAt = request.FinishedAt.HasValue ? Instant.FromDateTimeOffset(request.FinishedAt.Value) : null,
 				CompletionNote = request.CompletionNote,
 				FinalAchievement = request.FinalAchievement ?? Achievement.Success,
 				WriteUpChange = writeUpChange is not null
-					? new() { NodeVersion = writeUpChange.NodeVersion, WriteUp = writeUpChange.WriteUp }
+					? new() {
+						NodeVersion = writeUpChange.NodeVersion,
+						WriteUp = writeUpChange.WriteUp,
+					}
 					: null,
 			}, cancellationToken);
 
@@ -245,7 +256,11 @@ internal static partial class JobTrackApi
 		};
 
 	private static FinishSessionAndUpdateWriteUpResponse Map(FinishSessionAndUpdateWriteUpResult result) =>
-		new() { Session = Map(result.Session), WriteUpChanged = result.WriteUpChanged, Node = result.Node is not null ? Map(result.Node) : null };
+		new() {
+			Session = Map(result.Session),
+			WriteUpChanged = result.WriteUpChanged,
+			Node = result.Node is not null ? Map(result.Node) : null,
+		};
 
 	private static ReopenAndStartWorkResponse Map(ReopenAndStartWorkResult result) =>
 		new() {

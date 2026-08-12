@@ -87,7 +87,9 @@ public sealed class CreateEmployeeCommandTests
 
 		try {
 			await using var harness = await HarnessAsync(SchemaProvider.Sqlite, database.ConnectionString);
-			var options = DemoOptions(AdminCliProvider.Sqlite, database.ConnectionString) with { ForcePasswordChange = false };
+			var options = DemoOptions(AdminCliProvider.Sqlite, database.ConnectionString) with {
+				ForcePasswordChange = false,
+			};
 
 			var console = new FakeConsoleIO([], []);
 			var exitCode = await CreateEmployeeCommand.RunAsync(console, harness.UserManager, harness.Client, options, CancellationToken.None);
@@ -131,7 +133,9 @@ public sealed class CreateEmployeeCommandTests
 
 		try {
 			await using var harness = await HarnessAsync(SchemaProvider.Sqlite, database.ConnectionString);
-			var options = DemoOptions(AdminCliProvider.Sqlite, database.ConnectionString) with { Password = WeakPassword };
+			var options = DemoOptions(AdminCliProvider.Sqlite, database.ConnectionString) with {
+				Password = WeakPassword,
+			};
 
 			var console = new FakeConsoleIO([], []);
 			var exitCode = await CreateEmployeeCommand.RunAsync(console, harness.UserManager, harness.Client, options, CancellationToken.None);
@@ -152,7 +156,9 @@ public sealed class CreateEmployeeCommandTests
 
 		try {
 			await using var harness = await HarnessAsync(SchemaProvider.Sqlite, database.ConnectionString);
-			var options = DemoOptions(AdminCliProvider.Sqlite, database.ConnectionString) with { ActorUsername = "ghost" };
+			var options = DemoOptions(AdminCliProvider.Sqlite, database.ConnectionString) with {
+				ActorUsername = "ghost",
+			};
 
 			var console = new FakeConsoleIO([], []);
 			var exitCode = await CreateEmployeeCommand.RunAsync(console, harness.UserManager, harness.Client, options, CancellationToken.None);
@@ -215,7 +221,10 @@ public sealed class CreateEmployeeCommandTests
 		user.Should().NotBeNull();
 		var adminUser = await harness.UserManager.FindByNameAsync(AdminUsername);
 		return await harness.Client.Query.GetAccountStateAsync(new() {
-			Context = new() { Actor = adminUser!.AppUserId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminUser!.AppUserId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = user!.AppUserId,
 		});
 	}

@@ -15,9 +15,7 @@ public sealed class SqliteJobTrackIdentityDbContext : JobTrackIdentityDbContext
 			ticks => ticks == null ? null : DateTimeOffset.UnixEpoch.AddTicks(ticks.Value));
 
 	public SqliteJobTrackIdentityDbContext(DbContextOptions<SqliteJobTrackIdentityDbContext> options)
-		: base(options)
-	{
-	}
+		: base(options) { }
 
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{

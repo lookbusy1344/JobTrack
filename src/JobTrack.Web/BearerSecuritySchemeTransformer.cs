@@ -31,7 +31,9 @@ internal sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransfor
 
 			foreach (var operation in path.Operations.Values) {
 				operation.Security ??= [];
-				operation.Security.Add(new() { [schemeReference] = [] });
+				operation.Security.Add(new() {
+					[schemeReference] = [],
+				});
 			}
 		}
 

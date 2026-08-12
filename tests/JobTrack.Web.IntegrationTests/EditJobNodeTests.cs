@@ -7,13 +7,9 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
-using Identity;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Persistence.Sqlite;
@@ -57,7 +53,10 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString, capturedLogEntries);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -110,7 +109,7 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_who_does_not_own_the_node_is_denied_on_save()
 	{
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.owner-manager", EmployeeRole.JobManager);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.denied-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.denied-worker");
 		var leaf = await AddChildAsync(rootId, managerId, "Owned by manager");
 		var authCookie = await client.SignInAsync("edit.denied-worker");
 
@@ -129,8 +128,8 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_who_owns_subtree_a_is_denied_on_save_for_a_node_in_sibling_subtree_b()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.subtree-worker", EmployeeRole.Worker);
-		var otherOwnerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.subtree-other-owner", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.subtree-worker");
+		var otherOwnerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.subtree-other-owner");
 		await AddChildAsync(rootId, workerId, "Worker's own subtree A leaf");
 		var siblingLeaf = await AddChildAsync(rootId, otherOwnerId, "Sibling subtree B leaf");
 		var authCookie = await client.SignInAsync("edit.subtree-worker");
@@ -154,7 +153,10 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 
 		// A concurrent edit lands after the form was loaded, advancing the row's version.
 		_ = await seedClient.Jobs.EditAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = leaf.Id,
 			Description = "Concurrently changed elsewhere",
 			OwnerUserId = managerId,
@@ -187,7 +189,10 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "edit.zone-prefill", EmployeeRole.JobManager, "America/New_York");
 		var stored = CivilTimeResolver.ToInstant(new(2026, 6, 15, 9, 0, 0), newYork);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Node with a needed-start",
 			OwnerUserId = managerId,
@@ -218,13 +223,22 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("Enter a valid date and time.");
 
 		var current = await seedClient.Query.GetJobNodeAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = leaf.Id }, CancellationToken.None);
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = leaf.Id,
+			}, CancellationToken.None);
 		current.Node.Description.Should().Be("Unchanged description");
 	}
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
 		await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -299,9 +313,7 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 	{
 		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
 
-		public void Dispose()
-		{
-		}
+		public void Dispose() { }
 
 		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
 		{
@@ -310,7 +322,7 @@ public sealed partial class EditJobNodeTests : IAsyncLifetime, IDisposable
 			public bool IsEnabled(LogLevel logLevel) => true;
 
 			public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-				Func<TState, Exception?, string> formatter)
+									Func<TState, Exception?, string> formatter)
 			{
 				capturedLogEntries.Add(formatter(state, exception));
 				if (exception is not null) {

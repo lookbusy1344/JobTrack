@@ -518,10 +518,10 @@ public sealed partial class DockerImageArchitectureTests
 		// Executable lines only: the comment above the fix quotes the broken form deliberately, and the
 		// character class must exclude newlines or it spans lines and matches almost anything.
 		var offendingLines = containerScript
-			.Split('\n')
-			.Where(line => !line.TrimStart().StartsWith('#'))
-			.Where(line => TruncatedParameterExpansion().IsMatch(line))
-			.ToArray();
+							 .Split('\n')
+							 .Where(line => !line.TrimStart().StartsWith('#'))
+							 .Where(line => TruncatedParameterExpansion().IsMatch(line))
+							 .ToArray();
 
 		offendingLines.Should().BeEmpty(
 			"a closing brace inside a default-or-error parameter expansion truncates it and corrupts the value; use angle brackets in usage text");

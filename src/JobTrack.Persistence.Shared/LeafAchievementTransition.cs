@@ -39,13 +39,17 @@ internal static class LeafAchievementTransition
 
 		AuditEventWriter.Add(
 			context, actorId, now, Operation, "leaf_work", leafWork.JobNodeId.Value, correlationId, reason,
-			new Dictionary<string, string?> { [AchievementField] = previousAchievement.ToString() },
-			new Dictionary<string, string?> { [AchievementField] = newAchievement.ToString() });
+			new Dictionary<string, string?> {
+				[AchievementField] = previousAchievement.ToString(),
+			},
+			new Dictionary<string, string?> {
+				[AchievementField] = newAchievement.ToString(),
+			});
 
 		if (TriggersAcknowledgement(newAchievement)) {
 			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
-					context, leafWork.JobNodeId, actorId, now, correlationId, cancellationToken)
-				.ConfigureAwait(false);
+														 context, leafWork.JobNodeId, actorId, now, correlationId, cancellationToken)
+													 .ConfigureAwait(false);
 		}
 	}
 
@@ -67,8 +71,8 @@ internal static class LeafAchievementTransition
 
 		if (TriggersAcknowledgement(importedAchievement)) {
 			await RequesterRequestAutoAcknowledgement.AcknowledgeIfNeededAsync(
-					context, leafWork.JobNodeId, actorId, now, correlationId, cancellationToken)
-				.ConfigureAwait(false);
+														 context, leafWork.JobNodeId, actorId, now, correlationId, cancellationToken)
+													 .ConfigureAwait(false);
 		}
 	}
 

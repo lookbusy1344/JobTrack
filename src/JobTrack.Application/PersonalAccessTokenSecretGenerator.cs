@@ -20,7 +20,7 @@ internal static class PersonalAccessTokenSecretGenerator
 	{
 		var secretBytes = RandomNumberGenerator.GetBytes(SecretByteLength);
 		var plaintextToken = TokenPrefix + Convert.ToBase64String(secretBytes)
-			.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+												  .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
 		return (plaintextToken, Hash(plaintextToken));
 	}

@@ -30,9 +30,9 @@ public sealed class WebHostCivilTimeArchitectureTests
 	{
 		var pagesDirectory = Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web", "Pages");
 		var violations = Directory.EnumerateFiles(pagesDirectory, "*.cshtml.cs", SearchOption.AllDirectories)
-			.Where(path => File.ReadAllText(path).Contains("DateTimeOffset", StringComparison.Ordinal))
-			.Select(path => Path.GetRelativePath(pagesDirectory, path))
-			.ToList();
+								  .Where(path => File.ReadAllText(path).Contains("DateTimeOffset", StringComparison.Ordinal))
+								  .Select(path => Path.GetRelativePath(pagesDirectory, path))
+								  .ToList();
 
 		violations.Should().BeEmpty(
 			"a Razor Page field for a point in time is a string parsed through BackdateInstant in the viewer's own zone, " +

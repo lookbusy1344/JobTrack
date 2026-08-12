@@ -6,17 +6,11 @@ namespace JobTrack.AdminCli;
 /// </summary>
 public sealed class AdminCliUsageException : Exception
 {
-	public AdminCliUsageException()
-	{
-	}
+	public AdminCliUsageException() { }
 
 	public AdminCliUsageException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	public AdminCliUsageException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

@@ -93,21 +93,33 @@ public sealed class ConcurrentWorkModel(
 		}
 
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.AppUserId, cancellationToken);
-		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.AppUserId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var nodeId = new JobNodeId(NodeId);
 
 		try {
-			Node = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = nodeId }, cancellationToken);
+			Node = await jobTrackClient.Query.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = nodeId,
+			}, cancellationToken);
 			if (Node.Node.Kind != NodeKind.Leaf) {
 				ErrorMessage = "Concurrent work is reported for a leaf job only.";
 				return Page();
 			}
 
-			var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(new() { Context = context }, cancellationToken);
+			var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(new() {
+				Context = context,
+			}, cancellationToken);
 			_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 
 			ConcurrentWork = await jobTrackClient.Query.GetConcurrentWorkAsync(
-				new() { Context = context, NodeId = nodeId, AsOf = Now }, cancellationToken);
+				new() {
+					Context = context,
+					NodeId = nodeId,
+					AsOf = Now,
+				}, cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();

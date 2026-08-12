@@ -65,11 +65,11 @@ internal sealed class FakeCostQueries : ICostQueries
 		}
 
 		var displayed = request.NodeIds
-			.Where(_bulkCosts.ContainsKey)
-			.ToDictionary(nodeId => nodeId, nodeId => _bulkCosts[nodeId]);
+							   .Where(_bulkCosts.ContainsKey)
+							   .ToDictionary(nodeId => nodeId, nodeId => _bulkCosts[nodeId]);
 		var durations = request.NodeIds
-			.Where(_bulkCosts.ContainsKey)
-			.ToDictionary(nodeId => nodeId, nodeId => _bulkDurations[nodeId]);
+							   .Where(_bulkCosts.ContainsKey)
+							   .ToDictionary(nodeId => nodeId, nodeId => _bulkDurations[nodeId]);
 
 		return Task.FromResult(new BulkNodeCostResult {
 			DisplayedCosts = EquatableDictionaryFactory.CopyOf(displayed),

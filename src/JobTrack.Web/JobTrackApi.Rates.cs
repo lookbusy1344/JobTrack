@@ -18,7 +18,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Query.GetRatesAsync(new() { Context = context, UserId = new(userId) }, cancellationToken);
+			var result = await jobTrackClient.Query.GetRatesAsync(new() {
+				Context = context,
+				UserId = new(userId),
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -123,7 +126,10 @@ internal static partial class JobTrackApi
 	}
 
 	private static RatesResponse Map(RateSnapshotResult result) =>
-		new() { UserCostRates = [.. result.UserCostRates.Select(Map)], NodeRateOverrides = [.. result.NodeRateOverrides.Select(Map)] };
+		new() {
+			UserCostRates = [.. result.UserCostRates.Select(Map)],
+			NodeRateOverrides = [.. result.NodeRateOverrides.Select(Map)],
+		};
 
 	private static UserCostRateResponse Map(UserCostRateResult result) =>
 		new() {

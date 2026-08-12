@@ -63,8 +63,8 @@ public sealed class OverlappingCostScaleCorrectnessTests : IAsyncLifetime
 			allocations.Should().NotBeEmpty();
 
 			foreach (var allocation in allocations) {
-				var midpoint = allocation.Segment.Start + (allocation.Segment.Duration / 2);
-				var slot = ((midpoint - baseInstant).TotalTicks / Slot.Ticks) + 1;
+				var midpoint = allocation.Segment.Start + allocation.Segment.Duration / 2;
+				var slot = (midpoint - baseInstant).TotalTicks / Slot.Ticks + 1;
 				var expectedDepth = ExpectedDepth((int)slot, LeavesPerWorker, OverlapDepth);
 				allocation.Share.ConcurrencyDivisor.Should().Be(
 					expectedDepth,

@@ -22,7 +22,11 @@ public sealed class RateResolverTests
 		var root = new HierarchyNode(RootId, null, [BranchId], null);
 		var branch = new HierarchyNode(BranchId, RootId, [LeafId], null);
 		var leaf = Leaf(LeafId, BranchId);
-		return new() { [RootId] = root, [BranchId] = branch, [LeafId] = leaf };
+		return new() {
+			[RootId] = root,
+			[BranchId] = branch,
+			[LeafId] = leaf,
+		};
 	}
 
 	[Fact]

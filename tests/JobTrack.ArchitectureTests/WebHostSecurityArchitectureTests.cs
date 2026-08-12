@@ -49,9 +49,9 @@ public sealed partial class WebHostSecurityArchitectureTests
 			RepositoryPaths.SolutionRoot(), "samples", "JobTrack.ExternalApiClient", "JobTrack.ExternalApiClient.csproj");
 		var document = XDocument.Load(projectPath);
 		var references = document.Descendants("ProjectReference")
-			.Select(element => Path.GetFileName(element.Attribute("Include")?.Value ?? string.Empty))
-			.Where(name => name.StartsWith("JobTrack.", StringComparison.Ordinal))
-			.ToList();
+								 .Select(element => Path.GetFileName(element.Attribute("Include")?.Value ?? string.Empty))
+								 .Where(name => name.StartsWith("JobTrack.", StringComparison.Ordinal))
+								 .ToList();
 
 		references.Should().BeEmpty("the external API client proof must not reference JobTrack.* assemblies");
 	}
@@ -60,10 +60,10 @@ public sealed partial class WebHostSecurityArchitectureTests
 	public void Every_Razor_PageModel_is_authorized_except_the_public_allowlist()
 	{
 		var violations = EnumeratePageModels()
-			.Where(entry => !IsAllowedAnonymous(entry.RelativePath))
-			.Where(entry => !entry.Content.Contains("[Authorize", StringComparison.Ordinal))
-			.Select(entry => entry.RelativePath)
-			.ToList();
+						 .Where(entry => !IsAllowedAnonymous(entry.RelativePath))
+						 .Where(entry => !entry.Content.Contains("[Authorize", StringComparison.Ordinal))
+						 .Select(entry => entry.RelativePath)
+						 .ToList();
 
 		violations.Should().BeEmpty("workflow pages must declare an authorization policy");
 	}
@@ -102,9 +102,9 @@ public sealed partial class WebHostSecurityArchitectureTests
 		var pagesDirectory = Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web", "Pages");
 
 		return Directory.EnumerateFiles(pagesDirectory, "*.cshtml.cs", SearchOption.AllDirectories)
-			.Select(path => (
-				RelativePath: Path.GetRelativePath(pagesDirectory, path).Replace(Path.DirectorySeparatorChar, '/'),
-				Content: File.ReadAllText(path)));
+						.Select(path => (
+							RelativePath: Path.GetRelativePath(pagesDirectory, path).Replace(Path.DirectorySeparatorChar, '/'),
+							Content: File.ReadAllText(path)));
 	}
 
 	[Fact]
@@ -238,8 +238,8 @@ public sealed partial class WebHostSecurityArchitectureTests
 			var relativeDirectory = Path.GetRelativePath(srcRoot, Path.GetDirectoryName(path)!);
 			if (relativeDirectory.StartsWith("JobTrack.Identity", StringComparison.Ordinal)
 				|| relativeDirectory.StartsWith("JobTrack.AdminCli", StringComparison.Ordinal)
-				|| (relativeDirectory.StartsWith("JobTrack.Web", StringComparison.Ordinal)
-					&& JobTrackIdentityDbContextAllowlist.Contains(fileName))) {
+				|| relativeDirectory.StartsWith("JobTrack.Web", StringComparison.Ordinal)
+				&& JobTrackIdentityDbContextAllowlist.Contains(fileName)) {
 				continue;
 			}
 

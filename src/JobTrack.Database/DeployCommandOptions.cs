@@ -50,7 +50,11 @@ public sealed record DeployCommandOptions
 
 		var resolvedConnectionString = ConnectionStringSource.Resolve(connectionString, connectionStringFile);
 
-		return new() { Provider = provider.Value, ConnectionString = resolvedConnectionString, ScriptsRoot = scriptsRoot };
+		return new() {
+			Provider = provider.Value,
+			ConnectionString = resolvedConnectionString,
+			ScriptsRoot = scriptsRoot,
+		};
 	}
 
 	private static SchemaProvider ParseProvider(string value) => value switch {

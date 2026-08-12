@@ -9,13 +9,13 @@
 	   render nothing at all. Drawing a glyph for the absence of a state would put a mark on almost
 	   every branch row in a healthy tree, which is exactly the noise the blocked marker avoids. *@
 	var glyph = Model.Achievement switch {
-		Achievement.Waiting => ("jt-icon-achievement-waiting", "waiting"),
-		Achievement.InProgress => ("jt-icon-achievement-in-progress", "in-progress"),
-		Achievement.Success => ("jt-icon-achievement-success", "success"),
-		Achievement.Cancelled or Achievement.Unsuccessful => ("jt-icon-achievement-closed", "closed"),
-		Achievement.None or null => default((string IconId, string Modifier)?),
-		_ => throw new ArgumentOutOfRangeException(nameof(Model.Achievement), Model.Achievement, null),
-	};
+		            Achievement.Waiting => ("jt-icon-achievement-waiting", "waiting"),
+		            Achievement.InProgress => ("jt-icon-achievement-in-progress", "in-progress"),
+		            Achievement.Success => ("jt-icon-achievement-success", "success"),
+		            Achievement.Cancelled or Achievement.Unsuccessful => ("jt-icon-achievement-closed", "closed"),
+		            Achievement.None or null => default((string IconId, string Modifier)?),
+		            _ => throw new ArgumentOutOfRangeException(nameof(Model.Achievement), Model.Achievement, null),
+	            };
 }
 @* Both tests hold or neither does; the second binds the value the label needs. *@
 @if (glyph is var (iconId, modifier) && Model.Achievement is Achievement achievement) {

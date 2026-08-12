@@ -26,11 +26,11 @@ public sealed class ApplicationCommandAuthorizationBoundaryTests
 	public void Application_command_handlers_do_not_invoke_access_policies_directly()
 	{
 		var violations = typeof(IJobTrackClient).Assembly.GetTypes()
-			.Where(type => CommandTypeNames.Contains(type.Name))
-			.Select(type => (Type: type, Source: File.ReadAllText(FindSourcePath(type))))
-			.Where(entry => entry.Source.Contains("AccessPolicy", StringComparison.Ordinal))
-			.Select(entry => entry.Type.FullName)
-			.ToList();
+												.Where(type => CommandTypeNames.Contains(type.Name))
+												.Select(type => (Type: type, Source: File.ReadAllText(FindSourcePath(type))))
+												.Where(entry => entry.Source.Contains("AccessPolicy", StringComparison.Ordinal))
+												.Select(entry => entry.Type.FullName)
+												.ToList();
 
 		violations.Should().BeEmpty(
 			"command handlers delegate mutation authorization to persistence ports; query handlers own AccessPolicy checks");

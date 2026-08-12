@@ -19,8 +19,8 @@ public sealed class NestedScrollingRegionArchitectureTests
 	public void Hand_written_stylesheets_declare_no_scrolling_overflow()
 	{
 		var violations = StyleSheets()
-			.SelectMany(static file => NestedScrollingRegionGuard.FindStyleViolations(file, File.ReadAllText(file)))
-			.ToArray();
+						 .SelectMany(static file => NestedScrollingRegionGuard.FindStyleViolations(file, File.ReadAllText(file)))
+						 .ToArray();
 
 		violations.Should().BeEmpty(
 			"a page must scroll as one unit — no element inside it may scroll on its own:{0}{1}",
@@ -32,8 +32,8 @@ public sealed class NestedScrollingRegionArchitectureTests
 	public void Razor_markup_uses_no_scrolling_layout_utility()
 	{
 		var violations = RazorViews()
-			.SelectMany(static file => NestedScrollingRegionGuard.FindMarkupViolations(file, File.ReadAllText(file)))
-			.ToArray();
+						 .SelectMany(static file => NestedScrollingRegionGuard.FindMarkupViolations(file, File.ReadAllText(file)))
+						 .ToArray();
 
 		violations.Should().BeEmpty(
 			"a page must scroll as one unit — no element inside it may scroll on its own:{0}{1}",
@@ -78,11 +78,11 @@ public sealed class NestedScrollingRegionArchitectureTests
 	// not this rule's business; the rule binds the stylesheets this repository actually writes.
 	private static IEnumerable<string> StyleSheets() =>
 		Directory.EnumerateFiles(Path.Combine(RepositoryPaths.SolutionRoot(), "src"), "*.css", SearchOption.AllDirectories)
-			.Where(static file => !IsExcluded(file));
+				 .Where(static file => !IsExcluded(file));
 
 	private static IEnumerable<string> RazorViews() =>
 		Directory.EnumerateFiles(Path.Combine(RepositoryPaths.SolutionRoot(), "src"), "*.cshtml", SearchOption.AllDirectories)
-			.Where(static file => !IsExcluded(file));
+				 .Where(static file => !IsExcluded(file));
 
 	private static bool IsExcluded(string file)
 	{

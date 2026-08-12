@@ -69,12 +69,18 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 				"employee-username-already-taken", $"Username '{request.UserName}' is already taken.", ex);
 		}
 
-		_ = context.Add(new IdentityUserRoleEntity { IdentityUserId = identityUser.Id, IdentityRoleId = (short)request.Role });
+		_ = context.Add(new IdentityUserRoleEntity {
+			IdentityUserId = identityUser.Id,
+			IdentityRoleId = (short)request.Role,
+		});
 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "create-employee", "identity_user", identityUser.Id,
 			request.Context.CorrelationId, null, null,
-			new Dictionary<string, string?> { ["user_name"] = request.UserName, ["role"] = request.Role.ToString() });
+			new Dictionary<string, string?> {
+				["user_name"] = request.UserName,
+				["role"] = request.Role.ToString(),
+			});
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -102,7 +108,10 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 			await LoadTargetAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 
 		if (currentRoles.Contains(request.Role)) {
-			return new() { UserId = request.TargetUserId, Roles = currentRoles };
+			return new() {
+				UserId = request.TargetUserId,
+				Roles = currentRoles,
+			};
 		}
 
 		if (request.Role == EmployeeRole.Requester) {
@@ -110,20 +119,28 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 				context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		}
 
-		_ = context.Add(new IdentityUserRoleEntity { IdentityUserId = targetIdentityUserId, IdentityRoleId = (short)request.Role });
+		_ = context.Add(new IdentityUserRoleEntity {
+			IdentityUserId = targetIdentityUserId,
+			IdentityRoleId = (short)request.Role,
+		});
 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "assign-employee-role", "identity_user_role", targetIdentityUserId,
 			request.Context.CorrelationId, null, null,
-			new Dictionary<string, string?> { ["role"] = request.Role.ToString() });
+			new Dictionary<string, string?> {
+				["role"] = request.Role.ToString(),
+			});
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await RotateSecurityStampAsync(context, targetIdentityUserId, cancellationToken).ConfigureAwait(false);
 		_ = await provider.RevokeAllTokensForUserAsync(context, request.TargetUserId, now, cancellationToken)
-			.ConfigureAwait(false);
+						  .ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-		return new() { UserId = request.TargetUserId, Roles = [.. currentRoles, request.Role] };
+		return new() {
+			UserId = request.TargetUserId,
+			Roles = [.. currentRoles, request.Role],
+		};
 	}
 
 	/// <inheritdoc />
@@ -139,27 +156,35 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 			await LoadTargetAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 
 		if (!currentRoles.Contains(request.Role)) {
-			return new() { UserId = request.TargetUserId, Roles = currentRoles };
+			return new() {
+				UserId = request.TargetUserId,
+				Roles = currentRoles,
+			};
 		}
 
 		var affected = await context.Set<IdentityUserRoleEntity>()
-			.Where(ur => ur.IdentityUserId == targetIdentityUserId && ur.IdentityRoleId == (short)request.Role)
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+									.Where(ur => ur.IdentityUserId == targetIdentityUserId && ur.IdentityRoleId == (short)request.Role)
+									.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		if (affected > 0) {
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "revoke-employee-role", "identity_user_role", targetIdentityUserId,
 				request.Context.CorrelationId, null, null,
-				new Dictionary<string, string?> { ["role"] = request.Role.ToString() });
+				new Dictionary<string, string?> {
+					["role"] = request.Role.ToString(),
+				});
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			await RotateSecurityStampAsync(context, targetIdentityUserId, cancellationToken).ConfigureAwait(false);
 			_ = await provider.RevokeAllTokensForUserAsync(context, request.TargetUserId, now, cancellationToken)
-				.ConfigureAwait(false);
+							  .ConfigureAwait(false);
 		}
 
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-		return new() { UserId = request.TargetUserId, Roles = [.. currentRoles.Where(role => role != request.Role)] };
+		return new() {
+			UserId = request.TargetUserId,
+			Roles = [.. currentRoles.Where(role => role != request.Role)],
+		};
 	}
 
 	/// <inheritdoc />
@@ -172,7 +197,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
-						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
+								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
 		if (target.IsEnabled == request.Enabled) {
@@ -186,12 +211,14 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "set-employee-enabled", "identity_user", target.Id,
 			request.Context.CorrelationId, null, null,
-			new Dictionary<string, string?> { ["is_enabled"] = request.Enabled.ToString() });
+			new Dictionary<string, string?> {
+				["is_enabled"] = request.Enabled.ToString(),
+			});
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		if (!request.Enabled) {
 			_ = await provider.RevokeAllTokensForUserAsync(context, request.TargetUserId, now, cancellationToken)
-				.ConfigureAwait(false);
+							  .ConfigureAwait(false);
 		}
 
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -210,10 +237,10 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<AppUserEntity>()
-						 .FirstOrDefaultAsync(u => u.Id == request.TargetUserId, cancellationToken).ConfigureAwait(false)
+								  .FirstOrDefaultAsync(u => u.Id == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 		_ = await context.Set<IdentityUserEntity>().AsNoTracking()
-				.FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
+						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 			?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
 		target.DefaultHourlyRate = request.DefaultHourlyRate;
@@ -248,7 +275,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
-						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
+								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
 		target.PasswordHash = request.PasswordHash;
@@ -262,7 +289,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		_ = await provider.RevokeAllTokensForUserAsync(context, request.TargetUserId, now, cancellationToken)
-			.ConfigureAwait(false);
+						  .ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 		var roles = await GetRolesForIdentityUserAsync(context, target.Id, cancellationToken).ConfigureAwait(false);
@@ -279,7 +306,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
-						 .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
+								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
 
 		target.TwoFactorEnabled = false;
@@ -294,7 +321,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		_ = await provider.RevokeAllTokensForUserAsync(context, request.TargetUserId, now, cancellationToken)
-			.ConfigureAwait(false);
+						  .ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 		var roles = await GetRolesForIdentityUserAsync(context, target.Id, cancellationToken).ConfigureAwait(false);
@@ -309,7 +336,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		_ = await LoadActorAsync(context, request.Context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 		var actorAppUser = await context.Set<AppUserEntity>().AsNoTracking()
-							   .FirstOrDefaultAsync(u => u.Id == request.Context.Actor, cancellationToken).ConfigureAwait(false)
+										.FirstOrDefaultAsync(u => u.Id == request.Context.Actor, cancellationToken).ConfigureAwait(false)
 						   ?? throw new EntityNotFoundException($"Employee {request.Context.Actor} does not exist.");
 
 		if (request.NodeId is JobNodeId nodeId) {
@@ -317,9 +344,9 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		}
 
 		_ = await context.Set<AppUserEntity>()
-			.Where(u => u.Id == request.Context.Actor)
-			.ExecuteUpdateAsync(setters => setters.SetProperty(u => u.HomeNodeId, request.NodeId), cancellationToken)
-			.ConfigureAwait(false);
+						 .Where(u => u.Id == request.Context.Actor)
+						 .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.HomeNodeId, request.NodeId), cancellationToken)
+						 .ConfigureAwait(false);
 
 		return new() {
 			Id = actorAppUser.Id,
@@ -335,11 +362,11 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		DbContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
-					   .FirstOrDefaultAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)
+								.FirstOrDefaultAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 
 		var hasChildren = await context.Set<JobNodeEntity>().AsNoTracking()
-			.AnyAsync(c => c.ParentId == nodeId, cancellationToken).ConfigureAwait(false);
+									   .AnyAsync(c => c.ParentId == nodeId, cancellationToken).ConfigureAwait(false);
 
 		if (JobNodeStructuralResults.DeriveKind(node.ParentId, hasChildren) == NodeKind.Leaf) {
 			throw new InvariantViolationException(
@@ -363,16 +390,16 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 	{
 		var newStamp = Guid.NewGuid().ToString("N");
 		_ = await context.Set<IdentityUserEntity>()
-			.Where(u => u.Id == identityUserId)
-			.ExecuteUpdateAsync(setters => setters.SetProperty(u => u.SecurityStamp, newStamp), cancellationToken)
-			.ConfigureAwait(false);
+						 .Where(u => u.Id == identityUserId)
+						 .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.SecurityStamp, newStamp), cancellationToken)
+						 .ConfigureAwait(false);
 	}
 
 	private static async Task<(long TargetIdentityUserId, EquatableArray<EmployeeRole> Roles)> LoadTargetAsync(
 		DbContext context, AppUserId targetUserId, CancellationToken cancellationToken)
 	{
 		var targetIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									 .FirstOrDefaultAsync(iu => iu.AppUserId == targetUserId, cancellationToken).ConfigureAwait(false)
+											  .FirstOrDefaultAsync(iu => iu.AppUserId == targetUserId, cancellationToken).ConfigureAwait(false)
 								 ?? throw new EntityNotFoundException($"Employee {targetUserId} does not exist.");
 
 		var roles = await GetRolesForIdentityUserAsync(context, targetIdentityUser.Id, cancellationToken).ConfigureAwait(false);
@@ -384,9 +411,9 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		DbContext context, long identityUserId, CancellationToken cancellationToken)
 	{
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == identityUserId)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == identityUserId)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}
@@ -395,7 +422,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		DbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 

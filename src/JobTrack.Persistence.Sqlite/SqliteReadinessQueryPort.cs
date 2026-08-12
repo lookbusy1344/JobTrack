@@ -29,7 +29,7 @@ internal sealed class SqliteReadinessQueryPort : IReadinessQueryPort
 		await using var transaction = await context.Database.BeginTransactionAsync(
 			IsolationLevel.RepeatableRead, cancellationToken).ConfigureAwait(false);
 		var ancestors = await JobNodeHierarchyQueries.GetAncestorChainAsync(context, nodeId.Value, cancellationToken)
-			.ConfigureAwait(false);
+													 .ConfigureAwait(false);
 		if (ancestors.Count == 0) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 		}
@@ -74,7 +74,7 @@ internal sealed class SqliteReadinessQueryPort : IReadinessQueryPort
 				   """;
 		var parameters = nodeIdValues.Select((id, index) => (object)new SqliteParameter(nodeIdParameters[index], id)).ToArray();
 		return await context.Database.SqlQueryRaw<ReadinessAncestorRow>(sql, parameters)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+							.ToListAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	private static async Task<ReadinessQueryResult> LoadAsync(
@@ -82,8 +82,8 @@ internal sealed class SqliteReadinessQueryPort : IReadinessQueryPort
 	{
 		var ancestorIds = ancestors.Select(row => new JobNodeId(row.Id)).ToArray();
 		var edges = await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-			.Where(edge => ancestorIds.Contains(edge.ToId))
-			.Select(edge => new PrerequisiteEdge(edge.FromId, edge.ToId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(edge => ancestorIds.Contains(edge.ToId))
+								 .Select(edge => new PrerequisiteEdge(edge.FromId, edge.ToId)).ToListAsync(cancellationToken).ConfigureAwait(false);
 		var nodes = ancestors.ToDictionary(
 			row => new JobNodeId(row.Id),
 			row => new HierarchyNode(new(row.Id), row.ParentId is long parentId ? new JobNodeId(parentId) : null, [], null));
@@ -113,18 +113,21 @@ internal sealed class SqliteReadinessQueryPort : IReadinessQueryPort
 					  LEFT JOIN leaf_work leaf ON leaf.job_node_id = subtree.id
 					  """;
 			var subtree = await context.Database.SqlQueryRaw<ReadinessSubtreeRow>(
-					sql, new SqliteParameter("@requiredJobIds", requiredJobIdsJson))
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
+										   sql, new SqliteParameter("@requiredJobIds", requiredJobIdsJson))
+									   .ToListAsync(cancellationToken).ConfigureAwait(false);
 			AddSubtreeNodes(nodes, subtree);
 		}
 
-		return new() { NodesById = EquatableDictionaryFactory.CopyOf(nodes), Prerequisites = EquatableArray.CopyOf(edges) };
+		return new() {
+			NodesById = EquatableDictionaryFactory.CopyOf(nodes),
+			Prerequisites = EquatableArray.CopyOf(edges),
+		};
 	}
 
 	private static void AddSubtreeNodes(Dictionary<JobNodeId, HierarchyNode> nodes, IReadOnlyCollection<ReadinessSubtreeRow> subtree)
 	{
 		var childrenByParent = subtree.Where(row => row.ParentId is not null).GroupBy(row => row.ParentId!.Value)
-			.ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(row => new JobNodeId(row.Id))));
+									  .ToDictionary(group => group.Key, group => EquatableArray.CopyOf(group.Select(row => new JobNodeId(row.Id))));
 		foreach (var row in subtree) {
 			nodes[new(row.Id)] = new(new(row.Id), row.ParentId is long parentId ? new JobNodeId(parentId) : null,
 				childrenByParent.GetValueOrDefault(row.Id, []), row.AchievementId is short achievementId ? (Achievement)achievementId : null);

@@ -46,8 +46,8 @@ public static class ConcurrentWorkCalculator
 
 		var subjectNodeIds = subjectSessions.Select(session => session.NodeId).ToHashSet();
 		var subjectsByWorker = subjectSessions
-			.GroupBy(session => session.WorkedByUserId)
-			.ToDictionary(group => group.Key, IReadOnlyList<ConcurrentWorkSession> (group) => [.. group]);
+							   .GroupBy(session => session.WorkedByUserId)
+							   .ToDictionary(group => group.Key, IReadOnlyList<ConcurrentWorkSession> (group) => [.. group]);
 
 		var accumulators = new Dictionary<(AppUserId Worker, JobNodeId Node), OverlapAccumulator>();
 		foreach (var candidate in concurrentSessions) {
@@ -69,18 +69,18 @@ public static class ConcurrentWorkCalculator
 		}
 
 		var workerTotals = accumulators
-			.GroupBy(entry => entry.Key.Worker)
-			.ToDictionary(group => group.Key, group => group.Sum(entry => entry.Value.Total.TotalTicks));
+						   .GroupBy(entry => entry.Key.Worker)
+						   .ToDictionary(group => group.Key, group => group.Sum(entry => entry.Value.Total.TotalTicks));
 
 		return [
 			.. accumulators
-				.OrderByDescending(entry => workerTotals[entry.Key.Worker])
-				.ThenBy(entry => entry.Key.Worker.Value)
-				.ThenByDescending(entry => entry.Value.Total)
-				.ThenBy(entry => entry.Key.Node.Value)
-				.Select(entry => new ConcurrentWorkOverlap(
-					entry.Key.Worker, entry.Key.Node, entry.Value.Total, entry.Value.Count,
-					entry.Value.FirstStart, entry.Value.LastEnd)),
+			   .OrderByDescending(entry => workerTotals[entry.Key.Worker])
+			   .ThenBy(entry => entry.Key.Worker.Value)
+			   .ThenByDescending(entry => entry.Value.Total)
+			   .ThenBy(entry => entry.Key.Node.Value)
+			   .Select(entry => new ConcurrentWorkOverlap(
+				   entry.Key.Worker, entry.Key.Node, entry.Value.Total, entry.Value.Count,
+				   entry.Value.FirstStart, entry.Value.LastEnd)),
 		];
 	}
 

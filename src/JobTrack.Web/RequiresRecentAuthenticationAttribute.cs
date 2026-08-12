@@ -8,6 +8,4 @@ namespace JobTrack.Web;
 ///     freshness window.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class RequiresRecentAuthenticationAttribute : Attribute
-{
-}
+public sealed class RequiresRecentAuthenticationAttribute : Attribute { }

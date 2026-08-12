@@ -106,12 +106,14 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 
 		await using var connection = new NpgsqlConnection(ConnectionString);
 		await connection.OpenAsync();
-		foreach (var (table, column) in new[] { ("job_node", "id"), ("leaf_work", "job_node_id"), ("work_session", "leaf_work_id") }) {
+		foreach (var (table, column) in new[] {
+					 ("job_node", "id"), ("leaf_work", "job_node_id"), ("work_session", "leaf_work_id"),
+				 }) {
 			await using var command = connection.CreateCommand();
 			command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {column} = @id;";
 			command.Parameters.AddWithValue("id", child.Id.Value);
 			Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture)
-				.Should().Be(0, $"{table} must not outlive the deleted subtree");
+				   .Should().Be(0, $"{table} must not outlive the deleted subtree");
 		}
 	}
 
@@ -120,7 +122,10 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 	{
 		try {
 			_ = await port.DeleteSubtreeAsync(new() {
-				Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actorId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				RootId = subtreeRoot.Id,
 				Version = subtreeRoot.Version,
 				Reason = "Concurrent subtree deletion race.",
@@ -198,7 +203,10 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 		var portA = CreateCommandPort(ConnectionString);
 		var portB = CreateCommandPort(ConnectionString);
 		var unassigned = await portA.AddChildAsync(new() {
-			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = jobManagerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Unassigned pool leaf",
 			OwnerUserId = null,
@@ -229,7 +237,10 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 		}
 
 		var assignment = port.AddChildAsync(new() {
-			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = jobManagerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Concurrently assigned node",
 			OwnerUserId = workerId,
@@ -256,8 +267,8 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 		completed.Should().Be(assignment);
 		assignment.IsFaulted.Should().BeTrue();
 		assignment.Exception!.InnerExceptions.Should().ContainSingle()
-			.Which.Should().BeOfType<InvariantViolationException>()
-			.Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
+				  .Which.Should().BeOfType<InvariantViolationException>()
+				  .Which.ConstraintId.Should().Be("job-node-owner-not-eligible");
 	}
 
 	/// <summary>
@@ -283,7 +294,11 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 			_ = await lockCommand.ExecuteScalarAsync();
 		}
 
-		var creation = port.AddChildAsync(CreateRequest(jobManagerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
+		var creation = port.AddChildAsync(CreateRequest(jobManagerId, rootId) with {
+			BeginWork = new() {
+				WorkedByUserId = workerId,
+			},
+		});
 
 		var firstCompleted = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
 		firstCompleted.Should().NotBe(creation, "begin-work eligibility must wait for the target account's role lock");
@@ -305,8 +320,8 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 		completed.Should().Be(creation);
 		creation.IsFaulted.Should().BeTrue();
 		creation.Exception!.InnerExceptions.Should().ContainSingle()
-			.Which.Should().BeOfType<InvariantViolationException>()
-			.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
+				.Which.Should().BeOfType<InvariantViolationException>()
+				.Which.ConstraintId.Should().Be("work-session-target-not-eligible");
 		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
 	}
 
@@ -332,7 +347,13 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 	private static async Task<bool> TryPickUpAsync(IJobNodeCommandPort port, AppUserId actor, JobNodeId nodeId)
 	{
 		try {
-			_ = await port.PickUpAsync(new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = nodeId });
+			_ = await port.PickUpAsync(new() {
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = nodeId,
+			});
 			return true;
 		}
 		catch (InvariantViolationException) {
@@ -348,7 +369,10 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 	{
 		try {
 			await port.AddPrerequisiteAsync(new() {
-				Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
 				RequiredJobId = requiredJobId,
 				DependentJobId = dependentJobId,
 			});
@@ -360,7 +384,10 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 	}
 
 	private static CreateJobNodeRequest CreateRequest(AppUserId actor, JobNodeId parentId) => new() {
-		Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+		Context = new() {
+			Actor = actor,
+			CorrelationId = Guid.NewGuid(),
+		},
 		ParentId = parentId,
 		Description = "Do the thing",
 		OwnerUserId = actor,
@@ -372,7 +399,10 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 	{
 		try {
 			_ = await port.MoveAsync(new() {
-				Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
 				NodeId = node.Id,
 				NewParentId = newParentId,
 				Version = node.Version,

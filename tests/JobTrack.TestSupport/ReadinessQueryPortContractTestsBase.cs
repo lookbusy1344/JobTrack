@@ -156,13 +156,13 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 		var whileLeafBUnfinished = await port.GetReadinessInputsForNodesAsync(batch);
 
 		ReadinessCalculator.IsReady(tree.RequiredLeafId, whileLeafBUnfinished.NodesById, whileLeafBUnfinished.Prerequisites)
-			.IsReady.Should().BeFalse("Leaf B under the required branch has not succeeded yet");
+						   .IsReady.Should().BeFalse("Leaf B under the required branch has not succeeded yet");
 
 		await FinishAsSuccessAsync(achievementPort, context, tree.LeafBId);
 		var afterLeafBSucceeds = await port.GetReadinessInputsForNodesAsync(batch);
 
 		ReadinessCalculator.IsReady(tree.RequiredLeafId, afterLeafBSucceeds.NodesById, afterLeafBSucceeds.Prerequisites)
-			.IsReady.Should().BeTrue("every leaf beneath the required branch has succeeded");
+						   .IsReady.Should().BeTrue("every leaf beneath the required branch has succeeded");
 	}
 
 	[Fact]
@@ -177,7 +177,10 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = tree.AdministratorId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(tree.AdministratorId), JobNodeId = secondRequiredLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(tree.AdministratorId),
+			JobNodeId = secondRequiredLeaf.Id,
+		});
 		await jobNodePort.AddPrerequisiteAsync(new() {
 			Context = ContextFor(tree.AdministratorId),
 			RequiredJobId = tree.RequiredLeafId,
@@ -221,11 +224,18 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IReadinessQueryPort CreatePort(string connectionString, IReadOnlyList<IInterceptor> interceptors);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static Task AddPrerequisiteAsync(
 		IJobNodeCommandPort jobNodePort, CommandContext context, JobNodeId requiredJobId, JobNodeId dependentJobId) =>
-		jobNodePort.AddPrerequisiteAsync(new() { Context = context, RequiredJobId = requiredJobId, DependentJobId = dependentJobId });
+		jobNodePort.AddPrerequisiteAsync(new() {
+			Context = context,
+			RequiredJobId = requiredJobId,
+			DependentJobId = dependentJobId,
+		});
 
 	/// <summary>
 	///     Drives an already-attached leaf through the real achievement command port to
@@ -290,7 +300,10 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = administratorId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = context, JobNodeId = leafA.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = leafA.Id,
+		});
 		var leafB = await jobNodePort.AddChildAsync(new() {
 			Context = context,
 			ParentId = branch.Id,
@@ -298,7 +311,10 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = administratorId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = context, JobNodeId = leafB.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = leafB.Id,
+		});
 
 		var requiredLeaf = await jobNodePort.AddChildAsync(new() {
 			Context = context,
@@ -307,7 +323,10 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = administratorId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = context, JobNodeId = requiredLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = requiredLeaf.Id,
+		});
 
 		return new(administratorId, bootstrap.RootJobNodeId, branch.Id, leafA.Id, leafB.Id, requiredLeaf.Id);
 	}

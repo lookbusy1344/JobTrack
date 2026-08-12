@@ -85,7 +85,10 @@ public sealed class CreateModel(
 			return Challenge();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 		await LoadParentAsync(context.Actor, cancellationToken);
 		await LoadOwnerOptionsAsync(context.Actor, cancellationToken);
 
@@ -112,14 +115,19 @@ public sealed class CreateModel(
 			NeededFinish = neededFinish,
 			Priority = Input.Priority,
 			BeginWork = Input.BeginWorkForUserId.HasValue
-				? new CreateJobNodeWorkSpec { WorkedByUserId = new(Input.BeginWorkForUserId.Value) }
+				? new CreateJobNodeWorkSpec {
+					WorkedByUserId = new(Input.BeginWorkForUserId.Value),
+				}
 				: null,
 		};
 
 		try {
 			var result = await jobTrackClient.Jobs.AddChildAsync(request, cancellationToken);
 
-			return RedirectToPage("/Jobs/Browse", new { nodeId = result.Id.Value });
+			return RedirectToPage("/Jobs/Browse", new
+			{
+				nodeId = result.Id.Value,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -150,7 +158,13 @@ public sealed class CreateModel(
 	{
 		try {
 			Parent = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(ParentId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new JobNodeId(ParentId),
+				}, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "The parent job node does not exist.";
@@ -164,7 +178,12 @@ public sealed class CreateModel(
 	private async Task LoadOwnerOptionsAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } },
+			new() {
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
+			},
 			cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Unassigned", string.Empty));

@@ -22,7 +22,7 @@ public sealed class PostgreSqlScheduleExceptionSchemaTests()
 	protected override object EncodeRate(decimal value) => value;
 
 	protected override async Task AssertExceptionRangeAsync(DbConnection connection, long exceptionId, DateTimeOffset startedAt,
-		DateTimeOffset finishedAt)
+															DateTimeOffset finishedAt)
 	{
 		var range = await PostgreSqlGeneratedRangeAssertions.ReadTstzRangeAsync(
 			connection, "user_schedule_exception", "exception_range", exceptionId);

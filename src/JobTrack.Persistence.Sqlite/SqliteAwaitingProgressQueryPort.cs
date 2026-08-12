@@ -88,9 +88,13 @@ internal static class AwaitingProgressQueryAssembly
 
 		var inScopeIds = nodesById.Keys.ToList();
 		var edges = await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-			.Where(edge => inScopeIds.Contains(edge.ToId))
-			.Select(edge => new { edge.FromId, edge.ToId })
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(edge => inScopeIds.Contains(edge.ToId))
+								 .Select(edge => new
+								 {
+									 edge.FromId,
+									 edge.ToId,
+								 })
+								 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var requiredJobIds = edges.Select(edge => edge.FromId).Distinct().Where(id => !candidateIds.Contains(id)).ToList();
 		var succeededById = await LoadRequiredJobAchievementsAsync(context, requiredJobIds, cancellationToken).ConfigureAwait(false);
@@ -122,29 +126,29 @@ internal static class AwaitingProgressQueryAssembly
 
 		var requiredJobIdsJson = JsonSerializer.Serialize(requiredJobIds.Select(id => id.Value));
 		var rows = await context.Database.SqlQueryRaw<AwaitingProgressSucceededRow>(
-				"""
-				WITH RECURSIVE roots(id) AS (
-				    SELECT value FROM json_each(@requiredJobIds)
-				), subtree(origin_id, id) AS (
-				    SELECT id, id FROM roots
-				    UNION ALL
-				    SELECT subtree.origin_id, child.id
-				    FROM job_node child JOIN subtree ON child.parent_id = subtree.id
-				)
-				SELECT roots.id AS "Id", NOT EXISTS (
-				    SELECT 1 FROM subtree
-				    WHERE subtree.origin_id = roots.id
-				      AND NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = subtree.id)
-				      AND NOT EXISTS (
-				          SELECT 1 FROM leaf_work
-				          WHERE leaf_work.job_node_id = subtree.id AND leaf_work.achievement_id = @successAchievementId
-				      )
-				) AS "Succeeded"
-				FROM roots
-				""",
-				new SqliteParameter("@requiredJobIds", requiredJobIdsJson),
-				new SqliteParameter("@successAchievementId", (short)Achievement.Success))
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+									"""
+									WITH RECURSIVE roots(id) AS (
+									    SELECT value FROM json_each(@requiredJobIds)
+									), subtree(origin_id, id) AS (
+									    SELECT id, id FROM roots
+									    UNION ALL
+									    SELECT subtree.origin_id, child.id
+									    FROM job_node child JOIN subtree ON child.parent_id = subtree.id
+									)
+									SELECT roots.id AS "Id", NOT EXISTS (
+									    SELECT 1 FROM subtree
+									    WHERE subtree.origin_id = roots.id
+									      AND NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = subtree.id)
+									      AND NOT EXISTS (
+									          SELECT 1 FROM leaf_work
+									          WHERE leaf_work.job_node_id = subtree.id AND leaf_work.achievement_id = @successAchievementId
+									      )
+									) AS "Succeeded"
+									FROM roots
+									""",
+									new SqliteParameter("@requiredJobIds", requiredJobIdsJson),
+									new SqliteParameter("@successAchievementId", (short)Achievement.Success))
+								.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return rows.ToDictionary(row => new JobNodeId(row.Id), row => row.Succeeded);
 	}
@@ -224,16 +228,16 @@ internal static class AwaitingProgressQueryAssembly
 		}
 
 		var ordered = query
-			.OrderBy(candidate => candidate.IsBlocked)
-			.ThenByDescending(candidate => candidate.Priority)
-			.ThenBy(candidate => (candidate.NeededFinish ?? candidate.NeededStart) == null)
-			.ThenBy(candidate => candidate.NeededFinish ?? candidate.NeededStart)
-			.ThenBy(candidate => candidate.Id)
-			.Skip(filter.Offset)
-			.Take(filter.Limit)
-			.Select(candidate => new AwaitingProgressCandidate(
-				candidate.Id, candidate.ParentId, candidate.Description, candidate.OwnerUserId, candidate.Priority,
-				candidate.NeededStart, candidate.NeededFinish, candidate.ArchivedAt, candidate.Achievement));
+					  .OrderBy(candidate => candidate.IsBlocked)
+					  .ThenByDescending(candidate => candidate.Priority)
+					  .ThenBy(candidate => (candidate.NeededFinish ?? candidate.NeededStart) == null)
+					  .ThenBy(candidate => candidate.NeededFinish ?? candidate.NeededStart)
+					  .ThenBy(candidate => candidate.Id)
+					  .Skip(filter.Offset)
+					  .Take(filter.Limit)
+					  .Select(candidate => new AwaitingProgressCandidate(
+						  candidate.Id, candidate.ParentId, candidate.Description, candidate.OwnerUserId, candidate.Priority,
+						  candidate.NeededStart, candidate.NeededFinish, candidate.ArchivedAt, candidate.Achievement));
 
 		return await ordered.ToListAsync(cancellationToken).ConfigureAwait(false);
 	}
@@ -245,20 +249,20 @@ internal static class AwaitingProgressQueryAssembly
 	/// </summary>
 	private static IQueryable<JobNodeEntity> LoadSubtreeNodes(DbContext context, JobNodeId rootId) =>
 		context.Set<JobNodeEntity>().FromSqlRaw(
-				"""
-				WITH RECURSIVE subtree(id) AS (
-				    SELECT id FROM job_node WHERE id = @rootId
-				    UNION ALL
-				    SELECT node.id
-				    FROM job_node node
-				    JOIN subtree ON node.parent_id = subtree.id
-				)
-				SELECT node.*
-				FROM subtree
-				JOIN job_node node ON node.id = subtree.id
-				""",
-				new SqliteParameter("@rootId", rootId.Value))
-			.AsNoTracking();
+				   """
+				   WITH RECURSIVE subtree(id) AS (
+				       SELECT id FROM job_node WHERE id = @rootId
+				       UNION ALL
+				       SELECT node.id
+				       FROM job_node node
+				       JOIN subtree ON node.parent_id = subtree.id
+				   )
+				   SELECT node.*
+				   FROM subtree
+				   JOIN job_node node ON node.id = subtree.id
+				   """,
+				   new SqliteParameter("@rootId", rootId.Value))
+			   .AsNoTracking();
 
 	/// <summary>
 	///     A composable relation containing every node blocked by an unsatisfied prerequisite -- its own
@@ -271,36 +275,36 @@ internal static class AwaitingProgressQueryAssembly
 	/// </summary>
 	private static IQueryable<JobNodeEntity> LoadBlockedNodes(DbContext context) =>
 		context.Set<JobNodeEntity>().FromSqlRaw(
-				"""
-				WITH RECURSIVE required(id) AS (
-				    SELECT DISTINCT from_id FROM job_prerequisite
-				), required_subtree(origin_id, id) AS (
-				    SELECT id, id FROM required
-				    UNION ALL
-				    SELECT required_subtree.origin_id, child.id
-				    FROM job_node child JOIN required_subtree ON child.parent_id = required_subtree.id
-				), unsatisfied(id) AS (
-				    SELECT required.id FROM required
-				    WHERE EXISTS (
-				        SELECT 1 FROM required_subtree
-				        WHERE required_subtree.origin_id = required.id
-				          AND NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = required_subtree.id)
-				          AND NOT EXISTS (
-				              SELECT 1 FROM leaf_work
-				              WHERE leaf_work.job_node_id = required_subtree.id AND leaf_work.achievement_id = @successAchievementId
-				          )
-				    )
-				), blocked(id) AS (
-				    SELECT jp.to_id FROM job_prerequisite jp JOIN unsatisfied ON unsatisfied.id = jp.from_id
-				    UNION
-				    SELECT child.id FROM job_node child JOIN blocked ON child.parent_id = blocked.id
-				)
-				SELECT node.*
-				FROM blocked
-				JOIN job_node node ON node.id = blocked.id
-				""",
-				new SqliteParameter("@successAchievementId", (short)Achievement.Success))
-			.AsNoTracking();
+				   """
+				   WITH RECURSIVE required(id) AS (
+				       SELECT DISTINCT from_id FROM job_prerequisite
+				   ), required_subtree(origin_id, id) AS (
+				       SELECT id, id FROM required
+				       UNION ALL
+				       SELECT required_subtree.origin_id, child.id
+				       FROM job_node child JOIN required_subtree ON child.parent_id = required_subtree.id
+				   ), unsatisfied(id) AS (
+				       SELECT required.id FROM required
+				       WHERE EXISTS (
+				           SELECT 1 FROM required_subtree
+				           WHERE required_subtree.origin_id = required.id
+				             AND NOT EXISTS (SELECT 1 FROM job_node child WHERE child.parent_id = required_subtree.id)
+				             AND NOT EXISTS (
+				                 SELECT 1 FROM leaf_work
+				                 WHERE leaf_work.job_node_id = required_subtree.id AND leaf_work.achievement_id = @successAchievementId
+				             )
+				       )
+				   ), blocked(id) AS (
+				       SELECT jp.to_id FROM job_prerequisite jp JOIN unsatisfied ON unsatisfied.id = jp.from_id
+				       UNION
+				       SELECT child.id FROM job_node child JOIN blocked ON child.parent_id = blocked.id
+				   )
+				   SELECT node.*
+				   FROM blocked
+				   JOIN job_node node ON node.id = blocked.id
+				   """,
+				   new SqliteParameter("@successAchievementId", (short)Achievement.Success))
+			   .AsNoTracking();
 
 	/// <summary>
 	///     Every candidate's own ancestor chain up to the true root, via a parameterized recursive CTE
@@ -324,7 +328,7 @@ internal static class AwaitingProgressQueryAssembly
 				   """;
 		var parameters = candidateIdValues.Select((id, index) => (object)new SqliteParameter(candidateIdParameters[index], id)).ToArray();
 		return await context.Database.SqlQueryRaw<AwaitingProgressAncestorRow>(sql, parameters)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+							.ToListAsync(cancellationToken).ConfigureAwait(false);
 	}
 }
 

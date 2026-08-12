@@ -47,7 +47,10 @@ internal sealed class FakeCostQueryPort : ICostQueryPort
 			current = _nodesById.TryGetValue(id, out var node) ? node.ParentId : null;
 		}
 
-		return Task.FromResult(new CostAccessInputs { ActorRoles = actorRoles, AncestorOwnerIds = [.. ownerIds] });
+		return Task.FromResult(new CostAccessInputs {
+			ActorRoles = actorRoles,
+			AncestorOwnerIds = [.. ownerIds],
+		});
 	}
 
 	public Task<CostQueryResult> GetCostInputsAsync(

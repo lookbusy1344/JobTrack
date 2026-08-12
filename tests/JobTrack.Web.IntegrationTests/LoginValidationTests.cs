@@ -3,10 +3,8 @@ namespace JobTrack.Web.IntegrationTests;
 using System.Net;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
-using Database;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using TestSupport;
 using Program = Program;
 
@@ -32,15 +30,15 @@ public sealed partial class LoginValidationTests : IAsyncLifetime, IDisposable
 
 	public async Task DisposeAsync() => await database.DisposeAsync();
 
-	public void Dispose()
-	{
-	}
+	public void Dispose() { }
 
 	[Fact]
 	public async Task Submitting_an_empty_username_returns_the_login_page_with_validation_errors_instead_of_a_server_error()
 	{
 		using var factory = new LoginValidationWebApplicationFactory(database.ConnectionString);
-		using var client = factory.CreateClient(new() { AllowAutoRedirect = false });
+		using var client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+		});
 
 		var form = await GetLoginFormAsync(client);
 		var response = await PostLoginAsync(client, form.Token, string.Empty, string.Empty);

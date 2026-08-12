@@ -26,7 +26,10 @@ public sealed class CostEngineTests
 	{
 		var root = new HierarchyNode(RootId, null, [LeafId], null);
 		var leaf = new HierarchyNode(LeafId, RootId, [], Achievement.InProgress);
-		return new() { [RootId] = root, [LeafId] = leaf };
+		return new() {
+			[RootId] = root,
+			[LeafId] = leaf,
+		};
 	}
 
 	private static Dictionary<JobNodeId, HierarchyNode> TwoLeavesUnderRoot()
@@ -34,13 +37,19 @@ public sealed class CostEngineTests
 		var root = new HierarchyNode(RootId, null, [LeafId, OtherLeafId], null);
 		var first = new HierarchyNode(LeafId, RootId, [], Achievement.InProgress);
 		var second = new HierarchyNode(OtherLeafId, RootId, [], Achievement.InProgress);
-		return new() { [RootId] = root, [LeafId] = first, [OtherLeafId] = second };
+		return new() {
+			[RootId] = root,
+			[LeafId] = first,
+			[OtherLeafId] = second,
+		};
 	}
 
 	[Fact]
 	public void A_single_uncontested_session_costs_its_full_duration_at_the_default_rate()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(11))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(11))),
+		};
 		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], SingleLeafUnderRoot(), [], [], FullDay);
 
 		var costs = CostEngine.AggregateExactCosts(RootId, allocations, SingleLeafUnderRoot(), [FullDay], [], [], [], new HourlyRate(60m));
@@ -86,21 +95,23 @@ public sealed class CostEngineTests
 
 		result.Trace.Select(entry => entry.Segment.Start).Should().BeInAscendingOrder();
 		var overlapSegmentIds = result.Trace
-			.Where(entry => entry.Segment == new WorkInterval(At(11), At(12)))
-			.Select(entry => entry.SessionId)
-			.ToArray();
+									  .Where(entry => entry.Segment == new WorkInterval(At(11), At(12)))
+									  .Select(entry => entry.SessionId)
+									  .ToArray();
 		overlapSegmentIds.Should().Equal(Session1, Session2);
 
 		var overlapActiveSessionIds = result.Trace
-			.Single(entry => entry.Segment == new WorkInterval(At(11), At(12)) && entry.SessionId == Session1)
-			.ActiveSessionIds;
+											.Single(entry => entry.Segment == new WorkInterval(At(11), At(12)) && entry.SessionId == Session1)
+											.ActiveSessionIds;
 		overlapActiveSessionIds.Should().Equal(Session1, Session2);
 	}
 
 	[Fact]
 	public void A_node_override_boundary_changes_the_rate_applied_to_each_side_of_the_split()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(0), At(24))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(0), At(24))),
+		};
 		var rootOverride = new NodeRateOverride(RootId, new(100m), At(12), null);
 		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], SingleLeafUnderRoot(), [rootOverride], [], FullDay);
 
@@ -115,7 +126,9 @@ public sealed class CostEngineTests
 	[Fact]
 	public void Calculation_returns_the_canonical_explainable_segment_trace()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(11))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(11))),
+		};
 		var nodes = SingleLeafUnderRoot();
 		var allocations = CostSegmentPartitioner.Partition(sessions, [FullDay], nodes, [], [], FullDay);
 
@@ -177,7 +190,9 @@ public sealed class CostEngineTests
 	[Fact]
 	public void A_priced_additive_exception_inside_normal_working_time_is_costed_at_its_override_rate()
 	{
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(9), At(12))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(9), At(12))),
+		};
 		var overtime = new ScheduleExceptionEntry(
 			ScheduleExceptionEffect.AddWorkingTime, new(At(10), At(11)), new HourlyRate(100m));
 		var nodes = SingleLeafUnderRoot();
@@ -192,11 +207,15 @@ public sealed class CostEngineTests
 	[Fact]
 	public void Trace_marks_exception_only_time_as_not_scheduled_working_time()
 	{
-		var scheduled = new[] { new WorkInterval(At(9), At(17)) };
+		var scheduled = new[] {
+			new WorkInterval(At(9), At(17)),
+		};
 		var overtime = new ScheduleExceptionEntry(
 			ScheduleExceptionEffect.AddWorkingTime, new(At(18), At(20)), null);
 		var effective = ScheduleExceptionResolver.Apply(scheduled, [overtime]);
-		var sessions = new[] { new CostableSession(Session1, LeafId, new(At(18), At(19))) };
+		var sessions = new[] {
+			new CostableSession(Session1, LeafId, new(At(18), At(19))),
+		};
 		var nodes = SingleLeafUnderRoot();
 		var allocations = CostSegmentPartitioner.Partition(sessions, effective, nodes, [overtime], [], [], FullDay);
 

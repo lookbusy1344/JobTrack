@@ -36,9 +36,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 	private readonly IReadOnlyList<IInterceptor> interceptors;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
-	public PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock) : this(dataSource, clock, [])
-	{
-	}
+	public PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock) : this(dataSource, clock, []) { }
 
 	/// <summary>Test-only seam (§2.1 fresh-eyes review races) for attaching a deterministic-interleaving interceptor.</summary>
 	internal PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock, IReadOnlyList<IInterceptor> interceptors)
@@ -55,7 +53,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
-						   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
 
 		var now = clock.GetCurrentInstant();
@@ -91,9 +89,9 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 		}
 
 		await LeafAchievementTransition.ApplyAsync(
-				context, leafWork, request.NewAchievement, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
-				cancellationToken)
-			.ConfigureAwait(false);
+										   context, leafWork, request.NewAchievement, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
+										   cancellationToken)
+									   .ConfigureAwait(false);
 
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -136,7 +134,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 	{
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 
 		if (ancestorOwnerIds.Count == 0) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");

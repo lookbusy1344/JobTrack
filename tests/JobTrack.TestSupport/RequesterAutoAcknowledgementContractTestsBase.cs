@@ -43,7 +43,11 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		var sessionPort = CreateSessionPort(database.ConnectionString);
 
 		_ = await sessionPort.StartWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = submitted.JobNodeId, WorkedByUserId = jobManagerId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = submitted.JobNodeId,
+				WorkedByUserId = jobManagerId,
+			});
 
 		var detail = await requestPort.GetDetailAsync(DetailRequest(requesterId, submitted.JobNodeId));
 		detail.AcknowledgedAt.Should().NotBeNull();
@@ -56,11 +60,18 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		var sessionPort = CreateSessionPort(database.ConnectionString);
 
 		_ = await sessionPort.StartWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = submitted.JobNodeId, WorkedByUserId = jobManagerId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = submitted.JobNodeId,
+				WorkedByUserId = jobManagerId,
+			});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_request", EntityId = submitted.JobNodeId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_request",
+				EntityId = submitted.JobNodeId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "auto-acknowledge-request");
 	}
@@ -70,15 +81,26 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 	{
 		var (requesterId, jobManagerId, _, requestPort, submitted) = await SeedSubmittedRequestAsync();
 		_ = await requestPort.AcknowledgeAsync(
-			new() { Context = ContextFor(jobManagerId), NodeId = submitted.JobNodeId, Version = submitted.Version });
+			new() {
+				Context = ContextFor(jobManagerId),
+				NodeId = submitted.JobNodeId,
+				Version = submitted.Version,
+			});
 		var sessionPort = CreateSessionPort(database.ConnectionString);
 
 		_ = await sessionPort.StartWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = submitted.JobNodeId, WorkedByUserId = jobManagerId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = submitted.JobNodeId,
+				WorkedByUserId = jobManagerId,
+			});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_request", EntityId = submitted.JobNodeId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_request",
+				EntityId = submitted.JobNodeId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Select(e => e.Operation).Should().NotContain("auto-acknowledge-request");
 		var detail = await requestPort.GetDetailAsync(DetailRequest(requesterId, submitted.JobNodeId));
@@ -91,7 +113,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		var (requesterId, jobManagerId, _, requestPort, submitted) = await SeedSubmittedRequestAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		var attached = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = submitted.JobNodeId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = submitted.JobNodeId,
+			});
 		var achievementPort = CreateAchievementPort(database.ConnectionString);
 
 		_ = await achievementPort.SetAchievementAsync(new() {
@@ -112,7 +137,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		var (requesterId, jobManagerId, _, requestPort, submitted) = await SeedSubmittedRequestAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		var attached = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = submitted.JobNodeId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = submitted.JobNodeId,
+			});
 		var sessionPort = CreateSessionPort(database.ConnectionString);
 
 		_ = await sessionPort.CompleteLeafAsync(new() {
@@ -141,7 +169,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		var (_, jobManagerId, _, _, submitted) = await SeedSubmittedRequestAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
 		var attached = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = submitted.JobNodeId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = submitted.JobNodeId,
+			});
 		var sessionPort = CreateSessionPort(database.ConnectionString);
 		var completed = await sessionPort.CompleteLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -161,7 +192,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_request", EntityId = submitted.JobNodeId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_request",
+				EntityId = submitted.JobNodeId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Count(e => e.Operation == "auto-acknowledge-request").Should().Be(1);
 	}
@@ -182,7 +216,11 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		var leaf = await AddLeafAsync(jobNodePort, jobManagerId, innerAnchorId, "Nested request leaf");
 
 		_ = await CreateSessionPort(database.ConnectionString).StartWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.NodeId, WorkedByUserId = jobManagerId });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = leaf.NodeId,
+				WorkedByUserId = jobManagerId,
+			});
 
 		var inner = await requestPort.GetDetailAsync(DetailRequest(requesterId, innerAnchorId));
 		inner.AcknowledgedAt.Should().NotBeNull();
@@ -220,7 +258,9 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { CorrelationId = commandContext.CorrelationId }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				CorrelationId = commandContext.CorrelationId,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		var operations = audit.Events.Select(e => e.Operation).ToList();
 		operations.Should().Contain(["create-job-node", "set-achievement", "start-work-session", "auto-acknowledge-request"]);
@@ -240,7 +280,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 	{
 		var (requesterId, jobManagerId, _, requestPort, submitted) = await SeedSubmittedRequestAsync();
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = submitted.JobNodeId });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = submitted.JobNodeId,
+		});
 
 		var act = () => CreateAndBeginWorkAsync(jobManagerId, submitted.JobNodeId, ContextFor(jobManagerId));
 
@@ -274,10 +317,7 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 					OwnerUserId = jobManagerId,
 					Priority = Priority.Medium,
 					LeafWork = new() {
-						WorkedByUserId = jobManagerId,
-						StartedAt = startedAt,
-						FinishedAt = startedAt + Duration.FromMinutes(30),
-						Achievement = Achievement.Success,
+						WorkedByUserId = jobManagerId, StartedAt = startedAt, FinishedAt = startedAt + Duration.FromMinutes(30), Achievement = Achievement.Success,
 					},
 				},
 			]),
@@ -288,7 +328,9 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { CorrelationId = commandContext.CorrelationId }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				CorrelationId = commandContext.CorrelationId,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		var operations = audit.Events.Select(e => e.Operation).ToList();
 		operations.Should().Contain(["import-leaf-work", "auto-acknowledge-request"]);
@@ -333,9 +375,17 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 
 		await RunSimultaneouslyAsync(
 			() => CreateSessionPort(database.ConnectionString).StartWorkAsync(
-				new() { Context = ContextFor(jobManagerId), JobNodeId = first.NodeId, WorkedByUserId = jobManagerId }),
+				new() {
+					Context = ContextFor(jobManagerId),
+					JobNodeId = first.NodeId,
+					WorkedByUserId = jobManagerId,
+				}),
 			() => CreateSessionPort(database.ConnectionString).StartWorkAsync(
-				new() { Context = ContextFor(jobManagerId), JobNodeId = second.NodeId, WorkedByUserId = jobManagerId }));
+				new() {
+					Context = ContextFor(jobManagerId),
+					JobNodeId = second.NodeId,
+					WorkedByUserId = jobManagerId,
+				}));
 
 		await AssertAcknowledgedExactlyOnceAsync(requestPort, requesterId, submitted.JobNodeId);
 	}
@@ -415,7 +465,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_request", EntityId = anchorId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_request",
+				EntityId = anchorId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Count(e => e.Operation == "auto-acknowledge-request").Should().Be(1);
 	}
@@ -442,7 +495,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		IJobNodeCommandPort port, AppUserId actorId, JobNodeId parentId, string description)
 	{
 		var nodeId = await AddChildAsync(port, actorId, parentId, description);
-		var attached = await port.AttachLeafWorkAsync(new() { Context = ContextFor(actorId), JobNodeId = nodeId });
+		var attached = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(actorId),
+			JobNodeId = nodeId,
+		});
 		return new(nodeId, attached.Version);
 	}
 
@@ -453,7 +509,9 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 			Description = "Created and started in one transaction",
 			OwnerUserId = actorId,
 			Priority = Priority.Medium,
-			BeginWork = new() { WorkedByUserId = actorId },
+			BeginWork = new() {
+				WorkedByUserId = actorId,
+			},
 		});
 
 	private static async Task<JobNodeId> AddChildAsync(
@@ -470,10 +528,16 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 		return node.Id;
 	}
 
-	private static CommandContext ContextFor(AppUserId actorId) => new() { Actor = actorId, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actorId) => new() {
+		Actor = actorId,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static GetJobRequestDetailRequest DetailRequest(AppUserId actorId, JobNodeId nodeId) =>
-		new() { Context = ContextFor(actorId), NodeId = nodeId };
+		new() {
+			Context = ContextFor(actorId),
+			NodeId = nodeId,
+		};
 
 	/// <summary>
 	///     Deploys the schema, bootstraps a root/administrator, seeds one requester and one job manager,

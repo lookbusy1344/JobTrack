@@ -8,19 +8,13 @@ namespace JobTrack.Abstractions;
 public sealed class PrerequisiteBlockedException : JobTrackException
 {
 	/// <summary>Creates a <see cref="PrerequisiteBlockedException" />.</summary>
-	public PrerequisiteBlockedException()
-	{
-	}
+	public PrerequisiteBlockedException() { }
 
 	/// <summary>Creates a <see cref="PrerequisiteBlockedException" /> with the given message.</summary>
 	public PrerequisiteBlockedException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	/// <summary>Creates a <see cref="PrerequisiteBlockedException" /> with the given message and inner exception.</summary>
 	public PrerequisiteBlockedException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

@@ -117,13 +117,13 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 		}
 
 		var requiresIds = Input.Selections
-			.Where(selection => selection.Value == PrerequisiteSelection.Requires)
-			.Select(selection => new JobNodeId(selection.Key))
-			.ToArray();
+							   .Where(selection => selection.Value == PrerequisiteSelection.Requires)
+							   .Select(selection => new JobNodeId(selection.Key))
+							   .ToArray();
 		var requiredByIds = Input.Selections
-			.Where(selection => selection.Value == PrerequisiteSelection.RequiredBy)
-			.Select(selection => new JobNodeId(selection.Key))
-			.ToArray();
+								 .Where(selection => selection.Value == PrerequisiteSelection.RequiredBy)
+								 .Select(selection => new JobNodeId(selection.Key))
+								 .ToArray();
 
 		if (requiresIds.Length == 0 && requiredByIds.Length == 0) {
 			ErrorMessage = "Select at least one job to link before adding.";
@@ -136,7 +136,13 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 				.. requiredByIds.Select(otherId => new PrerequisiteEdge(new(NodeId), otherId)),
 			];
 			await jobTrackClient.Jobs.AddPrerequisitesAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, Edges = [.. edges] }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
+					Edges = [.. edges],
+				}, cancellationToken);
 
 			SuccessMessage = edges.Length == 1 ? "Dependency added." : $"{edges.Length} dependencies added.";
 		}
@@ -163,7 +169,10 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 		try {
 			await jobTrackClient.Jobs.RemovePrerequisiteAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					RequiredJobId = new(requiredJobId),
 					DependentJobId = new(dependentJobId),
 				}, cancellationToken);
@@ -183,27 +192,43 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 	///     The page's own browsing context, replayed on the redirect every mutating handler ends with
 	///     so the reloaded GET lands back on the same node and search text.
 	/// </summary>
-	private object CurrentRouteValues() => new { nodeId = NodeId, searchText = SearchText };
+	private object CurrentRouteValues() => new
+	{
+		nodeId = NodeId,
+		searchText = SearchText,
+	};
 
 	private async Task LoadAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
-		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
-			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = new JobNodeId(NodeId) }, cancellationToken);
+			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = new JobNodeId(NodeId),
+			}, cancellationToken);
 
-			var edges = await jobTrackClient.Query.GetPrerequisitesAsync(new() { Context = context, NodeId = new(NodeId) }, cancellationToken);
+			var edges = await jobTrackClient.Query.GetPrerequisitesAsync(new() {
+				Context = context,
+				NodeId = new(NodeId),
+			}, cancellationToken);
 
 			Requires = [.. edges.Where(e => e.DependentJobId.Value == NodeId)];
 			RequiredBy = [.. edges.Where(e => e.RequiredJobId.Value == NodeId)];
 
 			var farEndIds = edges
-				.Select(e => e.RequiredJobId.Value == NodeId ? e.DependentJobId : e.RequiredJobId)
-				.Distinct()
-				.ToArray();
+							.Select(e => e.RequiredJobId.Value == NodeId ? e.DependentJobId : e.RequiredJobId)
+							.Distinct()
+							.ToArray();
 			if (farEndIds.Length > 0) {
 				var summaries =
-					await jobTrackClient.Query.GetJobSummariesAsync(new() { Context = context, NodeIds = [.. farEndIds] }, cancellationToken);
+					await jobTrackClient.Query.GetJobSummariesAsync(new() {
+						Context = context,
+						NodeIds = [.. farEndIds],
+					}, cancellationToken);
 				NodeSummariesById = summaries.ToDictionary(s => s.Id);
 			}
 
@@ -211,7 +236,10 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 			ExistingRequiredByIds = RequiredBy.Select(e => e.DependentJobId).ToHashSet();
 
 			if (IsSearch) {
-				var matches = await jobTrackClient.Query.SearchJobNodesAsync(new() { Context = context, SearchText = SearchText! },
+				var matches = await jobTrackClient.Query.SearchJobNodesAsync(new() {
+					Context = context,
+					SearchText = SearchText!,
+				},
 					cancellationToken);
 				SearchResults = [.. matches.Where(m => m.Id.Value != NodeId)];
 			}

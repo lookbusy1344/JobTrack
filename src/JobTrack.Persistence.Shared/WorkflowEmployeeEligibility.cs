@@ -18,9 +18,9 @@ internal static class WorkflowEmployeeEligibility
 		_ = await IdentityUserWriteLock.AcquireAsync(context, targetId, cancellationToken).ConfigureAwait(false);
 
 		var ownsJob = await context.Set<JobNodeEntity>().AsNoTracking()
-			.AnyAsync(node => node.OwnerUserId == targetId, cancellationToken).ConfigureAwait(false);
+								   .AnyAsync(node => node.OwnerUserId == targetId, cancellationToken).ConfigureAwait(false);
 		var hasActiveSession = await context.Set<WorkSessionEntity>().AsNoTracking()
-			.AnyAsync(session => session.WorkedByUserId == targetId && session.FinishedAt == null, cancellationToken).ConfigureAwait(false);
+											.AnyAsync(session => session.WorkedByUserId == targetId && session.FinishedAt == null, cancellationToken).ConfigureAwait(false);
 
 		if (ownsJob || hasActiveSession) {
 			throw new InvariantViolationException(
@@ -47,9 +47,9 @@ internal static class WorkflowEmployeeEligibility
 		}
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == identityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == identityUser.Id)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		var hasWorkflowRole = roles.Any(role => role is EmployeeRole.Administrator
 			or EmployeeRole.JobManager

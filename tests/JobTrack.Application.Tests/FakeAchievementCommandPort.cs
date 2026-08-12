@@ -48,7 +48,11 @@ internal sealed class FakeAchievementCommandPort(FakeJobNodeCommandPort nodePort
 			}
 		}
 
-		var updated = leafWork with { Achievement = request.NewAchievement, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
+		var updated = leafWork with {
+			Achievement = request.NewAchievement,
+			ChangedAt = NowToReturn,
+			Version = leafWork.Version + 1,
+		};
 		nodePort.SetLeafWork(updated);
 
 		return updated;

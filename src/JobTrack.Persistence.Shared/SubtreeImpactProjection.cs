@@ -36,7 +36,11 @@ internal static class SubtreeImpactProjection
 		JobRequestCount = data.JobRequestCount,
 		BlockingHoldingAreas =
 			EquatableArray.CopyOf(data.BlockingHoldingAreas
-				.Select(h => new SubtreeImpactHoldingArea { Id = h.Id, Name = h.Name, JobNodeId = h.JobNodeId }).ToArray()),
+									  .Select(h => new SubtreeImpactHoldingArea {
+										  Id = h.Id,
+										  Name = h.Name,
+										  JobNodeId = h.JobNodeId,
+									  }).ToArray()),
 		IsPermanentRoot = data.IsPermanentRoot,
 	};
 }

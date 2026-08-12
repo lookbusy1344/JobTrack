@@ -48,14 +48,25 @@ public sealed class AssignRoleModel(IJobTrackClient jobTrackClient, UserManager<
 
 		await LoadTargetUserOptionsAsync(cancellationToken);
 
-		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.AppUserId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var targetUserId = new AppUserId(Input.TargetUserId);
 
 		try {
 			var result = Input.Revoke
-				? await jobTrackClient.Employees.RevokeRoleAsync(new() { Context = context, TargetUserId = targetUserId, Role = Input.Role },
+				? await jobTrackClient.Employees.RevokeRoleAsync(new() {
+					Context = context,
+					TargetUserId = targetUserId,
+					Role = Input.Role,
+				},
 					cancellationToken)
-				: await jobTrackClient.Employees.AssignRoleAsync(new() { Context = context, TargetUserId = targetUserId, Role = Input.Role },
+				: await jobTrackClient.Employees.AssignRoleAsync(new() {
+					Context = context,
+					TargetUserId = targetUserId,
+					Role = Input.Role,
+				},
 					cancellationToken);
 
 			SuccessMessage =
@@ -80,7 +91,12 @@ public sealed class AssignRoleModel(IJobTrackClient jobTrackClient, UserManager<
 		}
 
 		var directory = await jobTrackClient.Query.GetAllEmployeesAsync(
-			new() { Context = new() { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+			new() {
+				Context = new() {
+					Actor = actor.AppUserId,
+					CorrelationId = Guid.NewGuid(),
+				},
+			}, cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		TargetUserOptions = EmployeeDirectoryDisplay.BuildOptions(directory);
 	}

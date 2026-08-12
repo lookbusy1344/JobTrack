@@ -1,7 +1,6 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -534,7 +533,10 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		var commandPort = CreateCommandPort(database.ConnectionString);
 		var achievementPort = CreateAchievementPort(database.ConnectionString);
 		var plumbingWork = await commandPort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(tree.JobManagerId), JobNodeId = tree.PlumbingLeafId });
+			new() {
+				Context = ContextFor(tree.JobManagerId),
+				JobNodeId = tree.PlumbingLeafId,
+			});
 		var plumbingInProgress = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(tree.JobManagerId),
 			JobNodeId = tree.PlumbingLeafId,
@@ -705,7 +707,10 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		var commandPort = CreateCommandPort(database.ConnectionString);
 		var achievementPort = CreateAchievementPort(database.ConnectionString);
 
-		var leafWork = await commandPort.AttachLeafWorkAsync(new() { Context = ContextFor(actor), JobNodeId = leafId });
+		var leafWork = await commandPort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(actor),
+			JobNodeId = leafId,
+		});
 		var inProgress = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(actor),
 			JobNodeId = leafId,
@@ -898,10 +903,16 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		var achievementPort = CreateAchievementPort(database.ConnectionString);
 
 		_ = await commandPort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(tree.JobManagerId), JobNodeId = tree.CabinetsLeafId });
+			new() {
+				Context = ContextFor(tree.JobManagerId),
+				JobNodeId = tree.CabinetsLeafId,
+			});
 
 		var plumbingWork = await commandPort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(tree.JobManagerId), JobNodeId = tree.PlumbingLeafId });
+			new() {
+				Context = ContextFor(tree.JobManagerId),
+				JobNodeId = tree.PlumbingLeafId,
+			});
 		_ = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(tree.JobManagerId),
 			JobNodeId = tree.PlumbingLeafId,
@@ -911,7 +922,10 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		});
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>
 	///     Seeds root (owned by the bootstrap administrator) -&gt; branch "Kitchen renovation" (owned by
@@ -976,7 +990,11 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = jobManagerId,
 			Priority = Priority.Low,
 		});
-		_ = await commandPort.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = oldWiring.Id, Version = oldWiring.Version });
+		_ = await commandPort.ArchiveAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = oldWiring.Id,
+			Version = oldWiring.Version,
+		});
 
 		var tree = new SeededTree(jobManagerId, workerId, cabinets.Id, plumbing.Id, oldWiring.Id);
 		return (bootstrap.RootJobNodeId, branch.Id, tree);

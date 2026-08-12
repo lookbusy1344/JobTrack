@@ -53,20 +53,20 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		AwaitingProgressQueryFilter filter, CancellationToken cancellationToken = default)
 	{
 		var page = _nodes.Values
-			.Where(IsUnfinishedLeafCandidate)
-			.Where(node => filter.Ownership.Matches(node.OwnerUserId))
-			.Where(node => filter.SubtreeRootId is not JobNodeId subtreeRootId || IsInSubtree(node.Id, subtreeRootId))
-			.Where(node => string.IsNullOrWhiteSpace(filter.SearchText)
-						   || node.Description.Contains(filter.SearchText, StringComparison.OrdinalIgnoreCase))
-			.Where(node => !filter.InProgressOnly
-						   || (_leafWork.TryGetValue(node.Id, out var leafWork) && leafWork.Achievement == Achievement.InProgress))
-			.OrderByDescending(node => node.Priority)
-			.ThenBy(node => Deadline(node) is null)
-			.ThenBy(node => Deadline(node))
-			.ThenBy(node => node.Id.Value)
-			.Skip(filter.Offset)
-			.Take(filter.Limit)
-			.ToList();
+						 .Where(IsUnfinishedLeafCandidate)
+						 .Where(node => filter.Ownership.Matches(node.OwnerUserId))
+						 .Where(node => filter.SubtreeRootId is not JobNodeId subtreeRootId || IsInSubtree(node.Id, subtreeRootId))
+						 .Where(node => string.IsNullOrWhiteSpace(filter.SearchText)
+										|| node.Description.Contains(filter.SearchText, StringComparison.OrdinalIgnoreCase))
+						 .Where(node => !filter.InProgressOnly
+										|| _leafWork.TryGetValue(node.Id, out var leafWork) && leafWork.Achievement == Achievement.InProgress)
+						 .OrderByDescending(node => node.Priority)
+						 .ThenBy(node => Deadline(node) is null)
+						 .ThenBy(node => Deadline(node))
+						 .ThenBy(node => node.Id.Value)
+						 .Skip(filter.Offset)
+						 .Take(filter.Limit)
+						 .ToList();
 		var pageIds = new HashSet<JobNodeId>(page.Select(node => node.Id));
 
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
@@ -121,7 +121,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			current = ancestor.ParentId;
 		}
 
-		return Task.FromResult(new JobNodeDetailResult { Node = WithStructuralFacts(node), Ancestors = [.. ancestors] });
+		return Task.FromResult(new JobNodeDetailResult {
+			Node = WithStructuralFacts(node),
+			Ancestors = [.. ancestors],
+		});
 	}
 
 	public Task<EquatableArray<JobNodeSummaryResult>> GetChildrenAsync(
@@ -131,11 +134,11 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		_ = GetExisting(parentId);
 
 		var children = _nodes.Values
-			.Where(n => n.ParentId == parentId)
-			.Where(n => ownership.Matches(n.OwnerUserId))
-			.Where(n => MatchesArchiveFilter(n, archiveFilter))
-			.OrderBy(n => n.Id.Value)
-			.Select(ToSummary);
+							 .Where(n => n.ParentId == parentId)
+							 .Where(n => ownership.Matches(n.OwnerUserId))
+							 .Where(n => MatchesArchiveFilter(n, archiveFilter))
+							 .OrderBy(n => n.Id.Value)
+							 .Select(ToSummary);
 
 		return Task.FromResult<EquatableArray<JobNodeSummaryResult>>([.. ApplyPaging(children, offset, limit)]);
 	}
@@ -145,11 +148,11 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		int offset = 0, int? limit = null, CancellationToken cancellationToken = default)
 	{
 		var matches = _nodes.Values
-			.Where(n => n.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase))
-			.Where(n => ownership.Matches(n.OwnerUserId))
-			.Where(n => MatchesArchiveFilter(n, archiveFilter))
-			.OrderBy(n => n.Id.Value)
-			.Select(ToSummary);
+							.Where(n => n.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+							.Where(n => ownership.Matches(n.OwnerUserId))
+							.Where(n => MatchesArchiveFilter(n, archiveFilter))
+							.OrderBy(n => n.Id.Value)
+							.Select(ToSummary);
 
 		return Task.FromResult<EquatableArray<JobNodeSummaryResult>>([.. ApplyPaging(matches, offset, limit)]);
 	}
@@ -174,7 +177,9 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 
 		_ = GetExisting(rootId);
 
-		var depthById = new Dictionary<JobNodeId, int> { [rootId] = 0 };
+		var depthById = new Dictionary<JobNodeId, int> {
+			[rootId] = 0,
+		};
 		var expandedById = new Dictionary<JobNodeId, bool>();
 		var toExpand = new Queue<JobNodeId>();
 		toExpand.Enqueue(rootId);
@@ -207,9 +212,9 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		var matchesById = rows.ToDictionary(n => n.Id, n => ownership.Matches(n.OwnerUserId) && MatchesArchiveFilter(n, archiveFilter));
 
 		var childrenByParent = rows
-			.Where(n => n.ParentId is JobNodeId p && depthById.ContainsKey(p))
-			.GroupBy(n => n.ParentId!.Value)
-			.ToDictionary(g => g.Key, g => g.Select(n => n.Id).ToList());
+							   .Where(n => n.ParentId is JobNodeId p && depthById.ContainsKey(p))
+							   .GroupBy(n => n.ParentId!.Value)
+							   .ToDictionary(g => g.Key, g => g.Select(n => n.Id).ToList());
 
 		var keepById = new Dictionary<JobNodeId, bool>();
 		foreach (var node in rows.OrderByDescending(n => depthById[n.Id])) {
@@ -218,38 +223,43 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		}
 
 		var result = rows
-			.Where(n => keepById[n.Id])
-			.OrderBy(n => n.Id.Value)
-			.Select(n => new JobNodeSubtreeRow {
-				Id = n.Id,
-				ParentId = n.ParentId,
-				Kind = n.Kind,
-				Depth = depthById[n.Id],
-				Description = n.Description,
-				OwnerUserId = n.OwnerUserId,
-				Priority = n.Priority,
-				NeededStart = n.NeededStart,
-				NeededFinish = n.NeededFinish,
-				ArchivedAt = n.ArchivedAt,
-				HasChildren = n.HasChildren,
-				HasLeafWork = n.HasLeafWork,
-				Achievement = _leafWork.TryGetValue(n.Id, out var leafWork) ? leafWork.Achievement : null,
-				HasSessionHistory = false,
-				HasUnacknowledgedRequest = false,
-				HasUnexpandedChildren = n.HasChildren && !expandedById[n.Id],
-				MatchesFilter = matchesById[n.Id],
-			})
-			.ToList();
+					 .Where(n => keepById[n.Id])
+					 .OrderBy(n => n.Id.Value)
+					 .Select(n => new JobNodeSubtreeRow {
+						 Id = n.Id,
+						 ParentId = n.ParentId,
+						 Kind = n.Kind,
+						 Depth = depthById[n.Id],
+						 Description = n.Description,
+						 OwnerUserId = n.OwnerUserId,
+						 Priority = n.Priority,
+						 NeededStart = n.NeededStart,
+						 NeededFinish = n.NeededFinish,
+						 ArchivedAt = n.ArchivedAt,
+						 HasChildren = n.HasChildren,
+						 HasLeafWork = n.HasLeafWork,
+						 Achievement = _leafWork.TryGetValue(n.Id, out var leafWork) ? leafWork.Achievement : null,
+						 HasSessionHistory = false,
+						 HasUnacknowledgedRequest = false,
+						 HasUnexpandedChildren = n.HasChildren && !expandedById[n.Id],
+						 MatchesFilter = matchesById[n.Id],
+					 })
+					 .ToList();
 
 		for (var index = 0; index < result.Count; ++index) {
 			var row = result[index];
 			if (row.Kind is not NodeKind.Leaf) {
-				result[index] = row with { BranchAchievement = await GetSubtreeAchievementAsync(row.Id, cancellationToken) };
+				result[index] = row with {
+					BranchAchievement = await GetSubtreeAchievementAsync(row.Id, cancellationToken),
+				};
 			}
 		}
 
 		var rootAchievement = result.Single(row => row.Id == rootId).BranchAchievement;
-		return new() { Rows = [.. result], RootAchievement = rootAchievement };
+		return new() {
+			Rows = [.. result],
+			RootAchievement = rootAchievement,
+		};
 	}
 
 	public Task<BranchAchievement> GetSubtreeAchievementAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
@@ -267,11 +277,11 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		var subtreeIds = _nodes.Keys.Where(id => IsInSubtree(id, rootId)).ToList();
 		var inside = subtreeIds.ToHashSet();
 		var touching = _prerequisites
-			.Where(edge => inside.Contains(edge.RequiredJobId) || inside.Contains(edge.DependentJobId))
-			.ToList();
+					   .Where(edge => inside.Contains(edge.RequiredJobId) || inside.Contains(edge.DependentJobId))
+					   .ToList();
 		var external = touching
-			.Where(edge => !inside.Contains(edge.RequiredJobId) || !inside.Contains(edge.DependentJobId))
-			.ToList();
+					   .Where(edge => !inside.Contains(edge.RequiredJobId) || !inside.Contains(edge.DependentJobId))
+					   .ToList();
 
 		return Task.FromResult(new SubtreeImpactResult {
 			RootId = rootId,
@@ -351,7 +361,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 				"job-node-move-would-cycle", "Moving this node under the requested parent would create a cycle.");
 		}
 
-		var updated = existing with { ParentId = request.NewParentId, Version = existing.Version + 1 };
+		var updated = existing with {
+			ParentId = request.NewParentId,
+			Version = existing.Version + 1,
+		};
 		_nodes[updated.Id] = updated;
 
 		return Task.FromResult(WithStructuralFacts(updated));
@@ -363,7 +376,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		AuthorizeOrThrow(request.Context.Actor, request.NodeId);
 		CheckVersionOrThrow(existing.Version, request.Version);
 
-		var updated = existing with { ArchivedAt = NowToReturn, Version = existing.Version + 1 };
+		var updated = existing with {
+			ArchivedAt = NowToReturn,
+			Version = existing.Version + 1,
+		};
 		_nodes[updated.Id] = updated;
 
 		return Task.FromResult(WithStructuralFacts(updated));
@@ -382,7 +398,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 				"job-node-already-claimed", $"Job node {request.NodeId} has already been claimed.");
 		}
 
-		var updated = existing with { OwnerUserId = request.Context.Actor, Version = existing.Version + 1 };
+		var updated = existing with {
+			OwnerUserId = request.Context.Actor,
+			Version = existing.Version + 1,
+		};
 		_nodes[updated.Id] = updated;
 
 		return Task.FromResult(WithStructuralFacts(updated));
@@ -416,8 +435,8 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		var subtreeIds = _nodes.Keys.Where(id => IsInSubtree(id, request.RootId)).ToList();
 		var leafWorkCount = subtreeIds.Count(_leafWork.ContainsKey);
 		var droppedEdges = _prerequisites
-			.Where(edge => subtreeIds.Contains(edge.RequiredJobId) || subtreeIds.Contains(edge.DependentJobId))
-			.ToList();
+						   .Where(edge => subtreeIds.Contains(edge.RequiredJobId) || subtreeIds.Contains(edge.DependentJobId))
+						   .ToList();
 
 		foreach (var edge in droppedEdges) {
 			_ = _prerequisites.Remove(edge);
@@ -459,12 +478,18 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		foreach (var id in subtreeIds) {
 			var node = _nodes[id];
 			if (node.ArchivedAt is null) {
-				_nodes[id] = node with { ArchivedAt = NowToReturn, Version = node.Version + 1 };
+				_nodes[id] = node with {
+					ArchivedAt = NowToReturn,
+					Version = node.Version + 1,
+				};
 				++newlyArchived;
 			}
 		}
 
-		return Task.FromResult(new ArchiveSubtreeResult { NodeCount = subtreeIds.Count, NewlyArchivedCount = newlyArchived });
+		return Task.FromResult(new ArchiveSubtreeResult {
+			NodeCount = subtreeIds.Count,
+			NewlyArchivedCount = newlyArchived,
+		});
 	}
 
 	public Task DeleteAsync(DeleteJobNodeRequest request, CancellationToken cancellationToken = default)
@@ -591,7 +616,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			_nodes[existingWorkChild.Id] = existingWorkChild;
 
 			_leafWork.Remove(request.LeafNodeId);
-			_leafWork[existingWorkChild.Id] = leafWork! with { JobNodeId = existingWorkChild.Id, Version = leafWork.Version + 1 };
+			_leafWork[existingWorkChild.Id] = leafWork! with {
+				JobNodeId = existingWorkChild.Id,
+				Version = leafWork.Version + 1,
+			};
 		}
 
 		var newChildIds = new List<JobNodeId>();
@@ -618,7 +646,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			newChildIds.Add(newChild.Id);
 		}
 
-		var convertedBranch = WithStructuralFacts(existing with { Description = request.BranchDescription, Version = existing.Version + 1 });
+		var convertedBranch = WithStructuralFacts(existing with {
+			Description = request.BranchDescription,
+			Version = existing.Version + 1,
+		});
 		_nodes[convertedBranch.Id] = convertedBranch;
 
 		return Task.FromResult(new DecomposeWorkedLeafResult {
@@ -675,7 +706,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 				Priority = spec.Priority,
 			});
 			createdByLocalId[spec.LocalId] = node.Id;
-			created.Add(new() { LocalId = spec.LocalId, JobNodeId = node.Id });
+			created.Add(new() {
+				LocalId = spec.LocalId,
+				JobNodeId = node.Id,
+			});
 		}
 
 		foreach (var spec in request.Nodes) {
@@ -688,19 +722,24 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		// Replay the batch's recorded work chronologically, the same order the real ports use, so a
 		// dependent leaf's gate is evaluated only after its prerequisites have already been closed.
 		foreach (var spec in request.Nodes
-					 .Where(n => n.LeafWork is not null)
-					 .OrderBy(n => EarliestImportedSessionStart(n.LeafWork!))
-					 .ThenBy(n => n.LocalId)) {
+									.Where(n => n.LeafWork is not null)
+									.OrderBy(n => EarliestImportedSessionStart(n.LeafWork!))
+									.ThenBy(n => n.LocalId)) {
 			var nodeId = createdByLocalId[spec.LocalId];
 			var work = spec.LeafWork!;
 
 			_ = EnsureLeafWorkAttached(nodeId, request.Context.Actor);
 			_ = _workedLeafIds.Add(nodeId);
-			_leafWork[nodeId] = _leafWork[nodeId] with { Achievement = work.Achievement, ChangedAt = NowToReturn };
+			_leafWork[nodeId] = _leafWork[nodeId] with {
+				Achievement = work.Achievement,
+				ChangedAt = NowToReturn,
+			};
 		}
 
 		LastImportedNodes = request.Nodes;
-		return Task.FromResult(new ImportSubtreeResult { Nodes = [.. created] });
+		return Task.FromResult(new ImportSubtreeResult {
+			Nodes = [.. created],
+		});
 	}
 
 	public Task RemovePrerequisiteAsync(RemovePrerequisiteRequest request, CancellationToken cancellationToken = default)
@@ -808,7 +847,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 
 		var prerequisites = _prerequisites.Select(edge => new PrerequisiteEdge(edge.RequiredJobId, edge.DependentJobId));
 
-		return new() { NodesById = EquatableDictionaryFactory.CopyOf(nodesById), Prerequisites = [.. prerequisites] };
+		return new() {
+			NodesById = EquatableDictionaryFactory.CopyOf(nodesById),
+			Prerequisites = [.. prerequisites],
+		};
 	}
 
 	/// <summary>
@@ -824,7 +866,10 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			return;
 		}
 
-		_nodes[nodeId] = existing with { OwnerUserId = workedByUserId, Version = existing.Version + 1 };
+		_nodes[nodeId] = existing with {
+			OwnerUserId = workedByUserId,
+			Version = existing.Version + 1,
+		};
 	}
 
 	private static Instant EarliestImportedSessionStart(ImportSubtreeLeafWorkSpec work) =>
@@ -1026,7 +1071,11 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 	{
 		var hasChildren = _nodes.Values.Any(n => n.ParentId == node.Id);
 		var hasLeafWork = _leafWork.ContainsKey(node.Id);
-		return node with { HasChildren = hasChildren, HasLeafWork = hasLeafWork, Kind = DeriveKind(node.ParentId, hasChildren) };
+		return node with {
+			HasChildren = hasChildren,
+			HasLeafWork = hasLeafWork,
+			Kind = DeriveKind(node.ParentId, hasChildren),
+		};
 	}
 
 	private void RefreshStructuralFacts(JobNodeId nodeId)

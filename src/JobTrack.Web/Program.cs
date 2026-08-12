@@ -186,9 +186,7 @@ public sealed class Program
 		],
 		StringComparer.Ordinal);
 
-	private Program()
-	{
-	}
+	private Program() { }
 
 	public static void Main(string[] args)
 	{
@@ -299,10 +297,10 @@ public sealed class Program
 		// returns an IdentityCookiesBuilder, not the outer AuthenticationBuilder, so it cannot be
 		// chained directly into AddScheme -- both are called against the original builder instead.
 		var authenticationBuilder = builder.Services.AddAuthentication(CookieOrBearerSchemeName)
-			.AddPolicyScheme(CookieOrBearerSchemeName, "Cookie or personal access token", schemeOptions =>
-				schemeOptions.ForwardDefaultSelector = context => PersonalAccessTokenAuthenticationDefaults.IsBearerRequest(context)
-					? PersonalAccessTokenAuthenticationDefaults.AuthenticationScheme
-					: IdentityConstants.ApplicationScheme);
+										   .AddPolicyScheme(CookieOrBearerSchemeName, "Cookie or personal access token", schemeOptions =>
+											   schemeOptions.ForwardDefaultSelector = context => PersonalAccessTokenAuthenticationDefaults.IsBearerRequest(context)
+												   ? PersonalAccessTokenAuthenticationDefaults.AuthenticationScheme
+												   : IdentityConstants.ApplicationScheme);
 		_ = authenticationBuilder.AddIdentityCookies();
 		_ = authenticationBuilder.AddScheme<AuthenticationSchemeOptions, PersonalAccessTokenAuthenticationHandler>(
 			PersonalAccessTokenAuthenticationDefaults.AuthenticationScheme, _ => { });
@@ -321,62 +319,62 @@ public sealed class Program
 		// only -- the library reloads authoritative roles, ownership, and subtree scope itself
 		// inside each operation (plan §8.3, spec §7.1) rather than trusting these role claims alone.
 		_ = builder.Services.AddAuthorizationBuilder()
-			.AddPolicy(JobTrackPolicyNames.AnyEmployee, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.JobManager,
-					EmployeeRoleNames.Worker,
-					EmployeeRoleNames.RateManager,
-					EmployeeRoleNames.CostViewer,
-					EmployeeRoleNames.Auditor))
-			.AddPolicy(JobTrackPolicyNames.JobWorkflow, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.JobManager,
-					EmployeeRoleNames.Worker))
-			.AddPolicy(JobTrackPolicyNames.ScheduleAdministration, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.Worker))
-			.AddPolicy(JobTrackPolicyNames.RateAdministration, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.RateManager,
-					EmployeeRoleNames.CostViewer))
-			.AddPolicy(JobTrackPolicyNames.RateRead, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.CostViewer))
-			.AddPolicy(JobTrackPolicyNames.RateWrite, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.RateManager))
-			.AddPolicy(JobTrackPolicyNames.AuditSearch, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.Auditor))
-			.AddPolicy(JobTrackPolicyNames.RequesterAccess, policy => policy.RequireRole(EmployeeRoleNames.Requester))
-			// Reachable by two disjoint role sets (the request's own Requester, or staff triaging
-			// it) -- RequireAuthorization ANDs every named policy, so this is one combined
-			// coarse-admission policy, not RequesterAccess plus JobWorkflow stacked (ADR 0034). The
-			// authoritative per-request check still lives inside the operation
-			// (RequesterAccessPolicy.CanView/CanCommentAsRequester, JobNodeAccessPolicy.CanManage).
-			.AddPolicy(JobTrackPolicyNames.RequestDetailAccess, policy =>
-				policy.RequireRole(
-					EmployeeRoleNames.Requester,
-					EmployeeRoleNames.Administrator,
-					EmployeeRoleNames.JobManager,
-					EmployeeRoleNames.Worker))
-			// Any signed-in account, employee or Requester, may fetch a CSRF token -- token issuance
-			// itself grants no operational capability; the mutation endpoint each token is later
-			// presented to enforces its own role-scoped policy independently.
-			.AddPolicy(JobTrackPolicyNames.AnyAuthenticatedUser, policy => policy.RequireAuthenticatedUser())
-			.AddPolicy(EmployeeRoleNames.Administrator, policy => policy.RequireRole(EmployeeRoleNames.Administrator))
-			.AddPolicy(EmployeeRoleNames.JobManager, policy => policy.RequireRole(EmployeeRoleNames.JobManager))
-			.AddPolicy(EmployeeRoleNames.Worker, policy => policy.RequireRole(EmployeeRoleNames.Worker))
-			.AddPolicy(EmployeeRoleNames.RateManager, policy => policy.RequireRole(EmployeeRoleNames.RateManager))
-			.AddPolicy(EmployeeRoleNames.CostViewer, policy => policy.RequireRole(EmployeeRoleNames.CostViewer))
-			.AddPolicy(EmployeeRoleNames.Auditor, policy => policy.RequireRole(EmployeeRoleNames.Auditor));
+				   .AddPolicy(JobTrackPolicyNames.AnyEmployee, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.JobManager,
+						   EmployeeRoleNames.Worker,
+						   EmployeeRoleNames.RateManager,
+						   EmployeeRoleNames.CostViewer,
+						   EmployeeRoleNames.Auditor))
+				   .AddPolicy(JobTrackPolicyNames.JobWorkflow, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.JobManager,
+						   EmployeeRoleNames.Worker))
+				   .AddPolicy(JobTrackPolicyNames.ScheduleAdministration, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.Worker))
+				   .AddPolicy(JobTrackPolicyNames.RateAdministration, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.RateManager,
+						   EmployeeRoleNames.CostViewer))
+				   .AddPolicy(JobTrackPolicyNames.RateRead, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.CostViewer))
+				   .AddPolicy(JobTrackPolicyNames.RateWrite, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.RateManager))
+				   .AddPolicy(JobTrackPolicyNames.AuditSearch, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.Auditor))
+				   .AddPolicy(JobTrackPolicyNames.RequesterAccess, policy => policy.RequireRole(EmployeeRoleNames.Requester))
+				   // Reachable by two disjoint role sets (the request's own Requester, or staff triaging
+				   // it) -- RequireAuthorization ANDs every named policy, so this is one combined
+				   // coarse-admission policy, not RequesterAccess plus JobWorkflow stacked (ADR 0034). The
+				   // authoritative per-request check still lives inside the operation
+				   // (RequesterAccessPolicy.CanView/CanCommentAsRequester, JobNodeAccessPolicy.CanManage).
+				   .AddPolicy(JobTrackPolicyNames.RequestDetailAccess, policy =>
+					   policy.RequireRole(
+						   EmployeeRoleNames.Requester,
+						   EmployeeRoleNames.Administrator,
+						   EmployeeRoleNames.JobManager,
+						   EmployeeRoleNames.Worker))
+				   // Any signed-in account, employee or Requester, may fetch a CSRF token -- token issuance
+				   // itself grants no operational capability; the mutation endpoint each token is later
+				   // presented to enforces its own role-scoped policy independently.
+				   .AddPolicy(JobTrackPolicyNames.AnyAuthenticatedUser, policy => policy.RequireAuthenticatedUser())
+				   .AddPolicy(EmployeeRoleNames.Administrator, policy => policy.RequireRole(EmployeeRoleNames.Administrator))
+				   .AddPolicy(EmployeeRoleNames.JobManager, policy => policy.RequireRole(EmployeeRoleNames.JobManager))
+				   .AddPolicy(EmployeeRoleNames.Worker, policy => policy.RequireRole(EmployeeRoleNames.Worker))
+				   .AddPolicy(EmployeeRoleNames.RateManager, policy => policy.RequireRole(EmployeeRoleNames.RateManager))
+				   .AddPolicy(EmployeeRoleNames.CostViewer, policy => policy.RequireRole(EmployeeRoleNames.CostViewer))
+				   .AddPolicy(EmployeeRoleNames.Auditor, policy => policy.RequireRole(EmployeeRoleNames.Auditor));
 
 		_ = builder.Services.Configure<IdentityOptions>(options => {
 			options.Lockout.MaxFailedAccessAttempts = MaxFailedAccessAttempts;
@@ -589,7 +587,9 @@ public sealed class Program
 		_ = builder.Services.AddCors(options => options.AddPolicy(CorsPolicyName, policy => policy.WithOrigins()));
 
 		_ = builder.Services.AddRequestTimeouts(options =>
-			options.DefaultPolicy = new() { Timeout = TimeSpan.FromSeconds(RequestTimeoutSeconds) });
+			options.DefaultPolicy = new() {
+				Timeout = TimeSpan.FromSeconds(RequestTimeoutSeconds),
+			});
 
 		// Kestrel-level defense in depth; the enforced, testable limit is the middleware below --
 		// WebApplicationFactory's TestServer never exercises Kestrel's own body-size enforcement,
@@ -653,8 +653,8 @@ public sealed class Program
 				ExceptionHandlingPath = "/Error",
 				StatusCodeSelector = static exception => exception switch {
 					BadHttpRequestException badHttpRequestException => badHttpRequestException.StatusCode,
-					{ InnerException: BadHttpRequestException innerBadHttpRequestException } =>
-						innerBadHttpRequestException.StatusCode,
+															 { InnerException: BadHttpRequestException innerBadHttpRequestException } =>
+																 innerBadHttpRequestException.StatusCode,
 					_ => StatusCodes.Status500InternalServerError,
 				},
 			});
@@ -799,7 +799,7 @@ public sealed class Program
 		_ = app.MapStaticAssets();
 		app.MapJobTrackApi();
 		_ = app.MapRazorPages()
-			.WithStaticAssets();
+			   .WithStaticAssets();
 
 		app.Run();
 	}
@@ -809,7 +809,12 @@ public sealed class Program
 		context.Response.StatusCode = statusCode;
 		context.Response.ContentType = "application/problem+json";
 		await context.Response.WriteAsJsonAsync(
-			new ProblemDetails { Status = statusCode, Title = title, Detail = detail, Type = problemType },
+			new ProblemDetails {
+				Status = statusCode,
+				Title = title,
+				Detail = detail,
+				Type = problemType,
+			},
 			options: null,
 			contentType: "application/problem+json",
 			cancellationToken: context.RequestAborted);

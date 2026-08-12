@@ -8,17 +8,11 @@ namespace JobTrack.Database;
 /// </summary>
 public sealed class SchemaDeploymentException : Exception
 {
-	public SchemaDeploymentException()
-	{
-	}
+	public SchemaDeploymentException() { }
 
 	public SchemaDeploymentException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	public SchemaDeploymentException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

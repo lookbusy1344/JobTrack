@@ -5,14 +5,8 @@ using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP negative tests for the Administrator-only role-assignment page (plan §8.3),
@@ -36,7 +30,10 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -63,7 +60,7 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 	[Fact]
 	public async Task An_unauthenticated_post_request_is_redirected_to_sign_in_without_reaching_the_handler()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.unauth", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.unauth");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/AssignRole");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
@@ -81,8 +78,8 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 	[Fact]
 	public async Task An_authenticated_non_administrator_is_denied()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.requester", EmployeeRole.Worker);
-		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.requester");
+		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.target");
 		var authCookie = await SignInAsync("worker.requester");
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/Admin/AssignRole");
@@ -98,7 +95,7 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 	public async Task An_administrator_can_assign_a_role()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.assigner", EmployeeRole.Administrator);
-		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.assignee", EmployeeRole.Worker);
+		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.assignee");
 		var authCookie = await SignInAsync("admin.assigner");
 
 		var response = await PostAssignRoleAsync(authCookie, targetId, EmployeeRole.RateManager, false);
@@ -114,7 +111,7 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 	public async Task An_unexpected_extra_form_field_has_no_effect_beyond_the_allow_listed_fields()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.mass-assignment", EmployeeRole.Administrator);
-		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.mass-assignment", EmployeeRole.Worker);
+		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.mass-assignment");
 		var authCookie = await SignInAsync("admin.mass-assignment");
 		var (antiforgeryCookie, token) = await GetAssignRoleFormAsync(authCookie);
 
@@ -174,7 +171,7 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 		var loginFormResponse = await client.SendAsync(loginFormRequest);
 		var loginFormBody = await loginFormResponse.Content.ReadAsStringAsync();
 		var loginAntiforgeryCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(loginFormResponse, "Antiforgery") ??
-													   throw new InvalidOperationException("No antiforgery cookie in login page response."));
+																   throw new InvalidOperationException("No antiforgery cookie in login page response."));
 		var loginToken = AntiforgeryTokenPattern().Match(loginFormBody) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in login page body.");
@@ -199,8 +196,6 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
@@ -216,7 +211,4 @@ public sealed partial class AdminRoleAssignmentTests : IAsyncLifetime, IDisposab
 
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture) == 1;
 	}
-
-
-
 }

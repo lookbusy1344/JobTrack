@@ -14,9 +14,7 @@ internal class SqliteReadOperations(string connectionString, IReadOnlyList<IInte
 {
 	/// <summary>Creates the seam over the given SQLite connection string.</summary>
 	public SqliteReadOperations(string connectionString)
-		: this(connectionString, [])
-	{
-	}
+		: this(connectionString, []) { }
 
 	public DbContext CreateContext() => SqliteDbContextFactory.CreateContext(connectionString, interceptors);
 }

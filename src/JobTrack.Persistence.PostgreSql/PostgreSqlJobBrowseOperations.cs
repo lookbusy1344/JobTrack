@@ -15,14 +15,12 @@ internal sealed class PostgreSqlJobBrowseOperations(NpgsqlDataSource dataSource,
 {
 	/// <summary>Creates the seam over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobBrowseOperations(NpgsqlDataSource dataSource)
-		: this(dataSource, [])
-	{
-	}
+		: this(dataSource, []) { }
 
 	public async Task<bool> IsSubtreeSucceededAsync(DbContext context, long rootId, CancellationToken cancellationToken) =>
 		await context.Database.SqlQuery<bool>(
-				$"""
-				 SELECT node_succeeded({rootId}) AS "Value"
-				 """)
-			.SingleAsync(cancellationToken).ConfigureAwait(false);
+						 $"""
+						  SELECT node_succeeded({rootId}) AS "Value"
+						  """)
+					 .SingleAsync(cancellationToken).ConfigureAwait(false);
 }

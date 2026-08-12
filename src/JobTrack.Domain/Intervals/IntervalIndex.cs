@@ -87,7 +87,7 @@ internal sealed class IntervalIndex
 		var low = 0;
 		var high = sorted.Length;
 		while (low < high) {
-			var middle = low + ((high - low) / 2);
+			var middle = low + (high - low) / 2;
 			if (sorted[middle].End <= query.Start) {
 				low = middle + 1;
 			} else {
@@ -173,9 +173,7 @@ internal sealed class IntervalIndex
 
 			public readonly void Reset() => throw new NotSupportedException();
 
-			public readonly void Dispose()
-			{
-			}
+			public readonly void Dispose() { }
 		}
 	}
 }

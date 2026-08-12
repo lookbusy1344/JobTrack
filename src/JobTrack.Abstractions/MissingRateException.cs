@@ -8,19 +8,13 @@ namespace JobTrack.Abstractions;
 public sealed class MissingRateException : JobTrackException
 {
 	/// <summary>Creates a <see cref="MissingRateException" />.</summary>
-	public MissingRateException()
-	{
-	}
+	public MissingRateException() { }
 
 	/// <summary>Creates a <see cref="MissingRateException" /> with the given message.</summary>
 	public MissingRateException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	/// <summary>Creates a <see cref="MissingRateException" /> with the given message and inner exception.</summary>
 	public MissingRateException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

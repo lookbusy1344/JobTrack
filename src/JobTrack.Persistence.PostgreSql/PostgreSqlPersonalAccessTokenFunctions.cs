@@ -25,8 +25,8 @@ internal static class PostgreSqlPersonalAccessTokenFunctions
 		CancellationToken cancellationToken)
 	{
 		var id = await context.Database
-			.SqlQuery<long>($"SELECT pat_issue({appUserId.Value}, {tokenHash}, {label}, {createdAt}, {expiresAt}) AS \"Value\"")
-			.SingleAsync(cancellationToken).ConfigureAwait(false);
+							  .SqlQuery<long>($"SELECT pat_issue({appUserId.Value}, {tokenHash}, {label}, {createdAt}, {expiresAt}) AS \"Value\"")
+							  .SingleAsync(cancellationToken).ConfigureAwait(false);
 
 		return new(id);
 	}
@@ -34,20 +34,20 @@ internal static class PostgreSqlPersonalAccessTokenFunctions
 	public static async Task<PatAuthenticationRow?> TryAuthenticateAsync(
 		PostgreSqlJobTrackDbContext context, string tokenHash, Instant now, CancellationToken cancellationToken) =>
 		await context.Database
-			.SqlQuery<PatAuthenticationRow>(
-				$"SELECT id AS \"Id\", app_user_id AS \"AppUserId\" FROM pat_try_authenticate({tokenHash}, {now})")
-			.SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+					 .SqlQuery<PatAuthenticationRow>(
+						 $"SELECT id AS \"Id\", app_user_id AS \"AppUserId\" FROM pat_try_authenticate({tokenHash}, {now})")
+					 .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
 	public static async Task<IReadOnlyList<PatSummaryRow>> ListAsync(
 		PostgreSqlJobTrackDbContext context, AppUserId appUserId, CancellationToken cancellationToken) =>
 		await context.Database
-			.SqlQuery<PatSummaryRow>(
-				$"""
-				 SELECT id AS "Id", label AS "Label", created_at AS "CreatedAt", expires_at AS "ExpiresAt",
-				        revoked_at AS "RevokedAt", last_used_at AS "LastUsedAt"
-				 FROM pat_list({appUserId.Value})
-				 """)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+					 .SqlQuery<PatSummaryRow>(
+						 $"""
+						  SELECT id AS "Id", label AS "Label", created_at AS "CreatedAt", expires_at AS "ExpiresAt",
+						         revoked_at AS "RevokedAt", last_used_at AS "LastUsedAt"
+						  FROM pat_list({appUserId.Value})
+						  """)
+					 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 	public static async Task<PatRevokeRow> RevokeAsync(
 		PostgreSqlJobTrackDbContext context,
@@ -56,15 +56,15 @@ internal static class PostgreSqlPersonalAccessTokenFunctions
 		Instant now,
 		CancellationToken cancellationToken) =>
 		await context.Database
-			.SqlQuery<PatRevokeRow>(
-				$"SELECT found AS \"Found\", newly_revoked AS \"NewlyRevoked\" FROM pat_revoke({tokenId.Value}, {appUserId.Value}, {now})")
-			.SingleAsync(cancellationToken).ConfigureAwait(false);
+					 .SqlQuery<PatRevokeRow>(
+						 $"SELECT found AS \"Found\", newly_revoked AS \"NewlyRevoked\" FROM pat_revoke({tokenId.Value}, {appUserId.Value}, {now})")
+					 .SingleAsync(cancellationToken).ConfigureAwait(false);
 
 	/// <summary>Marks every currently-unrevoked token owned by <paramref name="appUserId" /> as revoked at <paramref name="now" />.</summary>
 	public static async Task<int> RevokeAllForUserAsync(
 		DbContext context, AppUserId appUserId, Instant now, CancellationToken cancellationToken) =>
 		await context.Database.SqlQuery<int>($"SELECT pat_revoke_all({appUserId.Value}, {now}) AS \"Value\"")
-			.SingleAsync(cancellationToken).ConfigureAwait(false);
+					 .SingleAsync(cancellationToken).ConfigureAwait(false);
 }
 
 /// <summary>One row of <see cref="PostgreSqlPersonalAccessTokenFunctions.TryAuthenticateAsync" />.</summary>

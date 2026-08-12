@@ -37,7 +37,10 @@ public sealed class CostQueriesTests
 		return port;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	[Fact]
 	public async Task A_cost_viewer_can_calculate_cost_details_for_a_leaf()
@@ -54,7 +57,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(CostViewerId), NodeId = LeafId, AsOf = At(24) });
+		var result = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = LeafId,
+			AsOf = At(24),
+		});
 
 		result.NodeId.Should().Be(LeafId);
 		result.ExactCost.Should().Be(new(120m));
@@ -79,7 +86,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var act = () => sut.GetCostDetailsAsync(new() { Context = ContextFor(WorkerId), NodeId = LeafId, AsOf = At(24) });
+		var act = () => sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(WorkerId),
+			NodeId = LeafId,
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		port.GetCostAccessInputsCallCount.Should().Be(1);
@@ -108,7 +119,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var result = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		// [09:00,10:00) session1 alone: 1h @ 60 = 60. [10:00,11:00) both sessions share: 0.5h @ 60 = 30. Total 90.
 		result.ExactCosts.Should().ContainKeys(BranchId, LeafId);
@@ -154,7 +169,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var result = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		result.AllocatedDurations[LeafId].ToHours().Should().Be(0.333333m, "20 minutes of work, not 10");
 		result.AllocatedDurations[LeafId].ToString().Should().Be("0.3 hrs");
@@ -195,7 +214,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		var result = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		result.AllocatedDurations[LeafId].ToHours().Should().Be(0.166667m, "only the rota'd worker's ten minutes are costable");
 		result.AllocatedDurations[LeafId].ToString().Should().Be("0.2 hrs");
@@ -223,7 +246,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = RootId, AsOf = At(24) });
+		var result = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = RootId,
+			AsOf = At(24),
+		});
 
 		result.AllocatedDurations[LeafId].ToHours().Should().Be(0.083333m, "five of the ten minutes went to this leaf");
 		result.AllocatedDurations[OtherLeafId].ToHours().Should().Be(0.083333m);
@@ -262,7 +289,11 @@ public sealed class CostQueriesTests
 	{
 		var sut = new CostQueries(CreatePortWithNodes());
 
-		var act = () => sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(WorkerId), NodeId = BranchId, AsOf = At(24) });
+		var act = () => sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(WorkerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -273,7 +304,11 @@ public sealed class CostQueriesTests
 		var sut = new CostQueries(CreatePortWithNodes());
 
 		var result = await sut.GetHierarchyTotalsAsync(
-			new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+			new() {
+				Context = ContextFor(CostViewerId),
+				NodeId = BranchId,
+				AsOf = At(24),
+			});
 
 		result.DisplayedCosts.Should().ContainKeys(BranchId, LeafId);
 		result.AllocatedDurations.Should().ContainKeys(BranchId, LeafId);
@@ -296,7 +331,11 @@ public sealed class CostQueriesTests
 
 		var sut = new CostQueries(port);
 
-		var act = () => sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = RootId, AsOf = At(24) });
+		var act = () => sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = RootId,
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
 	}
@@ -403,8 +442,16 @@ public sealed class CostQueriesTests
 			NodeIds = [BranchId, LeafId, OtherLeafId],
 			AsOf = At(24),
 		});
-		var individualBranch = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
-		var individualLeaf = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = LeafId, AsOf = At(24) });
+		var individualBranch = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
+		var individualLeaf = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = LeafId,
+			AsOf = At(24),
+		});
 
 		bulk.DisplayedCosts[BranchId].Should().Be(individualBranch.DisplayedCosts[BranchId]);
 		bulk.DisplayedCosts[LeafId].Should().Be(individualLeaf.DisplayedCosts[LeafId]);
@@ -453,7 +500,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(WorkerId), NodeIds = [LeafId], AsOf = At(24) });
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(WorkerId),
+			NodeIds = [LeafId],
+			AsOf = At(24),
+		});
 
 		bulk.DisplayedCosts.Should().ContainKey(LeafId);
 	}
@@ -473,7 +524,11 @@ public sealed class CostQueriesTests
 		});
 		var sut = new CostQueries(port);
 
-		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(WorkerId), NodeIds = [LeafId], AsOf = At(24) });
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(WorkerId),
+			NodeIds = [LeafId],
+			AsOf = At(24),
+		});
 
 		bulk.DisplayedCosts.Should().NotContainKey(LeafId);
 	}
@@ -485,7 +540,11 @@ public sealed class CostQueriesTests
 		port.SeedBulkSnapshotRoles(CostViewerId, EmployeeRole.Worker);
 		var sut = new CostQueries(port);
 
-		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(CostViewerId), NodeIds = [LeafId], AsOf = At(24) });
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeIds = [LeafId],
+			AsOf = At(24),
+		});
 
 		bulk.DisplayedCosts.Should().NotContainKey(
 			LeafId, "authorization must use the roles read in the same snapshot as the cost inputs");
@@ -497,7 +556,11 @@ public sealed class CostQueriesTests
 		var port = CreatePortWithNodes();
 		var sut = new CostQueries(port);
 
-		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(CostViewerId), NodeIds = [], AsOf = At(24) });
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeIds = [],
+			AsOf = At(24),
+		});
 
 		bulk.DisplayedCosts.Should().BeEmpty();
 		port.GetCostAccessInputsCallCount.Should().Be(0);

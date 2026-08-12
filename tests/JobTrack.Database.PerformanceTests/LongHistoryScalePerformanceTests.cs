@@ -62,12 +62,19 @@ public sealed class LongHistoryScalePerformanceTests : IAsyncLifetime
 		var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
 		var port = new PostgreSqlCostQueryPort(dataSource, SystemClock.Instance);
 		var costQueries = new CostQueries(port);
-		var context = new CommandContext { Actor = new(seed.OwnerActorId), CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = new(seed.OwnerActorId),
+			CorrelationId = Guid.NewGuid(),
+		};
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
 
 		var leafStopwatch = Stopwatch.StartNew();
 		var leafResult = await costQueries.GetCostDetailsAsync(
-			new() { Context = context, NodeId = new(seed.OneLeafId), AsOf = asOf });
+			new() {
+				Context = context,
+				NodeId = new(seed.OneLeafId),
+				AsOf = asOf,
+			});
 		leafStopwatch.Stop();
 		output.WriteLine(
 			$"Leaf cost details, 5-year history ({LeafCostBudget.TotalMilliseconds:F0} ms budget): " +
@@ -75,7 +82,11 @@ public sealed class LongHistoryScalePerformanceTests : IAsyncLifetime
 
 		var branchStopwatch = Stopwatch.StartNew();
 		var branchResult = await costQueries.GetHierarchyTotalsAsync(
-			new() { Context = context, NodeId = new(seed.BranchId), AsOf = asOf });
+			new() {
+				Context = context,
+				NodeId = new(seed.BranchId),
+				AsOf = asOf,
+			});
 		branchStopwatch.Stop();
 		output.WriteLine(
 			$"Branch (20-worker, 5-year history) hierarchy totals ({BranchCostBudget.TotalMilliseconds:F0} ms budget): " +

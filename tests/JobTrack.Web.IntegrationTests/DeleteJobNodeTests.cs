@@ -7,12 +7,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Persistence.Sqlite;
@@ -58,7 +54,10 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString, capturedLogEntries);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -96,7 +95,10 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "delete.unused-leafwork-manager", EmployeeRole.JobManager);
 		var leaf = await AddChildAsync(rootId, managerId, "Attached but never worked");
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 		var authCookie = await client.SignInAsync("delete.unused-leafwork-manager");
@@ -183,7 +185,10 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 		var required = await AddChildAsync(rootId, managerId, "Required job");
 		var dependent = await AddChildAsync(rootId, managerId, "Dependent job");
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = required.Id,
 			DependentJobId = dependent.Id,
 		});
@@ -211,7 +216,10 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 
 		// A concurrent edit lands after the form was loaded, advancing the row's version.
 		_ = await seedClient.Jobs.EditAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = leaf.Id,
 			Description = "Concurrently edited",
 			OwnerUserId = managerId,
@@ -232,8 +240,14 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeResult> AddWorkedLeafAsync(AppUserId ownerId, string description)
 	{
 		var leaf = await AddChildAsync(rootId, ownerId, description);
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
-		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = leaf.Id });
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = leaf.Id,
+		});
 		var started = await seedClient.Work.StartSessionAsync(new() {
 			Context = context,
 			LeafWorkId = leaf.Id,
@@ -248,13 +262,21 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 		});
 
 		// Re-read so the caller sees the leaf's post-attach version, not the pre-attach one.
-		var refreshed = await seedClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = leaf.Id });
-		return leaf with { Version = refreshed.Node.Version };
+		var refreshed = await seedClient.Query.GetJobNodeAsync(new() {
+			Context = context,
+			NodeId = leaf.Id,
+		});
+		return leaf with {
+			Version = refreshed.Node.Version,
+		};
 	}
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
 		await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -325,9 +347,7 @@ public sealed partial class DeleteJobNodeTests : IAsyncLifetime, IDisposable
 	{
 		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
 
-		public void Dispose()
-		{
-		}
+		public void Dispose() { }
 
 		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
 		{

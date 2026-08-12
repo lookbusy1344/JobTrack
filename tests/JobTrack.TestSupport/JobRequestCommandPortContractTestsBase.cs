@@ -59,7 +59,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_request", EntityId = result.JobNodeId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_request",
+				EntityId = result.JobNodeId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("submit-request");
@@ -331,7 +334,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var second = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
 		_ = await port.SubmitAsync(SubmitRequest(otherRequesterId, holdingAreaId));
 
-		var mine = await port.GetMyRequestsAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+		var mine = await port.GetMyRequestsAsync(new() {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		mine.Select(r => r.JobNodeId).Should().Equal(second.JobNodeId, first.JobNodeId);
 		mine.Select(r => r.Status).Should().OnlyContain(status => status == RequesterStatus.Submitted);
@@ -346,8 +352,14 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var requestPort = CreateCommandPort(database.ConnectionString);
 		var submitted = await requestPort.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
 		var nodeCommandPort = CreateJobNodeCommandPort(database.ConnectionString);
-		var jobManagerContext = new CommandContext { Actor = jobManagerId, CorrelationId = Guid.NewGuid() };
-		_ = await nodeCommandPort.AttachLeafWorkAsync(new() { Context = jobManagerContext, JobNodeId = submitted.JobNodeId });
+		var jobManagerContext = new CommandContext {
+			Actor = jobManagerId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		_ = await nodeCommandPort.AttachLeafWorkAsync(new() {
+			Context = jobManagerContext,
+			JobNodeId = submitted.JobNodeId,
+		});
 		_ = await nodeCommandPort.DecomposeWorkedLeafAsync(new() {
 			Context = jobManagerContext,
 			LeafNodeId = submitted.JobNodeId,
@@ -355,11 +367,16 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 			BranchDescription = "Printer troubleshooting",
 			ExistingWorkDescription = "Diagnose the fault",
 			NewChildren = [
-				new() { Description = "Order replacement part", OwnerUserId = jobManagerId, Priority = Priority.Medium },
+				new() {
+					Description = "Order replacement part", OwnerUserId = jobManagerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
-		var mine = await requestPort.GetMyRequestsAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+		var mine = await requestPort.GetMyRequestsAsync(new() {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		mine.Should().ContainSingle().Which.Status.Should().Be(RequesterStatus.Waiting,
 			"a decomposed request's public status is derived from its childless descendants, not its branch anchor");
@@ -371,7 +388,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var mine = await port.GetMyRequestsAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+		var mine = await port.GetMyRequestsAsync(new() {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		mine.Should().BeEmpty();
 	}
@@ -386,7 +406,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var otherDepartmentId = await SeedDepartmentAsync("HR");
 		_ = await SeedHoldingAreaAsync(otherDepartmentId, null, true);
 
-		var eligible = await port.GetEligibleHoldingAreasAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+		var eligible = await port.GetEligibleHoldingAreasAsync(new() {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		eligible.Select(h => h.Id).Should().Equal(globalId);
 	}
@@ -398,7 +421,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		_ = await SeedHoldingAreaAsync(null, null, true);
 
-		var eligible = await port.GetEligibleHoldingAreasAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+		var eligible = await port.GetEligibleHoldingAreasAsync(new() {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		var holdingArea = eligible.Should().ContainSingle().Which;
 		holdingArea.JobNodeDescription.Should().Be("Holding area", "a requester chooses between job nodes, not configured labels");
@@ -414,7 +440,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var scopedId = await SeedHoldingAreaAsync(departmentId, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var eligible = await port.GetEligibleHoldingAreasAsync(new() { Actor = requesterId, CorrelationId = Guid.NewGuid() });
+		var eligible = await port.GetEligibleHoldingAreasAsync(new() {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		eligible.Select(h => h.Id).Should().Equal(scopedId);
 	}
@@ -446,7 +475,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_request", EntityId = submitted.JobNodeId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_request",
+				EntityId = submitted.JobNodeId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().Contain(e => e.Operation == "acknowledge-request");
 	}
@@ -563,7 +595,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_request_note", EntityId = note.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_request_note",
+				EntityId = note.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("add-request-note");
@@ -626,7 +661,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
 		var nodeCommandPort = CreateJobNodeCommandPort(database.ConnectionString);
 		_ = await nodeCommandPort.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = jobManagerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = submitted.JobNodeId,
 		});
 
@@ -752,8 +790,14 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		var requestPort = CreateCommandPort(database.ConnectionString);
 		var submitted = await requestPort.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
 		var nodeCommandPort = CreateJobNodeCommandPort(database.ConnectionString);
-		var jobManagerContext = new CommandContext { Actor = jobManagerId, CorrelationId = Guid.NewGuid() };
-		_ = await nodeCommandPort.AttachLeafWorkAsync(new() { Context = jobManagerContext, JobNodeId = submitted.JobNodeId });
+		var jobManagerContext = new CommandContext {
+			Actor = jobManagerId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		_ = await nodeCommandPort.AttachLeafWorkAsync(new() {
+			Context = jobManagerContext,
+			JobNodeId = submitted.JobNodeId,
+		});
 
 		_ = await nodeCommandPort.DecomposeWorkedLeafAsync(new() {
 			Context = jobManagerContext,
@@ -762,7 +806,9 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 			BranchDescription = "Printer troubleshooting",
 			ExistingWorkDescription = "Diagnose the fault",
 			NewChildren = [
-				new() { Description = "Order replacement part", OwnerUserId = jobManagerId, Priority = Priority.Medium },
+				new() {
+					Description = "Order replacement part", OwnerUserId = jobManagerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -802,33 +848,48 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	protected abstract object EncodeInstant(DateTimeOffset value);
 
 	private static SubmitJobRequestRequest SubmitRequest(AppUserId requesterId, RequestHoldingAreaId holdingAreaId) => new() {
-		Context = new() { Actor = requesterId, CorrelationId = Guid.NewGuid() },
+		Context = new() {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		},
 		HoldingAreaId = holdingAreaId,
 		Description = "Printer will not turn on",
 	};
 
 	private static MoveRequesterJobRequest MoveRequest(AppUserId actorId, JobNodeId nodeId, JobNodeId newParentId, long version) => new() {
-		Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() },
+		Context = new() {
+			Actor = actorId,
+			CorrelationId = Guid.NewGuid(),
+		},
 		NodeId = nodeId,
 		NewParentId = newParentId,
 		Version = version,
 	};
 
 	private static AcknowledgeJobRequestRequest AcknowledgeRequest(AppUserId actorId, JobNodeId nodeId, long version) => new() {
-		Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() },
+		Context = new() {
+			Actor = actorId,
+			CorrelationId = Guid.NewGuid(),
+		},
 		NodeId = nodeId,
 		Version = version,
 	};
 
 	private static AddJobRequestNoteRequest AddNoteRequest(AppUserId actorId, JobNodeId nodeId, string content, bool visibleToRequester) => new() {
-		Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() },
+		Context = new() {
+			Actor = actorId,
+			CorrelationId = Guid.NewGuid(),
+		},
 		NodeId = nodeId,
 		Content = content,
 		VisibleToRequester = visibleToRequester,
 	};
 
 	private static GetJobRequestDetailRequest DetailRequest(AppUserId actorId, JobNodeId nodeId) => new() {
-		Context = new() { Actor = actorId, CorrelationId = Guid.NewGuid() },
+		Context = new() {
+			Actor = actorId,
+			CorrelationId = Guid.NewGuid(),
+		},
 		NodeId = nodeId,
 	};
 
@@ -1003,8 +1064,4 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 		command.AddParameter("@appUserId", appUserId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
-
-
-
-
 }

@@ -22,12 +22,12 @@ internal sealed class RateQueryPort(IProviderReadOperations provider, IClock clo
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
 		if (!await context.Set<AppUserEntity>().AsNoTracking()
-				.AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Employee {userId} does not exist.");
 		}
 
 		var userCostRateEntities = await context.Set<UserCostRateEntity>().AsNoTracking()
-			.Where(r => r.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
+												.Where(r => r.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var userCostRates = userCostRateEntities.Select(entity => new UserCostRateResult {
 			Id = entity.Id,
@@ -38,7 +38,7 @@ internal sealed class RateQueryPort(IProviderReadOperations provider, IClock clo
 		}).ToArray();
 
 		var nodeRateOverrideEntities = await context.Set<NodeRateOverrideEntity>().AsNoTracking()
-			.Where(o => o.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
+													.Where(o => o.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var nodeRateOverrides = nodeRateOverrideEntities.Select(entity => new NodeRateOverrideResult {
 			Id = entity.Id,
@@ -48,21 +48,25 @@ internal sealed class RateQueryPort(IProviderReadOperations provider, IClock clo
 			Version = entity.RowVersion,
 		}).ToArray();
 
-		return new() { ActorRoles = actorRoles, UserCostRates = [.. userCostRates], NodeRateOverrides = [.. nodeRateOverrides] };
+		return new() {
+			ActorRoles = actorRoles,
+			UserCostRates = [.. userCostRates],
+			NodeRateOverrides = [.. nodeRateOverrides],
+		};
 	}
 
 	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		DbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}

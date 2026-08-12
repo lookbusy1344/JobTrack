@@ -25,7 +25,7 @@ public sealed class PersonalAccessTokenPolicyTests
 		var act = () => PersonalAccessTokenPolicy.EnsureValidExpiry(Now, Now);
 
 		act.Should().Throw<InvariantViolationException>()
-			.Which.ConstraintId.Should().Be(ExpiryNotInFutureConstraint);
+		   .Which.ConstraintId.Should().Be(ExpiryNotInFutureConstraint);
 	}
 
 	[Fact]
@@ -34,7 +34,7 @@ public sealed class PersonalAccessTokenPolicyTests
 		var act = () => PersonalAccessTokenPolicy.EnsureValidExpiry(Now, Now - Duration.FromMinutes(1));
 
 		act.Should().Throw<InvariantViolationException>()
-			.Which.ConstraintId.Should().Be(ExpiryNotInFutureConstraint);
+		   .Which.ConstraintId.Should().Be(ExpiryNotInFutureConstraint);
 	}
 
 	[Fact]
@@ -54,6 +54,6 @@ public sealed class PersonalAccessTokenPolicyTests
 		var act = () => PersonalAccessTokenPolicy.EnsureValidExpiry(Now, expiresAt);
 
 		act.Should().Throw<InvariantViolationException>()
-			.Which.ConstraintId.Should().Be(ExpiryTooLongConstraint);
+		   .Which.ConstraintId.Should().Be(ExpiryTooLongConstraint);
 	}
 }

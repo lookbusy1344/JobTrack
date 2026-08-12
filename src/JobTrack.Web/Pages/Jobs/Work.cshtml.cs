@@ -142,7 +142,10 @@ public sealed class WorkModel(
 	/// </summary>
 	public string BackHref => ReturnUrl is not null && Url.IsLocalUrl(ReturnUrl)
 		? ReturnUrl
-		: Url.Page("/Jobs/Browse", new { nodeId = LeafNodeId })!;
+		: Url.Page("/Jobs/Browse", new
+		{
+			nodeId = LeafNodeId,
+		})!;
 
 	/// <summary>The one leaf this page is for, as a <see cref="WorkRowActionsModel" /> so the toolbar shares Browse's exact start/finish/start-for logic.</summary>
 	public WorkRowActionsModel ToolbarActions => new() {
@@ -221,7 +224,10 @@ public sealed class WorkModel(
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = new(LeafNodeId),
 					WorkedByUserId = actor.Value,
 					StartedAt = startedAtInstant,
@@ -266,7 +272,10 @@ public sealed class WorkModel(
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = new(LeafNodeId),
 					WorkedByUserId = new(targetUserId),
 					StartedAt = startedAtInstant,
@@ -316,7 +325,10 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
@@ -385,7 +397,10 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
@@ -460,7 +475,10 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
@@ -517,7 +535,10 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
@@ -580,7 +601,10 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			_ = await jobTrackClient.Work.SetAchievementAsync(new() {
@@ -665,11 +689,17 @@ public sealed class WorkModel(
 		}
 
 		var leafId = new JobNodeId(LeafNodeId);
-		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var text = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp;
 
 		try {
-			var current = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = leafId }, cancellationToken);
+			var current = await jobTrackClient.Query.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = leafId,
+			}, cancellationToken);
 			if (text == current.Node.WriteUp) {
 				return (false, null);
 			}
@@ -715,7 +745,11 @@ public sealed class WorkModel(
 		sessionVersions ??= [];
 
 		return sessionIds.Length == sessionVersions.Length
-			? [.. sessionIds.Zip(sessionVersions, (id, version) => new ExpectedActiveSession { Id = new(id), Version = version })]
+			? [
+				.. sessionIds.Zip(sessionVersions, (id, version) => new ExpectedActiveSession {
+					Id = new(id), Version = version,
+				}),
+			]
 			: null;
 	}
 
@@ -735,7 +769,12 @@ public sealed class WorkModel(
 	private static WriteUpChange? WriteUpChangeOrNull(long? nodeVersion, string? writeUp)
 	{
 		var trimmed = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp;
-		return nodeVersion.HasValue ? new WriteUpChange { NodeVersion = nodeVersion.Value, WriteUp = trimmed } : null;
+		return nodeVersion.HasValue
+			? new WriteUpChange {
+				NodeVersion = nodeVersion.Value,
+				WriteUp = trimmed,
+			}
+			: null;
 	}
 
 	/// <summary>Appends the write-up's own confirmation to a command's success message, but only when it actually changed.</summary>
@@ -766,10 +805,15 @@ public sealed class WorkModel(
 	{
 		CurrentActorId = actor;
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
-		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		_employeeDirectory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-			new() { Context = context }, cancellationToken);
+			new() {
+				Context = context,
+			}, cancellationToken);
 		_employeeDirectoryById = _employeeDirectory.ToDictionary(entry => entry.Id);
 		StartForWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory);
 		ReopenWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory);
@@ -779,8 +823,14 @@ public sealed class WorkModel(
 
 		var leafId = new JobNodeId(LeafNodeId);
 		try {
-			WorkPage = await jobTrackClient.Query.GetLeafWorkPageAsync(new() { Context = context, JobNodeId = leafId }, cancellationToken);
-			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = leafId }, cancellationToken);
+			WorkPage = await jobTrackClient.Query.GetLeafWorkPageAsync(new() {
+				Context = context,
+				JobNodeId = leafId,
+			}, cancellationToken);
+			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = leafId,
+			}, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
@@ -791,7 +841,11 @@ public sealed class WorkModel(
 
 		try {
 			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
-				new() { Context = context, LeafWorkId = leafId, WorkedByUserId = workedByUserId }, cancellationToken);
+				new() {
+					Context = context,
+					LeafWorkId = leafId,
+					WorkedByUserId = workedByUserId,
+				}, cancellationToken);
 
 			Panel = new() {
 				LeafNodeId = LeafNodeId,
@@ -830,7 +884,11 @@ public sealed class WorkModel(
 	{
 		try {
 			var details = await jobTrackClient.Costs.GetCostDetailsAsync(
-				new() { Context = context, NodeId = leafId, AsOf = Now }, cancellationToken);
+				new() {
+					Context = context,
+					NodeId = leafId,
+					AsOf = Now,
+				}, cancellationToken);
 			return SessionCostAggregator.AggregateBySession(details.Trace);
 		}
 		catch (AuthorizationDeniedException) {
@@ -884,7 +942,12 @@ public sealed class WorkModel(
 
 	/// <summary>Redirects back to this page itself, preserving <see cref="ReturnUrl" /> across the round trip.</summary>
 	private RedirectToPageResult RedirectToWork() =>
-		RedirectToPage(new { leafNodeId = LeafNodeId, workedByUserId = WorkedByUserId, returnUrl = ReturnUrl });
+		RedirectToPage(new
+		{
+			leafNodeId = LeafNodeId,
+			workedByUserId = WorkedByUserId,
+			returnUrl = ReturnUrl,
+		});
 
 	/// <summary>
 	///     Redirects to wherever this page was reached from once an ending action succeeds, or
@@ -894,5 +957,8 @@ public sealed class WorkModel(
 	private IActionResult RedirectToReturnUrlOrBrowse() =>
 		ReturnUrl is not null && Url.IsLocalUrl(ReturnUrl)
 			? LocalRedirect(ReturnUrl)
-			: RedirectToPage("/Jobs/Browse", new { nodeId = LeafNodeId });
+			: RedirectToPage("/Jobs/Browse", new
+			{
+				nodeId = LeafNodeId,
+			});
 }

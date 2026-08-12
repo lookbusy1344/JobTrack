@@ -53,9 +53,9 @@ internal static class SubtreeImportPlanner
 		}
 
 		var childrenByParent = nodes
-			.Where(n => n.ParentLocalId is not null)
-			.GroupBy(n => n.ParentLocalId!.Value)
-			.ToDictionary(g => g.Key, g => (IReadOnlyList<ImportSubtreeNodeSpec>)[.. g]);
+							   .Where(n => n.ParentLocalId is not null)
+							   .GroupBy(n => n.ParentLocalId!.Value)
+							   .ToDictionary(g => g.Key, g => (IReadOnlyList<ImportSubtreeNodeSpec>)[.. g]);
 
 		var ordered = new List<ImportSubtreeNodeSpec>(nodes.Count);
 		var visited = new HashSet<long>(nodes.Count);

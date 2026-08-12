@@ -45,7 +45,7 @@ public abstract class SchemaDeploymentContractTestsBase : IAsyncLifetime
 		applied.AppliedAtUtc.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
 
 		(await ReadNamesAsync(connection, "achievement_status")).Should()
-			.BeEquivalentTo("Waiting", "InProgress", "Success", "Cancelled", "Unsuccessful");
+																.BeEquivalentTo("Waiting", "InProgress", "Success", "Cancelled", "Unsuccessful");
 	}
 
 	// TC-DB-SCHEMA-002
@@ -72,7 +72,9 @@ public abstract class SchemaDeploymentContractTestsBase : IAsyncLifetime
 		var deployer = CreateDeployer(connection);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 
-		var tamperedScript = scripts[0] with { Checksum = "tampered-checksum" };
+		var tamperedScript = scripts[0] with {
+			Checksum = "tampered-checksum",
+		};
 
 		var act = async () => await deployer.DeployAsync([tamperedScript], CancellationToken.None);
 

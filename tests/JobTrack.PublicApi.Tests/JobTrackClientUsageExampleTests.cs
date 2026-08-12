@@ -116,7 +116,13 @@ public sealed class JobTrackClientUsageExampleTests
 		var actor = new AppUserId(1);
 
 		var result = await client.Query.GetEmployeeProfileAsync(
-			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, TargetUserId = actor },
+			new() {
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
+				TargetUserId = actor,
+			},
 			CancellationToken.None);
 
 		result.Id.Should().Be(actor);
@@ -130,7 +136,10 @@ public sealed class JobTrackClientUsageExampleTests
 
 		var result = await client.Jobs.AddChildAsync(
 			new() {
-				Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
 				ParentId = new(1),
 				Description = "Do the thing",
 				OwnerUserId = actor,
@@ -443,13 +452,17 @@ public sealed class JobTrackClientUsageExampleTests
 		public Task<EquatableArray<EmployeeDirectoryEntry>> GetEmployeeDirectoryAsync(
 			GetEmployeeDirectoryRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult<EquatableArray<EmployeeDirectoryEntry>>([
-				new() { Id = new(1), DisplayName = "Ada Example", UserName = "ada.example" },
+				new() {
+					Id = new(1), DisplayName = "Ada Example", UserName = "ada.example",
+				},
 			]);
 
 		public Task<EquatableArray<EmployeeDirectoryEntry>> GetAllEmployeesAsync(
 			GetAllEmployeesRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult<EquatableArray<EmployeeDirectoryEntry>>([
-				new() { Id = new(1), DisplayName = "Ada Example", UserName = "ada.example" },
+				new() {
+					Id = new(1), DisplayName = "Ada Example", UserName = "ada.example",
+				},
 			]);
 
 		public Task<AccountStateResult> GetAccountStateAsync(
@@ -497,7 +510,10 @@ public sealed class JobTrackClientUsageExampleTests
 
 		public Task<JobSubtreeResult> GetJobSubtreeAsync(
 			GetJobSubtreeRequest request, CancellationToken cancellationToken = default) =>
-			Task.FromResult(new JobSubtreeResult { RootId = request.RootId, Nodes = [] });
+			Task.FromResult(new JobSubtreeResult {
+				RootId = request.RootId,
+				Nodes = [],
+			});
 
 		public Task<BranchAchievement> GetBranchAchievementAsync(
 			GetBranchAchievementRequest request, CancellationToken cancellationToken = default) =>
@@ -541,10 +557,16 @@ public sealed class JobTrackClientUsageExampleTests
 			Task.FromResult<EquatableArray<PrerequisiteEdge>>([]);
 
 		public Task<ScheduleSnapshotResult> GetScheduleAsync(GetScheduleRequest request, CancellationToken cancellationToken = default) =>
-			Task.FromResult(new ScheduleSnapshotResult { Versions = [], Exceptions = [] });
+			Task.FromResult(new ScheduleSnapshotResult {
+				Versions = [],
+				Exceptions = [],
+			});
 
 		public Task<RateSnapshotResult> GetRatesAsync(GetRatesRequest request, CancellationToken cancellationToken = default) =>
-			Task.FromResult(new RateSnapshotResult { UserCostRates = [], NodeRateOverrides = [] });
+			Task.FromResult(new RateSnapshotResult {
+				UserCostRates = [],
+				NodeRateOverrides = [],
+			});
 
 		public Task<LeafWorkPageResult> GetLeafWorkPageAsync(GetLeafWorkPageRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");

@@ -59,8 +59,7 @@ public sealed class HierarchyAchievementReadinessPerformanceTests : IAsyncLifeti
 			parameter.Value = dependentLeafId;
 			command.Parameters.Add(parameter);
 			await using var reader = await command.ExecuteReaderAsync();
-			while (await reader.ReadAsync()) {
-			}
+			while (await reader.ReadAsync()) { }
 		}
 
 		stopwatch.Elapsed.Should().BeLessThan(UnsatisfiedPrerequisiteBudget);
@@ -87,8 +86,7 @@ public sealed class HierarchyAchievementReadinessPerformanceTests : IAsyncLifeti
 			parameter.Value = deepNodeId;
 			command.Parameters.Add(parameter);
 			await using var reader = await command.ExecuteReaderAsync();
-			while (await reader.ReadAsync()) {
-			}
+			while (await reader.ReadAsync()) { }
 		}
 
 		stopwatch.Elapsed.Should().BeLessThan(AncestryTraversalBudget);

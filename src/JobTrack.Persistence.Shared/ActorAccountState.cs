@@ -1,7 +1,6 @@
 namespace JobTrack.Persistence.Shared;
 
 using Abstractions;
-using Domain.Authorization;
 using Entities;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
@@ -13,14 +12,14 @@ internal static class ActorAccountState
 		DbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var identityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-			.FirstOrDefaultAsync(user => user.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
-			?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
+										.FirstOrDefaultAsync(user => user.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+						   ?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		EnsureMayAct(identityUser, actorId, now);
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(userRole => userRole.IdentityUserId == identityUser.Id)
-			.Select(userRole => (EmployeeRole)userRole.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(userRole => userRole.IdentityUserId == identityUser.Id)
+								 .Select(userRole => (EmployeeRole)userRole.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}
@@ -31,7 +30,7 @@ internal static class ActorAccountState
 	public static void EnsureMayAct(bool isEnabled, bool lockoutEnabled, Instant? lockoutEnd, AppUserId actorId, Instant now)
 	{
 		if (!isEnabled
-			|| (lockoutEnabled && lockoutEnd is Instant lockedUntil && lockedUntil > now)) {
+			|| lockoutEnabled && lockoutEnd is Instant lockedUntil && lockedUntil > now) {
 			throw new AuthorizationDeniedException($"Actor {actorId} has a disabled or locked account.");
 		}
 	}

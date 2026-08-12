@@ -180,7 +180,9 @@ public static class CostEngine
 				}
 
 				exposedEntries.Add(narrowedSessionsBySegment.TryGetValue(entry.Segment, out var narrowed)
-					? entry with { ActiveSessionIds = narrowed }
+					? entry with {
+						ActiveSessionIds = narrowed,
+					}
 					: entry);
 			}
 

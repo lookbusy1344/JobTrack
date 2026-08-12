@@ -53,7 +53,9 @@ public sealed class SqliteRateResolutionAndBoundaryDiscoverySchemaTests()
 			return exceptionRate;
 		}
 
-		var ancestry = new List<long> { nodeId };
+		var ancestry = new List<long> {
+			nodeId,
+		};
 		ancestry.AddRange(await AncestorsAsync(connection, nodeId));
 
 		foreach (var candidateNodeId in ancestry) {
@@ -106,7 +108,9 @@ public sealed class SqliteRateResolutionAndBoundaryDiscoverySchemaTests()
 			results.AddRange(await ReadBoundaryRangesAsync(command));
 		}
 
-		var ancestry = new List<long> { nodeId };
+		var ancestry = new List<long> {
+			nodeId,
+		};
 		ancestry.AddRange(await AncestorsAsync(connection, nodeId));
 
 		await using (var command = connection.CreateCommand()) {

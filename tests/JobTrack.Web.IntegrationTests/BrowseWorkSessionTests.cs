@@ -6,17 +6,10 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for <c>/Jobs/Browse</c>'s work controls: an inline one-click Start (recording
@@ -60,7 +53,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -78,7 +74,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_start_a_session_inline_from_the_browse_row()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.starter", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.starter");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Pour foundation");
 		var authCookie = await client.SignInAsync("browse.starter");
 
@@ -95,7 +91,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_complete_a_leaf_with_one_click_from_browse()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.completer", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.completer");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Wire the panel");
 		var authCookie = await client.SignInAsync("browse.completer");
 
@@ -115,13 +111,19 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		reloadedBody.Should().Contain("Job marked complete. Its one open session was closed.");
 
 		var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 		leafWork.Achievement.Should().Be(Achievement.Success);
 
 		var activeSessions = await seedClient.Query.GetActiveSessionsAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkIds = [leaf.Id],
 		});
 		activeSessions.Should().BeEmpty();
@@ -130,7 +132,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_complete_button_does_not_render_for_a_leaf_that_has_not_started()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.notstarted", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.notstarted");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Order materials");
 		var authCookie = await client.SignInAsync("browse.notstarted");
 
@@ -147,7 +149,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	/// </summary>
 	public async Task The_active_session_pill_has_its_own_column_alongside_priority()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.activecolumn", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.activecolumn");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Screed floor");
 		var authCookie = await client.SignInAsync("browse.activecolumn");
 
@@ -181,7 +183,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	/// </summary>
 	public async Task The_sessions_table_shows_each_sessions_cost_in_the_shared_cost_and_hours_format()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.sessioncost", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.sessioncost");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.sessioncost-viewer", EmployeeRole.CostViewer);
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Costed session leaf");
 		await SeedCostedSessionAsync(leaf.Id, workerId);
@@ -204,25 +206,37 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	private async Task SeedCostedSessionAsync(JobNodeId leafId, AppUserId workerId)
 	{
 		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Entry = new(
 				ScheduleExceptionEffect.AddWorkingTime, new(SessionCostStart, SessionCostFinish.Plus(Duration.FromHours(1))), null),
 			Reason = "Full working window for browse session-cost test",
 		});
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(60m), Instant.FromUtc(2000, 1, 1, 0, 0), null),
 		});
 
 		var session = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 		});
 		_ = await seedClient.Work.CorrectSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = session.Id,
 			StartedAt = SessionCostStart,
 			FinishedAt = SessionCostFinish,
@@ -239,7 +253,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	/// </summary>
 	public async Task The_row_pill_shows_a_stopwatch_and_a_timestamp_with_the_wording_kept_for_assistive_tech()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.compactpill", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.compactpill");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Tile bathroom");
 		var authCookie = await client.SignInAsync("browse.compactpill");
 
@@ -256,7 +270,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_start_a_session_with_a_backdated_time_from_the_browse_row()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.backdater", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.backdater");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Frame walls");
 		var authCookie = await client.SignInAsync("browse.backdater");
 		var backdated = DateTimeOffset.UtcNow.AddHours(-2).ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture);
@@ -273,7 +287,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Starting_a_session_with_a_future_time_shows_a_helpful_error()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.future", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.future");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Dig trench");
 		var authCookie = await client.SignInAsync("browse.future");
 		var future = DateTimeOffset.UtcNow.AddHours(2).ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture);
@@ -290,7 +304,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Starting_a_session_with_a_malformed_backdate_from_the_browse_row_does_not_start_work()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.malformed", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.malformed");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Malformed browse start");
 		var authCookie = await client.SignInAsync("browse.malformed");
 
@@ -302,14 +316,20 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Enter a valid date and time.");
 		var sessions = await seedClient.Query.GetLeafSessionsAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, LeafWorkId = leaf.Id });
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				LeafWorkId = leaf.Id,
+			});
 		sessions.Should().BeEmpty();
 	}
 
 	[Fact]
 	public async Task A_worker_can_end_their_active_session_from_the_browse_row_via_the_work_page()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finisher", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finisher");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Lay bricks");
 		var authCookie = await client.SignInAsync("browse.finisher");
 
@@ -324,8 +344,14 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		startBody.Should().Contain($"/Jobs/Work?leafNodeId={leaf.Id.Value}");
 
 		var session = (await seedClient.Query.GetLeafSessionsAsync(
-				new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, LeafWorkId = leaf.Id }))
-			.Should().ContainSingle().Subject;
+						  new() {
+							  Context = new() {
+								  Actor = administratorId,
+								  CorrelationId = Guid.NewGuid(),
+							  },
+							  LeafWorkId = leaf.Id,
+						  }))
+					  .Should().ContainSingle().Subject;
 
 		var (workCookie, workToken) = await GetFormAsync(authCookie, $"/Jobs/Work?leafNodeId={leaf.Id.Value}");
 		var finishResponse = await PostWorkFinishAsync(authCookie, workCookie, workToken, leaf.Id, session.Id.Value, session.Version, null);
@@ -338,9 +364,12 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_pick_up_an_unassigned_leaf_inline_from_the_browse_row()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.picker", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.picker");
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Unassigned pool leaf",
 			OwnerUserId = null,
@@ -366,16 +395,22 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	/// </summary>
 	public async Task An_unassigned_node_offers_the_pick_up_glyph_on_its_owner_field()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.picker.glyph", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.picker.glyph");
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Unassigned branch",
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = branch.Id,
 			Description = "Unassigned grandchild",
 			OwnerUserId = null,
@@ -401,7 +436,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_leaf_detail_toolbar_shows_finish_instead_of_start_once_a_session_is_active()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.toolbar", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.toolbar");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Toolbar toggle leaf");
 		var authCookie = await client.SignInAsync("browse.toolbar");
 
@@ -427,8 +462,8 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_owner_can_start_a_session_for_another_worker_through_the_start_for_disclosure()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.owner", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.target", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.owner");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.target");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Start-for leaf");
 		var authCookie = await client.SignInAsync("browse.startfor.owner");
 
@@ -444,9 +479,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_non_controlling_worker_cannot_start_a_session_for_another_worker()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.bystander-owner", EmployeeRole.Worker);
-		var bystanderId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.bystander", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.bystander-target", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.bystander-owner");
+		var bystanderId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.bystander");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.bystander-target");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Bystander start-for leaf");
 		var authCookie = await client.SignInAsync("browse.startfor.bystander");
 
@@ -462,8 +497,8 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_start_for_disclosure_is_rendered_for_an_owner_but_not_for_a_non_controlling_worker()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.render-owner", EmployeeRole.Worker);
-		var bystanderId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.render-bystander", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.render-owner");
+		var bystanderId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.render-bystander");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Render start-for leaf");
 
 		var ownerCookie = await client.SignInAsync("browse.startfor.render-owner");
@@ -480,7 +515,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_start_for_disclosure_uses_a_native_control_that_works_without_JavaScript()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.no-script-owner", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.startfor.no-script-owner");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "No-script start-for leaf");
 		var authCookie = await client.SignInAsync("browse.startfor.no-script-owner");
 
@@ -519,22 +554,31 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		// Plan §2.4/§6 test matrix: a two-row fixture can accidentally pass code that treats one
 		// session as "primary" -- this leaf has three concurrently active workers, none of them
 		// collapsed away, and the viewer's own labelled "You" ahead of the others.
-		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.threeactive.viewer", EmployeeRole.Worker);
-		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.threeactive.alice", EmployeeRole.Worker);
-		var bobId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.threeactive.bob", EmployeeRole.Worker);
+		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.threeactive.viewer");
+		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.threeactive.alice");
+		var bobId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.threeactive.bob");
 		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Three active leaf");
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = viewerId,
 		});
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = aliceId,
 		});
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = bobId,
 		});
@@ -555,13 +599,18 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Other_workers_sessions_are_never_finishable_inline_only_via_the_Sessions_page()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-target.owner", EmployeeRole.Worker);
-		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-target.alice", EmployeeRole.Worker);
-		var bobId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-target.bob", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-target.owner");
+		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-target.alice");
+		var bobId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-target.bob");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Exact finish targets");
-		foreach (var workerId in new[] { aliceId, bobId }) {
+		foreach (var workerId in new[] {
+					 aliceId, bobId,
+				 }) {
 			_ = await seedClient.Work.StartSessionAsync(new() {
-				Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				LeafWorkId = leaf.Id,
 				WorkedByUserId = workerId,
 			});
@@ -584,11 +633,14 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_lone_other_session_stays_sessions_linked_for_a_permitted_manager()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone.owner", EmployeeRole.Worker);
-		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone.alice", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone.owner");
+		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone.alice");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Lone other session leaf");
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = aliceId,
 		});
@@ -606,12 +658,15 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_lone_other_session_is_not_finishable_inline_without_manage_permission()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone-noperm.owner", EmployeeRole.Worker);
-		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone-noperm.alice", EmployeeRole.Worker);
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone-noperm.bystander", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone-noperm.owner");
+		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone-noperm.alice");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.lone-noperm.bystander");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Lone other no-permission leaf");
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = aliceId,
 		});
@@ -628,12 +683,17 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task With_several_active_workers_a_browse_row_still_finishes_only_the_viewers_own_session()
 	{
-		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.myfinish.viewer", EmployeeRole.Worker);
-		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.myfinish.alice", EmployeeRole.Worker);
+		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.myfinish.viewer");
+		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.myfinish.alice");
 		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Mixed active leaf");
-		foreach (var workerId in new[] { viewerId, aliceId }) {
+		foreach (var workerId in new[] {
+					 viewerId, aliceId,
+				 }) {
 			_ = await seedClient.Work.StartSessionAsync(new() {
-				Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				LeafWorkId = leaf.Id,
 				WorkedByUserId = workerId,
 			});
@@ -654,16 +714,22 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Two_active_workers_show_a_count_pill_naming_both()
 	{
-		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.twoactive.viewer", EmployeeRole.Worker);
-		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.twoactive.alice", EmployeeRole.Worker);
+		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.twoactive.viewer");
+		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.twoactive.alice");
 		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Two active leaf");
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = viewerId,
 		});
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = aliceId,
 		});
@@ -679,11 +745,14 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_single_active_worker_who_is_not_the_viewer_is_named_in_the_singular_pill()
 	{
-		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.singleother.viewer", EmployeeRole.Worker);
-		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.singleother.alice", EmployeeRole.Worker);
+		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.singleother.viewer");
+		var aliceId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.singleother.alice");
 		var leaf = await AddWorkedLeafAsync(rootId, viewerId, "Single other active leaf");
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = aliceId,
 		});
@@ -699,7 +768,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_browse_row_offers_start_as_an_icon_beside_the_backdate_disclosure()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.icons", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.icons");
 		_ = await AddWorkedLeafAsync(rootId, workerId, "Icon row leaf");
 		var authCookie = await client.SignInAsync("browse.icons");
 
@@ -715,7 +784,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_browse_row_shows_only_the_sessions_icon_once_a_session_is_active()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-icon", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-icon");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Finish icon row leaf");
 		var authCookie = await client.SignInAsync("browse.finish-icon");
 
@@ -733,7 +802,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_leaf_detail_view_embeds_its_own_sessions_panel_alongside_the_link_to_the_unified_work_page()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-label", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.finish-label");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Labelled finish leaf");
 		var authCookie = await client.SignInAsync("browse.finish-label");
 
@@ -757,7 +826,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_pause_their_own_session_directly_from_the_browse_leaf_detail_panel()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.inline-finisher", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.inline-finisher");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Inline finish leaf");
 		var authCookie = await client.SignInAsync("browse.inline-finisher");
 
@@ -765,8 +834,14 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		_ = await PostStartAsync(authCookie, startCookie, startToken, leaf.Id, null);
 
 		var session = (await seedClient.Query.GetLeafSessionsAsync(
-				new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, LeafWorkId = leaf.Id }))
-			.Should().ContainSingle().Subject;
+						  new() {
+							  Context = new() {
+								  Actor = administratorId,
+								  CorrelationId = Guid.NewGuid(),
+							  },
+							  LeafWorkId = leaf.Id,
+						  }))
+					  .Should().ContainSingle().Subject;
 
 		var (cookie, token) = await GetFormAsync(authCookie, $"/Jobs/Browse?nodeId={leaf.Id.Value}");
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=Finish");
@@ -795,15 +870,21 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_paused_leaf_reads_as_paused_on_browse()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.paused", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.paused");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Paused browse leaf");
 		var session = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 			WorkedByUserId = workerId,
 		});
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = session.Id,
 			Version = session.Version,
 		});
@@ -821,7 +902,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_leaf_nobody_has_started_is_not_marked_paused_on_browse()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.not-paused", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.not-paused");
 		_ = await AddWorkedLeafAsync(rootId, workerId, "Never started leaf");
 		var authCookie = await client.SignInAsync("browse.not-paused");
 
@@ -834,8 +915,8 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Work_page_exposes_a_worked_by_employee_selector()
 	{
-		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "work.selector.owner", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "work.selector.other", EmployeeRole.Worker);
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "work.selector.owner");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "work.selector.other");
 		var leaf = await AddWorkedLeafAsync(rootId, ownerId, "Selector leaf");
 		var authCookie = await client.SignInAsync("work.selector.owner");
 
@@ -853,7 +934,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_terminal_leaf_marks_its_closure_with_a_pill_without_rendering_start_controls()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.closed-terminal", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.closed-terminal");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Completed leaf");
 		await SetAchievementAsync(leaf.Id, Achievement.Success);
 		var authCookie = await client.SignInAsync("browse.closed-terminal");
@@ -863,7 +944,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var workResponse = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
 		var workBody = await workResponse.Content.ReadAsStringAsync();
 
-		foreach (var body in new[] { browseBody, workBody }) {
+		foreach (var body in new[] {
+					 browseBody, workBody,
+				 }) {
 			// The Active state is a concise "Closed" pill, never the verbose closure sentence -- and
 			// never in the Actions cell, which is buttons only.
 			body.Should().Contain("status-pill-closed");
@@ -877,14 +960,20 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_archived_leaf_marks_its_closure_with_a_pill_without_rendering_start_controls()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.closed-archived", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.closed-archived");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Archived leaf");
 		var current = await seedClient.Query.GetJobNodeAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = leaf.Id,
 		});
 		_ = await seedClient.Jobs.ArchiveAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = leaf.Id,
 			Version = current.Node.Version,
 		});
@@ -903,7 +992,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_browse_session_mutation_preserves_the_unassigned_filter_through_prg()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.preserve-filters", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.preserve-filters");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Preserve Browse state");
 		var authCookie = await client.SignInAsync("browse.preserve-filters");
 		var initial = await GetAsync($"/Jobs/Browse?nodeId={leaf.Id.Value}&unassignedOnly=true", authCookie);
@@ -932,8 +1021,6 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
 	private async Task<HttpResponseMessage> GetLeafDetailAsync(string authCookie, JobNodeId nodeId) =>
 		await GetAsync($"/Jobs/Browse?nodeId={nodeId.Value}", authCookie);
 
@@ -960,14 +1047,20 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeResult> AddWorkedLeafAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 
@@ -977,18 +1070,27 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	private async Task SetAchievementAsync(JobNodeId leafId, Achievement achievement)
 	{
 		var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 		var inProgress = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			NewAchievement = Achievement.InProgress,
 			Reason = "Seed terminal leaf",
 			Version = leafWork.Version,
 		});
 		_ = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			NewAchievement = achievement,
 			Reason = "Seed terminal leaf",
@@ -1088,9 +1190,4 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
-
-
 }

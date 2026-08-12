@@ -12,13 +12,13 @@ internal static class JobRequestPersistence
 		DbContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
 		var nodeExists = await context.Set<JobNodeEntity>().AsNoTracking()
-			.AnyAsync(node => node.Id == nodeId, cancellationToken).ConfigureAwait(false);
+									  .AnyAsync(node => node.Id == nodeId, cancellationToken).ConfigureAwait(false);
 		if (!nodeExists) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 		}
 
 		var isRequesterJob = await context.Set<JobRequestEntity>().AsNoTracking()
-			.AnyAsync(request => request.JobNodeId == nodeId, cancellationToken).ConfigureAwait(false);
+										  .AnyAsync(request => request.JobNodeId == nodeId, cancellationToken).ConfigureAwait(false);
 		if (!isRequesterJob) {
 			throw new InvariantViolationException("requester-job-required", $"Job node {nodeId} has no associated job_request row.");
 		}

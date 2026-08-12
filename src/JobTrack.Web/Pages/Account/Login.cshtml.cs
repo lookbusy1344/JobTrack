@@ -55,7 +55,10 @@ public sealed class LoginModel(
 		// examined here, so a forged cross-site login POST is still rejected without authenticating.
 		if (!await antiforgery.IsRequestValidAsync(HttpContext)) {
 			ExpiredNotice = SessionExpiredMessage;
-			return RedirectToPage(new { returnUrl });
+			return RedirectToPage(new
+			{
+				returnUrl,
+			});
 		}
 
 		var remoteAddress = GetRemoteAddress();
@@ -87,7 +90,10 @@ public sealed class LoginModel(
 		var user = await userManager.FindByNameAsync(Input.UserName);
 
 		if (result.RequiresTwoFactor) {
-			return RedirectToPage("LoginTwoFactor", new { returnUrl });
+			return RedirectToPage("LoginTwoFactor", new
+			{
+				returnUrl,
+			});
 		}
 
 		if (!result.Succeeded) {

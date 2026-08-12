@@ -43,7 +43,7 @@ internal static class RequesterRequestAutoAcknowledgement
 		DbContext context, JobNodeId leafNodeId, AppUserId actorId, Instant now, Guid correlationId, CancellationToken cancellationToken)
 	{
 		var anchorId = await JobNodeHierarchyQueries.GetNearestRequestAnchorIdAsync(context, leafNodeId.Value, cancellationToken)
-			.ConfigureAwait(false);
+													.ConfigureAwait(false);
 
 		if (anchorId is not long anchorNodeId) {
 			return;
@@ -51,14 +51,14 @@ internal static class RequesterRequestAutoAcknowledgement
 
 		var anchor = new JobNodeId(anchorNodeId);
 		var acknowledged = await context.Set<JobRequestEntity>()
-			.Where(r => r.JobNodeId == anchor && r.AcknowledgedAt == null)
-			.ExecuteUpdateAsync(
-				setters => setters
-					.SetProperty(r => r.AcknowledgedAt, now)
-					.SetProperty(r => r.AcknowledgedByUserId, actorId)
-					.SetProperty(r => r.RowVersion, r => r.RowVersion + 1),
-				cancellationToken)
-			.ConfigureAwait(false);
+										.Where(r => r.JobNodeId == anchor && r.AcknowledgedAt == null)
+										.ExecuteUpdateAsync(
+											setters => setters
+													   .SetProperty(r => r.AcknowledgedAt, now)
+													   .SetProperty(r => r.AcknowledgedByUserId, actorId)
+													   .SetProperty(r => r.RowVersion, r => r.RowVersion + 1),
+											cancellationToken)
+										.ConfigureAwait(false);
 
 		if (acknowledged == 0) {
 			return;
@@ -66,6 +66,8 @@ internal static class RequesterRequestAutoAcknowledgement
 
 		AuditEventWriter.Add(
 			context, actorId, now, Operation, "job_request", anchorNodeId, correlationId, null, null,
-			new Dictionary<string, string?> { ["acknowledged_by_user_id"] = actorId.Value.ToString(CultureInfo.InvariantCulture) });
+			new Dictionary<string, string?> {
+				["acknowledged_by_user_id"] = actorId.Value.ToString(CultureInfo.InvariantCulture),
+			});
 	}
 }

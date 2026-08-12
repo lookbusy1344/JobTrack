@@ -35,7 +35,13 @@ public static class SetHomeNodeCommand
 
 		try {
 			_ = await jobTrackClient.Employees.SetHomeNodeAsync(
-				new() { Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() }, NodeId = nodeId },
+				new() {
+					Context = new() {
+						Actor = user.AppUserId,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = nodeId,
+				},
 				cancellationToken);
 		}
 		catch (JobTrackException ex) {

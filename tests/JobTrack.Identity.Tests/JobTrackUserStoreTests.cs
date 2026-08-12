@@ -349,8 +349,8 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 	private SqliteJobTrackIdentityDbContext CreateContext()
 	{
 		var options = new DbContextOptionsBuilder<SqliteJobTrackIdentityDbContext>()
-			.UseSqlite(database.ConnectionString)
-			.Options;
+					  .UseSqlite(database.ConnectionString)
+					  .Options;
 		return new(options);
 	}
 

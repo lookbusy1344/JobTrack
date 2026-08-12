@@ -380,7 +380,7 @@ public readonly record struct KeyValue(string Key, string? Value)
 		}
 
 		// Check for quoted values
-		if ((valueSpan[0] != '\'' && valueSpan[0] != '\"') || valueSpan.Length <= 1) {
+		if (valueSpan[0] != '\'' && valueSpan[0] != '\"' || valueSpan.Length <= 1) {
 			return new(key, valueSpan.ToString());
 		}
 

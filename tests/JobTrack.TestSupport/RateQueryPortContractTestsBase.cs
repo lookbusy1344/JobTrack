@@ -1,7 +1,6 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -103,7 +102,10 @@ public abstract class RateQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IRateQueryPort CreateQueryPort(string connectionString);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private async Task<(AppUserId AdministratorId, AppUserId WorkerId, JobNodeId RootJobNodeId)> SeedRatesAsync()
 	{
@@ -139,12 +141,4 @@ public abstract class RateQueryPortContractTestsBase : IAsyncLifetime
 
 		return (administratorId, workerId, bootstrap.RootJobNodeId);
 	}
-
-
-
-
-
-
-
-
 }

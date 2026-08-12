@@ -5,18 +5,12 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Rates;
 using Domain.Schedules;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for cost reports with rate provenance and current prerequisite diagnostics
@@ -55,7 +49,10 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 		rootJobNodeId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -74,7 +71,7 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 	public async Task A_cost_viewer_sees_rate_provenance_and_readiness_for_a_leaf()
 	{
 		var administratorId = await SeedAdministratorAsync();
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.viewer", EmployeeRole.CostViewer);
 		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId);
 		var authCookie = await client.SignInAsync("cost.viewer");
@@ -95,7 +92,7 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_cannot_open_the_cost_report()
 	{
 		var administratorId = await SeedAdministratorAsync();
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.self", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.self");
 		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId);
 		var authCookie = await client.SignInAsync("cost.self");
 
@@ -123,7 +120,7 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 	public async Task A_malformed_AsOf_is_rejected_without_running_the_report()
 	{
 		var administratorId = await SeedAdministratorAsync();
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.malformed-asof-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.malformed-asof-worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.malformed-asof-viewer", EmployeeRole.CostViewer);
 		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId);
 		var authCookie = await client.SignInAsync("cost.malformed-asof-viewer");
@@ -148,7 +145,7 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 	public async Task AsOf_is_resolved_in_the_viewing_employees_own_zone_not_the_server_process_zone()
 	{
 		var administratorId = await SeedAdministratorAsync();
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.zoned-asof-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.zoned-asof-worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.zoned-asof-viewer", EmployeeRole.CostViewer, "America/New_York");
 		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId);
 		var authCookie = await client.SignInAsync("cost.zoned-asof-viewer");
@@ -171,7 +168,7 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 	public async Task A_leaf_costed_at_a_zero_rate_shows_a_dash_instead_of_zero_amounts()
 	{
 		var administratorId = await SeedAdministratorAsync();
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.zero-rate-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.zero-rate-worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.zero-rate-viewer", EmployeeRole.CostViewer);
 		var leafId = await SeedLeafWithCostedSessionAsync(administratorId, workerId, 0m);
 		var authCookie = await client.SignInAsync("cost.zero-rate-viewer");
@@ -202,7 +199,10 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
-		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = ContextFor(administratorId),
+			JobNodeId = leaf.Id,
+		});
 
 		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
 			Context = ContextFor(administratorId),
@@ -234,7 +234,10 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 		return leaf.Id;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	[GeneratedRegex(">&#xA3;120\\.00<")]
 	private static partial Regex SterlingAmountPattern();
@@ -289,9 +292,4 @@ public sealed partial class CostReportTests : IAsyncLifetime, IDisposable
 		var end = body.IndexOf('"', start);
 		return end < 0 ? null : body[start..end];
 	}
-
-
-
-
-
 }

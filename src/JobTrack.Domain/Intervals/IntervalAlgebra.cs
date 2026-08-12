@@ -29,9 +29,9 @@ public static class IntervalAlgebra
 	/// </summary>
 	public static IReadOnlyList<WorkInterval> Clip(IEnumerable<WorkInterval> intervals, WorkInterval bounds) => [
 		.. intervals
-			.Select(interval => Intersect(interval, bounds))
-			.Where(clipped => clipped.HasValue)
-			.Select(clipped => clipped!.Value),
+		   .Select(interval => Intersect(interval, bounds))
+		   .Where(clipped => clipped.HasValue)
+		   .Select(clipped => clipped!.Value),
 	];
 
 	/// <summary>
@@ -49,7 +49,9 @@ public static class IntervalAlgebra
 			return [];
 		}
 
-		var merged = new List<WorkInterval>(sorted.Length) { sorted[0] };
+		var merged = new List<WorkInterval>(sorted.Length) {
+			sorted[0],
+		};
 		foreach (var current in sorted.AsSpan(1)) {
 			var last = merged[^1];
 			if (current.Start > last.End) {

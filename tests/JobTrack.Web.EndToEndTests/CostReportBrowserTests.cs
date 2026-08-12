@@ -2,7 +2,6 @@ namespace JobTrack.Web.EndToEndTests;
 
 using System.Globalization;
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -34,7 +33,15 @@ public abstract class CostReportBrowserTestsBase
 	protected CostReportBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -70,7 +77,9 @@ public abstract class CostReportBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "View" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "View",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -124,20 +133,14 @@ public abstract class CostReportBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqliteCostReportBrowserTests : CostReportBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteCostReportBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteCostReportBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlCostReportBrowserTests : CostReportBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlCostReportBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlCostReportBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

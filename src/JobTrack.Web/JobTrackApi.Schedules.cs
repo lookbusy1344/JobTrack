@@ -19,7 +19,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Query.GetScheduleAsync(new() { Context = context, UserId = new(userId) }, cancellationToken);
+			var result = await jobTrackClient.Query.GetScheduleAsync(new() {
+				Context = context,
+				UserId = new(userId),
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -36,11 +39,11 @@ internal static partial class JobTrackApi
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var zone = ScheduleZoneId.Resolve(request.IanaTimeZone);
 			var weeklyIntervals = request.WeeklyIntervals
-				.Select(interval => new WeeklyInterval(
-					ToIsoDayOfWeek(interval.Day),
-					new(interval.Start.Hour, interval.Start.Minute, interval.Start.Second),
-					new(interval.End.Hour, interval.End.Minute, interval.End.Second)))
-				.ToArray();
+										 .Select(interval => new WeeklyInterval(
+											 ToIsoDayOfWeek(interval.Day),
+											 new(interval.Start.Hour, interval.Start.Minute, interval.Start.Second),
+											 new(interval.End.Hour, interval.End.Minute, interval.End.Second)))
+										 .ToArray();
 
 			var result = await jobTrackClient.Schedules.AddScheduleVersionAsync(new() {
 				Context = context,
@@ -70,11 +73,11 @@ internal static partial class JobTrackApi
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var zone = ScheduleZoneId.Resolve(request.IanaTimeZone);
 			var weeklyIntervals = request.WeeklyIntervals
-				.Select(interval => new WeeklyInterval(
-					ToIsoDayOfWeek(interval.Day),
-					new(interval.Start.Hour, interval.Start.Minute, interval.Start.Second),
-					new(interval.End.Hour, interval.End.Minute, interval.End.Second)))
-				.ToArray();
+										 .Select(interval => new WeeklyInterval(
+											 ToIsoDayOfWeek(interval.Day),
+											 new(interval.Start.Hour, interval.Start.Minute, interval.Start.Second),
+											 new(interval.End.Hour, interval.End.Minute, interval.End.Second)))
+										 .ToArray();
 
 			var result = await jobTrackClient.Schedules.CorrectScheduleVersionAsync(new() {
 				Context = context,
@@ -149,7 +152,10 @@ internal static partial class JobTrackApi
 	}
 
 	private static ScheduleResponse Map(ScheduleSnapshotResult result) =>
-		new() { Versions = [.. result.Versions.Select(Map)], Exceptions = [.. result.Exceptions.Select(Map)] };
+		new() {
+			Versions = [.. result.Versions.Select(Map)],
+			Exceptions = [.. result.Exceptions.Select(Map)],
+		};
 
 	private static ScheduleVersionResponse Map(ScheduleVersionResult result) =>
 		new() {

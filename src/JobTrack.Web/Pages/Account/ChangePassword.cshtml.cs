@@ -25,9 +25,7 @@ public sealed class ChangePasswordModel(
 
 	public string? ErrorMessage { get; private set; }
 
-	public void OnGet()
-	{
-	}
+	public void OnGet() { }
 
 	public async Task<IActionResult> OnPostAsync()
 	{

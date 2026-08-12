@@ -8,16 +8,10 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the requester intake external API surface (ADR 0033, plan §9 Stage 7):
@@ -55,7 +49,10 @@ public sealed partial class RequestsApiTests : IAsyncLifetime, IDisposable
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -126,7 +123,7 @@ public sealed partial class RequestsApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_cannot_call_the_requests_endpoints()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.worker.blocked", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "api.worker.blocked");
 		var authCookie = await client.SignInAsync("api.worker.blocked");
 
 		var response = await client.GetAuthenticatedAsync("/api/requests", authCookie);
@@ -329,7 +326,10 @@ public sealed partial class RequestsApiTests : IAsyncLifetime, IDisposable
 
 	private async Task<JobRequestResult> SubmitAsync(AppUserId requesterId, RequestHoldingAreaId holdingAreaId) =>
 		await seedClient.Requests.SubmitAsync(new() {
-			Context = new() { Actor = requesterId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = requesterId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			HoldingAreaId = holdingAreaId,
 			Description = "Printer will not turn on",
 		});
@@ -350,7 +350,10 @@ public sealed partial class RequestsApiTests : IAsyncLifetime, IDisposable
 	private async Task<string> IssueTokenAsync(AppUserId userId)
 	{
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = userId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = userId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = userId,
 			Label = "requests-api-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -419,7 +422,4 @@ public sealed partial class RequestsApiTests : IAsyncLifetime, IDisposable
 		command.CommandText = "SELECT owner_user_id FROM job_node WHERE parent_id IS NULL;";
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
-
-
-
 }

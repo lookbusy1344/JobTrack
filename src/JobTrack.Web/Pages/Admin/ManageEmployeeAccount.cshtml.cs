@@ -71,7 +71,10 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 		try {
 			var result = await jobTrackClient.Employees.CreateEmployeeAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = Guid.NewGuid(),
+				},
 				DisplayName = CreateEmployee.DisplayName,
 				IanaTimeZone = CreateEmployee.IanaTimeZone,
 				DefaultHourlyRate = new HourlyRate(CreateEmployee.DefaultHourlyRate),
@@ -119,7 +122,10 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 		try {
 			var result = await jobTrackClient.Employees.SetEnabledAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					TargetUserId = targetUserId,
 					Enabled = SetEnabled.Enabled,
 				}, cancellationToken);
@@ -157,7 +163,10 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 		try {
 			var result = await jobTrackClient.Employees.SetDefaultHourlyRateAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					TargetUserId = targetUserId,
 					DefaultHourlyRate = new(SetDefaultHourlyRate.DefaultHourlyRate),
 				}, cancellationToken);
@@ -197,7 +206,10 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 		try {
 			_ = await jobTrackClient.Employees.ResetPasswordAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					TargetUserId = targetUserId,
 					TargetUserName = _employeeDirectoryById.TryGetValue(targetUserId, out var targetEntry) ? targetEntry.UserName : string.Empty,
 					NewPassword = ResetPassword.NewPassword,
@@ -241,7 +253,13 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 		try {
 			_ = await jobTrackClient.Employees.ResetTwoFactorAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, TargetUserId = targetUserId }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
+					TargetUserId = targetUserId,
+				}, cancellationToken);
 
 			SuccessMessage =
 				$"Two-factor authentication has been reset for " +
@@ -283,7 +301,13 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 		try {
 			await jobTrackClient.Tokens.RevokeAllAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, TargetUserId = targetUserId }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
+					TargetUserId = targetUserId,
+				}, cancellationToken);
 
 			SuccessMessage =
 				"Every personal access token for " +
@@ -304,7 +328,12 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 		}
 
 		var directory = await jobTrackClient.Query.GetAllEmployeesAsync(
-			new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() } },
+			new() {
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = Guid.NewGuid(),
+				},
+			},
 			cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		TargetUserOptions = EmployeeDirectoryDisplay.BuildOptions(directory);

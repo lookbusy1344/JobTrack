@@ -11,9 +11,7 @@ public sealed class LogoutModel(
 	UserManager<JobTrackIdentityUser> userManager,
 	IJobTrackClient jobTrackClient) : PageModel
 {
-	public void OnGet()
-	{
-	}
+	public void OnGet() { }
 
 	public async Task<IActionResult> OnPostAsync()
 	{

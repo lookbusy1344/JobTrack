@@ -2,7 +2,6 @@ namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
 using Deque.AxeCore.Playwright;
-using Microsoft.Playwright;
 
 /// <summary>
 ///     Cross-browser compatibility evidence (plan §8.7): sign-in and job-tree browsing -- the
@@ -54,20 +53,14 @@ public abstract class CrossBrowserCompatibilityTestsBase
 			"/Jobs/Browse should have no critical/serious accessibility violations, found: " +
 			string.Join("; ", criticalOrSerious.Select(v => $"{v.Id} ({v.Impact}): {v.Help}")));
 	}
-
-
 }
 
 public sealed class FirefoxCrossBrowserCompatibilityTests : CrossBrowserCompatibilityTestsBase, IClassFixture<FirefoxBrowserFixture>
 {
-	public FirefoxCrossBrowserCompatibilityTests(FirefoxBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public FirefoxCrossBrowserCompatibilityTests(FirefoxBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class WebKitCrossBrowserCompatibilityTests : CrossBrowserCompatibilityTestsBase, IClassFixture<WebKitBrowserFixture>
 {
-	public WebKitCrossBrowserCompatibilityTests(WebKitBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public WebKitCrossBrowserCompatibilityTests(WebKitBrowserFixture fixture) : base(fixture) { }
 }

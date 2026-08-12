@@ -72,18 +72,29 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
 		var port = new PostgreSqlCostQueryPort(dataSource, SystemClock.Instance);
 		var costQueries = new CostQueries(port);
-		var context = new CommandContext { Actor = new(seed.OwnerActorId), CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = new(seed.OwnerActorId),
+			CorrelationId = Guid.NewGuid(),
+		};
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
 
 		var leafStopwatch = Stopwatch.StartNew();
 		var leafResult = await costQueries.GetCostDetailsAsync(
-			new() { Context = context, NodeId = new(seed.OneLeafId), AsOf = asOf });
+			new() {
+				Context = context,
+				NodeId = new(seed.OneLeafId),
+				AsOf = asOf,
+			});
 		leafStopwatch.Stop();
 		output.WriteLine($"Leaf cost details (150 ms budget): {leafStopwatch.Elapsed.TotalMilliseconds:F1} ms, exact={leafResult.ExactCost}");
 
 		var branchStopwatch = Stopwatch.StartNew();
 		var branchResult = await costQueries.GetHierarchyTotalsAsync(
-			new() { Context = context, NodeId = new(seed.OneBranchId), AsOf = asOf });
+			new() {
+				Context = context,
+				NodeId = new(seed.OneBranchId),
+				AsOf = asOf,
+			});
 		branchStopwatch.Stop();
 		output.WriteLine(
 			$"Branch (400-leaf, single-worker) hierarchy totals (2 s budget): {branchStopwatch.Elapsed.TotalMilliseconds:F1} ms, " +
@@ -130,12 +141,19 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 
 		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build(), SystemClock.Instance);
 		var costQueries = new CostQueries(port);
-		var context = new CommandContext { Actor = new(seed.HeavyWorkerId!.Value), CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = new(seed.HeavyWorkerId!.Value),
+			CorrelationId = Guid.NewGuid(),
+		};
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
 
 		var stopwatch = Stopwatch.StartNew();
 		var result = await costQueries.GetHierarchyTotalsAsync(
-			new() { Context = context, NodeId = new(seed.HeavyWorkerBranchId!.Value), AsOf = asOf });
+			new() {
+				Context = context,
+				NodeId = new(seed.HeavyWorkerBranchId!.Value),
+				AsOf = asOf,
+			});
 		stopwatch.Stop();
 
 		output.WriteLine(
@@ -150,7 +168,11 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		// number -- there is no separate performance-budgets.md row for this deliberately unrealistic
 		// worst case (plan §7), matching this test's own sibling assertion above.
 		var detailsResult = await costQueries.GetCostDetailsAsync(
-			new() { Context = context, NodeId = new(seed.HeavyWorkerBranchId!.Value), AsOf = asOf });
+			new() {
+				Context = context,
+				NodeId = new(seed.HeavyWorkerBranchId!.Value),
+				AsOf = asOf,
+			});
 		output.WriteLine($"Heavy worker (5,000 sessions) cost details trace: {detailsResult.Trace.Count} segments");
 		detailsResult.Trace.Count.Should().BeLessThan(
 			HeavyWorkerTraceSegmentCeiling,
@@ -193,12 +215,19 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 
 		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build(), SystemClock.Instance);
 		var costQueries = new CostQueries(port);
-		var context = new CommandContext { Actor = new(seed.HeavyWorkerId!.Value), CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = new(seed.HeavyWorkerId!.Value),
+			CorrelationId = Guid.NewGuid(),
+		};
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
 
 		var stopwatch = Stopwatch.StartNew();
 		var result = await costQueries.GetCostDetailsAsync(
-			new() { Context = context, NodeId = new(lateLeafId), AsOf = asOf });
+			new() {
+				Context = context,
+				NodeId = new(lateLeafId),
+				AsOf = asOf,
+			});
 		stopwatch.Stop();
 
 		output.WriteLine($"Late leaf in long history cost details: {stopwatch.Elapsed.TotalMilliseconds:F1} ms, exact={result.ExactCost}");

@@ -19,8 +19,8 @@ public sealed class EmptyBracesPatternArchitectureTests
 	public void Repository_sources_do_not_use_the_empty_braces_property_pattern()
 	{
 		var violations = SourceFiles()
-			.SelectMany(static file => EmptyBracesPatternGuard.FindViolations(file, File.ReadAllText(file)))
-			.ToArray();
+						 .SelectMany(static file => EmptyBracesPatternGuard.FindViolations(file, File.ReadAllText(file)))
+						 .ToArray();
 
 		violations.Should().BeEmpty();
 	}
@@ -64,8 +64,8 @@ public sealed class EmptyBracesPatternArchitectureTests
 		foreach (var top in (string[])["src", "tests", "samples"]) {
 			var directory = Path.Combine(solutionRoot, top);
 			foreach (var file in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
-						 .Concat(Directory.EnumerateFiles(directory, "*.cshtml", SearchOption.AllDirectories))
-						 .Where(static file => !IsGeneratedOutput(file))) {
+										  .Concat(Directory.EnumerateFiles(directory, "*.cshtml", SearchOption.AllDirectories))
+										  .Where(static file => !IsGeneratedOutput(file))) {
 				yield return file;
 			}
 		}
@@ -101,9 +101,9 @@ internal static partial class EmptyBracesPatternGuard
 	{
 		var root = CSharpSyntaxTree.ParseText(source).GetRoot();
 		return root.DescendantNodes()
-			.OfType<RecursivePatternSyntax>()
-			.Where(IsEmptyBracesBinding)
-			.Select(pattern => Describe(fileName, pattern));
+				   .OfType<RecursivePatternSyntax>()
+				   .Where(IsEmptyBracesBinding)
+				   .Select(pattern => Describe(fileName, pattern));
 	}
 
 	// `{ } y` and — under a `not` — `not { } y`: an empty property pattern that both binds a designation and

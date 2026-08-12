@@ -83,10 +83,7 @@ internal static partial class JobTrackApi
 			NodeId = result.NodeId.Value,
 			Nodes = [
 				.. result.ExactCosts.Select(entry => new HierarchyNodeCostResponse {
-					NodeId = entry.Key.Value,
-					ExactCost = entry.Value.Amount,
-					DisplayedCost = result.DisplayedCosts[entry.Key].Amount,
-					AllocatedHours = result.AllocatedDurations[entry.Key].ToHours(),
+					NodeId = entry.Key.Value, ExactCost = entry.Value.Amount, DisplayedCost = result.DisplayedCosts[entry.Key].Amount, AllocatedHours = result.AllocatedDurations[entry.Key].ToHours(),
 				}),
 			],
 			TzdbVersion = result.TzdbVersion,

@@ -10,18 +10,18 @@
 	// Sprite symbol id and the spoken noun for a node's kind — the two halves of the tree row's
 	// leading glyph: the drawn icon (aria-hidden) and the screen-reader label that replaces it.
 	static string KindIconId(NodeKind kind) => kind switch {
-		NodeKind.Root => "jt-icon-root",
-		NodeKind.Branch => "jt-icon-branch",
-		NodeKind.Leaf => "jt-icon-leaf",
-		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-	};
+		                                           NodeKind.Root => "jt-icon-root",
+		                                           NodeKind.Branch => "jt-icon-branch",
+		                                           NodeKind.Leaf => "jt-icon-leaf",
+		                                           _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                           };
 
 	static string KindNoun(NodeKind kind) => kind switch {
-		NodeKind.Root => "root",
-		NodeKind.Branch => "branch",
-		NodeKind.Leaf => "leaf",
-		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-	};
+		                                         NodeKind.Root => "root",
+		                                         NodeKind.Branch => "branch",
+		                                         NodeKind.Leaf => "leaf",
+		                                         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                         };
 }
 
 <div class="jt-page-head">
@@ -93,7 +93,9 @@
 		<div class="col row g-1">
 			<dt class="col-12 col-sm-4">Kind</dt>
 			<dd class="col-12 col-sm-8 mb-0">
-				<partial name="_KindIcon" model="@(new KindIconModel { Kind = Model.CurrentNode.Node.Kind })"/>
+				<partial name="_KindIcon" model="@(new KindIconModel {
+					                                 Kind = Model.CurrentNode.Node.Kind,
+				                                 })"/>
 			</dd>
 		</div>
 		<div class="col row g-1">
@@ -104,7 +106,9 @@
 				   unassigned owner and the one action that resolves it read as a single fact. *@
 				@if (Model.CurrentNode.Node.OwnerUserId is null) {
 					<partial name="_PickUpButton"
-					         model="@(new PickUpButtonModel { NodeId = Model.CurrentNode.Node.Id.Value, PageStateFields = Model.RowStateFields })"/>
+					         model="@(new PickUpButtonModel {
+						                NodeId = Model.CurrentNode.Node.Id.Value, PageStateFields = Model.RowStateFields,
+					                })"/>
 				}
 			</dd>
 		</div>
@@ -114,7 +118,9 @@
 			<dd class="col-12 col-sm-8 mb-0">
 				<partial
 					name="_PriorityLabel"
-					model="@(new PriorityLabelModel { Priority = Model.CurrentNode.Node.Priority, Full = true })"/>
+					model="@(new PriorityLabelModel {
+						       Priority = Model.CurrentNode.Node.Priority, Full = true,
+					       })"/>
 			</dd>
 		</div>
 		@* The card's field order is fixed: Kind, Owner, Priority, Cost, Deadline, Achievement, Readiness,
@@ -158,7 +164,9 @@
 			<div class="col row g-1">
 				<dt class="col-12 col-sm-4">Achievement</dt>
 				<dd class="col-12 col-sm-8 mb-0">
-					<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = currentAchievement })"/>
+					<partial name="_AchievementIcon" model="@(new AchievementIconModel {
+						                                        Achievement = currentAchievement,
+					                                        })"/>
 				</dd>
 			</div>
 		}
@@ -166,7 +174,9 @@
 			<div class="col row g-1">
 				<dt class="col-12 col-sm-4">Achievement</dt>
 				<dd class="col-12 col-sm-8 mb-0">
-					<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel { Achievement = branchAchievement })"/>
+					<partial name="_BranchAchievementIcon" model="@(new BranchAchievementIconModel {
+						                                              Achievement = branchAchievement,
+					                                              })"/>
 				</dd>
 			</div>
 		}
@@ -316,7 +326,7 @@
 		   question nobody asks while standing on the node they chose. Nothing becomes unreachable --
 		   root's own "Set as home node" is how a home node moves back to the top. *@
 		@if (Model.CurrentNode.Node.Kind != NodeKind.Leaf) {
-			var isCurrentHomeNode = Model.HomeNodeId == Model.CurrentNode.Node.Id || (Model.HomeNodeId is null && Model.CurrentNode.Node.Kind == NodeKind.Root);
+			var isCurrentHomeNode = Model.HomeNodeId == Model.CurrentNode.Node.Id || Model.HomeNodeId is null && Model.CurrentNode.Node.Kind == NodeKind.Root;
 			@if (!isCurrentHomeNode) {
 				<form method="post" asp-page-handler="SetHomeNode" class="inline-form">
 					<input type="hidden" name="NodeId" value="@Model.NodeId"/>
@@ -374,7 +384,9 @@
 									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 									<span class="d-flex align-items-center gap-2 ms-auto">
-										<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
+										<partial name="_KindIcon" model="@(new KindIconModel {
+											                                 Kind = node.Kind, CollapseLabelOnNarrow = true,
+										                                 })"/>
 										@if (node.ArchivedAt is not null) {
 											<span class="jt-muted"> · archived</span>
 										}
@@ -398,7 +410,9 @@
 									<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 									<span class="d-flex align-items-center gap-2 ms-auto">
-										<partial name="_KindIcon" model="@(new KindIconModel { Kind = node.Kind, CollapseLabelOnNarrow = true })"/>
+										<partial name="_KindIcon" model="@(new KindIconModel {
+											                                 Kind = node.Kind, CollapseLabelOnNarrow = true,
+										                                 })"/>
 										@if (node.ArchivedAt is not null) {
 											<span class="jt-muted"> · archived</span>
 										}
@@ -473,13 +487,17 @@
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 							   asp-route-nodeId="@child.Id.Value">@JobNodeDisplay.Title(child, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 							<partial name="_AchievementIcon"
-							         model="@(new AchievementIconModel { Achievement = child.Achievement, ShowLabel = false })"/>
+							         model="@(new AchievementIconModel {
+								                Achievement = child.Achievement, ShowLabel = false,
+							                })"/>
 							@if (child.HasChildren) {
 								<span class="jt-muted"> · has children</span>
 							}
 						</td>
 						<td class="col-2 col-md-1">
-							<partial name="_KindIcon" model="@(new KindIconModel { Kind = child.Kind, ShowLabel = false })"/>
+							<partial name="_KindIcon" model="@(new KindIconModel {
+								                                 Kind = child.Kind, ShowLabel = false,
+							                                 })"/>
 						</td>
 						<td class="jt-col-secondary jt-col-owner col-lg-1 d-none d-lg-table-cell">
 							@if (child.OwnerUserId is AppUserId childOwnerUserId) {
@@ -488,7 +506,9 @@
 								<span class="d-inline-flex align-items-center gap-2">
 									<span>Unassigned</span>
 									<partial name="_PickUpButton"
-									         model="@(new PickUpButtonModel { NodeId = child.Id.Value, PageStateFields = Model.RowStateFields })"/>
+									         model="@(new PickUpButtonModel {
+										                NodeId = child.Id.Value, PageStateFields = Model.RowStateFields,
+									                })"/>
 								</span>
 							}
 						</td>
@@ -587,11 +607,11 @@
 						ViewerZone = Model.ViewerZone,
 						Now = Model.Now,
 						Closed = node.Kind switch {
-							NodeKind.Root or NodeKind.Branch => node.BranchAchievement is BranchAchievement.Success,
-							NodeKind.Leaf => nodeActions?.IsStartClosed ?? false,
-							NodeKind.None => throw new InvalidOperationException("A displayed subtree node must have a structural kind."),
-							_ => throw new ArgumentOutOfRangeException(nameof(node.Kind), node.Kind, null),
-						},
+							         NodeKind.Root or NodeKind.Branch => node.BranchAchievement is BranchAchievement.Success,
+							         NodeKind.Leaf => nodeActions?.IsStartClosed ?? false,
+							         NodeKind.None => throw new InvalidOperationException("A displayed subtree node must have a structural kind."),
+							         _ => throw new ArgumentOutOfRangeException(nameof(node.Kind), node.Kind, null),
+						         },
 						Paused = nodeActions?.IsPaused ?? false,
 						UnacknowledgedRequest = node.Kind is NodeKind.Leaf && node.HasUnacknowledgedRequest,
 						Unstarted = node.Kind is NodeKind.Leaf && !node.HasSessionHistory,
@@ -631,10 +651,14 @@
 									   word at every column width without adding visible spacing. *@
 									@if (node.BranchAchievement is BranchAchievement.Success) {
 										<partial name="_BranchAchievementIcon"
-										         model="@(new BranchAchievementIconModel { Achievement = BranchAchievement.Success, ShowLabel = false })"/>
+										         model="@(new BranchAchievementIconModel {
+											                Achievement = BranchAchievement.Success, ShowLabel = false,
+										                })"/>
 									} else {
 										<partial name="_AchievementIcon"
-										         model="@(new AchievementIconModel { Achievement = node.Achievement, ShowLabel = false })"/>
+										         model="@(new AchievementIconModel {
+											                Achievement = node.Achievement, ShowLabel = false,
+										                })"/>
 									}
 									@if (node.HasUnexpandedChildren) {
 										@* The name already links here; this only says the container holds more
@@ -654,7 +678,9 @@
 							</span>
 						</td>
 						<td class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell">
-							<partial name="_PriorityLabel" model="@(new PriorityLabelModel { Priority = node.Priority })"/>
+							<partial name="_PriorityLabel" model="@(new PriorityLabelModel {
+								                                      Priority = node.Priority,
+							                                      })"/>
 						</td>
 						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
 							@if (needed is Instant neededInstant) {

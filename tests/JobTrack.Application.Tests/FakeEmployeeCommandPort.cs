@@ -58,7 +58,10 @@ internal sealed class FakeEmployeeCommandPort : IEmployeeCommandPort
 			roles.Add(request.Role);
 		}
 
-		return Task.FromResult(new EmployeeRolesResult { UserId = request.TargetUserId, Roles = [.. roles] });
+		return Task.FromResult(new EmployeeRolesResult {
+			UserId = request.TargetUserId,
+			Roles = [.. roles],
+		});
 	}
 
 	public Task<EmployeeRolesResult> RevokeRoleAsync(
@@ -69,7 +72,10 @@ internal sealed class FakeEmployeeCommandPort : IEmployeeCommandPort
 
 		_ = roles.Remove(request.Role);
 
-		return Task.FromResult(new EmployeeRolesResult { UserId = request.TargetUserId, Roles = [.. roles] });
+		return Task.FromResult(new EmployeeRolesResult {
+			UserId = request.TargetUserId,
+			Roles = [.. roles],
+		});
 	}
 
 	public Task<AccountStateResult> SetEnabledAsync(

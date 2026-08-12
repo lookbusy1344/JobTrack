@@ -88,7 +88,10 @@ public sealed class RatesModel(
 			try {
 				_ = await jobTrackClient.Rates.AddUserCostRateAsync(
 					new() {
-						Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+						Context = new() {
+							Actor = actor.Value,
+							CorrelationId = Guid.NewGuid(),
+						},
 						UserId = new(UserId),
 						Rate = new(new(UserCostRateInput.AmountPerHour), effectiveStart, effectiveEnd),
 					}, cancellationToken);
@@ -107,7 +110,10 @@ public sealed class RatesModel(
 				ErrorMessage = ex.Message;
 			}
 
-			return RedirectToPage(new { userId = UserId });
+			return RedirectToPage(new
+			{
+				userId = UserId,
+			});
 		}
 
 		await LoadAsync(actor.Value, cancellationToken);
@@ -133,7 +139,10 @@ public sealed class RatesModel(
 
 			try {
 				_ = await jobTrackClient.Rates.AddNodeRateOverrideAsync(new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					UserId = new(UserId),
 					Override = new(
 						new(NodeRateOverrideInput.NodeId), new(NodeRateOverrideInput.AmountPerHour), effectiveStart, effectiveEnd),
@@ -153,7 +162,10 @@ public sealed class RatesModel(
 				ErrorMessage = ex.Message;
 			}
 
-			return RedirectToPage(new { userId = UserId });
+			return RedirectToPage(new
+			{
+				userId = UserId,
+			});
 		}
 
 		await LoadAsync(actor.Value, cancellationToken);
@@ -175,7 +187,13 @@ public sealed class RatesModel(
 
 		try {
 			Snapshot = await jobTrackClient.Query.GetRatesAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, UserId = new(UserId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					UserId = new(UserId),
+				}, cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "You may not view that employee's rates.";
@@ -197,11 +215,21 @@ public sealed class RatesModel(
 	{
 		try {
 			return await jobTrackClient.Query.GetAllEmployeesAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+				}, cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
 			return await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+				}, cancellationToken);
 		}
 	}
 

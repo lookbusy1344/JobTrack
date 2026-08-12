@@ -2,7 +2,6 @@ namespace JobTrack.TestSupport;
 
 using System.Data.Common;
 using System.Diagnostics;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -54,7 +53,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		var result = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		result.NodeId.Should().Be(leafId);
 		result.ExactCost.Should().Be(new(120m));
@@ -81,7 +84,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		var result = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		result.ExactCost.Should().Be(new(120m));
 	}
@@ -101,7 +108,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var act = () => sut.GetCostDetailsAsync(new() { Context = ContextFor(workerId), NodeId = branchId, AsOf = At(24) });
+		var act = () => sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = branchId,
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -119,7 +130,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(workerId), NodeId = leafId, AsOf = At(24) });
+		var result = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		result.ExactCost.Should().Be(new(120m));
 	}
@@ -134,7 +149,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, otherLeafId, At(10), At(12));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var result = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(administratorId), NodeId = branchId, AsOf = At(24) });
+		var result = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = branchId,
+			AsOf = At(24),
+		});
 
 		// [09:00,10:00) session1 alone: 1h @ 60 = 60. [10:00,11:00) both sessions share: 0.5h @ 60 = 30. Total 90.
 		result.ExactCosts.Should().ContainKeys(branchId, leafId);
@@ -163,9 +182,17 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 			AsOf = At(24),
 		});
 		var individualBranch = await sut.GetHierarchyTotalsAsync(
-			new() { Context = ContextFor(administratorId), NodeId = branchId, AsOf = At(24) });
+			new() {
+				Context = ContextFor(administratorId),
+				NodeId = branchId,
+				AsOf = At(24),
+			});
 		var individualOtherLeaf = await sut.GetHierarchyTotalsAsync(
-			new() { Context = ContextFor(administratorId), NodeId = otherLeafId, AsOf = At(24) });
+			new() {
+				Context = ContextFor(administratorId),
+				NodeId = otherLeafId,
+				AsOf = At(24),
+			});
 
 		// Same overlap as Hierarchy_totals_reflect_a_workers_foreign_concurrent_session_without_exposing_it:
 		// branch/leaf see 90 (the shared [10:00,11:00) segment costed once each side), otherLeaf sees its
@@ -189,7 +216,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		// leafId is owned by workerId (ADR 0040 admits it); branchId is owned by the administrator, so a
 		// plain worker with no cost-viewing role may not see it and otherLeafId does not even exist yet.
-		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(workerId), NodeIds = [branchId, leafId], AsOf = At(24) });
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(workerId),
+			NodeIds = [branchId, leafId],
+			AsOf = At(24),
+		});
 
 		bulk.DisplayedCosts.Should().NotContainKey(branchId);
 		bulk.DisplayedCosts[leafId].Should().Be(new(120m));
@@ -223,7 +254,10 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 				OwnerUserId = workerId,
 				Priority = Priority.Medium,
 			});
-			_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+			_ = await jobNodePort.AttachLeafWorkAsync(new() {
+				Context = ContextFor(administratorId),
+				JobNodeId = leaf.Id,
+			});
 			await CreateCorrectedSessionAsync(administratorId, workerId, leaf.Id, At(9), At(10));
 			leafIds.Add(leaf.Id);
 		}
@@ -231,7 +265,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
 		var stopwatch = Stopwatch.StartNew();
-		var bulk = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(administratorId), NodeIds = [.. leafIds], AsOf = At(24) });
+		var bulk = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeIds = [.. leafIds],
+			AsOf = At(24),
+		});
 		stopwatch.Stop();
 
 		// All 200 sessions are the same worker's, at the identical [09:00,10:00) window, so ADR 0017's
@@ -259,7 +297,10 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 				OwnerUserId = workerId,
 				Priority = Priority.Medium,
 			});
-			_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+			_ = await jobNodePort.AttachLeafWorkAsync(new() {
+				Context = ContextFor(administratorId),
+				JobNodeId = leaf.Id,
+			});
 			await CreateCorrectedSessionAsync(administratorId, workerId, leaf.Id, At(9), At(10));
 			leafIds.Add(leaf.Id);
 		}
@@ -269,14 +310,22 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var narrowSut = new CostQueries(CreateCostQueryPortWithInterceptors(
 			database.ConnectionString, [narrowCommands, narrowConnections]));
 		_ = await narrowSut.GetBulkNodeCostsAsync(
-			new() { Context = ContextFor(administratorId), NodeIds = [leafIds[0]], AsOf = At(24) });
+			new() {
+				Context = ContextFor(administratorId),
+				NodeIds = [leafIds[0]],
+				AsOf = At(24),
+			});
 
 		var wideCommands = new CommandCountInterceptor();
 		var wideConnections = new ConnectionConcurrencyInterceptor();
 		var wideSut = new CostQueries(CreateCostQueryPortWithInterceptors(
 			database.ConnectionString, [wideCommands, wideConnections]));
 		_ = await wideSut.GetBulkNodeCostsAsync(
-			new() { Context = ContextFor(administratorId), NodeIds = [.. leafIds], AsOf = At(24) });
+			new() {
+				Context = ContextFor(administratorId),
+				NodeIds = [.. leafIds],
+				AsOf = At(24),
+			});
 
 		wideCommands.Count.Should().Be(narrowCommands.Count);
 		wideCommands.Count.Should().BeLessThanOrEqualTo(BulkCostMaximumCommandCount);
@@ -315,14 +364,21 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 				OwnerUserId = workerId,
 				Priority = Priority.Medium,
 			});
-			_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leaf.Id });
+			_ = await jobNodePort.AttachLeafWorkAsync(new() {
+				Context = ContextFor(administratorId),
+				JobNodeId = leaf.Id,
+			});
 			await CreateCorrectedSessionAsync(administratorId, workerId, leaf.Id, At(9), At(10));
 		}
 
 		var parameters = new MaxArrayParameterLengthInterceptor();
 		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [parameters]));
 
-		_ = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(administratorId), NodeId = branchId, AsOf = At(24) });
+		_ = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = branchId,
+			AsOf = At(24),
+		});
 
 		parameters.MaxArrayLength.Should().BeLessThan(
 			leafCount, "the requested subtree's own node ids must never round-trip as an array parameter proportional to its size");
@@ -353,10 +409,14 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var commandTexts = new CommandTextCaptureInterceptor();
 		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [commandTexts]));
 
-		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		_ = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		var exceptionQuery = commandTexts.CommandTexts.Should()
-			.ContainSingle(text => text.Contains("user_schedule_exception", StringComparison.Ordinal)).Subject;
+										 .ContainSingle(text => text.Contains("user_schedule_exception", StringComparison.Ordinal)).Subject;
 		exceptionQuery.Should().NotContain(
 			"reason", "the exceptions query must project only the columns CostQueryAssembly reads, not a full entity");
 	}
@@ -380,7 +440,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var commands = new CommandCountInterceptor();
 		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [commands]));
 
-		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		_ = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		commands.Count.Should().BeLessThanOrEqualTo(SingleNodeCostMaximumCommandCount);
 	}
@@ -406,7 +470,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var commands = new CommandCountInterceptor();
 		var sut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [commands]));
 
-		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		_ = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		commands.Count.Should().Be(13, "worker discovery must issue one grouped query instead of a separate MIN and DISTINCT");
 	}
@@ -439,12 +507,20 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 
 		var deniedCommands = new CommandCountInterceptor();
 		var deniedSut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [deniedCommands]));
-		var act = () => deniedSut.GetCostDetailsAsync(new() { Context = ContextFor(workerId), NodeId = branchId, AsOf = At(24) });
+		var act = () => deniedSut.GetCostDetailsAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = branchId,
+			AsOf = At(24),
+		});
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 
 		var authorizedCommands = new CommandCountInterceptor();
 		var authorizedSut = new CostQueries(CreateCostQueryPortWithInterceptors(database.ConnectionString, [authorizedCommands]));
-		_ = await authorizedSut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		_ = await authorizedSut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		deniedCommands.Count.Should().BeLessThan(
 			authorizedCommands.Count, "an authorization denial must never open the worker-materialization connection");
@@ -456,7 +532,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		var (_, _, _, _, administratorId, _) = await SeedTreeAsync();
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var act = () => sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = new(999_999), AsOf = At(24) });
+		var act = () => sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = new(999_999),
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -480,7 +560,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var act = () => sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		var act = () => sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<UnknownStoredTimeZoneException>();
 	}
@@ -493,7 +577,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var act = () => sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		var act = () => sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		await act.Should().ThrowAsync<MissingRateException>();
 	}
@@ -539,7 +627,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		// [09:00,11:00) at the 100/hr root override (not the 60/hr plain user rate) = 200: proves the
 		// override above leafId's own requested subtree was still found.
 		var sut = new CostQueries(port);
-		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		var result = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 		result.ExactCost.Should().Be(new(200m));
 	}
 
@@ -576,7 +668,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		worker.NodeOverrides.Should().BeEmpty("none of the seeded overrides are on leafId or one of its ancestors");
 
 		var sut = new CostQueries(port);
-		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		var result = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 		result.ExactCost.Should().Be(new(120m));
 	}
 
@@ -617,7 +713,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 		var sut = new CostQueries(CreateCostQueryPort(database.ConnectionString));
 
-		var result = await sut.GetCostDetailsAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, AsOf = At(24) });
+		var result = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			AsOf = At(24),
+		});
 
 		result.ExactCost.Should().Be(new(120m));
 	}
@@ -646,7 +746,10 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 	internal abstract ICostQueryPort CreateCostQueryPortWithInterceptors(
 		string connectionString, IReadOnlyList<IInterceptor> interceptors);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private async Task GiveWorkerFullDayWorkingTimeAsync(AppUserId administratorId, AppUserId workerId)
 	{
@@ -693,7 +796,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		AppUserId administratorId, AppUserId workerId, JobNodeId leafId, Instant startedAt, Instant finishedAt)
 	{
 		var sessionPort = CreateSessionPort(database.ConnectionString);
-		var session = await sessionPort.StartSessionAsync(new() { Context = ContextFor(workerId), LeafWorkId = leafId, WorkedByUserId = workerId });
+		var session = await sessionPort.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		_ = await sessionPort.CorrectSessionAsync(new() {
 			Context = ContextFor(administratorId),
@@ -747,7 +854,10 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(result.AdministratorId), JobNodeId = leaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(result.AdministratorId),
+			JobNodeId = leaf.Id,
+		});
 		var otherLeaf = await jobNodePort.AddChildAsync(new() {
 			Context = ContextFor(result.AdministratorId),
 			ParentId = result.RootJobNodeId,
@@ -756,16 +866,11 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 		_ = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(result.AdministratorId), JobNodeId = otherLeaf.Id });
+			new() {
+				Context = ContextFor(result.AdministratorId),
+				JobNodeId = otherLeaf.Id,
+			});
 
 		return (result.RootJobNodeId, branch.Id, leaf.Id, otherLeaf.Id, result.AdministratorId, workerId);
 	}
-
-
-
-
-
-
-
-
 }

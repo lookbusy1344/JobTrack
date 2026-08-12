@@ -20,7 +20,7 @@
 	// The one section that carries the write-up inside its own form (with Pause job / Complete job);
 	// every other state renders it standalone below, so it never appears twice.
 	var hasEndingSection = workPage is not null && !isArchived && !isTerminal
-	                       && (workPage.ActiveSessions.Count > 0 || (isPaused && workPage.CanComplete));
+	                       && (workPage.ActiveSessions.Count > 0 || isPaused && workPage.CanComplete);
 }
 
 <div class="jt-page-head">
@@ -45,7 +45,9 @@
 @if (workPage is not null) {
 	<div class="jt-card" id="status">
 		<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-			<partial name="_AchievementIcon" model="@(new AchievementIconModel { Achievement = workPage.Achievement })"/>
+			<partial name="_AchievementIcon" model="@(new AchievementIconModel {
+				                                        Achievement = workPage.Achievement,
+			                                        })"/>
 			@* "No blocks" is reassurance for a job nobody has started, so it stays on the narrow
 			   Waiting-and-idle case -- but Blocked is a fact about what the job may do next, and under
 			   ADR 0051 an in-progress leaf becomes blocked the moment a prerequisite is reopened
@@ -232,7 +234,7 @@
 			   leaf. So it needs the authority to finish each of them -- the viewer's own always, anyone
 			   else's only with management rights. A rendering hint; PauseLeafAsync re-authorizes itself. *@
 			var canPause = presentation.Count > 0
-			               && (workPage.CanManageSessions || (presentation.ViewerSession is not null && presentation.Count == 1));
+			               && (workPage.CanManageSessions || presentation.ViewerSession is not null && presentation.Count == 1);
 
 			@* Authority and readiness are separate gates on the same button: CanComplete answers "may
 			   this actor close it", the block answers "may it be closed at all". Both are rendering
@@ -260,7 +262,9 @@
 					}
 					@if (Model.CurrentNode is not null) {
 						<partial name="_WriteUpField"
-						         model="@(new WriteUpFieldModel { NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp })"/>
+						         model="@(new WriteUpFieldModel {
+							                NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp,
+						                })"/>
 					}
 					@if (canCompleteNow) {
 						<div class="jt-completion-review mt-3">
@@ -325,7 +329,9 @@
 				<input type="hidden" name="LeafNodeId" value="@Model.LeafNodeId"/>
 				<input type="hidden" name="returnUrl" value="@Model.ReturnUrl"/>
 				<partial name="_WriteUpField"
-				         model="@(new WriteUpFieldModel { NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp })"/>
+				         model="@(new WriteUpFieldModel {
+					                NodeVersion = Model.CurrentNode.Node.Version, WriteUp = Model.CurrentNode.Node.WriteUp,
+				                })"/>
 				<button type="submit" class="btn btn-secondary">Save write-up</button>
 			</form>
 		}

@@ -48,23 +48,26 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 
 		var holdingArea = await context.Set<RequestHoldingAreaEntity>().AsNoTracking()
-							  .FirstOrDefaultAsync(h => h.Id == request.HoldingAreaId, cancellationToken).ConfigureAwait(false)
+									   .FirstOrDefaultAsync(h => h.Id == request.HoldingAreaId, cancellationToken).ConfigureAwait(false)
 						  ?? throw new EntityNotFoundException($"Holding area {request.HoldingAreaId} does not exist.");
 
 		var actorIsEligible = holdingArea.DepartmentId is null
 							  || await context.Set<AppUserDepartmentEntity>().AsNoTracking()
-								  .AnyAsync(
-									  d => d.AppUserId == request.Context.Actor && d.DepartmentId == holdingArea.DepartmentId, cancellationToken)
-								  .ConfigureAwait(false);
+											  .AnyAsync(
+												  d => d.AppUserId == request.Context.Actor && d.DepartmentId == holdingArea.DepartmentId, cancellationToken)
+											  .ConfigureAwait(false);
 
 		if (!RequesterAccessPolicy.CanSubmit(
-				actorRoles, new() { IsHoldingAreaActive = holdingArea.IsActive, ActorIsEligibleForHoldingArea = actorIsEligible })) {
+				actorRoles, new() {
+					IsHoldingAreaActive = holdingArea.IsActive,
+					ActorIsEligibleForHoldingArea = actorIsEligible,
+				})) {
 			throw new AuthorizationDeniedException(
 				$"Actor {request.Context.Actor} may not submit a request into holding area {request.HoldingAreaId}.");
 		}
@@ -116,7 +119,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
@@ -127,7 +130,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		}
 
 		var oldParentId = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Where(n => n.Id == request.NodeId).Select(n => n.ParentId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+									   .Where(n => n.Id == request.NodeId).Select(n => n.ParentId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
 		int affected;
 		try {
@@ -136,13 +139,13 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 			// constraint triggers (impl plan §7.4). Only the authorization predicate differs from
 			// the ordinary structural move (ADR 0033, plan §5).
 			affected = await context.Set<JobNodeEntity>()
-				.Where(n => n.Id == request.NodeId && n.RowVersion == request.Version)
-				.ExecuteUpdateAsync(
-					setters => setters
-						.SetProperty(n => n.ParentId, request.NewParentId)
-						.SetProperty(n => n.RowVersion, n => n.RowVersion + 1),
-					cancellationToken)
-				.ConfigureAwait(false);
+									.Where(n => n.Id == request.NodeId && n.RowVersion == request.Version)
+									.ExecuteUpdateAsync(
+										setters => setters
+												   .SetProperty(n => n.ParentId, request.NewParentId)
+												   .SetProperty(n => n.RowVersion, n => n.RowVersion + 1),
+										cancellationToken)
+									.ConfigureAwait(false);
 		}
 		catch (SqliteException ex) when (ex.Message.Contains(PrerequisiteEdgeAfterMoveMessage, StringComparison.Ordinal)) {
 			throw new InvariantViolationException(
@@ -166,14 +169,18 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "move-requester-job", "job_node",
 			request.NodeId.Value, request.Context.CorrelationId, null,
-			new Dictionary<string, string?> { ["parent_id"] = oldParentId?.Value.ToString(CultureInfo.InvariantCulture) },
-			new Dictionary<string, string?> { ["parent_id"] = request.NewParentId.Value.ToString(CultureInfo.InvariantCulture) });
+			new Dictionary<string, string?> {
+				["parent_id"] = oldParentId?.Value.ToString(CultureInfo.InvariantCulture),
+			},
+			new Dictionary<string, string?> {
+				["parent_id"] = request.NewParentId.Value.ToString(CultureInfo.InvariantCulture),
+			});
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
 		var moved = await context.Set<JobNodeEntity>().AsNoTracking()
-						.FirstOrDefaultAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false)
+								 .FirstOrDefaultAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false)
 					?? throw new EntityNotFoundException($"Job node {request.NodeId} no longer exists after the move committed.");
 
 		return await JobNodeStructuralProjection.ToResultAsync(context, moved, cancellationToken).ConfigureAwait(false);
@@ -185,7 +192,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var dbContext = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await dbContext.Database
-			.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken).ConfigureAwait(false);
+													 .BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken).ConfigureAwait(false);
 
 		_ = await ActorAccountState.LoadRolesAsync(dbContext, context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 
@@ -231,16 +238,16 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		_ = await ActorAccountState.LoadRolesAsync(dbContext, context.Actor, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 
 		var rows = await dbContext.Set<RequestHoldingAreaEntity>().AsNoTracking()
-			.Where(h => h.IsActive
-						&& (h.DepartmentId == null
-							|| dbContext.Set<AppUserDepartmentEntity>().Any(d => d.AppUserId == context.Actor && d.DepartmentId == h.DepartmentId)))
-			.Select(h => new HoldingAreaSummaryResult {
-				Id = h.Id,
-				Name = h.Name,
-				JobNodeDescription = dbContext.Set<JobNodeEntity>().First(n => n.Id == h.JobNodeId).Description,
-			})
-			.OrderBy(h => h.JobNodeDescription)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								  .Where(h => h.IsActive
+											  && (h.DepartmentId == null
+												  || dbContext.Set<AppUserDepartmentEntity>().Any(d => d.AppUserId == context.Actor && d.DepartmentId == h.DepartmentId)))
+								  .Select(h => new HoldingAreaSummaryResult {
+									  Id = h.Id,
+									  Name = h.Name,
+									  JobNodeDescription = dbContext.Set<JobNodeEntity>().First(n => n.Id == h.JobNodeId).Description,
+								  })
+								  .OrderBy(h => h.JobNodeDescription)
+								  .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. rows];
 	}
@@ -250,7 +257,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
@@ -261,7 +268,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		}
 
 		var jobRequest = await context.Set<JobRequestEntity>().FirstAsync(r => r.JobNodeId == request.NodeId, cancellationToken)
-			.ConfigureAwait(false);
+									  .ConfigureAwait(false);
 		if (jobRequest.RowVersion != request.Version) {
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for job request {request.NodeId} did not match its current version.");
@@ -280,12 +287,14 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "acknowledge-request", "job_request", request.NodeId.Value,
 			request.Context.CorrelationId, null, null,
-			new Dictionary<string, string?> { ["acknowledged_by_user_id"] = request.Context.Actor.Value.ToString(CultureInfo.InvariantCulture) });
+			new Dictionary<string, string?> {
+				["acknowledged_by_user_id"] = request.Context.Actor.Value.ToString(CultureInfo.InvariantCulture),
+			});
 
 		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
 
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
-			.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
+								.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		return JobRequestPersistence.ToResult(node, jobRequest);
 	}
@@ -295,14 +304,14 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobRequestPersistence.RequireRequesterJobAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		var jobRequest = await context.Set<JobRequestEntity>().AsNoTracking()
-			.FirstAsync(r => r.JobNodeId == request.NodeId, cancellationToken).ConfigureAwait(false);
+									  .FirstAsync(r => r.JobNodeId == request.NodeId, cancellationToken).ConfigureAwait(false);
 		var controlsAnchor = ancestorOwnerIds.Contains(request.Context.Actor.Value);
 
 		bool visibleToRequester;
@@ -339,7 +348,9 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "add-request-note", "job_request_note", note.Id.Value,
 				request.Context.CorrelationId, null, null,
-				new Dictionary<string, string?> { ["visible_to_requester"] = visibleToRequester.ToString(CultureInfo.InvariantCulture) });
+				new Dictionary<string, string?> {
+					["visible_to_requester"] = visibleToRequester.ToString(CultureInfo.InvariantCulture),
+				});
 
 			return Task.CompletedTask;
 		}).ConfigureAwait(false);
@@ -353,26 +364,26 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, request.Context.Actor, clock.GetCurrentInstant(), cancellationToken)
-			.ConfigureAwait(false);
+												.ConfigureAwait(false);
 		var ancestorOwnerIds = await JobRequestPersistence.RequireRequesterJobAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		var requestHeader = await (
-				from jobRequestRow in context.Set<JobRequestEntity>().AsNoTracking()
-				join requester in context.Set<AppUserEntity>().AsNoTracking()
-					on jobRequestRow.RequesterUserId equals requester.Id
-				join requesterIdentity in context.Set<IdentityUserEntity>().AsNoTracking()
-					on requester.Id equals requesterIdentity.AppUserId
-				where jobRequestRow.JobNodeId == request.NodeId
-				select new
-				{
-					JobRequest = jobRequestRow,
-					RequesterDisplayName = requester.DisplayName,
-					RequesterUserName = requesterIdentity.UserName,
-				})
-			.FirstAsync(cancellationToken).ConfigureAwait(false);
+									  from jobRequestRow in context.Set<JobRequestEntity>().AsNoTracking()
+									  join requester in context.Set<AppUserEntity>().AsNoTracking()
+										  on jobRequestRow.RequesterUserId equals requester.Id
+									  join requesterIdentity in context.Set<IdentityUserEntity>().AsNoTracking()
+										  on requester.Id equals requesterIdentity.AppUserId
+									  where jobRequestRow.JobNodeId == request.NodeId
+									  select new
+									  {
+										  JobRequest = jobRequestRow,
+										  RequesterDisplayName = requester.DisplayName,
+										  RequesterUserName = requesterIdentity.UserName,
+									  })
+								  .FirstAsync(cancellationToken).ConfigureAwait(false);
 		var jobRequest = requestHeader.JobRequest;
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
-			.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
+								.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
 		var controlsAnchor = ancestorOwnerIds.Contains(request.Context.Actor.Value);
 
 		if (!RequesterAccessPolicy.CanView(
@@ -390,13 +401,13 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 																			|| actorRoles.Contains(EmployeeRole.Worker);
 
 		var subtreeRows = await JobNodeHierarchyQueries.GetRequesterSubtreeAsync(context, request.NodeId.Value, cancellationToken)
-			.ConfigureAwait(false);
+													   .ConfigureAwait(false);
 		var subtreeIds = subtreeRows.Select(r => new JobNodeId(r.Id)).ToArray();
 		var postedAtByNodeId = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Where(n => subtreeIds.Contains(n.Id)).ToDictionaryAsync(n => n.Id, n => n.PostedAt, cancellationToken).ConfigureAwait(false);
+											.Where(n => subtreeIds.Contains(n.Id)).ToDictionaryAsync(n => n.Id, n => n.PostedAt, cancellationToken).ConfigureAwait(false);
 		var changedAtByNodeId = await context.Set<LeafWorkEntity>().AsNoTracking()
-			.Where(lw => subtreeIds.Contains(lw.JobNodeId))
-			.ToDictionaryAsync(lw => lw.JobNodeId, lw => lw.ChangedAt, cancellationToken).ConfigureAwait(false);
+											 .Where(lw => subtreeIds.Contains(lw.JobNodeId))
+											 .ToDictionaryAsync(lw => lw.JobNodeId, lw => lw.ChangedAt, cancellationToken).ConfigureAwait(false);
 
 		var acknowledged = jobRequest.AcknowledgedAt is not null;
 		var childlessStates = JobRequestPersistence.ToLeafStates(subtreeRows.Where(r => r.IsChildless));
@@ -422,9 +433,9 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		}).ToArray();
 
 		var notes = await context.Set<JobRequestNoteEntity>().AsNoTracking()
-			.Where(n => n.JobNodeId == request.NodeId && (isStaffViewer || n.IsVisibleToRequester))
-			.OrderBy(n => n.CreatedAt)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(n => n.JobNodeId == request.NodeId && (isStaffViewer || n.IsVisibleToRequester))
+								 .OrderBy(n => n.CreatedAt)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			JobNodeId = node.Id,

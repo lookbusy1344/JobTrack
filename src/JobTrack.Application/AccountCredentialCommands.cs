@@ -27,7 +27,10 @@ internal sealed class AccountCredentialCommands : IAccountCredentialCommands
 
 		return JobTrackOperation.TraceAsync(
 			"credentials.set-two-factor-state",
-			new CommandContext { Actor = request.ActorUserId, CorrelationId = request.CorrelationId },
+			new CommandContext {
+				Actor = request.ActorUserId,
+				CorrelationId = request.CorrelationId,
+			},
 			null,
 			() => port.SetTwoFactorStateAsync(request, cancellationToken));
 	}
@@ -46,7 +49,10 @@ internal sealed class AccountCredentialCommands : IAccountCredentialCommands
 
 		return JobTrackOperation.TraceAsync(
 			"credentials.change-own-password",
-			new CommandContext { Actor = request.ActorUserId, CorrelationId = request.CorrelationId },
+			new CommandContext {
+				Actor = request.ActorUserId,
+				CorrelationId = request.CorrelationId,
+			},
 			null,
 			() => port.ChangeOwnPasswordAsync(request, cancellationToken));
 	}

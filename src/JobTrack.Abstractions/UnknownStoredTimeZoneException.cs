@@ -10,19 +10,13 @@ namespace JobTrack.Abstractions;
 public sealed class UnknownStoredTimeZoneException : JobTrackException
 {
 	/// <summary>Creates an <see cref="UnknownStoredTimeZoneException" />.</summary>
-	public UnknownStoredTimeZoneException()
-	{
-	}
+	public UnknownStoredTimeZoneException() { }
 
 	/// <summary>Creates an <see cref="UnknownStoredTimeZoneException" /> with the given message.</summary>
 	public UnknownStoredTimeZoneException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	/// <summary>Creates an <see cref="UnknownStoredTimeZoneException" /> with the given message and inner exception.</summary>
 	public UnknownStoredTimeZoneException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

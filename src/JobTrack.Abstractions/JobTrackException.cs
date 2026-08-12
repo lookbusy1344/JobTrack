@@ -11,19 +11,13 @@ namespace JobTrack.Abstractions;
 public abstract class JobTrackException : Exception
 {
 	/// <summary>Creates a <see cref="JobTrackException" />.</summary>
-	protected JobTrackException()
-	{
-	}
+	protected JobTrackException() { }
 
 	/// <summary>Creates a <see cref="JobTrackException" /> with the given message.</summary>
 	protected JobTrackException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	/// <summary>Creates a <see cref="JobTrackException" /> with the given message and inner exception.</summary>
 	protected JobTrackException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

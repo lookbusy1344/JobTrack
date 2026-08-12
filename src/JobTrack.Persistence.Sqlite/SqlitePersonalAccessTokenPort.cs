@@ -34,7 +34,7 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		await AuthorizeIssueOrThrowAsync(context, request.Context.Actor, request.TargetUserId, request.CreatedAt, cancellationToken)
 			.ConfigureAwait(false);
@@ -55,7 +55,9 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 		AuditEventWriter.Add(
 			context, request.Context.Actor, request.CreatedAt, "issue-personal-access-token", "personal_access_token",
 			token.Id.Value, request.Context.CorrelationId, null, null,
-			new Dictionary<string, string?> { ["label"] = request.Label });
+			new Dictionary<string, string?> {
+				["label"] = request.Label,
+			});
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -77,17 +79,17 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 			.ConfigureAwait(false);
 
 		var tokens = await context.Set<PersonalAccessTokenEntity>().AsNoTracking()
-			.Where(t => t.AppUserId == request.TargetUserId)
-			.OrderByDescending(t => t.CreatedAt)
-			.Select(t => new PersonalAccessTokenSummaryResult {
-				Id = t.Id,
-				Label = t.Label,
-				CreatedAt = t.CreatedAt,
-				ExpiresAt = t.ExpiresAt,
-				RevokedAt = t.RevokedAt,
-				LastUsedAt = t.LastUsedAt,
-			})
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								  .Where(t => t.AppUserId == request.TargetUserId)
+								  .OrderByDescending(t => t.CreatedAt)
+								  .Select(t => new PersonalAccessTokenSummaryResult {
+									  Id = t.Id,
+									  Label = t.Label,
+									  CreatedAt = t.CreatedAt,
+									  ExpiresAt = t.ExpiresAt,
+									  RevokedAt = t.RevokedAt,
+									  LastUsedAt = t.LastUsedAt,
+								  })
+								  .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. tokens];
 	}
@@ -97,15 +99,15 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.TargetUserId, now, cancellationToken).ConfigureAwait(false);
 
 		var token = await context.Set<PersonalAccessTokenEntity>()
-						.FirstOrDefaultAsync(
-							t => t.Id == request.TokenId && t.AppUserId == request.TargetUserId, cancellationToken)
-						.ConfigureAwait(false)
+								 .FirstOrDefaultAsync(
+									 t => t.Id == request.TokenId && t.AppUserId == request.TargetUserId, cancellationToken)
+								 .ConfigureAwait(false)
 					?? throw new EntityNotFoundException($"Token {request.TokenId} does not exist for user {request.TargetUserId}.");
 
 		if (token.RevokedAt is null) {
@@ -126,13 +128,13 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.TargetUserId, now, cancellationToken).ConfigureAwait(false);
 
 		var revoked = await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
-			.ConfigureAwait(false);
+														 .ConfigureAwait(false);
 
 		if (revoked > 0) {
 			AuditEventWriter.Add(
@@ -152,21 +154,24 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 
 		var now = clock.GetCurrentInstant();
 		var token = await context.Set<PersonalAccessTokenEntity>()
-			.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken).ConfigureAwait(false);
+								 .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken).ConfigureAwait(false);
 		if (token is null || token.RevokedAt is not null || token.ExpiresAt <= now) {
 			return null;
 		}
 
 		var owner = await context.Set<IdentityUserEntity>().AsNoTracking()
-			.FirstOrDefaultAsync(iu => iu.AppUserId == token.AppUserId, cancellationToken).ConfigureAwait(false);
-		if (owner is null || !owner.IsEnabled || (owner.LockoutEnabled && owner.LockoutEnd is Instant lockoutEnd && lockoutEnd > now)) {
+								 .FirstOrDefaultAsync(iu => iu.AppUserId == token.AppUserId, cancellationToken).ConfigureAwait(false);
+		if (owner is null || !owner.IsEnabled || owner.LockoutEnabled && owner.LockoutEnd is Instant lockoutEnd && lockoutEnd > now) {
 			return null;
 		}
 
 		token.LastUsedAt = now;
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-		return new() { UserId = token.AppUserId, TokenId = token.Id };
+		return new() {
+			UserId = token.AppUserId,
+			TokenId = token.Id,
+		};
 	}
 
 	private Task<SqliteJobTrackDbContext> CreateOpenContextAsync(CancellationToken cancellationToken) =>
@@ -178,9 +183,9 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 		var actorIdentityUser = await LoadActingIdentityUserAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 
 		var actorRoles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+									  .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
+									  .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+									  .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		if (!PersonalAccessTokenAccessPolicy.CanManage(actorId, targetUserId, actorRoles)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage tokens for {targetUserId}.");
@@ -201,7 +206,7 @@ internal sealed class SqlitePersonalAccessTokenPort : IPersonalAccessTokenPort
 		SqliteJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 

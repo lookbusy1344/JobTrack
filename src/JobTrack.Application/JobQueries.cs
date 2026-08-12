@@ -291,8 +291,8 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-employee-profile", request.Context, JobTrackOperation.WithUserId(request.TargetUserId),
 			async () => {
 				var actorRoles = await _employeeQueryPort
-					.GetActorRolesAsync(request.Context.Actor, cancellationToken)
-					.ConfigureAwait(false);
+									   .GetActorRolesAsync(request.Context.Actor, cancellationToken)
+									   .ConfigureAwait(false);
 
 				if (!EmployeeAccessPolicy.CanViewEmployee(request.Context.Actor, request.TargetUserId, actorRoles)) {
 					throw new AuthorizationDeniedException(
@@ -300,8 +300,8 @@ internal sealed class JobQueries : IJobQueries
 				}
 
 				var result = await _employeeQueryPort
-					.GetEmployeeProfileAsync(request.Context.Actor, request.TargetUserId, cancellationToken)
-					.ConfigureAwait(false);
+								   .GetEmployeeProfileAsync(request.Context.Actor, request.TargetUserId, cancellationToken)
+								   .ConfigureAwait(false);
 
 				return result.Profile;
 			});
@@ -353,8 +353,8 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-account-state", request.Context, JobTrackOperation.WithUserId(request.TargetUserId),
 			async () => {
 				var actorRoles = await _employeeQueryPort
-					.GetActorRolesAsync(request.Context.Actor, cancellationToken)
-					.ConfigureAwait(false);
+									   .GetActorRolesAsync(request.Context.Actor, cancellationToken)
+									   .ConfigureAwait(false);
 
 				if (!EmployeeAccessPolicy.CanViewEmployee(request.Context.Actor, request.TargetUserId, actorRoles)) {
 					throw new AuthorizationDeniedException(
@@ -362,8 +362,8 @@ internal sealed class JobQueries : IJobQueries
 				}
 
 				var result = await _employeeQueryPort
-					.GetAccountStateAsync(request.Context.Actor, request.TargetUserId, cancellationToken)
-					.ConfigureAwait(false);
+								   .GetAccountStateAsync(request.Context.Actor, request.TargetUserId, cancellationToken)
+								   .ConfigureAwait(false);
 
 				return result.AccountState;
 			});
@@ -395,8 +395,8 @@ internal sealed class JobQueries : IJobQueries
 				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
 
 				var children = await _browseQueryPort.GetChildrenAsync(
-						request.ParentId, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
-					.ConfigureAwait(false);
+														 request.ParentId, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
+													 .ConfigureAwait(false);
 				return await EnrichSummariesWithCostAsync(request.Context, children, cancellationToken).ConfigureAwait(false);
 			});
 
@@ -407,8 +407,8 @@ internal sealed class JobQueries : IJobQueries
 				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
 
 				var matches = await _browseQueryPort.SearchJobNodesAsync(
-						request.SearchText, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
-					.ConfigureAwait(false);
+														request.SearchText, request.Ownership, request.ArchiveFilter, request.Offset, request.Limit, cancellationToken)
+													.ConfigureAwait(false);
 				return await EnrichSummariesWithCostAsync(request.Context, matches, cancellationToken).ConfigureAwait(false);
 			});
 
@@ -443,7 +443,11 @@ internal sealed class JobQueries : IJobQueries
 				EquatableDictionary<JobNodeId, AllocatedDuration>? allocatedDurations = null;
 				try {
 					var totals = await _costQueries.GetHierarchyTotalsAsync(
-						new() { Context = request.Context, NodeId = request.RootId, AsOf = request.AsOf },
+						new() {
+							Context = request.Context,
+							NodeId = request.RootId,
+							AsOf = request.AsOf,
+						},
 						cancellationToken).ConfigureAwait(false);
 					rootTotal = totals.DisplayedCosts.GetValueOrDefault(request.RootId);
 					rootAllocatedDuration = totals.AllocatedDurations.GetValueOrDefault(request.RootId);
@@ -485,7 +489,7 @@ internal sealed class JobQueries : IJobQueries
 				// result here previously threw for any such row once the port stopped over-fetching the
 				// whole job_node table (regression fixed alongside this call).
 				var readinessInputs = await _readinessQueryPort
-					.GetReadinessInputsForNodesAsync([.. rows.Select(row => row.Id)], cancellationToken).ConfigureAwait(false);
+											.GetReadinessInputsForNodesAsync([.. rows.Select(row => row.Id)], cancellationToken).ConfigureAwait(false);
 
 				var nodes = rows.OrderBy(row => spans[row.Id].Lft).Select(row => new JobSubtreeNodeResult {
 					Id = row.Id,
@@ -505,7 +509,7 @@ internal sealed class JobQueries : IJobQueries
 					HasUnacknowledgedRequest = row.HasUnacknowledgedRequest,
 					BranchAchievement = row.BranchAchievement,
 					IsReady = ReadinessCalculator
-						.IsReady(row.Id, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
+							  .IsReady(row.Id, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
 					HasUnexpandedChildren = row.HasUnexpandedChildren,
 					MatchesFilter = row.MatchesFilter,
 					SubtreeLft = spans[row.Id].Lft,
@@ -619,20 +623,20 @@ internal sealed class JobQueries : IJobQueries
 				// renders, so a row carries a real description/kind/achievement/owner rather than a
 				// bare id. An id that no longer resolves is dropped, matching the port's contract.
 				var summaries = await _browseQueryPort.GetSummariesByIdsAsync(
-						[.. overlaps.Select(overlap => overlap.NodeId).Distinct()], cancellationToken)
-					.ConfigureAwait(false);
+														  [.. overlaps.Select(overlap => overlap.NodeId).Distinct()], cancellationToken)
+													  .ConfigureAwait(false);
 				var summariesById = summaries.ToDictionary(summary => summary.Id);
 
 				var rows = overlaps
-					.Where(overlap => summariesById.ContainsKey(overlap.NodeId))
-					.Select(overlap => new ConcurrentWorkRow {
-						WorkedByUserId = overlap.WorkedByUserId,
-						Node = summariesById[overlap.NodeId],
-						TotalOverlap = overlap.TotalOverlap,
-						OverlapCount = overlap.OverlapCount,
-						FirstOverlapStart = overlap.FirstOverlapStart,
-						LastOverlapEnd = overlap.LastOverlapEnd,
-					});
+						   .Where(overlap => summariesById.ContainsKey(overlap.NodeId))
+						   .Select(overlap => new ConcurrentWorkRow {
+							   WorkedByUserId = overlap.WorkedByUserId,
+							   Node = summariesById[overlap.NodeId],
+							   TotalOverlap = overlap.TotalOverlap,
+							   OverlapCount = overlap.OverlapCount,
+							   FirstOverlapStart = overlap.FirstOverlapStart,
+							   LastOverlapEnd = overlap.LastOverlapEnd,
+						   });
 
 				return new ConcurrentWorkResult {
 					NodeId = request.NodeId,
@@ -654,9 +658,9 @@ internal sealed class JobQueries : IJobQueries
 		// admitted to the node; a branch's roll-up is an aggregate and remains visible.
 		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
 		var candidateIds = summaries
-			.Where(summary => CostAccessPolicy.CanViewNodeCost(costRoles, summary.HasChildren, summary.OwnerUserId, context.Actor))
-			.Select(summary => summary.Id)
-			.ToArray();
+						   .Where(summary => CostAccessPolicy.CanViewNodeCost(costRoles, summary.HasChildren, summary.OwnerUserId, context.Actor))
+						   .Select(summary => summary.Id)
+						   .ToArray();
 
 		// Fresh-eyes review §2.8: one bulk snapshot for the whole page, never one round trip per row.
 		var metrics = await GetBulkCostMetricsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
@@ -680,9 +684,9 @@ internal sealed class JobQueries : IJobQueries
 		// CanViewNodeCost never applies here: it reduces to "your own or unassigned" (ADR 0042).
 		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
 		var candidateIds = entries
-			.Where(entry => CostAccessPolicy.CanViewNodeCost(costRoles, false, entry.OwnerUserId, context.Actor))
-			.Select(entry => entry.Id)
-			.ToArray();
+						   .Where(entry => CostAccessPolicy.CanViewNodeCost(costRoles, false, entry.OwnerUserId, context.Actor))
+						   .Select(entry => entry.Id)
+						   .ToArray();
 
 		var metrics = await GetBulkCostMetricsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
 
@@ -720,7 +724,11 @@ internal sealed class JobQueries : IJobQueries
 			// every row's cost instead, which is why that is no longer caught below.
 			foreach (var batch in candidateIds.Chunk(CostQueries.MaxBulkNodeIdCount)) {
 				var result = await _costQueries.GetBulkNodeCostsAsync(
-					new() { Context = context, NodeIds = [.. batch], AsOf = asOf }, cancellationToken).ConfigureAwait(false);
+					new() {
+						Context = context,
+						NodeIds = [.. batch],
+						AsOf = asOf,
+					}, cancellationToken).ConfigureAwait(false);
 				foreach (var (nodeId, cost) in result.DisplayedCosts) {
 					displayed[nodeId] = cost;
 				}
@@ -765,9 +773,9 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-leaf-sessions", request.Context, JobTrackOperation.WithNodeId(request.LeafWorkId),
 			async () => {
 				var result = await _workSessionQueryPort
-					.GetSessionsAsync(
-						request.Context.Actor, request.LeafWorkId, request.WorkedByUserId, request.Offset, request.Limit, cancellationToken)
-					.ConfigureAwait(false);
+								   .GetSessionsAsync(
+									   request.Context.Actor, request.LeafWorkId, request.WorkedByUserId, request.Offset, request.Limit, cancellationToken)
+								   .ConfigureAwait(false);
 
 				if (!WorkSessionAccessPolicy.CanView(result.ActorRoles)) {
 					throw new AuthorizationDeniedException(
@@ -783,8 +791,8 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-active-sessions", request.Context, null,
 			async () => {
 				var result = await _workSessionQueryPort
-					.GetActiveSessionsAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
-					.ConfigureAwait(false);
+								   .GetActiveSessionsAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
+								   .ConfigureAwait(false);
 
 				if (!WorkSessionAccessPolicy.CanView(result.ActorRoles)) {
 					throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view active sessions.");
@@ -806,8 +814,8 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-session-manage-capabilities", request.Context, null,
 			async () => {
 				var result = await _workSessionQueryPort
-					.GetManageCapabilitiesAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
-					.ConfigureAwait(false);
+								   .GetManageCapabilitiesAsync(request.Context.Actor, request.LeafWorkIds, cancellationToken)
+								   .ConfigureAwait(false);
 				var controlled = result.ControlledLeafWorkIds.ToHashSet();
 				EquatableArray<LeafSessionManageCapabilityResult> capabilities = [
 					.. request.LeafWorkIds.Select(id => new LeafSessionManageCapabilityResult {
@@ -834,7 +842,7 @@ internal sealed class JobQueries : IJobQueries
 				_ = await EnsureActorMayBrowseJobDataAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
 
 				return await _prerequisiteQueryPort
-					.GetPrerequisitesAsync(request.NodeId, request.Offset, request.Limit, cancellationToken).ConfigureAwait(false);
+							 .GetPrerequisitesAsync(request.NodeId, request.Offset, request.Limit, cancellationToken).ConfigureAwait(false);
 			});
 
 	/// <summary>
@@ -860,7 +868,7 @@ internal sealed class JobQueries : IJobQueries
 				// controlling owner can see the "Start for..." disclosure on a brand-new leaf exactly
 				// as StartWorkAsync's own authorization already permits them to invoke it.
 				var manageCapabilities = await _workSessionQueryPort
-					.GetManageCapabilitiesAsync(request.Context.Actor, [leafId], cancellationToken).ConfigureAwait(false);
+											   .GetManageCapabilitiesAsync(request.Context.Actor, [leafId], cancellationToken).ConfigureAwait(false);
 				var actorControlsNode = manageCapabilities.ControlledLeafWorkIds.Contains(leafId);
 				var canManageSessions = WorkSessionAccessPolicy.CanManage(manageCapabilities.ActorRoles, actorControlsNode);
 				// ADR 0045 §3.6: the same "controlling owner, Job Manager, or Administrator" test
@@ -891,12 +899,12 @@ internal sealed class JobQueries : IJobQueries
 					isReady = ReadinessCalculator.IsReady(leafId, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady;
 
 					var activeSessionsResult = await _workSessionQueryPort
-						.GetActiveSessionsAsync(request.Context.Actor, [leafId], cancellationToken).ConfigureAwait(false);
+													 .GetActiveSessionsAsync(request.Context.Actor, [leafId], cancellationToken).ConfigureAwait(false);
 					activeSessions = activeSessionsResult.Sessions;
 
 					var priorParticipation = await _workSessionQueryPort.GetSessionsAsync(
-							request.Context.Actor, leafId, request.Context.Actor, 0, 1, cancellationToken)
-						.ConfigureAwait(false);
+																			request.Context.Actor, leafId, request.Context.Actor, 0, 1, cancellationToken)
+																		.ConfigureAwait(false);
 					actorParticipatedPreviously = priorParticipation.Sessions.Count > 0;
 
 					var isTerminal = AchievementTransitions.IsCompletedState(achievement.Value);
@@ -913,7 +921,7 @@ internal sealed class JobQueries : IJobQueries
 						manageCapabilities.ActorRoles, actorControlsNode, true);
 
 					directDependentCount = await _prerequisiteQueryPort
-						.CountDirectDependentsAsync(leafId, cancellationToken).ConfigureAwait(false);
+												 .CountDirectDependentsAsync(leafId, cancellationToken).ConfigureAwait(false);
 
 					// Only Success can be reopened into a readiness regression, and only a dependent
 					// with a *running* session is at risk of losing its gate mid-flight -- so this
@@ -921,7 +929,7 @@ internal sealed class JobQueries : IJobQueries
 					hasActiveDependentWork = achievement == Achievement.Success
 											 && directDependentCount > 0
 											 && await _prerequisiteQueryPort
-												 .HasActiveDependentWorkAsync(leafId, cancellationToken).ConfigureAwait(false);
+													  .HasActiveDependentWorkAsync(leafId, cancellationToken).ConfigureAwait(false);
 				}
 
 				return new LeafWorkPageResult {
@@ -951,8 +959,8 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-schedule", request.Context, JobTrackOperation.WithUserId(request.UserId),
 			async () => {
 				var result = await _scheduleQueryPort
-					.GetScheduleAsync(request.Context.Actor, request.UserId, cancellationToken)
-					.ConfigureAwait(false);
+								   .GetScheduleAsync(request.Context.Actor, request.UserId, cancellationToken)
+								   .ConfigureAwait(false);
 
 				if (!ScheduleAccessPolicy.CanManage(result.ActorRoles, request.Context.Actor == request.UserId)) {
 					throw new AuthorizationDeniedException(
@@ -967,7 +975,10 @@ internal sealed class JobQueries : IJobQueries
 						$"This employee's schedule has {entryCount} entries, exceeding the {MaxScheduleEntryCount}-entry maximum.");
 				}
 
-				return new ScheduleSnapshotResult { Versions = result.Versions, Exceptions = result.Exceptions };
+				return new ScheduleSnapshotResult {
+					Versions = result.Versions,
+					Exceptions = result.Exceptions,
+				};
 			});
 
 	private Task<RateSnapshotResult> GetRatesCoreAsync(GetRatesRequest request, CancellationToken cancellationToken) =>
@@ -975,8 +986,8 @@ internal sealed class JobQueries : IJobQueries
 			"query.get-rates", request.Context, JobTrackOperation.WithUserId(request.UserId),
 			async () => {
 				var result = await _rateQueryPort
-					.GetRatesAsync(request.Context.Actor, request.UserId, cancellationToken)
-					.ConfigureAwait(false);
+								   .GetRatesAsync(request.Context.Actor, request.UserId, cancellationToken)
+								   .ConfigureAwait(false);
 
 				if (!CostAccessPolicy.CanView(result.ActorRoles, false)) {
 					throw new AuthorizationDeniedException(
@@ -991,6 +1002,9 @@ internal sealed class JobQueries : IJobQueries
 						$"This employee's rates have {entryCount} entries, exceeding the {MaxRateEntryCount}-entry maximum.");
 				}
 
-				return new RateSnapshotResult { UserCostRates = result.UserCostRates, NodeRateOverrides = result.NodeRateOverrides };
+				return new RateSnapshotResult {
+					UserCostRates = result.UserCostRates,
+					NodeRateOverrides = result.NodeRateOverrides,
+				};
 			});
 }

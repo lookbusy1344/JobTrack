@@ -6,16 +6,12 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Self-service TOTP enrolment and disablement (ADR 0037), exercised over real HTTP against a
@@ -41,7 +37,10 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -64,7 +63,10 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var originalSecurityStamp = await GetSecurityStampAsync(appUserId);
 		var seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = new(appUserId), CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = new(appUserId),
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = new(appUserId),
 			Label = "enable-audit-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -179,7 +181,10 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var originalSecurityStamp = await GetSecurityStampAsync(appUserId);
 		var seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = new(appUserId), CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = new(appUserId),
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = new(appUserId),
 			Label = "disable-audit-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -364,10 +369,10 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var hash = hmac.ComputeHash(counterBytes);
 		var offset = hash[^1] & 0x0F;
 		var binaryCode =
-			((hash[offset] & 0x7F) << 24) |
-			((hash[offset + 1] & 0xFF) << 16) |
-			((hash[offset + 2] & 0xFF) << 8) |
-			(hash[offset + 3] & 0xFF);
+			(hash[offset] & 0x7F) << 24 |
+			(hash[offset + 1] & 0xFF) << 16 |
+			(hash[offset + 2] & 0xFF) << 8 |
+			hash[offset + 3] & 0xFF;
 		var truncated = binaryCode % (int)Math.Pow(10, TotpDigits);
 
 		return truncated.ToString(CultureInfo.InvariantCulture).PadLeft(TotpDigits, '0');
@@ -381,10 +386,10 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var bitCount = 0;
 
 		foreach (var c in trimmed) {
-			bitBuffer = (bitBuffer << 5) | Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
+			bitBuffer = bitBuffer << 5 | Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
 			bitCount += 5;
 			if (bitCount >= 8) {
-				output.Add((byte)((bitBuffer >> (bitCount - 8)) & 0xFF));
+				output.Add((byte)(bitBuffer >> bitCount - 8 & 0xFF));
 				bitCount -= 8;
 			}
 		}
@@ -447,7 +452,9 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		await using var command = connection.CreateCommand();
 		command.CommandText =
 			"UPDATE identity_user SET two_factor_enabled = 1, authenticator_key_protected = $key WHERE app_user_id = $appUserId;";
-		_ = command.Parameters.AddWithValue("$key", new byte[] { 1, 2, 3 });
+		_ = command.Parameters.AddWithValue("$key", new byte[] {
+			1, 2, 3,
+		});
 		_ = command.Parameters.AddWithValue("$appUserId", appUserId);
 		_ = await command.ExecuteNonQueryAsync();
 	}
@@ -467,7 +474,4 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 
 		return (enabled, keyProtected);
 	}
-
-
-
 }

@@ -100,7 +100,7 @@ public sealed class WorkRowActionsModel
 	public WorkSessionResult? ViewerSession => Presentation.ViewerSession;
 
 	/// <summary>Whether current leaf state prohibits creating or reopening an active session (ADR 0044).</summary>
-	public bool IsStartClosed => IsArchived || (Achievement.HasValue && AchievementTransitions.IsCompletedState(Achievement.Value));
+	public bool IsStartClosed => IsArchived || Achievement.HasValue && AchievementTransitions.IsCompletedState(Achievement.Value);
 
 	/// <summary>Whether the leaf is paused — started, but nobody clocked on right now (<see cref="LeafActivity.IsPaused" />).</summary>
 	public bool IsPaused => LeafActivity.IsPaused(Achievement, ActiveSessions.Count);
@@ -118,7 +118,9 @@ public sealed class WorkRowActionsModel
 
 	/// <summary>Hidden fields for the viewer's own one-click start.</summary>
 	public IReadOnlyDictionary<string, string?> StartFields =>
-		new Dictionary<string, string?>(PageStateFields) { [StartNodeFieldName] = LeafNodeId.ToString(CultureInfo.InvariantCulture) };
+		new Dictionary<string, string?>(PageStateFields) {
+			[StartNodeFieldName] = LeafNodeId.ToString(CultureInfo.InvariantCulture),
+		};
 
 	/// <summary>The backdate control for the viewer's own one-click start.</summary>
 	public BackdateDisclosureModel StartBackdate => new() {

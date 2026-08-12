@@ -1,7 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -35,7 +34,15 @@ public abstract class AdminAccountManagementBrowserTestsBase
 	protected AdminAccountManagementBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -52,7 +59,7 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 
 		scrollWidth.Should()
-			.BeLessThanOrEqualTo(clientWidth, $"the manage employee account page should not overflow horizontally at {width}x{height}");
+				   .BeLessThanOrEqualTo(clientWidth, $"the manage employee account page should not overflow horizontally at {width}x{height}");
 	}
 
 	[Fact]
@@ -68,7 +75,9 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Create" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "Create",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -139,20 +148,14 @@ public abstract class AdminAccountManagementBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqliteAdminAccountManagementBrowserTests : AdminAccountManagementBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteAdminAccountManagementBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteAdminAccountManagementBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlAdminAccountManagementBrowserTests : AdminAccountManagementBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlAdminAccountManagementBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlAdminAccountManagementBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

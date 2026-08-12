@@ -238,7 +238,9 @@ public static class Program
 		var client = CreateClient(options.Provider, options.ConnectionString);
 		var password = options.Password
 					   ?? (options.PasswordFromStdin ? io.ReadStdinLine() : PasswordPrompt.ReadConfirmed(io));
-		var resolvedOptions = options with { Password = password };
+		var resolvedOptions = options with {
+			Password = password,
+		};
 
 		return await CreateEmployeeCommand.RunAsync(io, userManager, client, resolvedOptions, CancellationToken.None);
 	}

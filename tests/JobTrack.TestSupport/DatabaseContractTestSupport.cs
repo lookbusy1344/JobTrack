@@ -29,9 +29,9 @@ public static class DatabaseContractTestSupport
 	{
 		await using var roleCommand = connection.CreateCommand();
 		roleCommand.CommandText = """
-			INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-			SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-			""";
+								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
+								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
+								  """;
 		roleCommand.AddParameter("@appUserId", appUserId.Value);
 		roleCommand.AddParameter("@roleId", (short)role);
 		_ = await roleCommand.ExecuteNonQueryAsync();
@@ -49,22 +49,22 @@ public static class DatabaseContractTestSupport
 
 		await using var appUserCommand = connection.CreateCommand();
 		appUserCommand.CommandText = """
-			INSERT INTO app_user (display_name, iana_time_zone)
-			VALUES (@displayName, 'Europe/London')
-			RETURNING id;
-			""";
+									 INSERT INTO app_user (display_name, iana_time_zone)
+									 VALUES (@displayName, 'Europe/London')
+									 RETURNING id;
+									 """;
 		appUserCommand.AddParameter("@displayName", displayName);
 		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
 		await using var identityUserCommand = connection.CreateCommand();
 		identityUserCommand.CommandText = """
-			INSERT INTO identity_user
-				(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-				 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-			VALUES
-				(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-				 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-			""";
+										  INSERT INTO identity_user
+										  	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
+										  	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
+										  VALUES
+										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
+										  	 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
+										  """;
 		identityUserCommand.AddParameter("@appUserId", appUserId.Value);
 		identityUserCommand.AddParameter("@userName", userName);
 		identityUserCommand.AddParameter("@normalizedUserName", userName.ToUpperInvariant());

@@ -30,8 +30,8 @@ internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstr
 		BootstrapPersistenceRequest request, CancellationToken cancellationToken = default)
 	{
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, o => o.UseNodaTime())
-			.Options;
+					  .UseNpgsql(dataSource, o => o.UseNodaTime())
+					  .Options;
 
 		await using var context = new PostgreSqlJobTrackDbContext(options);
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -82,7 +82,10 @@ internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstr
 		// (not app_user.id), so it needs that generated id assigned before it can be constructed.
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-		_ = context.Add(new IdentityUserRoleEntity { IdentityUserId = identityUser.Id, IdentityRoleId = (short)EmployeeRole.Administrator });
+		_ = context.Add(new IdentityUserRoleEntity {
+			IdentityUserId = identityUser.Id,
+			IdentityRoleId = (short)EmployeeRole.Administrator,
+		});
 
 		var root = new JobNodeEntity {
 			Id = default,
@@ -96,7 +99,10 @@ internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstr
 		};
 		_ = context.Add(root);
 
-		_ = context.Add(new InitialisedMarkerEntity { Id = 1, InitialisedAt = now });
+		_ = context.Add(new InitialisedMarkerEntity {
+			Id = 1,
+			InitialisedAt = now,
+		});
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

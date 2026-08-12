@@ -107,9 +107,9 @@ public sealed record CreateEmployeeCommandOptions
 	private static EquatableArray<EmployeeRole> ParseRoles(string rolesRaw)
 	{
 		var roles = rolesRaw
-			.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-			.Select(ParseRole)
-			.ToArray();
+					.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+					.Select(ParseRole)
+					.ToArray();
 
 		return roles.Length == 0
 			? throw new AdminCliUsageException("At least one role is required in --roles.")

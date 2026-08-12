@@ -20,8 +20,10 @@ internal static partial class WebTestHttp
 		this HttpClient client, HttpResponseMessage response, string authCookie)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
-		var responseCookies = WebTestHttp.ExtractSetCookiePairs(response);
-		request.Headers.Add("Cookie", string.Join("; ", new[] { authCookie }.Concat(responseCookies)));
+		var responseCookies = ExtractSetCookiePairs(response);
+		request.Headers.Add("Cookie", string.Join("; ", new[] {
+			authCookie,
+		}.Concat(responseCookies)));
 		return await client.SendAsync(request);
 	}
 
@@ -58,12 +60,12 @@ internal static partial class WebTestHttp
 		request.Headers.Add("Cookie", authCookie);
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery")
-			?? throw new InvalidOperationException("No antiforgery cookie in token response.");
+		var antiforgeryCookie = FindSetCookie(response, "Antiforgery")
+								?? throw new InvalidOperationException("No antiforgery cookie in token response.");
 		var token = JsonDocument.Parse(body).RootElement.GetProperty("token").GetString()
-			?? throw new InvalidOperationException("No antiforgery token in token response.");
+					?? throw new InvalidOperationException("No antiforgery token in token response.");
 
-		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
+		return (ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	public static async Task<HttpResponseMessage> PostLoginAsync(
@@ -85,10 +87,10 @@ internal static partial class WebTestHttp
 	public static async Task<string> SignInAsync(this HttpClient client, string userName, string password)
 	{
 		var response = await client.PostLoginAsync(userName, password);
-		var authCookie = WebTestHttp.FindSetCookie(response, "Identity.Application")
-			?? throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
+		var authCookie = FindSetCookie(response, "Identity.Application")
+						 ?? throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return WebTestHttp.ExtractCookiePair(authCookie);
+		return ExtractCookiePair(authCookie);
 	}
 
 	public static Task<string> SignInAsync(this HttpClient client, string userName) =>
@@ -98,11 +100,11 @@ internal static partial class WebTestHttp
 	{
 		var response = await client.GetAsync("/Account/Login");
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery")
-			?? throw new InvalidOperationException("No antiforgery cookie in login page response.");
+		var antiforgeryCookie = FindSetCookie(response, "Antiforgery")
+								?? throw new InvalidOperationException("No antiforgery cookie in login page response.");
 		var token = ExtractAntiforgeryToken(body);
 
-		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
+		return (ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	public static async Task<(string CookieHeader, string Token)> ExtractFormAsync(

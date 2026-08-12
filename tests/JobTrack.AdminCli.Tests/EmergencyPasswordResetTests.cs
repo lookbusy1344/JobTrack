@@ -132,7 +132,10 @@ public sealed partial class EmergencyPasswordResetTests
 			var (appUserId, _) = await SeedEmployeeAsync(database.ConnectionString, SchemaProvider.Sqlite, "ada.reset-revokes");
 			var jobTrackClient = JobTrackSqlite.Create(database.ConnectionString);
 			var issued = await jobTrackClient.Tokens.IssueAsync(new() {
-				Context = new() { Actor = new(appUserId), CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = new(appUserId),
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = new(appUserId),
 				Label = "cli-test-token",
 				ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -154,7 +157,9 @@ public sealed partial class EmergencyPasswordResetTests
 
 			exitCode.Should().Be(0);
 			var authenticated = await jobTrackClient.Tokens.TryAuthenticateAsync(
-				new() { Token = issued.Token });
+				new() {
+					Token = issued.Token,
+				});
 			authenticated.Should().BeNull("the emergency reset must revoke every personal access token for the reset employee");
 		}
 		finally {

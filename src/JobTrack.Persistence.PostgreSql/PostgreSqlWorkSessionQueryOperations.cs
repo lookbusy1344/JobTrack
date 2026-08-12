@@ -14,9 +14,7 @@ internal sealed class PostgreSqlWorkSessionQueryOperations(NpgsqlDataSource data
 {
 	/// <summary>Creates the seam over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlWorkSessionQueryOperations(NpgsqlDataSource dataSource)
-		: this(dataSource, [])
-	{
-	}
+		: this(dataSource, []) { }
 
 	public async Task<IReadOnlyList<long>> GetControlledLeafIdsAsync(
 		DbContext context, long actorId, IReadOnlyList<long> leafWorkIds, CancellationToken cancellationToken)

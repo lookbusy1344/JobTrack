@@ -7,16 +7,9 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the external HTTP API's leaf-completion and reopen-and-start composites
@@ -55,7 +48,10 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -78,7 +74,10 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 		var authCookie = await client.SignInAsync("complete.worker");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var session = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			WorkedByUserId = workerId,
 		});
@@ -106,7 +105,10 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 		var authCookie = await client.SignInAsync("complete.stale");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var session = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			WorkedByUserId = workerId,
 		});
@@ -133,7 +135,10 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 		var authCookie = await client.SignInAsync("complete.stranger");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var session = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			WorkedByUserId = workerId,
 		});
@@ -198,8 +203,15 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 	{
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "reopen.archived");
 		var leafId = await CreateTerminalLeafAsync(workerId);
-		var node = await seedClient.Query.GetJobNodeAsync(new() { Context = ContextFor(administratorId), NodeId = leafId });
-		_ = await seedClient.Jobs.ArchiveAsync(new() { Context = ContextFor(administratorId), NodeId = leafId, Version = node.Node.Version });
+		var node = await seedClient.Query.GetJobNodeAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+		});
+		_ = await seedClient.Jobs.ArchiveAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leafId,
+			Version = node.Node.Version,
+		});
 		var authCookie = await client.SignInAsync("reopen.archived");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 
@@ -233,7 +245,10 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 		response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
 
 		var leafWork = await seedClient.Query.GetLeafWorkAsync(
-			new() { Context = ContextFor(administratorId), JobNodeId = leafId });
+			new() {
+				Context = ContextFor(administratorId),
+				JobNodeId = leafId,
+			});
 		leafWork.Achievement.Should().Be(Achievement.Unsuccessful);
 		leafWork.Version.Should().Be(3);
 	}
@@ -258,15 +273,26 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 		response.StatusCode.Should().Be(HttpStatusCode.Created);
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private async Task<JobNodeId> CreateTerminalLeafAsync(AppUserId workerId)
 	{
 		var leafId = await AddChildAsync(rootId, workerId, "Terminal leaf");
 		var session = await seedClient.Work.StartWorkAsync(
-			new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				JobNodeId = leafId,
+				WorkedByUserId = workerId,
+			});
 		_ = await seedClient.Work.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = session.Id,
+				Version = session.Version,
+			});
 		_ = await seedClient.Work.SetAchievementAsync(new() {
 			Context = ContextFor(administratorId),
 			JobNodeId = leafId,
@@ -299,7 +325,10 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
-		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = result.Id });
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = ContextFor(administratorId),
+			JobNodeId = result.Id,
+		});
 
 		return result.Id;
 	}
@@ -332,7 +361,4 @@ public sealed partial class LeafCompletionAndReopenApiTests : IAsyncLifetime, ID
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
 }

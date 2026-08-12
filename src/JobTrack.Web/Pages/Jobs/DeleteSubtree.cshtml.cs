@@ -94,13 +94,21 @@ public sealed partial class DeleteSubtreeModel(
 
 		try {
 			_ = await jobTrackClient.Jobs.DeleteSubtreeAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = correlationId },
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = correlationId,
+				},
 				RootId = new(NodeId),
 				Version = OriginalVersion,
 				Reason = Input.Reason ?? string.Empty,
 			}, cancellationToken);
 
-			return RedirectToPage("/Jobs/Browse", parentId.HasValue ? new { nodeId = parentId.Value.Value } : null);
+			return RedirectToPage("/Jobs/Browse", parentId.HasValue
+				? new
+				{
+					nodeId = parentId.Value.Value,
+				}
+				: null);
 		}
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "Deleting a whole subtree requires the Administrator role.";
@@ -144,10 +152,20 @@ public sealed partial class DeleteSubtreeModel(
 
 		try {
 			_ = await jobTrackClient.Jobs.ArchiveSubtreeAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = correlationId }, RootId = new(NodeId), Version = OriginalVersion },
+				new() {
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = correlationId,
+					},
+					RootId = new(NodeId),
+					Version = OriginalVersion,
+				},
 				cancellationToken);
 
-			return RedirectToPage("/Jobs/Browse", new { nodeId = NodeId });
+			return RedirectToPage("/Jobs/Browse", new
+			{
+				nodeId = NodeId,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			ErrorMessage = "Archiving a whole subtree requires the Administrator role.";
@@ -196,12 +214,24 @@ public sealed partial class DeleteSubtreeModel(
 	{
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(NodeId) },
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new JobNodeId(NodeId),
+				},
 				cancellationToken);
 			OriginalVersion = OriginalVersion == 0 ? CurrentNode.Node.Version : OriginalVersion;
 
 			Impact = await jobTrackClient.Query.GetSubtreeImpactAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, RootId = new(NodeId) },
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					RootId = new(NodeId),
+				},
 				cancellationToken);
 
 			await LoadCostsAsync(actor, cancellationToken);
@@ -227,7 +257,14 @@ public sealed partial class DeleteSubtreeModel(
 	{
 		try {
 			var totals = await jobTrackClient.Costs.GetHierarchyTotalsAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new(NodeId), AsOf = clock.GetCurrentInstant() },
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new(NodeId),
+					AsOf = clock.GetCurrentInstant(),
+				},
 				cancellationToken);
 
 			NodeCosts = totals.DisplayedCosts;

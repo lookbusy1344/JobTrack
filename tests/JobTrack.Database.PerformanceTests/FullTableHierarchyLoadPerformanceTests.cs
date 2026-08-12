@@ -81,14 +81,22 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 	// 2026-07-25 scalability-follow-up plan §2.1: these benchmarks predate request-scoped filtering and
 	// deliberately measure the unfiltered, unbounded worst case (every leaf legitimately on the list) --
 	// an unbounded filter reproduces that same shape against the now-request-scoped port.
-	private static readonly AwaitingProgressQueryFilter UnboundedFilter = new() { Ownership = OwnershipFilter.All, Offset = 0, Limit = int.MaxValue };
+	private static readonly AwaitingProgressQueryFilter UnboundedFilter = new() {
+		Ownership = OwnershipFilter.All,
+		Offset = 0,
+		Limit = int.MaxValue,
+	};
 
 	// 2026-07-25 scalability-follow-up plan §2.2: the production-realistic shape (no ownership/subtree/
 	// search filter, one default page) EXPLAIN (ANALYZE, BUFFERS) measured at ~34 ms against this same
 	// fixture -- the childless anti-join against job_node_parent_id_idx dominates (17,211 index probes),
 	// not a problematic sequential scan; no partial index is evidence-backed at this scale.
 	private static readonly AwaitingProgressQueryFilter DefaultPageFilter =
-		new() { Ownership = OwnershipFilter.All, Offset = 0, Limit = AwaitingProgressPaging.DefaultPageSize + 1 };
+		new() {
+			Ownership = OwnershipFilter.All,
+			Offset = 0,
+			Limit = AwaitingProgressPaging.DefaultPageSize + 1,
+		};
 
 	// §2.3 of the 2026-07-28 fresh-eyes review: restored from 1,500 ms back to this isolated-evidence
 	// figure (measured ~34 ms originally, ~78-112 ms re-measured via scripts/perf-test.sh on different
@@ -212,7 +220,9 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 
 		await using var dataSource = new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build();
 		var awaitingProgressPort = new PostgreSqlAwaitingProgressQueryPort(dataSource);
-		var rootScopedFilter = DefaultPageFilter with { SubtreeRootId = new(rootId) };
+		var rootScopedFilter = DefaultPageFilter with {
+			SubtreeRootId = new(rootId),
+		};
 
 		_ = await awaitingProgressPort.GetAwaitingProgressInputsAsync(DefaultPageFilter);
 		_ = await awaitingProgressPort.GetAwaitingProgressInputsAsync(rootScopedFilter);
@@ -340,7 +350,9 @@ public sealed class FullTableHierarchyLoadPerformanceTests : IAsyncLifetime
 			Limit = AwaitingProgressPaging.DefaultPageSize + 1,
 			ExcludeBlocked = false,
 		};
-		var excludeBlockedFilter = includeBlockedFilter with { ExcludeBlocked = true };
+		var excludeBlockedFilter = includeBlockedFilter with {
+			ExcludeBlocked = true,
+		};
 
 		_ = await awaitingProgressPort.GetAwaitingProgressInputsAsync(includeBlockedFilter);
 		_ = await awaitingProgressPort.GetAwaitingProgressInputsAsync(excludeBlockedFilter);

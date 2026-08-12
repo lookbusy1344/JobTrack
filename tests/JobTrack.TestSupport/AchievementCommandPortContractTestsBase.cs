@@ -1,7 +1,6 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -71,7 +70,10 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "leaf_work", EntityId = leafId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "leaf_work",
+				EntityId = leafId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		// AttachLeafWorkAsync (SeedReadyLeafAsync) also writes a leaf_work audit event, so filter
 		// down to the transition this test actually performed.
@@ -289,8 +291,7 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 		});
 		var port = CreateAchievementPort(database.ConnectionString);
 		foreach (var (leafId, achievement, version) in new[] {
-					 (requiredLeaf, Achievement.InProgress, 1L), (requiredLeaf, Achievement.Success, 2L), (dependentLeaf, Achievement.InProgress, 1L),
-					 (dependentLeaf, Achievement.Success, 2L), (requiredLeaf, Achievement.Waiting, 3L),
+					 (requiredLeaf, Achievement.InProgress, 1L), (requiredLeaf, Achievement.Success, 2L), (dependentLeaf, Achievement.InProgress, 1L), (dependentLeaf, Achievement.Success, 2L), (requiredLeaf, Achievement.Waiting, 3L),
 				 }) {
 			_ = await port.SetAchievementAsync(new() {
 				Context = ContextFor(jobManagerId),
@@ -429,7 +430,10 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IAuditQueryPort CreateAuditQueryPort(string connectionString);
 
-	protected static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	protected static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static async Task<JobNodeId> CreateReadyLeafAsync(
 		IJobNodeCommandPort jobNodePort, JobNodeId parentId, AppUserId jobManagerId, AppUserId workerId)
@@ -442,7 +446,10 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 		_ = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = leaf.Id,
+			});
 
 		return leaf.Id;
 	}
@@ -483,12 +490,4 @@ public abstract class AchievementCommandPortContractTestsBase : IAsyncLifetime
 
 		return (result.RootJobNodeId, result.AdministratorId, workerId, leafId);
 	}
-
-
-
-
-
-
-
-
 }

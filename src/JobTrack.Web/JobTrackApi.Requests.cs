@@ -38,7 +38,11 @@ internal static partial class JobTrackApi
 		var body = request ?? throw new ArgumentNullException(nameof(request));
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var result = await jobTrackClient.Requests.SubmitAsync(
-				new() { Context = context, HoldingAreaId = new(body.HoldingAreaId), Description = body.Description }, cancellationToken);
+				new() {
+					Context = context,
+					HoldingAreaId = new(body.HoldingAreaId),
+					Description = body.Description,
+				}, cancellationToken);
 
 			return TypedResults.Created("/api/requests", Map(result));
 		});
@@ -65,7 +69,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Requests.GetDetailAsync(new() { Context = context, NodeId = new(jobNodeId) }, cancellationToken);
+			var result = await jobTrackClient.Requests.GetDetailAsync(new() {
+				Context = context,
+				NodeId = new(jobNodeId),
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -133,14 +140,21 @@ internal static partial class JobTrackApi
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			var result = await jobTrackClient.Requests.AcknowledgeAsync(
-				new() { Context = context, NodeId = new(jobNodeId), Version = request.Version }, cancellationToken);
+				new() {
+					Context = context,
+					NodeId = new(jobNodeId),
+					Version = request.Version,
+				}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
 	}
 
 	private static HoldingAreaResponse Map(HoldingAreaSummaryResult result) =>
-		new() { Id = result.Id.Value, Name = result.Name };
+		new() {
+			Id = result.Id.Value,
+			Name = result.Name,
+		};
 
 	private static RequestResponse Map(JobRequestResult result) =>
 		new() {

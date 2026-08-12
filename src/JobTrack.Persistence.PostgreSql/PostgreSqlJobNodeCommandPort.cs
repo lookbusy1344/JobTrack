@@ -96,7 +96,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, actorRoles, request.Context.Actor, request.NewParentId, cancellationToken).ConfigureAwait(false);
 
 		var oldParentId = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Where(n => n.Id == request.NodeId).Select(n => n.ParentId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+									   .Where(n => n.Id == request.NodeId).Select(n => n.ParentId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
 		try {
 			// The expected-version compare-and-swap, cycle check (deferred to commit, schema
@@ -109,8 +109,12 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "move-job-node", "job_node", request.NodeId.Value,
 				request.Context.CorrelationId, null,
-				new Dictionary<string, string?> { ["parent_id"] = oldParentId?.Value.ToString(CultureInfo.InvariantCulture) },
-				new Dictionary<string, string?> { ["parent_id"] = request.NewParentId.Value.ToString(CultureInfo.InvariantCulture) });
+				new Dictionary<string, string?> {
+					["parent_id"] = oldParentId?.Value.ToString(CultureInfo.InvariantCulture),
+				},
+				new Dictionary<string, string?> {
+					["parent_id"] = request.NewParentId.Value.ToString(CultureInfo.InvariantCulture),
+				});
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -134,7 +138,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		var moved = await context.Set<JobNodeEntity>().AsNoTracking()
-						.FirstOrDefaultAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false)
+								 .FirstOrDefaultAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false)
 					?? throw new EntityNotFoundException($"Job node {request.NodeId} no longer exists after the move committed.");
 
 		return await JobNodeStructuralProjection.ToResultAsync(context, moved, cancellationToken).ConfigureAwait(false);
@@ -147,7 +151,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		var before = await context.Set<JobNodeEntity>().AsNoTracking()
-						 .FirstOrDefaultAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false)
+								  .FirstOrDefaultAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Job node {request.NodeId} does not exist.");
 
 		var now = clock.GetCurrentInstant();
@@ -157,13 +161,13 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		if (!await UnassignedNodeClaim.TryClaimAsync(context, request.NodeId, request.Context.Actor, cancellationToken)
-				.ConfigureAwait(false)) {
+									  .ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"job-node-already-claimed", $"Job node {request.NodeId} has already been claimed.");
 		}
 
 		var claimed = await context.Set<JobNodeEntity>().AsNoTracking()
-			.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
+								   .FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "pick-up-job-node", "job_node", request.NodeId.Value,
@@ -200,8 +204,12 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		AuditEventWriter.Add(
 			context, request.Context.Actor, node.ArchivedAt.Value, "archive-job-node", "job_node", node.Id.Value,
 			request.Context.CorrelationId, null,
-			new Dictionary<string, string?> { ["archived_at"] = wasArchivedAt?.ToString() },
-			new Dictionary<string, string?> { ["archived_at"] = node.ArchivedAt?.ToString() });
+			new Dictionary<string, string?> {
+				["archived_at"] = wasArchivedAt?.ToString(),
+			},
+			new Dictionary<string, string?> {
+				["archived_at"] = node.ArchivedAt?.ToString(),
+			});
 
 		try {
 			await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
@@ -231,21 +239,21 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		if (await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(c => c.ParentId == request.NodeId, cancellationToken).ConfigureAwait(false)) {
+						 .AnyAsync(c => c.ParentId == request.NodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"job-node-has-children-cannot-delete",
 				"A node with children cannot be deleted; delete or move its children first.");
 		}
 
 		if (await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-				.AnyAsync(jp => jp.FromId == request.NodeId || jp.ToId == request.NodeId, cancellationToken).ConfigureAwait(false)) {
+						 .AnyAsync(jp => jp.FromId == request.NodeId || jp.ToId == request.NodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"job-node-has-prerequisites-cannot-delete",
 				"A node with a prerequisite edge cannot be deleted; remove the edge(s) first.");
 		}
 
 		var leafWork = await context.Set<LeafWorkEntity>()
-			.FirstOrDefaultAsync(lw => lw.JobNodeId == request.NodeId, cancellationToken).ConfigureAwait(false);
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == request.NodeId, cancellationToken).ConfigureAwait(false);
 
 		Dictionary<string, string?> before;
 		string operation;
@@ -260,7 +268,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			// that no longer do -- removing leafWork afterward then throws attempting a cascade-delete
 			// fixup against sessions it thinks are still related but were never marked for deletion.
 			var sessions = await context.Set<WorkSessionEntity>().AsNoTracking()
-				.Where(s => s.LeafWorkId == request.NodeId).ToListAsync(cancellationToken).ConfigureAwait(false);
+										.Where(s => s.LeafWorkId == request.NodeId).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 			if (sessions.Count == 0) {
 				before = SnapshotJobNode(node);
@@ -288,7 +296,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		foreach (var (key, value) in await JobNodeDependentCascade
-					 .RemoveDependentsOfAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false)) {
+										   .RemoveDependentsOfAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false)) {
 			before[key] = value;
 		}
 
@@ -389,22 +397,22 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		CheckVersionOrThrow(root.RowVersion, request.Version);
 
 		var rows = await JobNodeHierarchyQueries.GetSubtreeImpactRowsAsync(context, request.RootId.Value, cancellationToken)
-			.ConfigureAwait(false);
+												.ConfigureAwait(false);
 		var subtreeIds = rows.Select(r => new JobNodeId(r.Id)).ToList();
 		var leafWorkIds = rows.Where(r => r.HasLeafWork).Select(r => new JobNodeId(r.Id)).ToList();
 
 		// Same rule the single-node archive enforces (ADR 0044), applied across the whole subtree:
 		// an archived leaf must not be left carrying a running session.
 		if (leafWorkIds.Count > 0 && await context.Set<WorkSessionEntity>().AsNoTracking()
-				.AnyAsync(s => leafWorkIds.Contains(s.LeafWorkId) && s.FinishedAt == null, cancellationToken)
-				.ConfigureAwait(false)) {
+												  .AnyAsync(s => leafWorkIds.Contains(s.LeafWorkId) && s.FinishedAt == null, cancellationToken)
+												  .ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"leaf-closure-active-sessions", "This subtree cannot be archived while a session is active within it.");
 		}
 
 		var toArchive = await context.Set<JobNodeEntity>()
-			.Where(n => subtreeIds.Contains(n.Id) && n.ArchivedAt == null)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+									 .Where(n => subtreeIds.Contains(n.Id) && n.ArchivedAt == null)
+									 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		foreach (var affected in toArchive) {
 			affected.ArchivedAt = now;
@@ -426,7 +434,10 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
 
-		return new() { NodeCount = rows.Count, NewlyArchivedCount = toArchive.Count };
+		return new() {
+			NodeCount = rows.Count,
+			NewlyArchivedCount = toArchive.Count,
+		};
 	}
 
 	/// <inheritdoc />
@@ -437,12 +448,12 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		var now = clock.GetCurrentInstant();
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
-					   .FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+								.FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
 
 		if (await context.Set<LeafWorkEntity>().AsNoTracking()
-				.AnyAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+						 .AnyAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException("leaf-work-already-attached", "This node already has LeafWork attached.");
 		}
 
@@ -451,7 +462,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			cancellationToken).ConfigureAwait(false);
 
 		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitForLeafWorkAttachAsync(context, transaction, cancellationToken)
-			.ConfigureAwait(false);
+											  .ConfigureAwait(false);
 
 		return ToLeafWorkResult(leafWork);
 	}
@@ -473,13 +484,13 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		if (await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(c => c.ParentId == branch.Id, cancellationToken).ConfigureAwait(false)) {
+						 .AnyAsync(c => c.ParentId == branch.Id, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"job-node-has-children-cannot-decompose", "A node with children cannot be decomposed.");
 		}
 
 		var oldLeafWork = await context.Set<LeafWorkEntity>()
-			.FirstOrDefaultAsync(lw => lw.JobNodeId == request.LeafNodeId, cancellationToken).ConfigureAwait(false);
+									   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.LeafNodeId, cancellationToken).ConfigureAwait(false);
 		if (oldLeafWork is null) {
 			if (request.NewChildren.Count == 0) {
 				throw new InvariantViolationException(
@@ -492,10 +503,10 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		foreach (var ownerUserId in request.NewChildren
-					 .Select(child => child.OwnerUserId)
-					 .Where(ownerUserId => ownerUserId.HasValue)
-					 .Distinct()
-					 .OrderBy(ownerUserId => ownerUserId!.Value.Value)) {
+										   .Select(child => child.OwnerUserId)
+										   .Where(ownerUserId => ownerUserId.HasValue)
+										   .Distinct()
+										   .OrderBy(ownerUserId => ownerUserId!.Value.Value)) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
 				context, ownerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 		}
@@ -630,8 +641,8 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			.ConfigureAwait(false);
 
 		var affected = await context.Set<JobPrerequisiteEntity>()
-			.Where(p => p.FromId == request.RequiredJobId && p.ToId == request.DependentJobId)
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+									.Where(p => p.FromId == request.RequiredJobId && p.ToId == request.DependentJobId)
+									.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		if (affected == 0) {
 			throw new EntityNotFoundException(
@@ -660,17 +671,17 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.ParentId, now, cancellationToken).ConfigureAwait(false);
 		var ownerAssignees = request.Nodes
-			.Where(node => node.OwnerUserId.HasValue)
-			.Select(node => (UserId: node.OwnerUserId!.Value, ConstraintId: "job-node-owner-not-eligible"));
+									.Where(node => node.OwnerUserId.HasValue)
+									.Select(node => (UserId: node.OwnerUserId!.Value, ConstraintId: "job-node-owner-not-eligible"));
 		var sessionAssignees = request.Nodes
-			.Where(node => node.LeafWork is not null)
-			.SelectMany(node => ImportedSessions(node.LeafWork!))
-			.Select(session => (UserId: session.WorkedByUserId, ConstraintId: "work-session-target-not-eligible"));
+									  .Where(node => node.LeafWork is not null)
+									  .SelectMany(node => ImportedSessions(node.LeafWork!))
+									  .Select(session => (UserId: session.WorkedByUserId, ConstraintId: "work-session-target-not-eligible"));
 		var assignees = ownerAssignees.Concat(sessionAssignees)
-			.GroupBy(assignee => assignee.UserId)
-			.Select(group => group.First())
-			.OrderBy(assignee => assignee.UserId.Value)
-			.ToList();
+									  .GroupBy(assignee => assignee.UserId)
+									  .Select(group => group.First())
+									  .OrderBy(assignee => assignee.UserId.Value)
+									  .ToList();
 		await IdentityUserWriteLock.AcquireManyAsync(
 			context, assignees.Select(assignee => assignee.UserId).Concat(request.HomeNodeUserIds), cancellationToken).ConfigureAwait(false);
 		foreach (var assignee in assignees) {
@@ -681,7 +692,13 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		var created = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
 			transaction, ct => ImportSubtreeCoreAsync(context, request, now, ct), cancellationToken).ConfigureAwait(false);
 
-		return new() { Nodes = [.. created.Select(c => new ImportedJobNode { LocalId = c.LocalId, JobNodeId = c.Entity.Id })] };
+		return new() {
+			Nodes = [
+				.. created.Select(c => new ImportedJobNode {
+					LocalId = c.LocalId, JobNodeId = c.Entity.Id,
+				}),
+			],
+		};
 	}
 
 	private static PostgresException? FindActiveSessionsViolation(Exception? ex) =>
@@ -738,7 +755,10 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 				var requiredId = createdByLocalId[prerequisiteLocalId].Id;
 				await ValidatePrerequisiteEdgeAsync(context, request.Context.Actor, requiredId, dependentId, now, cancellationToken)
 					.ConfigureAwait(false);
-				_ = context.Add(new JobPrerequisiteEntity { FromId = requiredId, ToId = dependentId });
+				_ = context.Add(new JobPrerequisiteEntity {
+					FromId = requiredId,
+					ToId = dependentId,
+				});
 			}
 		}
 
@@ -748,9 +768,9 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		if (request.HomeNodeLocalId is long homeNodeLocalId) {
 			await ImportHomeNodeAssignment.ApplyAsync(
-					context, createdByLocalId[homeNodeLocalId].Id, request.HomeNodeUserIds, request.Context.Actor, now,
-					request.Context.CorrelationId, cancellationToken)
-				.ConfigureAwait(false);
+											  context, createdByLocalId[homeNodeLocalId].Id, request.HomeNodeUserIds, request.Context.Actor, now,
+											  request.Context.CorrelationId, cancellationToken)
+										  .ConfigureAwait(false);
 		}
 
 		AuditEventWriter.Add(
@@ -799,10 +819,10 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		CancellationToken cancellationToken)
 	{
 		var workedSpecs = request.Nodes
-			.Where(spec => spec.LeafWork is not null)
-			.OrderBy(spec => ImportedSessions(spec.LeafWork!).Min(session => session.StartedAt))
-			.ThenBy(spec => spec.LocalId)
-			.ToList();
+								 .Where(spec => spec.LeafWork is not null)
+								 .OrderBy(spec => ImportedSessions(spec.LeafWork!).Min(session => session.StartedAt))
+								 .ThenBy(spec => spec.LocalId)
+								 .ToList();
 
 		foreach (var spec in workedSpecs) {
 			var node = createdByLocalId[spec.LocalId];
@@ -837,8 +857,8 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			}
 
 			await LeafAchievementTransition.ApplyImportedAsync(
-					context, leafWork, work.Achievement, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
-				.ConfigureAwait(false);
+											   context, leafWork, work.Achievement, request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
+										   .ConfigureAwait(false);
 
 			// Flush before the recheck so this leaf's own rows, and every earlier leaf's achievement,
 			// are visible to the readiness query.
@@ -897,9 +917,9 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		var dependentAncestorIds = await JobNodeHierarchyQueries.GetAncestorIdsAsync(context, dependentJobId.Value, cancellationToken)
-			.ConfigureAwait(false);
+																.ConfigureAwait(false);
 		var requiredAncestorIds = await JobNodeHierarchyQueries.GetAncestorIdsAsync(context, requiredJobId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															   .ConfigureAwait(false);
 		if (dependentAncestorIds.Contains(requiredJobId.Value) || requiredAncestorIds.Contains(dependentJobId.Value)) {
 			throw new InvariantViolationException(
 				"job-prerequisite-is-hierarchy-edge",
@@ -907,7 +927,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		if (await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-				.AnyAsync(jp => jp.FromId == requiredJobId && jp.ToId == dependentJobId, cancellationToken).ConfigureAwait(false)) {
+						 .AnyAsync(jp => jp.FromId == requiredJobId && jp.ToId == dependentJobId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException("job-prerequisite-already-exists", "This prerequisite edge already exists.");
 		}
 
@@ -969,9 +989,9 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			// potentially large number of sessions into memory; preserves every other column
 			// (identifiers, users, times -- spec §4.5) untouched.
 			_ = await context.Set<WorkSessionEntity>()
-				.Where(ws => ws.LeafWorkId == oldLeafWork.JobNodeId)
-				.ExecuteUpdateAsync(setters => setters.SetProperty(ws => ws.LeafWorkId, existingWorkChild.Id), cancellationToken)
-				.ConfigureAwait(false);
+							 .Where(ws => ws.LeafWorkId == oldLeafWork.JobNodeId)
+							 .ExecuteUpdateAsync(setters => setters.SetProperty(ws => ws.LeafWorkId, existingWorkChild.Id), cancellationToken)
+							 .ConfigureAwait(false);
 
 			_ = context.Remove(oldLeafWork);
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -1011,7 +1031,10 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "decompose-worked-leaf", "job_node", branch.Id.Value, request.Context.CorrelationId,
 			null,
-			new Dictionary<string, string?> { ["description"] = oldBranchDescription, ["kind"] = "Leaf" },
+			new Dictionary<string, string?> {
+				["description"] = oldBranchDescription,
+				["kind"] = "Leaf",
+			},
 			new Dictionary<string, string?> {
 				["description"] = branch.Description,
 				["kind"] = "Branch",
@@ -1043,8 +1066,8 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 		if (request.BeginWork is CreateJobNodeWorkSpec eligibilityCheck) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-					context, eligibilityCheck.WorkedByUserId, now, "work-session-target-not-eligible", cancellationToken)
-				.ConfigureAwait(false);
+												 context, eligibilityCheck.WorkedByUserId, now, "work-session-target-not-eligible", cancellationToken)
+											 .ConfigureAwait(false);
 		}
 
 		var node = new JobNodeEntity {
@@ -1113,9 +1136,9 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		var leafWork = await LeafWorkAttachSupport.CreateAsync(
 			context, node, now, commandContext, null, null, cancellationToken).ConfigureAwait(false);
 		await LeafAchievementTransition.ApplyAsync(
-				context, leafWork, Achievement.InProgress, commandContext.Actor, now, commandContext.CorrelationId,
-				WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
-			.ConfigureAwait(false);
+										   context, leafWork, Achievement.InProgress, commandContext.Actor, now, commandContext.CorrelationId,
+										   WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
+									   .ConfigureAwait(false);
 
 		var session = new WorkSessionEntity {
 			Id = default,
@@ -1145,8 +1168,8 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	private PostgreSqlJobTrackDbContext CreateContext()
 	{
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, o => o.UseNodaTime())
-			.Options;
+					  .UseNpgsql(dataSource, o => o.UseNodaTime())
+					  .Options;
 
 		return new(options);
 	}
@@ -1173,7 +1196,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		JobNodeId nodeId, CancellationToken cancellationToken)
 	{
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 
 		if (ancestorOwnerIds.Count == 0) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
@@ -1188,14 +1211,14 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
 
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}
@@ -1209,8 +1232,8 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	private static async Task<int> ForceDeleteWorkSessionsAsync(
 		DbContext context, IReadOnlyList<JobNodeId> leafWorkIds, CancellationToken cancellationToken) =>
 		await context.Database.SqlQuery<int>(
-				$"SELECT force_delete_work_sessions({leafWorkIds.Select(id => id.Value).ToArray()}) AS \"Value\"")
-			.SingleAsync(cancellationToken).ConfigureAwait(false);
+						 $"SELECT force_delete_work_sessions({leafWorkIds.Select(id => id.Value).ToArray()}) AS \"Value\"")
+					 .SingleAsync(cancellationToken).ConfigureAwait(false);
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)
 	{
@@ -1263,9 +1286,9 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		snapshot["full_criteria"] = leafWork.FullCriteria;
 		snapshot["work_session_count"] = sessions.Count.ToString(CultureInfo.InvariantCulture);
 		snapshot["work_session_total_seconds"] = sessions
-			.Where(s => s.FinishedAt is not null)
-			.Sum(s => (s.FinishedAt!.Value - s.StartedAt).TotalSeconds)
-			.ToString(CultureInfo.InvariantCulture);
+												 .Where(s => s.FinishedAt is not null)
+												 .Sum(s => (s.FinishedAt!.Value - s.StartedAt).TotalSeconds)
+												 .ToString(CultureInfo.InvariantCulture);
 		return snapshot;
 	}
 }

@@ -13,7 +13,9 @@ public sealed class HierarchyDisplayReconcilerTests
 	[Fact]
 	public void When_naive_rounding_already_matches_the_parent_children_are_unchanged()
 	{
-		var children = new[] { (ChildA, new Money(5.00m)), (ChildB, new Money(5.00m)) };
+		var children = new[] {
+			(ChildA, new Money(5.00m)), (ChildB, new Money(5.00m)),
+		};
 
 		var result = HierarchyDisplayReconciler.Reconcile(new(10.00m), children);
 
@@ -29,7 +31,9 @@ public sealed class HierarchyDisplayReconcilerTests
 		// Exact: 3.334 + 3.333 + 3.333 = 10.000, matching the exact parent total exactly.
 		// Naive per-child rounding: 3.33 + 3.33 + 3.33 = 9.99, one penny short of the parent's 10.00.
 		// Child A lost the most to rounding (0.004 vs 0.003), so it receives the missing penny.
-		var children = new[] { (ChildA, new(3.334m)), (ChildB, new Money(3.333m)), (ChildC, new Money(3.333m)) };
+		var children = new[] {
+			(ChildA, new(3.334m)), (ChildB, new Money(3.333m)), (ChildC, new Money(3.333m)),
+		};
 
 		var result = HierarchyDisplayReconciler.Reconcile(new(10.000m), children);
 
@@ -48,7 +52,9 @@ public sealed class HierarchyDisplayReconcilerTests
 		// Midpoint-to-even rounds each 3.335 up to 3.34 (even); naive sum 3.34+3.34+3.35 = 10.03,
 		// one penny over the parent's 10.02. A and B are tied for largest over-rounding (both moved
 		// 0.005 away from their exact value); the lower JobNodeId (A) absorbs the penny.
-		var children = new[] { (ChildA, new(3.335m)), (ChildB, new Money(3.335m)), (ChildC, new Money(3.35m)) };
+		var children = new[] {
+			(ChildA, new(3.335m)), (ChildB, new Money(3.335m)), (ChildC, new Money(3.35m)),
+		};
 
 		var result = HierarchyDisplayReconciler.Reconcile(new(10.02m), children);
 
@@ -67,7 +73,9 @@ public sealed class HierarchyDisplayReconcilerTests
 		// 0.003 — A must absorb the shortfall penny purely on that basis. Child B's rounded amount
 		// (100.00) dwarfs Child A's (1.00), so a selection rule that folded the rounded amount into
 		// the ranking (rather than ranking on the rounding movement alone) would pick B instead.
-		var children = new[] { (ChildA, new Money(1.004m)), (ChildB, new Money(100.003m)) };
+		var children = new[] {
+			(ChildA, new Money(1.004m)), (ChildB, new Money(100.003m)),
+		};
 
 		var result = HierarchyDisplayReconciler.Reconcile(new(101.007m), children);
 
@@ -91,7 +99,9 @@ public sealed class HierarchyDisplayReconcilerTests
 	[InlineData(100.004, 200.006, 50.335, 350.345)]
 	public void Displayed_children_always_sum_exactly_to_the_displayed_parent(decimal a, decimal b, decimal c, decimal exactParent)
 	{
-		var children = new[] { (ChildA, new(a)), (ChildB, new Money(b)), (ChildC, new Money(c)) };
+		var children = new[] {
+			(ChildA, new(a)), (ChildB, new Money(b)), (ChildC, new Money(c)),
+		};
 
 		var result = HierarchyDisplayReconciler.Reconcile(new(exactParent), children);
 

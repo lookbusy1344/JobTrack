@@ -22,9 +22,9 @@ internal static class AuditEventCursorCodec
 			$"{cursor.OccurredAt.ToUnixTimeTicks()}{Separator}{cursor.Id.Value}");
 
 		return Convert.ToBase64String(Encoding.UTF8.GetBytes(payload))
-			.TrimEnd('=')
-			.Replace('+', '-')
-			.Replace('/', '_');
+					  .TrimEnd('=')
+					  .Replace('+', '-')
+					  .Replace('/', '_');
 	}
 
 	public static bool TryDecode(string token, out AuditEventSearchCursor cursor)
@@ -34,7 +34,7 @@ internal static class AuditEventCursorCodec
 		string payload;
 		try {
 			var base64 = token.Replace('-', '+').Replace('_', '/');
-			base64 = base64.PadRight(base64.Length + ((4 - (base64.Length % 4)) % 4), '=');
+			base64 = base64.PadRight(base64.Length + (4 - base64.Length % 4) % 4, '=');
 			payload = Encoding.UTF8.GetString(Convert.FromBase64String(base64));
 		}
 		catch (FormatException) {
@@ -48,7 +48,10 @@ internal static class AuditEventCursorCodec
 			return false;
 		}
 
-		cursor = new() { OccurredAt = Instant.FromUnixTimeTicks(ticks), Id = new(id) };
+		cursor = new() {
+			OccurredAt = Instant.FromUnixTimeTicks(ticks),
+			Id = new(id),
+		};
 		return true;
 	}
 }

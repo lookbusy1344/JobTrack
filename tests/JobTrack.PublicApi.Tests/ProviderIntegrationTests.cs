@@ -39,7 +39,9 @@ public sealed class ProviderIntegrationTests
 				_ = await lockCommand.ExecuteNonQueryAsync();
 			}
 
-			var timedOutConnectionString = new NpgsqlConnectionStringBuilder(database.ConnectionString) { CommandTimeout = 1 }.ConnectionString;
+			var timedOutConnectionString = new NpgsqlConnectionStringBuilder(database.ConnectionString) {
+				CommandTimeout = 1,
+			}.ConnectionString;
 			await using var timedOutDataSource = new NpgsqlDataSourceBuilder(timedOutConnectionString).UseNodaTime().Build();
 			var timedOutClient = JobTrackPostgreSql.Create(timedOutDataSource);
 
@@ -88,7 +90,10 @@ public sealed class ProviderIntegrationTests
 			var bootstrapResult = await client.Installation.BootstrapAdministratorAsync(CreateBootstrapRequest("ada.roles"));
 
 			var accountState = await client.Query.GetAccountStateAsync(new() {
-				Context = new() { Actor = bootstrapResult.AdministratorId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = bootstrapResult.AdministratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = bootstrapResult.AdministratorId,
 			});
 
@@ -107,7 +112,10 @@ public sealed class ProviderIntegrationTests
 		await dataSource.DisposeAsync();
 
 		var act = () => client.Query.GetReadinessAsync(new() {
-			Context = new() { Actor = new(1), CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = new(1),
 		});
 
@@ -178,8 +186,8 @@ public sealed class ProviderIntegrationTests
 			_ = await client.Installation.BootstrapAdministratorAsync(request);
 
 			var operation = stopped.Should()
-				.ContainSingle(activity => activity.OperationName == "installation.bootstrap-administrator")
-				.Which;
+								   .ContainSingle(activity => activity.OperationName == "installation.bootstrap-administrator")
+								   .Which;
 			operation.Status.Should().Be(ActivityStatusCode.Ok);
 			operation.GetTagItem("jobtrack.correlation_id").Should().Be(request.CorrelationId.ToString("D"));
 			operation.GetTagItem("jobtrack.user_name").Should().BeNull();
@@ -213,7 +221,10 @@ public sealed class ProviderIntegrationTests
 			var bootstrapResult = await client.Installation.BootstrapAdministratorAsync(CreateBootstrapRequest("ada.roles"));
 
 			var accountState = await client.Query.GetAccountStateAsync(new() {
-				Context = new() { Actor = bootstrapResult.AdministratorId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = bootstrapResult.AdministratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = bootstrapResult.AdministratorId,
 			});
 

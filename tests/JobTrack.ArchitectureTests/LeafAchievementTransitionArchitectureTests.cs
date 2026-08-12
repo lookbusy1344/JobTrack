@@ -27,9 +27,9 @@ public sealed class LeafAchievementTransitionArchitectureTests
 	public void Only_the_shared_transition_helper_reassigns_a_tracked_leafs_achievement()
 	{
 		var violations = PersistenceSourceFiles()
-			.Where(static file => Path.GetFileNameWithoutExtension(file) != TransitionType)
-			.SelectMany(static file => FindAchievementReassignments(file, File.ReadAllText(file)))
-			.ToArray();
+						 .Where(static file => Path.GetFileNameWithoutExtension(file) != TransitionType)
+						 .SelectMany(static file => FindAchievementReassignments(file, File.ReadAllText(file)))
+						 .ToArray();
 
 		violations.Should().BeEmpty(
 			"every leaf achievement transition should go through {0}.ApplyAsync so ADR 0058's "
@@ -43,10 +43,10 @@ public sealed class LeafAchievementTransitionArchitectureTests
 	public void The_shared_transition_helper_is_the_only_caller_of_the_acknowledgement_helper()
 	{
 		var callers = PersistenceSourceFiles()
-			.Where(static file => File.ReadAllText(file).Contains("AcknowledgeIfNeededAsync(", StringComparison.Ordinal))
-			.Select(static file => Path.GetFileNameWithoutExtension(file))
-			.Order(StringComparer.Ordinal)
-			.ToArray();
+					  .Where(static file => File.ReadAllText(file).Contains("AcknowledgeIfNeededAsync(", StringComparison.Ordinal))
+					  .Select(static file => Path.GetFileNameWithoutExtension(file))
+					  .Order(StringComparer.Ordinal)
+					  .ToArray();
 
 		callers.Should().BeEquivalentTo(TransitionType, "RequesterRequestAutoAcknowledgement");
 	}
@@ -73,7 +73,7 @@ public sealed class LeafAchievementTransitionArchitectureTests
 					 "JobTrack.Persistence.Shared", "JobTrack.Persistence.PostgreSql", "JobTrack.Persistence.Sqlite",
 				 ]) {
 			foreach (var file in Directory.EnumerateFiles(Path.Combine(source, project), "*.cs", SearchOption.AllDirectories)
-						 .Where(static file => !IsGeneratedOutput(file))) {
+										  .Where(static file => !IsGeneratedOutput(file))) {
 				yield return file;
 			}
 		}

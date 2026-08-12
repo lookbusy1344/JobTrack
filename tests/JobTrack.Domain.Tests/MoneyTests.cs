@@ -83,7 +83,9 @@ public sealed class MoneyTests
 
 	[Fact]
 	public void Amounts_sort_by_value() =>
-		new[] { new Money(3m), new Money(1m), new Money(2m) }
+		new[] {
+				new Money(3m), new Money(1m), new Money(2m),
+			}
 			.Order()
 			.Should()
 			.Equal(new Money(1m), new Money(2m), new Money(3m));

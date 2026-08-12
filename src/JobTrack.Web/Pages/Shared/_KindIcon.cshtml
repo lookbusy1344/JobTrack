@@ -2,11 +2,11 @@
 @model KindIconModel
 @{
 	var (iconId, noun) = Model.Kind switch {
-		NodeKind.Root => ("jt-icon-root", "root"),
-		NodeKind.Branch => ("jt-icon-branch", "branch"),
-		NodeKind.Leaf => ("jt-icon-leaf", "leaf"),
-		_ => throw new ArgumentOutOfRangeException(nameof(Model.Kind), Model.Kind, null),
-	};
+		                     NodeKind.Root => ("jt-icon-root", "root"),
+		                     NodeKind.Branch => ("jt-icon-branch", "branch"),
+		                     NodeKind.Leaf => ("jt-icon-leaf", "leaf"),
+		                     _ => throw new ArgumentOutOfRangeException(nameof(Model.Kind), Model.Kind, null),
+	                     };
 	var label = EnumDisplay.Label(Model.Kind);
 }
 <span class="jt-kind-icon">

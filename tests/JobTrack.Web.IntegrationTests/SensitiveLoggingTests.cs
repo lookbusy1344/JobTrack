@@ -3,7 +3,6 @@ namespace JobTrack.Web.IntegrationTests;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
-using Database;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -41,7 +40,10 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 		await SeedUserAsync("edith", KnownPassword);
 
 		factory = new(database.ConnectionString, capturedLogEntries);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -163,9 +165,7 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 	{
 		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
 
-		public void Dispose()
-		{
-		}
+		public void Dispose() { }
 
 		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
 		{
@@ -174,7 +174,7 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 			public bool IsEnabled(LogLevel logLevel) => true;
 
 			public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-				Func<TState, Exception?, string> formatter)
+									Func<TState, Exception?, string> formatter)
 			{
 				capturedLogEntries.Add(formatter(state, exception));
 				if (exception is not null) {

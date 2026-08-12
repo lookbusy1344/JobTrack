@@ -70,8 +70,12 @@ public abstract class PersonalAccessTokensBrowserTestsBase
 			"WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
 		// What the row is, what state it is in, and its one action survive the column drops.
-		(await page.GetByText("Nightly export job", new() { Exact = false }).First.IsVisibleAsync()).Should().BeTrue();
-		(await page.GetByText("Active", new() { Exact = true }).First.IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByText("Nightly export job", new() {
+			Exact = false,
+		}).First.IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByText("Active", new() {
+			Exact = true,
+		}).First.IsVisibleAsync()).Should().BeTrue();
 		// .First: the axe test in this class issues a token too, and both share the fixture's database.
 		(await page.Locator("button[title='Revoke token']").First.IsVisibleAsync()).Should().BeTrue();
 	}
@@ -86,20 +90,14 @@ public abstract class PersonalAccessTokensBrowserTestsBase
 		// The handler redirects (PRG); without waiting, a measurement here reads the pre-submit document.
 		await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 	}
-
-
 }
 
 public sealed class SqlitePersonalAccessTokensBrowserTests : PersonalAccessTokensBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqlitePersonalAccessTokensBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqlitePersonalAccessTokensBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlPersonalAccessTokensBrowserTests : PersonalAccessTokensBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlPersonalAccessTokensBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlPersonalAccessTokensBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

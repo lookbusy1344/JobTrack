@@ -6,11 +6,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
-using Identity;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
@@ -45,7 +42,10 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString, clock);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()

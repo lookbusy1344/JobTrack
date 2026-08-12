@@ -5,10 +5,10 @@
 	   "success" glyph, Unfinished borrows the leaf "waiting" glyph, since a branch's own state has
 	   no separate icon asset and the two read the same way (not yet done vs. done). *@
 	var (iconId, modifier) = Model.Achievement switch {
-		BranchAchievement.Success => ("jt-icon-achievement-success", "success"),
-		BranchAchievement.Unfinished => ("jt-icon-achievement-waiting", "waiting"),
-		_ => throw new ArgumentOutOfRangeException(nameof(Model.Achievement), Model.Achievement, null),
-	};
+		                         BranchAchievement.Success => ("jt-icon-achievement-success", "success"),
+		                         BranchAchievement.Unfinished => ("jt-icon-achievement-waiting", "waiting"),
+		                         _ => throw new ArgumentOutOfRangeException(nameof(Model.Achievement), Model.Achievement, null),
+	                         };
 	var label = EnumDisplay.Label(Model.Achievement);
 }
 <span class="jt-achievement-icon jt-achievement-icon--@modifier">

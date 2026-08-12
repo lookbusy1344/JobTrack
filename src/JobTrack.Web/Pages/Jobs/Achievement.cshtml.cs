@@ -16,5 +16,8 @@ public sealed class AchievementModel : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long JobNodeId { get; init; }
 
-	public IActionResult OnGet() => RedirectToPage("/Jobs/Work", null, new { leafNodeId = JobNodeId }, "status");
+	public IActionResult OnGet() => RedirectToPage("/Jobs/Work", null, new
+	{
+		leafNodeId = JobNodeId,
+	}, "status");
 }

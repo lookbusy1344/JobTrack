@@ -80,7 +80,7 @@ internal sealed class AuditQueries : IAuditQueries
 
 				var pageSize = ResolvePageSize(request.PageSize);
 				var result = await _port.SearchAuditEventsAsync(request.Filter, before, pageSize + 1, cancellationToken)
-					.ConfigureAwait(false);
+										.ConfigureAwait(false);
 
 				// Audit search spans events across many unrelated nodes, not one queried node, so
 				// ADR 0040's ownership carve-out (scoped to a single node's ancestry) doesn't apply here.
@@ -89,7 +89,10 @@ internal sealed class AuditQueries : IAuditQueries
 				var hasMore = result.Events.Count > pageSize;
 				var page = hasMore ? result.Events.Take(pageSize).ToArray() : [.. result.Events];
 				var continuationCursor = hasMore
-					? AuditEventCursorCodec.Encode(new() { OccurredAt = page[^1].OccurredAt, Id = page[^1].Id })
+					? AuditEventCursorCodec.Encode(new() {
+						OccurredAt = page[^1].OccurredAt,
+						Id = page[^1].Id,
+					})
 					: null;
 
 				return new AuditEventSearchResult {

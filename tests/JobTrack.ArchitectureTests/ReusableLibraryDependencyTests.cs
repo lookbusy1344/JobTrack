@@ -41,9 +41,9 @@ public sealed class ReusableLibraryDependencyTests
 	{
 		var assembly = markerType.Assembly;
 		var projectReferences = assembly.GetReferencedAssemblies()
-			.Select(reference => reference.Name)
-			.Where(name => name is not null && name.StartsWith("JobTrack.", StringComparison.Ordinal))
-			.Cast<string>();
+										.Select(reference => reference.Name)
+										.Where(name => name is not null && name.StartsWith("JobTrack.", StringComparison.Ordinal))
+										.Cast<string>();
 
 		projectReferences.Should().BeSubsetOf(AllowedProjectReferences[assembly.GetName().Name!]);
 	}
@@ -62,12 +62,12 @@ public sealed class ReusableLibraryDependencyTests
 	{
 		var assembly = Assembly.Load("JobTrack.Persistence.Shared");
 		var projectReferences = assembly.GetReferencedAssemblies()
-			.Select(reference => reference.Name)
-			.Where(name => name is not null && name.StartsWith("JobTrack.", StringComparison.Ordinal))
-			.Cast<string>();
+										.Select(reference => reference.Name)
+										.Where(name => name is not null && name.StartsWith("JobTrack.", StringComparison.Ordinal))
+										.Cast<string>();
 
 		projectReferences.Should().BeSubsetOf(AllowedProjectReferences[assembly.GetName().Name!]);
 		assembly.GetReferencedAssemblies().Select(reference => reference.Name)
-			.Should().NotContain(name => name != null && name.StartsWith("Microsoft.AspNetCore.", StringComparison.Ordinal));
+				.Should().NotContain(name => name != null && name.StartsWith("Microsoft.AspNetCore.", StringComparison.Ordinal));
 	}
 }

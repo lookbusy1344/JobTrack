@@ -23,7 +23,10 @@ public sealed class RateCommandsTests
 		return port;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	[Fact]
 	public async Task A_rate_manager_can_add_a_user_cost_rate()
@@ -31,7 +34,11 @@ public sealed class RateCommandsTests
 		var sut = new RateCommands(CreateSeededPort());
 		var rate = new UserCostRate(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null);
 
-		var result = await sut.AddUserCostRateAsync(new() { Context = ContextFor(RateManagerId), UserId = WorkerId, Rate = rate });
+		var result = await sut.AddUserCostRateAsync(new() {
+			Context = ContextFor(RateManagerId),
+			UserId = WorkerId,
+			Rate = rate,
+		});
 
 		result.UserId.Should().Be(WorkerId);
 		result.Version.Should().Be(1);
@@ -43,7 +50,11 @@ public sealed class RateCommandsTests
 		var sut = new RateCommands(CreateSeededPort());
 		var rate = new UserCostRate(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null);
 
-		var act = () => sut.AddUserCostRateAsync(new() { Context = ContextFor(WorkerId), UserId = WorkerId, Rate = rate });
+		var act = () => sut.AddUserCostRateAsync(new() {
+			Context = ContextFor(WorkerId),
+			UserId = WorkerId,
+			Rate = rate,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -54,7 +65,11 @@ public sealed class RateCommandsTests
 		var sut = new RateCommands(CreateSeededPort());
 		var rate = new UserCostRate(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null);
 
-		var act = () => sut.AddUserCostRateAsync(new() { Context = ContextFor(RateManagerId), UserId = new(999), Rate = rate });
+		var act = () => sut.AddUserCostRateAsync(new() {
+			Context = ContextFor(RateManagerId),
+			UserId = new(999),
+			Rate = rate,
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -86,7 +101,11 @@ public sealed class RateCommandsTests
 		var sut = new RateCommands(CreateSeededPort());
 		var over = new NodeRateOverride(NodeId, new(40m), Instant.FromUtc(2026, 1, 1, 0, 0), null);
 
-		var result = await sut.AddNodeRateOverrideAsync(new() { Context = ContextFor(AdministratorId), UserId = WorkerId, Override = over });
+		var result = await sut.AddNodeRateOverrideAsync(new() {
+			Context = ContextFor(AdministratorId),
+			UserId = WorkerId,
+			Override = over,
+		});
 
 		result.UserId.Should().Be(WorkerId);
 		result.Override.NodeId.Should().Be(NodeId);
@@ -98,7 +117,11 @@ public sealed class RateCommandsTests
 		var sut = new RateCommands(CreateSeededPort());
 		var over = new NodeRateOverride(NodeId, new(40m), Instant.FromUtc(2026, 1, 1, 0, 0), null);
 
-		var act = () => sut.AddNodeRateOverrideAsync(new() { Context = ContextFor(WorkerId), UserId = WorkerId, Override = over });
+		var act = () => sut.AddNodeRateOverrideAsync(new() {
+			Context = ContextFor(WorkerId),
+			UserId = WorkerId,
+			Override = over,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -109,7 +132,11 @@ public sealed class RateCommandsTests
 		var sut = new RateCommands(CreateSeededPort());
 		var over = new NodeRateOverride(new(999), new(40m), Instant.FromUtc(2026, 1, 1, 0, 0), null);
 
-		var act = () => sut.AddNodeRateOverrideAsync(new() { Context = ContextFor(RateManagerId), UserId = WorkerId, Override = over });
+		var act = () => sut.AddNodeRateOverrideAsync(new() {
+			Context = ContextFor(RateManagerId),
+			UserId = WorkerId,
+			Override = over,
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}

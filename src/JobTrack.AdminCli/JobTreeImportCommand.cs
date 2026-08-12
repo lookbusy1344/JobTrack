@@ -29,7 +29,9 @@ using NodaTime;
 /// </summary>
 public static class JobTreeImportCommand
 {
-	private static readonly JsonSerializerOptions SerializerOptions = new() { PropertyNameCaseInsensitive = true };
+	private static readonly JsonSerializerOptions SerializerOptions = new() {
+		PropertyNameCaseInsensitive = true,
+	};
 
 	public static async Task<int> RunAsync(
 		IConsoleIO io,
@@ -96,8 +98,8 @@ public static class JobTreeImportCommand
 		if (homeLocalId.HasValue) {
 			homeNodeUsers.Add((username, user.AppUserId));
 			foreach (var homeUsername in homeNodeUsernames
-						 .Distinct(StringComparer.OrdinalIgnoreCase)
-						 .Where(n => !string.Equals(n, username, StringComparison.OrdinalIgnoreCase))) {
+										 .Distinct(StringComparer.OrdinalIgnoreCase)
+										 .Where(n => !string.Equals(n, username, StringComparison.OrdinalIgnoreCase))) {
 				var homeUser = await userManager.FindByNameAsync(homeUsername);
 				if (homeUser is null) {
 					io.WriteError($"No employee account found for username '{homeUsername}'.");
@@ -112,7 +114,10 @@ public static class JobTreeImportCommand
 		try {
 			result = await jobTrackClient.Jobs.ImportSubtreeAsync(
 				new() {
-					Context = new() { Actor = user.AppUserId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = user.AppUserId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					ParentId = importRootId,
 					Nodes = nodes,
 					HomeNodeLocalId = homeLocalId,

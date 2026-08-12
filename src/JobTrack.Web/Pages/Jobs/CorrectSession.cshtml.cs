@@ -97,7 +97,10 @@ public sealed class CorrectSessionModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var request = new CorrectSessionRequest {
 			Context = context,
 			SessionId = new(SessionId),
@@ -111,7 +114,11 @@ public sealed class CorrectSessionModel(
 			_ = await jobTrackClient.Work.CorrectSessionAsync(request, cancellationToken);
 			// No workedByUserId: returning to Work restores the viewer's remembered filter (or its
 			// permission-aware default), rather than snapping the Sessions view to the corrected worker.
-			return RedirectToPage("/Jobs/Work", new { leafNodeId = LeafNodeId, returnUrl = ReturnUrl });
+			return RedirectToPage("/Jobs/Work", new
+			{
+				leafNodeId = LeafNodeId,
+				returnUrl = ReturnUrl,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -136,7 +143,10 @@ public sealed class CorrectSessionModel(
 		try {
 			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
 				new() {
-					Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
 					LeafWorkId = new(LeafNodeId),
 					WorkedByUserId = new AppUserId(WorkedByUserId),
 				}, cancellationToken);

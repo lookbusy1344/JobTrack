@@ -5,16 +5,9 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for job-tree navigation on <c>/Jobs/Browse</c>: the breadcrumb path to root,
@@ -54,7 +47,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		workerId = await SeedWorkerEmployeeAsync("browse-nav.worker");
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -103,7 +99,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	[Fact]
 	public async Task Search_remembers_the_owner_filter_across_a_return_visit()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse-nav.filtermem", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse-nav.filtermem");
 		_ = await AddChildAsync(rootId, "Admin owned oak cabinet");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
@@ -172,7 +168,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		// Far enough in the future to stay non-overdue (no jt-overdue class) for the life of this test.
 		var deadline = Instant.FromUtc(2030, 7, 26, 12, 0);
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Kitchen renovation",
 			OwnerUserId = adminId,
@@ -203,7 +202,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	public async Task The_record_card_fields_run_in_their_fixed_order()
 	{
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Field order branch",
 			OwnerUserId = adminId,
@@ -213,7 +215,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		// Leaf work attached so the node carries an Achievement to place; without it that field is absent
 		// and the order it sits in goes unchecked.
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = branch.Id,
 		});
 		var authCookie = await SignInAsync("browse-nav.worker");
@@ -236,7 +241,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	{
 		var pastDeadline = Instant.FromUtc(2020, 1, 1, 12, 0);
 		var pastBranch = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Overdue deadline branch",
 			OwnerUserId = adminId,
@@ -245,7 +253,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		});
 		var futureDeadline = Instant.FromUtc(2030, 1, 1, 12, 0);
 		var futureBranch = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Future deadline branch",
 			OwnerUserId = adminId,
@@ -499,7 +510,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	{
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			WorkedByUserId = adminId,
 		});
@@ -530,7 +544,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = adminId,
@@ -543,12 +560,18 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	private async Task ArchiveAsync(JobNodeId nodeId)
 	{
 		var node = await seedClient.Query.GetJobNodeAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = nodeId,
 		});
 
 		_ = await seedClient.Jobs.ArchiveAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = nodeId,
 			Version = node.Node.Version,
 		});
@@ -556,13 +579,22 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 
 	private async Task AddPrerequisiteAsync(JobNodeId requiredJobId, JobNodeId dependentJobId) =>
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredJobId,
 			DependentJobId = dependentJobId,
 		});
 
 	private async Task SetWorkerHomeNodeAsync(JobNodeId nodeId) =>
-		await seedClient.Employees.SetHomeNodeAsync(new() { Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() }, NodeId = nodeId });
+		await seedClient.Employees.SetHomeNodeAsync(new() {
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
+			NodeId = nodeId,
+		});
 
 	private static async Task<string> ReadNormalizedBodyAsync(HttpResponseMessage response) =>
 		WhitespaceRunPattern().Replace(await response.Content.ReadAsStringAsync(), " ");
@@ -604,8 +636,5 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 
 
 
-	private Task<AppUserId> SeedWorkerEmployeeAsync(string userName) => IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, userName, EmployeeRole.Worker);
-
-
-
+	private Task<AppUserId> SeedWorkerEmployeeAsync(string userName) => IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, userName);
 }

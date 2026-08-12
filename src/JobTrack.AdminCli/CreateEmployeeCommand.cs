@@ -36,7 +36,10 @@ public static class CreateEmployeeCommand
 			return 1;
 		}
 
-		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.AppUserId,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var created = await jobTrackClient.Employees.CreateEmployeeAsync(
@@ -53,7 +56,11 @@ public static class CreateEmployeeCommand
 
 			foreach (var role in options.Roles.Skip(1)) {
 				_ = await jobTrackClient.Employees.AssignRoleAsync(
-					new() { Context = context, TargetUserId = created.Id, Role = role },
+					new() {
+						Context = context,
+						TargetUserId = created.Id,
+						Role = role,
+					},
 					cancellationToken);
 			}
 

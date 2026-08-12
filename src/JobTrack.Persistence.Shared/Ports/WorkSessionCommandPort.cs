@@ -43,7 +43,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
 
 		if (!await context.Set<LeafWorkEntity>().AsNoTracking()
-				.AnyAsync(lw => lw.JobNodeId == request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(lw => lw.JobNodeId == request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Job node {request.LeafWorkId} has no LeafWork attached.");
 		}
 
@@ -125,7 +125,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
 
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
-					   .FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+								.FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
 		var now = clock.GetCurrentInstant();
 		await AutoClaimUnassignedNodeAsync(context, request.Context, request.JobNodeId, request.WorkedByUserId, now, cancellationToken)
@@ -135,7 +135,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			.ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
-			.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false);
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false);
 		leafWork ??= await LeafWorkAttachSupport.CreateAsync(
 			context, node, now, request.Context, null, null, cancellationToken).ConfigureAwait(false);
 
@@ -163,9 +163,9 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 
 		if (leafWork.Achievement == Achievement.Waiting) {
 			await LeafAchievementTransition.ApplyAsync(
-					context, leafWork, Achievement.InProgress, request.Context.Actor, now, request.Context.CorrelationId,
-					WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
-				.ConfigureAwait(false);
+											   context, leafWork, Achievement.InProgress, request.Context.Actor, now, request.Context.CorrelationId,
+											   WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
+										   .ConfigureAwait(false);
 		}
 
 		var session = new WorkSessionEntity {
@@ -241,8 +241,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "finish-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
 			null,
-			new Dictionary<string, string?> { ["finished_at"] = null },
-			new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
+			new Dictionary<string, string?> {
+				["finished_at"] = null,
+			},
+			new Dictionary<string, string?> {
+				["finished_at"] = session.FinishedAt?.ToString(),
+			});
 
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -288,8 +292,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, now, "finish-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
 			null,
-			new Dictionary<string, string?> { ["finished_at"] = null },
-			new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
+			new Dictionary<string, string?> {
+				["finished_at"] = null,
+			},
+			new Dictionary<string, string?> {
+				["finished_at"] = session.FinishedAt?.ToString(),
+			});
 
 		var writeUpChanged = false;
 		JobNodeEntity? writtenUpNode = null;
@@ -318,7 +326,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			Node = writtenUpNode is null
 				? null
 				: await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
-					.ConfigureAwait(false),
+												   .ConfigureAwait(false),
 		};
 	}
 
@@ -359,7 +367,10 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, session.ChangedAt, "correct-work-session", "work_session", session.Id.Value,
 			request.Context.CorrelationId, request.Reason, before,
-			new Dictionary<string, string?> { ["started_at"] = session.StartedAt.ToString(), ["finished_at"] = session.FinishedAt?.ToString() });
+			new Dictionary<string, string?> {
+				["started_at"] = session.StartedAt.ToString(),
+				["finished_at"] = session.FinishedAt?.ToString(),
+			});
 
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -390,7 +401,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
-						   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
 
 		var now = clock.GetCurrentInstant();
@@ -420,8 +431,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "finish-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
 				null,
-				new Dictionary<string, string?> { ["finished_at"] = null },
-				new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
+				new Dictionary<string, string?> {
+					["finished_at"] = null,
+				},
+				new Dictionary<string, string?> {
+					["finished_at"] = session.FinishedAt?.ToString(),
+				});
 		}
 
 		var writeUpChanged = false;
@@ -437,9 +452,9 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 				? $"{CompletionReason} ({note})"
 				: CompletionReason;
 			await LeafAchievementTransition.ApplyAsync(
-					context, leafWork, request.FinalAchievement, request.Context.Actor, now, request.Context.CorrelationId, completionReason,
-					cancellationToken)
-				.ConfigureAwait(false);
+											   context, leafWork, request.FinalAchievement, request.Context.Actor, now, request.Context.CorrelationId, completionReason,
+											   cancellationToken)
+										   .ConfigureAwait(false);
 
 			if (request.WriteUpChange is WriteUpChange writeUpChange) {
 				(writeUpChanged, writtenUpNode) = await WriteUpChangeApplier.ApplyAsync(
@@ -469,7 +484,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			Node = writtenUpNode is null
 				? null
 				: await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
-					.ConfigureAwait(false),
+												   .ConfigureAwait(false),
 		};
 	}
 
@@ -480,7 +495,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
 
 		if (!await context.Set<LeafWorkEntity>().AsNoTracking()
-				.AnyAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
 		}
 
@@ -501,8 +516,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "finish-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
 				null,
-				new Dictionary<string, string?> { ["finished_at"] = null },
-				new Dictionary<string, string?> { ["finished_at"] = session.FinishedAt?.ToString() });
+				new Dictionary<string, string?> {
+					["finished_at"] = null,
+				},
+				new Dictionary<string, string?> {
+					["finished_at"] = session.FinishedAt?.ToString(),
+				});
 		}
 
 		var writeUpChanged = false;
@@ -533,7 +552,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			Node = writtenUpNode is null
 				? null
 				: await JobNodeStructuralProjection.ToResultAsync(context, writtenUpNode, cancellationToken)
-					.ConfigureAwait(false),
+												   .ConfigureAwait(false),
 		};
 	}
 
@@ -547,10 +566,10 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
-						   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
-					   .FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+								.FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
 
 		var now = clock.GetCurrentInstant();
@@ -598,13 +617,13 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		}
 
 		await LeafAchievementTransition.ApplyAsync(
-				context, leafWork, Achievement.Waiting, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
-				cancellationToken)
-			.ConfigureAwait(false);
+										   context, leafWork, Achievement.Waiting, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
+										   cancellationToken)
+									   .ConfigureAwait(false);
 		await LeafAchievementTransition.ApplyAsync(
-				context, leafWork, Achievement.InProgress, request.Context.Actor, now, request.Context.CorrelationId,
-				WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
-			.ConfigureAwait(false);
+										   context, leafWork, Achievement.InProgress, request.Context.Actor, now, request.Context.CorrelationId,
+										   WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
+									   .ConfigureAwait(false);
 
 		var session = new WorkSessionEntity {
 			Id = default,
@@ -669,7 +688,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	{
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 
 		if (!AchievementAccessPolicy.CanSetAchievement(actorRoles, ancestorOwnerIds.Contains(actorId.Value), false)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not complete job node {leafId}.");
@@ -683,9 +702,9 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	{
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 		var actorParticipatedPreviously = await context.Set<WorkSessionEntity>().AsNoTracking()
-			.AnyAsync(s => s.LeafWorkId == leafId && s.WorkedByUserId == actorId, cancellationToken).ConfigureAwait(false);
+													   .AnyAsync(s => s.LeafWorkId == leafId && s.WorkedByUserId == actorId, cancellationToken).ConfigureAwait(false);
 
 		if (!LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(
 				actorRoles,
@@ -731,7 +750,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		CancellationToken cancellationToken)
 	{
 		var isUnassigned = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Where(n => n.Id == nodeId).Select(n => n.OwnerUserId == null).SingleAsync(cancellationToken).ConfigureAwait(false);
+										.Where(n => n.Id == nodeId).Select(n => n.OwnerUserId == null).SingleAsync(cancellationToken).ConfigureAwait(false);
 		if (!isUnassigned) {
 			return;
 		}
@@ -747,8 +766,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 
 		AuditEventWriter.Add(
 			context, ctx.Actor, now, "pick-up-job-node", "job_node", nodeId.Value, ctx.CorrelationId, AutoClaimReason,
-			new Dictionary<string, string?> { ["owner_user_id"] = null },
-			new Dictionary<string, string?> { ["owner_user_id"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture) });
+			new Dictionary<string, string?> {
+				["owner_user_id"] = null,
+			},
+			new Dictionary<string, string?> {
+				["owner_user_id"] = workedByUserId.Value.ToString(CultureInfo.InvariantCulture),
+			});
 	}
 
 	/// <summary>
@@ -769,13 +792,13 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		CancellationToken cancellationToken)
 	{
 		var activeSessions = await context.Set<WorkSessionEntity>()
-			.Where(s => s.LeafWorkId == leafId && s.FinishedAt == null)
-			.OrderBy(s => s.Id)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+										  .Where(s => s.LeafWorkId == leafId && s.FinishedAt == null)
+										  .OrderBy(s => s.Id)
+										  .ToListAsync(cancellationToken).ConfigureAwait(false);
 		var expected = expectedActiveSessions.OrderBy(e => e.Id.Value).ToList();
 		var matchesExpected = activeSessions.Count == expected.Count
 							  && activeSessions.Zip(expected)
-								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.RowVersion == pair.Second.Version);
+											   .All(pair => pair.First.Id == pair.Second.Id && pair.First.RowVersion == pair.Second.Version);
 		if (!matchesExpected) {
 			throw new ConcurrencyConflictException("The leaf's current active-session set no longer matches the confirmed set.");
 		}
@@ -809,7 +832,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	{
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 		var controlsNode = ancestorOwnerIds.Contains(actorId.Value);
 
 		foreach (var session in activeSessions) {
@@ -824,7 +847,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	{
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 
 		if (!WorkSessionAccessPolicy.CanManage(actorRoles, ancestorOwnerIds.Contains(actorId.Value))) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage a session on job node {leafId}.");
@@ -844,7 +867,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	{
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 
 		if (!WorkSessionAccessPolicy.CanFinishSession(
 				actorRoles, ancestorOwnerIds.Contains(actorId.Value), actorId == sessionWorkedByUserId)) {

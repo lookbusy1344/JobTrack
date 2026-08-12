@@ -5,14 +5,8 @@ using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the self-service personal access token page (security review remediation
@@ -35,7 +29,10 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -53,7 +50,7 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task A_worker_can_issue_a_token_for_themselves_and_it_is_shown_exactly_once()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.issue", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.issue");
 		var authCookie = await client.SignInAsync("pat.issue");
 
 		var issueResponse = await PostIssueAsync(authCookie, "laptop", 30);
@@ -86,7 +83,7 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task Refreshing_the_issuance_redirect_does_not_mint_a_second_token()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.refresh", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.refresh");
 		var authCookie = await client.SignInAsync("pat.refresh");
 
 		var issueResponse = await PostIssueAsync(authCookie, "laptop", 30);
@@ -100,7 +97,7 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task Issued_tokens_are_never_returned_from_a_cached_response()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.no-cache", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.no-cache");
 		var authCookie = await client.SignInAsync("pat.no-cache");
 
 		var issueResponse = await PostIssueAsync(authCookie, "laptop", 30);
@@ -115,7 +112,7 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task A_worker_can_revoke_their_own_token()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke");
 		var authCookie = await client.SignInAsync("pat.revoke");
 		_ = await PostIssueAsync(authCookie, "to-revoke", 30);
 		var tokenId = await GetMostRecentTokenIdAsync("pat.revoke");
@@ -137,7 +134,7 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	/// </summary>
 	public async Task A_live_token_row_offers_an_icon_revoke_naming_the_token()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke-icon", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke-icon");
 		var authCookie = await client.SignInAsync("pat.revoke-icon");
 		_ = await PostIssueAsync(authCookie, "workshop-laptop", 30);
 
@@ -160,12 +157,12 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task A_worker_cannot_revoke_another_workers_token()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke.owner", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke.owner");
 		var otherAuthCookie = await client.SignInAsync("pat.revoke.owner");
 		_ = await PostIssueAsync(otherAuthCookie, "owner-token", 30);
 		var tokenId = await GetMostRecentTokenIdAsync("pat.revoke.owner");
 
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke.attacker", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.revoke.attacker");
 		var attackerAuthCookie = await client.SignInAsync("pat.revoke.attacker");
 
 		var revokeResponse = await PostRevokeAsync(attackerAuthCookie, tokenId);
@@ -180,7 +177,7 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task Issuing_a_token_without_an_antiforgery_token_is_rejected()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.csrf", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.csrf");
 		var authCookie = await client.SignInAsync("pat.csrf");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/PersonalAccessTokens?handler=Issue");
@@ -197,7 +194,7 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task An_administrator_can_revoke_all_of_an_employees_tokens()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.admin-revoke.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.admin-revoke.worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.admin-revoke.admin", EmployeeRole.Administrator);
 		var workerAuthCookie = await client.SignInAsync("pat.admin-revoke.worker");
 		_ = await PostIssueAsync(workerAuthCookie, "worker-token", 30);
@@ -214,8 +211,8 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	[Fact]
 	public async Task A_non_administrator_cannot_revoke_all_of_another_employees_tokens()
 	{
-		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.admin-revoke-denied.target", EmployeeRole.Worker);
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.admin-revoke-denied.worker", EmployeeRole.Worker);
+		var targetId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.admin-revoke-denied.target");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pat.admin-revoke-denied.worker");
 		var workerAuthCookie = await client.SignInAsync("pat.admin-revoke-denied.worker");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/ManageEmployeeAccount?handler=RevokeAllTokens");
@@ -297,10 +294,12 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 	///     delivery-cookie deletion a first reveal GET set), not the original redirecting POST.
 	/// </summary>
 	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie,
-		HttpResponseMessage? cookieSource = null)
+																HttpResponseMessage? cookieSource = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
-		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(WebTestHttp.ExtractSetCookiePairs(cookieSource ?? response)));
+		var cookieHeader = string.Join("; ", new[] {
+			authCookie,
+		}.Concat(WebTestHttp.ExtractSetCookiePairs(cookieSource ?? response)));
 		request.Headers.Add("Cookie", cookieHeader);
 
 		return await client.SendAsync(request);
@@ -393,7 +392,4 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 
 		return await command.ExecuteScalarAsync() is not DBNull and not null;
 	}
-
-
-
 }

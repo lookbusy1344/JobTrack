@@ -66,13 +66,19 @@ public abstract class LeafWorkQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract ILeafWorkQueryPort CreateQueryPort(string connectionString);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private async Task<JobNodeId> SeedWorkedLeafAsync()
 	{
 		var (administratorId, leafId) = await SeedBareLeafAsync();
 		var jobCommandPort = CreateJobCommandPort(database.ConnectionString);
-		_ = await jobCommandPort.AttachLeafWorkAsync(new() { Context = ContextFor(administratorId), JobNodeId = leafId });
+		_ = await jobCommandPort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(administratorId),
+			JobNodeId = leafId,
+		});
 
 		return leafId;
 	}
@@ -106,6 +112,4 @@ public abstract class LeafWorkQueryPortContractTestsBase : IAsyncLifetime
 
 		return (administratorId, leaf.Id);
 	}
-
-
 }

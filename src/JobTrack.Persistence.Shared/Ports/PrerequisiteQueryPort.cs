@@ -18,12 +18,12 @@ internal sealed class PrerequisiteQueryPort(IPrerequisiteProviderOperations prov
 		await using var context = provider.CreateContext();
 
 		if (!await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(n => n.Id == requiredJobId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(n => n.Id == requiredJobId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Job node {requiredJobId} does not exist.");
 		}
 
 		return await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-			.CountAsync(edge => edge.FromId == requiredJobId, cancellationToken).ConfigureAwait(false);
+							.CountAsync(edge => edge.FromId == requiredJobId, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <inheritdoc />
@@ -32,12 +32,12 @@ internal sealed class PrerequisiteQueryPort(IPrerequisiteProviderOperations prov
 		await using var context = provider.CreateContext();
 
 		if (!await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(n => n.Id == requiredJobId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(n => n.Id == requiredJobId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Job node {requiredJobId} does not exist.");
 		}
 
 		return await provider.HasActiveDependentWorkAsync(context, requiredJobId, cancellationToken)
-			.ConfigureAwait(false);
+							 .ConfigureAwait(false);
 	}
 
 	/// <inheritdoc />
@@ -47,17 +47,17 @@ internal sealed class PrerequisiteQueryPort(IPrerequisiteProviderOperations prov
 		await using var context = provider.CreateContext();
 
 		if (!await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 		}
 
 		var query = context.Set<JobPrerequisiteEntity>().AsNoTracking()
-			.Where(jp => jp.FromId == nodeId || jp.ToId == nodeId)
-			.OrderBy(jp => jp.FromId).ThenBy(jp => jp.ToId)
-			.Skip(offset)
-			.Select(jp => new PrerequisiteEdge(jp.FromId, jp.ToId));
+						   .Where(jp => jp.FromId == nodeId || jp.ToId == nodeId)
+						   .OrderBy(jp => jp.FromId).ThenBy(jp => jp.ToId)
+						   .Skip(offset)
+						   .Select(jp => new PrerequisiteEdge(jp.FromId, jp.ToId));
 		var edges = await (limit.HasValue ? query.Take(limit.Value) : query)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+						  .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. edges];
 	}

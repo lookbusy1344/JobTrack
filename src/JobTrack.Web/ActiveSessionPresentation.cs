@@ -34,6 +34,11 @@ public sealed record ActiveSessionPresentation
 		var viewerSession = ordered.FirstOrDefault(s => s.WorkedByUserId == viewerId);
 		EquatableArray<WorkSessionResult> others = [.. ordered.Where(s => s.WorkedByUserId != viewerId)];
 
-		return new() { ViewerSession = viewerSession, OtherSessions = others, Count = ordered.Count, StableOrder = ordered };
+		return new() {
+			ViewerSession = viewerSession,
+			OtherSessions = others,
+			Count = ordered.Count,
+			StableOrder = ordered,
+		};
 	}
 }

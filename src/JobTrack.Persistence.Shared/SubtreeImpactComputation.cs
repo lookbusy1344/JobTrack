@@ -25,7 +25,7 @@ internal static class SubtreeImpactComputation
 		DbContext context, JobNodeId rootId, CancellationToken cancellationToken)
 	{
 		var rows = await JobNodeHierarchyQueries.GetSubtreeImpactRowsAsync(context, rootId.Value, cancellationToken)
-			.ConfigureAwait(false);
+												.ConfigureAwait(false);
 		if (rows.Count == 0) {
 			throw new EntityNotFoundException($"Job node {rootId} does not exist.");
 		}
@@ -36,9 +36,14 @@ internal static class SubtreeImpactComputation
 		var sessions = leafWorkIds.Count == 0
 			? []
 			: await context.Set<WorkSessionEntity>().AsNoTracking()
-				.Where(s => leafWorkIds.Contains(s.LeafWorkId))
-				.Select(s => new { s.LeafWorkId, s.StartedAt, s.FinishedAt })
-				.ToListAsync(cancellationToken).ConfigureAwait(false);
+						   .Where(s => leafWorkIds.Contains(s.LeafWorkId))
+						   .Select(s => new
+						   {
+							   s.LeafWorkId,
+							   s.StartedAt,
+							   s.FinishedAt,
+						   })
+						   .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		// An active session (no finish) has contributed no completed work yet, so it adds nothing to
 		// the total even though the row itself is still destroyed and counted.
@@ -47,34 +52,38 @@ internal static class SubtreeImpactComputation
 			(running, s) => s.FinishedAt is Instant finishedAt ? running + (finishedAt - s.StartedAt) : running);
 
 		var sessionCountByLeaf = sessions
-			.GroupBy(s => s.LeafWorkId)
-			.ToDictionary(g => g.Key, g => g.Count());
+								 .GroupBy(s => s.LeafWorkId)
+								 .ToDictionary(g => g.Key, g => g.Count());
 
 		var edges = await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-			.Where(e => nodeIds.Contains(e.FromId) || nodeIds.Contains(e.ToId))
-			.Select(e => new { e.FromId, e.ToId })
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(e => nodeIds.Contains(e.FromId) || nodeIds.Contains(e.ToId))
+								 .Select(e => new
+								 {
+									 e.FromId,
+									 e.ToId,
+								 })
+								 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var inside = nodeIds.ToHashSet();
 		var externalEdges = edges.Where(e => !inside.Contains(e.FromId) || !inside.Contains(e.ToId)).ToList();
 		var externalNodeIds = externalEdges
-			.Select(e => inside.Contains(e.FromId) ? e.ToId : e.FromId)
-			.Distinct()
-			.ToList();
+							  .Select(e => inside.Contains(e.FromId) ? e.ToId : e.FromId)
+							  .Distinct()
+							  .ToList();
 
 		var externalDescriptions = externalNodeIds.Count == 0
 			? []
 			: await context.Set<JobNodeEntity>().AsNoTracking()
-				.Where(n => externalNodeIds.Contains(n.Id))
-				.ToDictionaryAsync(n => n.Id, n => n.Description, cancellationToken).ConfigureAwait(false);
+						   .Where(n => externalNodeIds.Contains(n.Id))
+						   .ToDictionaryAsync(n => n.Id, n => n.Description, cancellationToken).ConfigureAwait(false);
 
 		var jobRequestCount = await context.Set<JobRequestEntity>().AsNoTracking()
-			.CountAsync(r => nodeIds.Contains(r.JobNodeId), cancellationToken).ConfigureAwait(false);
+										   .CountAsync(r => nodeIds.Contains(r.JobNodeId), cancellationToken).ConfigureAwait(false);
 
 		var holdingAreas = await context.Set<RequestHoldingAreaEntity>().AsNoTracking()
-			.Where(h => nodeIds.Contains(h.JobNodeId))
-			.Select(h => new SubtreeImpactHoldingAreaData(h.Id, h.Name, h.JobNodeId))
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+										.Where(h => nodeIds.Contains(h.JobNodeId))
+										.Select(h => new SubtreeImpactHoldingAreaData(h.Id, h.Name, h.JobNodeId))
+										.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var root = rows.First(r => r.Id == rootId.Value);
 
@@ -90,18 +99,18 @@ internal static class SubtreeImpactComputation
 		};
 
 		var nodes = rows
-			.OrderBy(r => r.Depth).ThenBy(r => r.Id)
-			.Select(r => new SubtreeImpactNodeData(
-				new(r.Id),
-				r.ParentId is long parentId ? new JobNodeId(parentId) : null,
-				r.Depth,
-				r.Description,
-				KindOf(r),
-				r.HasLeafWork ? (Achievement)r.AchievementId!.Value : null,
-				r.HasLeafWork,
-				sessionCountByLeaf.GetValueOrDefault(new(r.Id)),
-				r.IsArchived))
-			.ToList();
+					.OrderBy(r => r.Depth).ThenBy(r => r.Id)
+					.Select(r => new SubtreeImpactNodeData(
+						new(r.Id),
+						r.ParentId is long parentId ? new JobNodeId(parentId) : null,
+						r.Depth,
+						r.Description,
+						KindOf(r),
+						r.HasLeafWork ? (Achievement)r.AchievementId!.Value : null,
+						r.HasLeafWork,
+						sessionCountByLeaf.GetValueOrDefault(new(r.Id)),
+						r.IsArchived))
+					.ToList();
 
 		return new(
 			rootId,
@@ -112,12 +121,12 @@ internal static class SubtreeImpactComputation
 			totalWorked,
 			edges.Count - externalEdges.Count,
 			EquatableArray.CopyOf(externalEdges
-				.Select(e => new SubtreeImpactPrerequisiteEdgeData(
-					e.FromId,
-					e.ToId,
-					externalDescriptions.GetValueOrDefault(inside.Contains(e.FromId) ? e.ToId : e.FromId, string.Empty),
-					!inside.Contains(e.ToId)))
-				.ToArray()),
+								  .Select(e => new SubtreeImpactPrerequisiteEdgeData(
+									  e.FromId,
+									  e.ToId,
+									  externalDescriptions.GetValueOrDefault(inside.Contains(e.FromId) ? e.ToId : e.FromId, string.Empty),
+									  !inside.Contains(e.ToId)))
+								  .ToArray()),
 			jobRequestCount,
 			EquatableArray.CopyOf(holdingAreas),
 			root.ParentId is null);

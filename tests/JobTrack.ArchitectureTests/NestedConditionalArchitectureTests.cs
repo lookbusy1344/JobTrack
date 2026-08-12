@@ -22,8 +22,8 @@ public sealed class NestedConditionalArchitectureTests
 	public void Repository_sources_do_not_nest_conditional_expressions()
 	{
 		var violations = SourceFiles()
-			.SelectMany(static file => NestedConditionalGuard.FindViolations(file, File.ReadAllText(file)))
-			.ToArray();
+						 .SelectMany(static file => NestedConditionalGuard.FindViolations(file, File.ReadAllText(file)))
+						 .ToArray();
 
 		violations.Should().BeEmpty("nested conditionals found:{0}{1}", Environment.NewLine, string.Join(Environment.NewLine, violations));
 	}
@@ -56,20 +56,14 @@ public sealed class NestedConditionalArchitectureTests
 	[InlineData("<p>@(a ? \"x\" : b ? \"y\" : \"z\")</p>")]
 	[InlineData("<p class=\"@(a ? (b ? \"x\" : \"y\") : null)\">text</p>")]
 	[InlineData("@{ var label = a ? \"x\" : b ? \"y\" : \"z\"; }")]
-	public void Razor_nested_conditionals_are_violations(string markup)
-	{
-		NestedConditionalGuard.FindViolations("Example.cshtml", markup).Should().NotBeEmpty();
-	}
+	public void Razor_nested_conditionals_are_violations(string markup) => NestedConditionalGuard.FindViolations("Example.cshtml", markup).Should().NotBeEmpty();
 
 	[Theory]
 	[InlineData("<p>@(a ? \"x\" : \"y\")</p>")]
 	[InlineData("<p>@(a ? \"x\" : \"y\")@(b ? \"z\" : \"w\")</p>")] // siblings, not nested
 	[InlineData("@{ var label = a ? \"x\" : \"y\"; var other = b ? \"z\" : \"w\"; }")]
 	[InlineData("<a href=\"https://example.test/a?b=1\">link</a>")] // a query string is not a conditional
-	public void Razor_unnested_conditionals_are_allowed(string markup)
-	{
-		NestedConditionalGuard.FindViolations("Example.cshtml", markup).Should().BeEmpty();
-	}
+	public void Razor_unnested_conditionals_are_allowed(string markup) => NestedConditionalGuard.FindViolations("Example.cshtml", markup).Should().BeEmpty();
 
 	private static IEnumerable<string> SourceFiles()
 	{
@@ -77,8 +71,8 @@ public sealed class NestedConditionalArchitectureTests
 		foreach (var top in (string[])["src", "tests", "samples"]) {
 			var directory = Path.Combine(solutionRoot, top);
 			foreach (var file in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
-						 .Concat(Directory.EnumerateFiles(directory, "*.cshtml", SearchOption.AllDirectories))
-						 .Where(static file => !IsGeneratedOutput(file))) {
+										  .Concat(Directory.EnumerateFiles(directory, "*.cshtml", SearchOption.AllDirectories))
+										  .Where(static file => !IsGeneratedOutput(file))) {
 				yield return file;
 			}
 		}
@@ -96,15 +90,15 @@ internal static class NestedConditionalGuard
 	public static IEnumerable<string> FindViolations(string fileName, string source) =>
 		fileName.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
 			? RazorRegions(source).SelectMany(region => NestedIn(fileName, region.Code, region.Line))
-			: NestedIn(fileName, source, lineOffset: 0);
+			: NestedIn(fileName, source, 0);
 
 	private static IEnumerable<string> NestedIn(string fileName, string code, int lineOffset)
 	{
 		var root = CSharpSyntaxTree.ParseText(code).GetRoot();
 		return root.DescendantNodes()
-			.OfType<ConditionalExpressionSyntax>()
-			.Where(static conditional => conditional.Ancestors().OfType<ConditionalExpressionSyntax>().Any())
-			.Select(conditional => Describe(fileName, conditional, lineOffset));
+				   .OfType<ConditionalExpressionSyntax>()
+				   .Where(static conditional => conditional.Ancestors().OfType<ConditionalExpressionSyntax>().Any())
+				   .Select(conditional => Describe(fileName, conditional, lineOffset));
 	}
 
 	private static string Describe(string fileName, ConditionalExpressionSyntax conditional, int lineOffset)

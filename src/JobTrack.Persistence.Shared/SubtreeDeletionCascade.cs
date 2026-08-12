@@ -58,13 +58,13 @@ internal static class SubtreeDeletionCascade
 		if (leafWorkIds.Count > 0) {
 			await deleteWorkSessionsForLeafWorkAsync(context, leafWorkIds, cancellationToken).ConfigureAwait(false);
 			_ = await context.Set<LeafWorkEntity>()
-				.Where(lw => leafWorkIds.Contains(lw.JobNodeId))
-				.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+							 .Where(lw => leafWorkIds.Contains(lw.JobNodeId))
+							 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 		}
 
 		_ = await context.Set<NodeRateOverrideEntity>()
-			.Where(o => nodeIds.Contains(o.NodeId))
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+						 .Where(o => nodeIds.Contains(o.NodeId))
+						 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		// job_request_note is deliberately not deleted here: ADR 0034's append-only trigger refuses a
 		// note deletion while its request still exists, so deleting the thread directly aborted the
@@ -72,15 +72,15 @@ internal static class SubtreeDeletionCascade
 		// ADR 0068 makes the note foreign key ON DELETE CASCADE instead, so the thread goes with the
 		// job_request row below and append-only still holds everywhere else.
 		_ = await context.Set<JobRequestEntity>()
-			.Where(r => nodeIds.Contains(r.JobNodeId))
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+						 .Where(r => nodeIds.Contains(r.JobNodeId))
+						 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		// ADR 0061 drops every edge touching the subtree, including one arriving from a node outside
 		// it -- reversing ADR 0036's refusal. An external dependent therefore loses a prerequisite and
 		// may become ready; that is a valid state per ADR 0051, and the manifest named it beforehand.
 		var edgesDropped = await context.Set<JobPrerequisiteEntity>()
-			.Where(e => nodeIds.Contains(e.FromId) || nodeIds.Contains(e.ToId))
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+										.Where(e => nodeIds.Contains(e.FromId) || nodeIds.Contains(e.ToId))
+										.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		// job_node.parent_id is RESTRICT, so a parent may not go before its children. Deleting one
 		// depth level at a time, deepest first, makes that ordering explicit rather than relying on
@@ -89,8 +89,8 @@ internal static class SubtreeDeletionCascade
 		foreach (var depthGroup in impact.Nodes.Where(n => n.Depth > 0).GroupBy(n => n.Depth).OrderByDescending(g => g.Key)) {
 			var idsAtDepth = depthGroup.Select(n => n.Id).ToList();
 			_ = await context.Set<JobNodeEntity>()
-				.Where(n => idsAtDepth.Contains(n.Id))
-				.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+							 .Where(n => idsAtDepth.Contains(n.Id))
+							 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 		}
 
 		return edgesDropped;

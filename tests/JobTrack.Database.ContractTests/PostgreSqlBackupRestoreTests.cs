@@ -73,7 +73,7 @@ public sealed class PostgreSqlBackupRestoreTests : IAsyncLifetime
 
 		(await ReadAppliedVersionCountAsync(targetConnection)).Should().Be(scripts.Count);
 		(await ReadNamesAsync(targetConnection, "achievement_status")).Should()
-			.BeEquivalentTo("Waiting", "InProgress", "Success", "Cancelled", "Unsuccessful");
+																	  .BeEquivalentTo("Waiting", "InProgress", "Success", "Cancelled", "Unsuccessful");
 		(await ReadDisplayNameAsync(targetConnection, seededAppUserId)).Should().Be("Alice Example");
 
 		var act = async () => await ExecuteAsRoleAsync(targetConnection, "jobtrack_application", "CREATE TABLE rogue_table (id integer);");

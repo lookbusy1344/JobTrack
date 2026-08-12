@@ -6,15 +6,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the self-service home-node preference: setting/resetting it from
@@ -52,7 +45,10 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -260,14 +256,20 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 
 	private async Task SetHomeNodeAsync(AppUserId actor, JobNodeId nodeId) =>
 		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
-			Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = actor,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = nodeId,
 		});
 
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = administratorId,
@@ -294,7 +296,9 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Browse?handler=ResetHomeNode");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["__RequestVerificationToken"] = token,
+		});
 
 		return await client.SendAsync(request);
 	}
@@ -322,20 +326,9 @@ public sealed partial class HomeNodeTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
-
-
-
-
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
 	[GeneratedRegex("<nav aria-label=\"breadcrumb\">.*?</nav>", RegexOptions.Singleline)]
 	private static partial Regex BreadcrumbPattern();
-
-
-
-
-
 }

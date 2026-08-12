@@ -6,16 +6,9 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the external HTTP API's pickup route (Stage 8 of the job-node ownership
@@ -55,7 +48,10 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -106,7 +102,10 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.bearer.worker");
 		var leafId = await AddUnassignedLeafAsync(rootId, "Unassigned pool leaf");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -155,7 +154,10 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -168,7 +170,10 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddUnassignedLeafAsync(JobNodeId parentId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = null,
@@ -205,7 +210,4 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
 }

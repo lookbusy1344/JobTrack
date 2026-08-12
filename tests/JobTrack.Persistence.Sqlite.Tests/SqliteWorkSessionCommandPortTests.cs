@@ -102,7 +102,10 @@ public sealed class SqliteWorkSessionCommandPortTests()
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassigned.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = unassigned.Id,
+		});
 
 		var results = await Task.WhenAll(
 			TryStartSessionForAsync(CreateSessionPort(ConnectionString), workerA, workerA, unassigned.Id),
@@ -145,7 +148,11 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "sqlite.complete-vs-start.other", EmployeeRole.Worker);
 		var sessionPort = CreateSessionPort(ConnectionString);
-		var session = await sessionPort.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var completeTask = TryCompleteLeafAsync(CreateSessionPort(ConnectionString), jobManagerId, leafId, session.Id, session.Version);
 		var startTask = TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, otherWorkerId, leafId);
@@ -169,7 +176,11 @@ public sealed class SqliteWorkSessionCommandPortTests()
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var sessionPort = CreateSessionPort(ConnectionString);
-		var session = await sessionPort.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var completeTask = TryCompleteLeafAsync(CreateSessionPort(ConnectionString), jobManagerId, leafId, session.Id, session.Version);
 		var finishTask = TryFinishSessionAsync(CreateSessionPort(ConnectionString), workerId, session.Id, session.Version);
@@ -190,7 +201,11 @@ public sealed class SqliteWorkSessionCommandPortTests()
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var sessionPort = CreateSessionPort(ConnectionString);
-		var session = await sessionPort.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
+		var session = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
 
 		var completeTask = TryCompleteLeafAsync(CreateSessionPort(ConnectionString), jobManagerId, leafId, session.Id, session.Version);
 		var correctTask = TryCorrectSessionAsync(CreateSessionPort(ConnectionString), jobManagerId, session.Id, session.StartedAt, session.Version);
@@ -216,9 +231,17 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		var (rootId, jobManagerId, workerId, requiredLeafId) = await SeedReadyLeafAsync();
 		var sessionPort = CreateSessionPort(ConnectionString);
 		var requiredSession = await sessionPort.StartWorkAsync(
-			new() { Context = ContextFor(workerId), JobNodeId = requiredLeafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				JobNodeId = requiredLeafId,
+				WorkedByUserId = workerId,
+			});
 		_ = await sessionPort.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = requiredSession.Id, Version = requiredSession.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = requiredSession.Id,
+				Version = requiredSession.Version,
+			});
 		_ = await CreateAchievementPort(ConnectionString).SetAchievementAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = requiredLeafId,
@@ -234,7 +257,10 @@ public sealed class SqliteWorkSessionCommandPortTests()
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = dependent.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = dependent.Id,
+		});
 		await jobNodePort.AddPrerequisiteAsync(new() {
 			Context = ContextFor(jobManagerId),
 			RequiredJobId = requiredLeafId,
@@ -266,9 +292,17 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		var (rootId, jobManagerId, workerId, requiredLeafId) = await SeedReadyLeafAsync();
 		var sessionPort = CreateSessionPort(ConnectionString);
 		var requiredSession = await sessionPort.StartWorkAsync(
-			new() { Context = ContextFor(workerId), JobNodeId = requiredLeafId, WorkedByUserId = workerId });
+			new() {
+				Context = ContextFor(workerId),
+				JobNodeId = requiredLeafId,
+				WorkedByUserId = workerId,
+			});
 		_ = await sessionPort.FinishSessionAsync(
-			new() { Context = ContextFor(workerId), SessionId = requiredSession.Id, Version = requiredSession.Version });
+			new() {
+				Context = ContextFor(workerId),
+				SessionId = requiredSession.Id,
+				Version = requiredSession.Version,
+			});
 		_ = await CreateAchievementPort(ConnectionString).SetAchievementAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = requiredLeafId,
@@ -284,7 +318,10 @@ public sealed class SqliteWorkSessionCommandPortTests()
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = dependent.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = dependent.Id,
+		});
 		await jobNodePort.AddPrerequisiteAsync(new() {
 			Context = ContextFor(jobManagerId),
 			RequiredJobId = requiredLeafId,
@@ -328,7 +365,11 @@ public sealed class SqliteWorkSessionCommandPortTests()
 				Context = ContextFor(actorId),
 				JobNodeId = leafId,
 				Version = 2,
-				ExpectedActiveSessions = [new() { Id = sessionId, Version = sessionVersion }],
+				ExpectedActiveSessions = [
+					new() {
+						Id = sessionId, Version = sessionVersion,
+					},
+				],
 			});
 			return true;
 		}
@@ -352,7 +393,11 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		IWorkSessionCommandPort port, AppUserId actorId, AppUserId targetWorkerId, JobNodeId leafId)
 	{
 		try {
-			_ = await port.StartSessionAsync(new() { Context = ContextFor(actorId), LeafWorkId = leafId, WorkedByUserId = targetWorkerId });
+			_ = await port.StartSessionAsync(new() {
+				Context = ContextFor(actorId),
+				LeafWorkId = leafId,
+				WorkedByUserId = targetWorkerId,
+			});
 			return true;
 		}
 		catch (Exception ex) when (ex is InvariantViolationException or ConcurrencyConflictException
@@ -364,7 +409,11 @@ public sealed class SqliteWorkSessionCommandPortTests()
 	private static async Task<bool> TryFinishSessionAsync(IWorkSessionCommandPort port, AppUserId actorId, WorkSessionId sessionId, long version)
 	{
 		try {
-			_ = await port.FinishSessionAsync(new() { Context = ContextFor(actorId), SessionId = sessionId, Version = version });
+			_ = await port.FinishSessionAsync(new() {
+				Context = ContextFor(actorId),
+				SessionId = sessionId,
+				Version = version,
+			});
 			return true;
 		}
 		catch (Exception ex) when (ex is InvariantViolationException or ConcurrencyConflictException) {
@@ -394,8 +443,16 @@ public sealed class SqliteWorkSessionCommandPortTests()
 	{
 		var (rootId, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
 		var sessionPort = CreateSessionPort(ConnectionString);
-		var session = await sessionPort.StartWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leafId, WorkedByUserId = workerId });
-		_ = await sessionPort.FinishSessionAsync(new() { Context = ContextFor(workerId), SessionId = session.Id, Version = session.Version });
+		var session = await sessionPort.StartWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leafId,
+			WorkedByUserId = workerId,
+		});
+		_ = await sessionPort.FinishSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			Version = session.Version,
+		});
 		var achievementPort = CreateAchievementPort(ConnectionString);
 		_ = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -428,7 +485,11 @@ public sealed class SqliteWorkSessionCommandPortTests()
 	private static async Task<bool> TryArchiveAsync(IJobNodeCommandPort port, AppUserId actorId, JobNodeId leafId)
 	{
 		try {
-			_ = await port.ArchiveAsync(new() { Context = ContextFor(actorId), NodeId = leafId, Version = 1 });
+			_ = await port.ArchiveAsync(new() {
+				Context = ContextFor(actorId),
+				NodeId = leafId,
+				Version = 1,
+			});
 			return true;
 		}
 		catch (Exception ex) when (ex is InvariantViolationException or ConcurrencyConflictException) {

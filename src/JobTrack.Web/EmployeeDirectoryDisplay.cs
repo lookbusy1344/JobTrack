@@ -25,7 +25,7 @@ internal static class EmployeeDirectoryDisplay
 	internal static string Format(string displayName, string userName) => $"{displayName} ({userName})";
 
 	internal static string Describe(IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> directoryById, long? userId,
-		string noneLabel = "Unassigned")
+									string noneLabel = "Unassigned")
 	{
 		if (userId is not long id) {
 			return noneLabel;
@@ -39,8 +39,8 @@ internal static class EmployeeDirectoryDisplay
 	internal static List<SelectListItem> BuildOptions(IEnumerable<EmployeeDirectoryEntry> directory, SelectListItem? firstOption = null)
 	{
 		var options = directory
-			.OrderBy(entry => entry.DisplayName, StringComparer.Ordinal)
-			.Select(entry => new SelectListItem(Format(entry), entry.Id.Value.ToString(CultureInfo.InvariantCulture)));
+					  .OrderBy(entry => entry.DisplayName, StringComparer.Ordinal)
+					  .Select(entry => new SelectListItem(Format(entry), entry.Id.Value.ToString(CultureInfo.InvariantCulture)));
 
 		return firstOption is null ? [.. options] : [firstOption, .. options];
 	}

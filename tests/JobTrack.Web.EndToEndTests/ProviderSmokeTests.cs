@@ -38,7 +38,10 @@ public sealed partial class ProviderSmokeTests
 			"Sqlite-Horse-Battery-42!");
 
 		using var factory = new TestWebApplicationFactory(SchemaProvider.Sqlite, database.ConnectionString);
-		using var client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		using var client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 
 		var authCookie = await SignInAsync(client, admin.UserName, admin.Password);
 
@@ -58,7 +61,10 @@ public sealed partial class ProviderSmokeTests
 			"PostgreSql-Horse-Battery-42!");
 
 		using var factory = new TestWebApplicationFactory(SchemaProvider.PostgreSql, database.ConnectionString);
-		using var client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		using var client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 
 		var authCookie = await SignInAsync(client, admin.UserName, admin.Password);
 

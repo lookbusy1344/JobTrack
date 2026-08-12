@@ -32,9 +32,9 @@ internal static class JobNodeStructuralProjection
 		DbContext context, JobNodeEntity node, CancellationToken cancellationToken)
 	{
 		var hasChildren = await context.Set<JobNodeEntity>().AsNoTracking()
-			.AnyAsync(c => c.ParentId == node.Id, cancellationToken).ConfigureAwait(false);
+									   .AnyAsync(c => c.ParentId == node.Id, cancellationToken).ConfigureAwait(false);
 		var hasLeafWork = await context.Set<LeafWorkEntity>().AsNoTracking()
-			.AnyAsync(lw => lw.JobNodeId == node.Id, cancellationToken).ConfigureAwait(false);
+									   .AnyAsync(lw => lw.JobNodeId == node.Id, cancellationToken).ConfigureAwait(false);
 		return ToResult(node, hasChildren, hasLeafWork);
 	}
 }

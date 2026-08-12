@@ -58,12 +58,16 @@
 							<td class="col-8 col-md-7 col-lg-4">
 								@* Leads the name, as the kind glyph does on Browse's tree rows: it says what the
 								   row *is* before it is read, which a column of its own spent width to say worse. *@
-								<partial name="_KindIcon" model="@(new KindIconModel { Kind = row.Node.Kind, ShowLabel = false })"/>
+								<partial name="_KindIcon" model="@(new KindIconModel {
+									                                 Kind = row.Node.Kind, ShowLabel = false,
+								                                 })"/>
 								<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 								   asp-route-nodeId="@row.Node.Id.Value">@JobNodeDisplay.Title(row.Node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>&#x2060;
 								@* Trails the name, as on Browse's subtree tables and Awaiting Progress. *@
 								<partial name="_AchievementIcon"
-								         model="@(new AchievementIconModel { Achievement = row.Node.Achievement, ShowLabel = false })"/>
+								         model="@(new AchievementIconModel {
+									                Achievement = row.Node.Achievement, ShowLabel = false,
+								                })"/>
 								@if (row.Node.ArchivedAt is not null) {
 									<span class="jt-muted"> &middot; archived</span>
 								}

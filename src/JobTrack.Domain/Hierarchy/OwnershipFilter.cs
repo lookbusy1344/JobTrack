@@ -13,14 +13,16 @@ using Abstractions;
 public sealed record OwnershipFilter
 {
 	/// <summary>Every node matches, regardless of owner.</summary>
-	public static readonly OwnershipFilter All = new() { Kind = OwnershipFilterKind.All };
+	public static readonly OwnershipFilter All = new() {
+		Kind = OwnershipFilterKind.All,
+	};
 
 	/// <summary>Only nodes with no direct owner (the pickup pool).</summary>
-	public static readonly OwnershipFilter Unassigned = new() { Kind = OwnershipFilterKind.Unassigned };
+	public static readonly OwnershipFilter Unassigned = new() {
+		Kind = OwnershipFilterKind.Unassigned,
+	};
 
-	private OwnershipFilter()
-	{
-	}
+	private OwnershipFilter() { }
 
 	/// <summary>Which of the three filter shapes this is.</summary>
 	public required OwnershipFilterKind Kind { get; init; }
@@ -29,7 +31,10 @@ public sealed record OwnershipFilter
 	public AppUserId? OwnerUserId { get; init; }
 
 	/// <summary>Only nodes directly owned by <paramref name="ownerUserId" />.</summary>
-	public static OwnershipFilter OwnedBy(AppUserId ownerUserId) => new() { Kind = OwnershipFilterKind.OwnedBy, OwnerUserId = ownerUserId };
+	public static OwnershipFilter OwnedBy(AppUserId ownerUserId) => new() {
+		Kind = OwnershipFilterKind.OwnedBy,
+		OwnerUserId = ownerUserId,
+	};
 
 	/// <summary>Whether a node whose direct owner is <paramref name="actualOwnerUserId" /> (null for unassigned) matches this filter.</summary>
 	public bool Matches(AppUserId? actualOwnerUserId) =>

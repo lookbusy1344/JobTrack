@@ -112,7 +112,11 @@ internal sealed class EmployeeCommands : IEmployeeCommands
 				var passwordHash = _passwordHasher.HashPassword(CredentialSubject, request.NewPassword);
 
 				return _port.ResetPasswordAsync(
-					new() { Context = request.Context, TargetUserId = request.TargetUserId, PasswordHash = passwordHash },
+					new() {
+						Context = request.Context,
+						TargetUserId = request.TargetUserId,
+						PasswordHash = passwordHash,
+					},
 					cancellationToken);
 			});
 	}

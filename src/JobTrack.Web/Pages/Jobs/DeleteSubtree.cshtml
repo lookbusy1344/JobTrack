@@ -8,11 +8,11 @@
 
 	// Same sprite ids and spoken nouns Browse's tree uses, so a row reads identically on both pages.
 	static string KindIconId(NodeKind kind) => kind switch {
-		NodeKind.Root => "jt-icon-root",
-		NodeKind.Branch => "jt-icon-branch",
-		NodeKind.Leaf => "jt-icon-leaf",
-		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-	};
+		                                           NodeKind.Root => "jt-icon-root",
+		                                           NodeKind.Branch => "jt-icon-branch",
+		                                           NodeKind.Leaf => "jt-icon-leaf",
+		                                           _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                           };
 
 	// "1 job" / "3 jobs" — a parenthesised "(s)" reads as unfinished copy on the one screen where
 	// the reader is being asked to confirm an irreversible action.
@@ -20,11 +20,11 @@
 		string.Create(CultureInfo.InvariantCulture, $"{quantity} {(quantity == 1 ? singular : plural)}");
 
 	static string KindNoun(NodeKind kind) => kind switch {
-		NodeKind.Root => "root",
-		NodeKind.Branch => "branch",
-		NodeKind.Leaf => "leaf",
-		_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-	};
+		                                         NodeKind.Root => "root",
+		                                         NodeKind.Branch => "branch",
+		                                         NodeKind.Leaf => "leaf",
+		                                         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                         };
 }
 
 @* Deliberately not .jt-page-narrow: this page mixes a form with a wide tree table, which site.css's

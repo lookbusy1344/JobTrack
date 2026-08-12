@@ -17,7 +17,9 @@ public sealed class ReadinessCalculatorTests
 	[Fact]
 	public void A_leaf_with_no_prerequisites_is_ready()
 	{
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [LeafId] = Leaf(LeafId, null, Achievement.Waiting) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[LeafId] = Leaf(LeafId, null, Achievement.Waiting),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, []);
 
@@ -30,8 +32,13 @@ public sealed class ReadinessCalculatorTests
 	{
 		var required = Leaf(RequiredId, null, Achievement.Success);
 		var leaf = Leaf(LeafId, null, Achievement.Waiting);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RequiredId] = required, [LeafId] = leaf };
-		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafId) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RequiredId] = required,
+			[LeafId] = leaf,
+		};
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, LeafId),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, edges);
 
@@ -44,8 +51,13 @@ public sealed class ReadinessCalculatorTests
 	{
 		var required = Leaf(RequiredId, null, Achievement.InProgress);
 		var leaf = Leaf(LeafId, null, Achievement.Waiting);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RequiredId] = required, [LeafId] = leaf };
-		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafId) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RequiredId] = required,
+			[LeafId] = leaf,
+		};
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, LeafId),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, edges);
 
@@ -66,7 +78,9 @@ public sealed class ReadinessCalculatorTests
 			[BranchId] = branch,
 			[LeafId] = leaf,
 		};
-		var edges = new[] { new PrerequisiteEdge(RequiredId, BranchId) };
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, BranchId),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, edges);
 
@@ -80,8 +94,14 @@ public sealed class ReadinessCalculatorTests
 		var required = Leaf(RequiredId, null, Achievement.Success);
 		var branch = new HierarchyNode(BranchId, null, [LeafId], null);
 		var leaf = Leaf(LeafId, BranchId, Achievement.Waiting);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RequiredId] = required, [BranchId] = branch, [LeafId] = leaf };
-		var edges = new[] { new PrerequisiteEdge(RequiredId, BranchId) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RequiredId] = required,
+			[BranchId] = branch,
+			[LeafId] = leaf,
+		};
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, BranchId),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, edges);
 
@@ -104,7 +124,9 @@ public sealed class ReadinessCalculatorTests
 			[BranchId] = branch,
 			[LeafId] = leaf,
 		};
-		var edges = new[] { new PrerequisiteEdge(ownRequired, LeafId), new PrerequisiteEdge(ancestorRequired, BranchId) };
+		var edges = new[] {
+			new PrerequisiteEdge(ownRequired, LeafId), new PrerequisiteEdge(ancestorRequired, BranchId),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, edges);
 
@@ -122,8 +144,14 @@ public sealed class ReadinessCalculatorTests
 		var grandchild = Leaf(grandchildId, RequiredId, Achievement.InProgress);
 		var requiredBranch = new HierarchyNode(RequiredId, null, [grandchildId], null);
 		var leaf = Leaf(LeafId, null, Achievement.Waiting);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RequiredId] = requiredBranch, [grandchildId] = grandchild, [LeafId] = leaf };
-		var edges = new[] { new PrerequisiteEdge(RequiredId, LeafId) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RequiredId] = requiredBranch,
+			[grandchildId] = grandchild,
+			[LeafId] = leaf,
+		};
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, LeafId),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, edges);
 
@@ -137,8 +165,13 @@ public sealed class ReadinessCalculatorTests
 		var unrelatedDependentId = new JobNodeId(8);
 		var required = Leaf(RequiredId, null, Achievement.Waiting);
 		var leaf = Leaf(LeafId, null, Achievement.Waiting);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RequiredId] = required, [LeafId] = leaf };
-		var edges = new[] { new PrerequisiteEdge(RequiredId, unrelatedDependentId) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RequiredId] = required,
+			[LeafId] = leaf,
+		};
+		var edges = new[] {
+			new PrerequisiteEdge(RequiredId, unrelatedDependentId),
+		};
 
 		var result = ReadinessCalculator.IsReady(LeafId, nodes, edges);
 

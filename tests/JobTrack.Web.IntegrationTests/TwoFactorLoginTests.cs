@@ -7,7 +7,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
 using Identity;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
@@ -46,7 +45,10 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -103,7 +105,9 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		await SeedUserWithTwoFactorAsync("morgan.2fa", SecondSecret);
 		var baseAddress = new Uri("https://localhost");
 		using var cookieHandler = new TestCookieContainerHandler(factory.Server.CreateHandler());
-		using var browserClient = new HttpClient(cookieHandler) { BaseAddress = baseAddress };
+		using var browserClient = new HttpClient(cookieHandler) {
+			BaseAddress = baseAddress,
+		};
 
 		await PostLoginWithCookieClientAsync(browserClient, "jordan.2fa", KnownPassword);
 		await PostTwoFactorCodeWithCookieClientAsync(browserClient, GenerateTotpCode(FirstSecret, DateTimeOffset.UtcNow));
@@ -334,10 +338,10 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		var hash = hmac.ComputeHash(counterBytes);
 		var offset = hash[^1] & 0x0F;
 		var binaryCode =
-			((hash[offset] & 0x7F) << 24) |
-			((hash[offset + 1] & 0xFF) << 16) |
-			((hash[offset + 2] & 0xFF) << 8) |
-			(hash[offset + 3] & 0xFF);
+			(hash[offset] & 0x7F) << 24 |
+			(hash[offset + 1] & 0xFF) << 16 |
+			(hash[offset + 2] & 0xFF) << 8 |
+			hash[offset + 3] & 0xFF;
 		var truncated = binaryCode % (int)Math.Pow(10, TotpDigits);
 
 		return truncated.ToString(CultureInfo.InvariantCulture).PadLeft(TotpDigits, '0');
@@ -351,10 +355,10 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		var bitCount = 0;
 
 		foreach (var c in trimmed) {
-			bitBuffer = (bitBuffer << 5) | Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
+			bitBuffer = bitBuffer << 5 | Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
 			bitCount += 5;
 			if (bitCount >= 8) {
-				output.Add((byte)((bitBuffer >> (bitCount - 8)) & 0xFF));
+				output.Add((byte)(bitBuffer >> bitCount - 8 & 0xFF));
 				bitCount -= 8;
 			}
 		}
@@ -368,7 +372,10 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		factory.Dispose();
 
 		factory = new(database.ConnectionString, loginRateLimitPermitLimit);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	private async Task<AppUserId> SeedUserWithTwoFactorAsync(string userName, string base32Secret)

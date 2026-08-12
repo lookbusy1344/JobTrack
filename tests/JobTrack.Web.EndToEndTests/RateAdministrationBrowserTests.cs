@@ -1,7 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 using NodaTime;
@@ -34,7 +33,15 @@ public abstract class RateAdministrationBrowserTestsBase
 	protected RateAdministrationBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -66,7 +73,9 @@ public abstract class RateAdministrationBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Add user cost rate" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "Add user cost rate",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -151,20 +160,14 @@ public abstract class RateAdministrationBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqliteRateAdministrationBrowserTests : RateAdministrationBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteRateAdministrationBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteRateAdministrationBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlRateAdministrationBrowserTests : RateAdministrationBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlRateAdministrationBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlRateAdministrationBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

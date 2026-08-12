@@ -23,8 +23,8 @@ public static class HierarchyDisplayReconciler
 		}
 
 		var naive = children
-			.Select(child => (child.ChildId, child.ExactAmount, Rounded: child.ExactAmount.RoundToPennies()))
-			.ToList();
+					.Select(child => (child.ChildId, child.ExactAmount, Rounded: child.ExactAmount.RoundToPennies()))
+					.ToList();
 
 		var parentPennies = exactParentTotal.RoundToPennies();
 		var residual = parentPennies.Amount - naive.Sum(child => child.Rounded.Amount);
@@ -34,10 +34,10 @@ public static class HierarchyDisplayReconciler
 
 		var direction = Math.Sign(residual);
 		var adjustedChildId = naive
-			.OrderByDescending(child => direction * (child.ExactAmount.Amount - child.Rounded.Amount))
-			.ThenBy(child => child.ChildId.Value)
-			.First()
-			.ChildId;
+							  .OrderByDescending(child => direction * (child.ExactAmount.Amount - child.Rounded.Amount))
+							  .ThenBy(child => child.ChildId.Value)
+							  .First()
+							  .ChildId;
 
 		return [
 			.. naive.Select(child => new ReconciledChildCost(

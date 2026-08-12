@@ -47,7 +47,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 		var act = () => sut.ChangeOwnPasswordAsync(CreateRequest(seeded, "incorrect-password"));
 
 		await act.Should().ThrowAsync<InvariantViolationException>()
-			.WithMessage("*current password is incorrect*");
+				 .WithMessage("*current password is incorrect*");
 		(await ReadStateAsync(seeded.AppUserId)).Should().Be(before);
 	}
 
@@ -62,9 +62,9 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 
 		var after = await ReadStateAsync(seeded.AppUserId);
 		PasswordHasher.VerifyHashedPassword(CredentialSubject, after.PasswordHash, CurrentPassword)
-			.Should().Be(PasswordVerificationResult.Failed);
+					  .Should().Be(PasswordVerificationResult.Failed);
 		PasswordHasher.VerifyHashedPassword(CredentialSubject, after.PasswordHash, NewPassword)
-			.Should().NotBe(PasswordVerificationResult.Failed);
+					  .Should().NotBe(PasswordVerificationResult.Failed);
 		after.RequiresPasswordChange.Should().BeFalse();
 		after.SecurityStamp.Should().NotBe(before.SecurityStamp);
 		after.ConcurrencyStamp.Should().NotBe(before.ConcurrencyStamp);

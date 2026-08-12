@@ -18,7 +18,9 @@ public sealed class SqliteDatabaseFixture : IDisposableTestDatabase
 
 	public Task InitializeAsync()
 	{
-		ConnectionString = new SqliteConnectionStringBuilder { DataSource = databaseFilePath }.ConnectionString;
+		ConnectionString = new SqliteConnectionStringBuilder {
+			DataSource = databaseFilePath,
+		}.ConnectionString;
 		return Task.CompletedTask;
 	}
 

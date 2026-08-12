@@ -73,7 +73,7 @@ public sealed record AllocatedDuration : IFormattable
 		var leftMultiplier = other.Denominator / denominatorDivisor;
 		var rightMultiplier = Denominator / denominatorDivisor;
 		return new(
-			(TickNumerator * leftMultiplier) + (other.TickNumerator * rightMultiplier),
+			TickNumerator * leftMultiplier + other.TickNumerator * rightMultiplier,
 			Denominator * leftMultiplier);
 	}
 
@@ -87,7 +87,7 @@ public sealed record AllocatedDuration : IFormattable
 		var hourDenominator = Denominator * TicksPerHour;
 		var scaledHours = BigInteger.DivRem(scaledNumerator, hourDenominator, out var remainder);
 		var midpointComparison = (remainder * 2).CompareTo(hourDenominator);
-		if (midpointComparison > 0 || (midpointComparison == 0 && !scaledHours.IsEven)) {
+		if (midpointComparison > 0 || midpointComparison == 0 && !scaledHours.IsEven) {
 			++scaledHours;
 		}
 

@@ -247,7 +247,7 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 		DbContext context, AppUserId userId, CancellationToken cancellationToken)
 	{
 		if (!await context.Set<AppUserEntity>().AsNoTracking()
-				.AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Employee {userId} does not exist.");
 		}
 	}
@@ -256,7 +256,7 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 		DbContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
 		if (!await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
 		}
 	}

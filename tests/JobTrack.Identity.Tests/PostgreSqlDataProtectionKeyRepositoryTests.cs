@@ -98,9 +98,9 @@ public sealed class PostgreSqlDataProtectionKeyRepositoryTests : IAsyncLifetime
 		var services = new ServiceCollection();
 		_ = services.AddDbContext<PostgreSqlJobTrackIdentityDbContext>(options => options.UseNpgsql(database.ConnectionString));
 		_ = services.AddDataProtection()
-			.SetApplicationName(DataProtectionApplicationName)
-			.PersistKeysToDbContext<PostgreSqlJobTrackIdentityDbContext>()
-			.ProtectKeysWithCertificate(certificate);
+					.SetApplicationName(DataProtectionApplicationName)
+					.PersistKeysToDbContext<PostgreSqlJobTrackIdentityDbContext>()
+					.ProtectKeysWithCertificate(certificate);
 
 		return services.BuildServiceProvider().GetRequiredService<IDataProtectionProvider>();
 	}
@@ -108,8 +108,8 @@ public sealed class PostgreSqlDataProtectionKeyRepositoryTests : IAsyncLifetime
 	private PostgreSqlJobTrackIdentityDbContext CreateContext()
 	{
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackIdentityDbContext>()
-			.UseNpgsql(database.ConnectionString)
-			.Options;
+					  .UseNpgsql(database.ConnectionString)
+					  .Options;
 
 		return new(options);
 	}

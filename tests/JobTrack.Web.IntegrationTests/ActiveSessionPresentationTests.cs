@@ -23,8 +23,7 @@ public sealed class ActiveSessionPresentationTests
 	public void Grouping_never_drops_a_session_with_three_simultaneous_workers()
 	{
 		var sessions = new[] {
-			Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)), Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)),
-			Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)),
+			Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)), Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)), Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)),
 		};
 
 		var grouped = ActiveSessionGrouping.Group(sessions);
@@ -37,8 +36,7 @@ public sealed class ActiveSessionPresentationTests
 	public void Grouping_orders_sessions_by_started_at_then_id()
 	{
 		var sessions = new[] {
-			Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)), Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)),
-			Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 0)),
+			Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)), Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)), Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 0)),
 		};
 
 		var grouped = ActiveSessionGrouping.Group(sessions);
@@ -50,8 +48,7 @@ public sealed class ActiveSessionPresentationTests
 	public void Derive_separates_the_viewers_own_session_from_every_other_worker()
 	{
 		var sessions = new[] {
-			Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)), Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)),
-			Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)),
+			Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)), Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)), Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)),
 		};
 
 		var presentation = ActiveSessionPresentation.Derive(sessions, Viewer);
@@ -66,7 +63,9 @@ public sealed class ActiveSessionPresentationTests
 	[Fact]
 	public void Derive_reports_no_viewer_session_when_the_viewer_is_not_among_the_active_workers()
 	{
-		var sessions = new[] { Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)), Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)) };
+		var sessions = new[] {
+			Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)), Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)),
+		};
 
 		var presentation = ActiveSessionPresentation.Derive(sessions, Viewer);
 
@@ -79,8 +78,7 @@ public sealed class ActiveSessionPresentationTests
 	public void Derive_reports_the_full_stable_order_regardless_of_viewer()
 	{
 		var sessions = new[] {
-			Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)), Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)),
-			Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)),
+			Session(3, Bob, Instant.FromUtc(2026, 1, 1, 9, 10)), Session(1, Viewer, Instant.FromUtc(2026, 1, 1, 9, 0)), Session(2, Alice, Instant.FromUtc(2026, 1, 1, 9, 5)),
 		};
 
 		var presentation = ActiveSessionPresentation.Derive(sessions, Viewer);

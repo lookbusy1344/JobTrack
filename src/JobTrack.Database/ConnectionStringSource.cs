@@ -38,7 +38,9 @@ public static class ConnectionStringSource
 	private static bool ContainsPassword(string connectionString)
 	{
 		try {
-			var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+			var builder = new DbConnectionStringBuilder {
+				ConnectionString = connectionString,
+			};
 			return builder.Keys.Cast<string>().Any(key =>
 				key.Equals("Password", StringComparison.OrdinalIgnoreCase) || key.Equals("Pwd", StringComparison.OrdinalIgnoreCase));
 		}

@@ -7,12 +7,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Persistence.Sqlite;
 using TestSupport;
@@ -57,7 +53,10 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString, capturedLogEntries);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -181,8 +180,14 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
-		var archivedBranch = await seedClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = branch.Id });
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		var archivedBranch = await seedClient.Query.GetJobNodeAsync(new() {
+			Context = context,
+			NodeId = branch.Id,
+		});
 		archivedBranch.Node.ArchivedAt.Should().NotBeNull();
 	}
 
@@ -198,7 +203,10 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 
 		// A concurrent edit lands after the form was loaded, advancing the row's version.
 		_ = await seedClient.Jobs.EditAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = branch.Id,
 			Description = "Concurrently edited",
 			OwnerUserId = adminId,
@@ -218,7 +226,10 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
 		await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -290,9 +301,7 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	{
 		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
 
-		public void Dispose()
-		{
-		}
+		public void Dispose() { }
 
 		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
 		{
@@ -301,7 +310,7 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 			public bool IsEnabled(LogLevel logLevel) => true;
 
 			public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-				Func<TState, Exception?, string> formatter)
+									Func<TState, Exception?, string> formatter)
 			{
 				capturedLogEntries.Add(formatter(state, exception));
 				if (exception is not null) {

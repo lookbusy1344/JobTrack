@@ -21,7 +21,10 @@ public sealed class ScheduleCommandsTests
 		return port;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static ScheduleVersion CreateWeekdayScheduleVersion(LocalDate effectiveStart, LocalDate? effectiveEnd = null) =>
 		new(

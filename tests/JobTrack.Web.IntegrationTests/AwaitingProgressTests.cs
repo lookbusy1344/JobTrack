@@ -6,19 +6,15 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using NodaTime.Text;
 using Pages.Jobs;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the flat "jobs awaiting progress" dashboard: leaves only, filtered by
@@ -59,7 +55,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -83,7 +82,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var doneLeaf = await AddLeafWithWorkAsync(rootId, workerId, "Painting", adminId);
 		await SetAchievementAsync(doneLeaf.JobNodeId, Achievement.InProgress, adminId, doneLeaf.Version);
 		var inProgress = await seedClient.Query.GetLeafWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = doneLeaf.JobNodeId,
 		});
 		await SetAchievementAsync(doneLeaf.JobNodeId, Achievement.Success, adminId, inProgress.Version);
@@ -168,7 +170,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var required = await AddLeafWithWorkAsync(rootId, workerId, "Required first", adminId);
 		var dependent = await AddLeafWithWorkAsync(rootId, workerId, "Blocked leaf", adminId);
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = required.JobNodeId,
 			DependentJobId = dependent.JobNodeId,
 		});
@@ -287,7 +292,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var required = await AddLeafWithWorkAsync(rootId, workerId, "Required first", adminId);
 		var dependent = await AddLeafAtPriorityAsync(rootId, workerId, "Urgent but blocked", adminId, Priority.Urgent);
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = required.JobNodeId,
 			DependentJobId = dependent,
 		});
@@ -310,7 +318,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var required = await AddLeafWithWorkAsync(rootId, workerId, "Required first", adminId);
 		var dependent = await AddLeafWithWorkAsync(rootId, workerId, "Blocked leaf", adminId);
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = required.JobNodeId,
 			DependentJobId = dependent.JobNodeId,
 		});
@@ -332,7 +343,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var required = await AddLeafWithWorkAsync(rootId, workerId, "Required first", adminId);
 		var dependent = await AddLeafWithWorkAsync(rootId, workerId, "Blocked leaf", adminId);
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = required.JobNodeId,
 			DependentJobId = dependent.JobNodeId,
 		});
@@ -420,7 +434,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var beingWorked = await AddLeafWithWorkAsync(rootId, workerId, "Worker is on this now", adminId);
 		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = beingWorked.JobNodeId,
 			WorkedByUserId = workerId,
 		});
@@ -449,13 +466,19 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var workerLeaf = await AddLeafWithWorkAsync(rootId, workerId, "Worker is on this", adminId);
 		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = workerLeaf.JobNodeId,
 			WorkedByUserId = workerId,
 		});
 		var adminLeaf = await AddLeafWithWorkAsync(rootId, workerId, "Admin is on this", adminId);
 		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = adminLeaf.JobNodeId,
 			WorkedByUserId = adminId,
 		});
@@ -476,7 +499,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var beingWorked = await AddLeafWithWorkAsync(rootId, workerId, "Worker is on this now", adminId);
 		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = beingWorked.JobNodeId,
 			WorkedByUserId = workerId,
 		});
@@ -513,7 +539,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Owned job", adminId);
 		var unassigned = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Pool job",
 			OwnerUserId = null,
@@ -544,7 +573,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(otherBranchId, workerId, "Outside the home node", adminId);
 		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = branchId,
 		});
 		var authCookie = await client.SignInAsync("awaiting.subtreemem");
@@ -572,7 +604,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
 		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = branchId,
 		});
 		var authCookie = await client.SignInAsync("awaiting.wholetreemem");
@@ -620,7 +655,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		_ = await AddLeafWithWorkAsync(homeId, workerId, "Install cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(elsewhereId, workerId, "Tile the floor", adminId);
 		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = homeId,
 		});
 		var authCookie = await client.SignInAsync("awaiting.homelink");
@@ -687,7 +725,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
 		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = branchId,
 		});
 		var authCookie = await client.SignInAsync("awaiting.browsewhole");
@@ -752,7 +793,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
 		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = branchId,
 		});
 		var authCookie = await client.SignInAsync("awaiting.homedefault");
@@ -777,7 +821,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
 		_ = await seedClient.Employees.SetHomeNodeAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = branchId,
 		});
 		var authCookie = await client.SignInAsync("awaiting.homeoverride");
@@ -964,13 +1011,19 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		reloadedBody.Should().Contain("Job marked complete. Its one open session was closed.");
 
 		var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.JobNodeId,
 		});
 		leafWork.Achievement.Should().Be(Achievement.Success);
 
 		var activeSessions = await seedClient.Query.GetActiveSessionsAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkIds = [leaf.JobNodeId],
 		});
 		activeSessions.Should().BeEmpty();
@@ -1200,7 +1253,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		await AddUserCostRateAsync(workerId, adminId, 25m, now - Duration.FromDays(2));
 		await AddFinishedSessionAsync(workerId, pausedLeaf, now - Duration.FromDays(1), now - Duration.FromDays(1) + Duration.FromHours(8));
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = activeLeaf,
 			WorkedByUserId = workerId,
 			StartedAt = now - Duration.FromHours(1),
@@ -1220,7 +1276,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		// is a wall-clock race. £25/hour accrues a penny every 1.44s of drift, so tolerate a few minutes
 		// of slack rather than pinning an exact value.
 		var activeLeafCosts = MoneyAmountPattern().Matches(body)
-			.Select(match => decimal.Parse(match.Groups["amount"].Value, CultureInfo.InvariantCulture));
+												  .Select(match => decimal.Parse(match.Groups["amount"].Value, CultureInfo.InvariantCulture));
 		activeLeafCosts.Should().Contain(amount => amount >= 25.00m && amount <= 25.50m);
 	}
 
@@ -1256,7 +1312,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -1270,7 +1329,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId, Instant neededFinish)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -1285,7 +1347,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId, Priority priority)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -1324,7 +1389,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	private async Task<LeafWorkResult> AddLeafWithWorkAsync(JobNodeId parentId, AppUserId ownerId, string description, AppUserId adminId)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -1332,16 +1400,31 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		});
 
 		return await seedClient.Jobs.AttachLeafWorkAsync(
-			new() { Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id });
+			new() {
+				Context = new() {
+					Actor = adminId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = leaf.Id,
+			});
 	}
 
 	private async Task AttachLeafWorkAsync(JobNodeId leafId, AppUserId adminId) =>
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(
-			new() { Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() }, JobNodeId = leafId });
+			new() {
+				Context = new() {
+					Actor = adminId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = leafId,
+			});
 
 	private async Task AddWorkingWindowAsync(AppUserId workerId, AppUserId adminId, Instant start, Instant end) =>
 		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Entry = new(
 				ScheduleExceptionEffect.AddWorkingTime,
@@ -1352,7 +1435,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 	private async Task AddUserCostRateAsync(AppUserId workerId, AppUserId adminId, decimal amountPerHour, Instant effectiveStart) =>
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(amountPerHour), effectiveStart, null),
 		});
@@ -1360,14 +1446,20 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	private async Task AddFinishedSessionAsync(AppUserId workerId, JobNodeId leafId, Instant startedAt, Instant finishedAt)
 	{
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = startedAt,
 		});
 
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 			FinishedAt = finishedAt,
@@ -1376,7 +1468,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 	private async Task SetAchievementAsync(JobNodeId leafId, Achievement newAchievement, AppUserId adminId, long version) =>
 		_ = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			NewAchievement = newAchievement,
 			Reason = "Test transition",
@@ -1388,10 +1483,6 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
-
-
 	/// <summary>
 	///     A minute-aligned UTC wall time, <paramref name="minutes" /> ago. UTC, not the test process's
 	///     own local zone, because a <c>datetime-local</c> backdate posts a bare wall time with no
@@ -1415,11 +1506,17 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 	private async Task<EquatableArray<WorkSessionResult>> GetSessionsAsync(JobNodeId leafId, AppUserId actor) =>
 		await seedClient.Query.GetLeafSessionsAsync(
-			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, LeafWorkId = leafId },
+			new() {
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
+				LeafWorkId = leafId,
+			},
 			CancellationToken.None);
 
 	private async Task<HttpResponseMessage> PostStartWorkAsync(string authCookie, string antiforgeryCookie, string token, JobNodeId jobNodeId,
-		string? startedAt = null)
+															   string? startedAt = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/AwaitingProgress?handler=StartWork");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -1456,7 +1553,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	///     the dashboard's End-session link ultimately drives.
 	/// </summary>
 	private async Task<HttpResponseMessage> PostFinishWorkAsync(string authCookie, string antiforgeryCookie, string token, JobNodeId leafNodeId,
-		long sessionId, long version, string? finishedAt = null)
+																long sessionId, long version, string? finishedAt = null)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/Work?handler=Finish");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
@@ -1549,7 +1646,4 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 		return new(appUserId);
 	}
-
-
-
 }

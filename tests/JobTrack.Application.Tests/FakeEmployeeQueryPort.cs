@@ -54,7 +54,10 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 			throw new EntityNotFoundException($"Employee {targetUserId} does not exist.");
 		}
 
-		return Task.FromResult(new EmployeeProfileQueryResult { ActorRoles = actorRoles, Profile = profile });
+		return Task.FromResult(new EmployeeProfileQueryResult {
+			ActorRoles = actorRoles,
+			Profile = profile,
+		});
 	}
 
 	public Task<AccountStateQueryResult> GetAccountStateAsync(
@@ -69,7 +72,10 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 			throw new EntityNotFoundException($"Employee {targetUserId} does not exist.");
 		}
 
-		return Task.FromResult(new AccountStateQueryResult { ActorRoles = actorRoles, AccountState = accountState });
+		return Task.FromResult(new AccountStateQueryResult {
+			ActorRoles = actorRoles,
+			AccountState = accountState,
+		});
 	}
 
 	public Task<EquatableArray<EmployeeDirectoryEntry>> GetEmployeeDirectoryAsync(CancellationToken cancellationToken = default)
@@ -94,7 +100,9 @@ internal sealed class FakeEmployeeQueryPort : IEmployeeQueryPort
 	/// </summary>
 	public static FakeEmployeeQueryPort AllowingAnyActor()
 	{
-		var port = new FakeEmployeeQueryPort { _defaultRolesForUnseededActors = [EmployeeRole.Worker] };
+		var port = new FakeEmployeeQueryPort {
+			_defaultRolesForUnseededActors = [EmployeeRole.Worker],
+		};
 		return port;
 	}
 

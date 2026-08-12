@@ -366,7 +366,9 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 
-		foreach (var role in new[] { "jobtrack_domain", "jobtrack_identity" }) {
+		foreach (var role in new[] {
+					 "jobtrack_domain", "jobtrack_identity",
+				 }) {
 			var selectAct = async () => await ExecuteAsRoleAsync(connection, role, "SELECT * FROM rate_limit_capacity_lock;");
 			var insertAct = async () => await ExecuteAsRoleAsync(
 				connection, role, "INSERT INTO rate_limit_capacity_lock (purpose) VALUES ('rogue');");

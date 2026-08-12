@@ -76,7 +76,10 @@ public sealed class DetailsModel(
 
 		try {
 			_ = await jobTrackClient.Requests.AddNoteAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = Guid.NewGuid(),
+				},
 				NodeId = new(id),
 				Content = NoteInput.Content,
 				VisibleToRequester = NoteInput.VisibleToRequester,
@@ -89,7 +92,11 @@ public sealed class DetailsModel(
 			return NotFound();
 		}
 
-		return RedirectToPage(new { id, returnUrl = SafeReturnUrl });
+		return RedirectToPage(new
+		{
+			id,
+			returnUrl = SafeReturnUrl,
+		});
 	}
 
 	public async Task<IActionResult> OnPostAcknowledgeAsync(long id, long version, CancellationToken cancellationToken)
@@ -101,11 +108,18 @@ public sealed class DetailsModel(
 			return Challenge();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			_ = await jobTrackClient.Requests.AcknowledgeAsync(
-				new() { Context = context, NodeId = new(id), Version = version },
+				new() {
+					Context = context,
+					NodeId = new(id),
+					Version = version,
+				},
 				cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
@@ -119,7 +133,11 @@ public sealed class DetailsModel(
 			ErrorMessage = "This request was changed by someone else. Reload and try again.";
 		}
 
-		return RedirectToPage(new { id, returnUrl = SafeReturnUrl });
+		return RedirectToPage(new
+		{
+			id,
+			returnUrl = SafeReturnUrl,
+		});
 	}
 
 	private async Task<IActionResult> LoadAsync(long id, CancellationToken cancellationToken)
@@ -133,7 +151,13 @@ public sealed class DetailsModel(
 
 		try {
 			Detail = await jobTrackClient.Requests.GetDetailAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, NodeId = new(id) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new(id),
+				}, cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -149,7 +173,10 @@ public sealed class DetailsModel(
 		BackUrl = SafeReturnUrl
 				  ?? (User.IsInRole(EmployeeRoleNames.Requester)
 					  ? Url.Page("/Requests/Index")
-					  : Url.Page("/Jobs/Browse", new { nodeId = id }))
+					  : Url.Page("/Jobs/Browse", new
+					  {
+						  nodeId = id,
+					  }))
 				  ?? "/";
 		return Page();
 	}
@@ -158,8 +185,8 @@ public sealed class DetailsModel(
 	private static List<SubtreeRow> BuildOrderedSubtree(JobRequestDetailResult detail)
 	{
 		var childrenByParentId = detail.Subtree.Where(n => n.ParentId is not null)
-			.GroupBy(n => n.ParentId!.Value)
-			.ToDictionary(g => g.Key, g => g.ToArray());
+									   .GroupBy(n => n.ParentId!.Value)
+									   .ToDictionary(g => g.Key, g => g.ToArray());
 		var root = detail.Subtree.First(n => n.JobNodeId == detail.JobNodeId);
 
 		var rows = new List<SubtreeRow>();

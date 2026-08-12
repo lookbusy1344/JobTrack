@@ -89,7 +89,11 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 			Password = "correct-horse-battery-staple",
 			Role = EmployeeRole.Worker,
 		});
-		_ = await commands.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = disabledWorker.Id, Enabled = false });
+		_ = await commands.SetEnabledAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = disabledWorker.Id,
+			Enabled = false,
+		});
 
 		var queryPort = CreateQueryPort(database.ConnectionString);
 
@@ -151,7 +155,10 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IEmployeeCommandPort CreateCommandPort(string connectionString);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	[Fact]
 	public async Task GetEmployeeDirectoryAsync_returns_enabled_workflow_employees_only()
@@ -176,7 +183,11 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 			Password = "correct-horse-battery-staple",
 			Role = EmployeeRole.Worker,
 		});
-		_ = await commands.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = disabledWorker.Id, Enabled = false });
+		_ = await commands.SetEnabledAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = disabledWorker.Id,
+			Enabled = false,
+		});
 
 		var requester = await commands.CreateEmployeeAsync(new() {
 			Context = ContextFor(administratorId),
@@ -206,10 +217,14 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 		var result = await queryPort.GetEmployeeDirectoryAsync();
 
 		result.Select(entry => entry.Id).Should().Contain([administratorId, jobManager.Id])
-			.And.NotContain([disabledWorker.Id, requester.Id, requestingWorker.Id]);
+			  .And.NotContain([disabledWorker.Id, requester.Id, requestingWorker.Id]);
 		result.Should().ContainSingle(entry => entry.Id == administratorId)
-			.Which.Should()
-			.BeEquivalentTo(new EmployeeDirectoryEntry { Id = administratorId, DisplayName = "Ada Lovelace", UserName = "ada.lovelace" });
+			  .Which.Should()
+			  .BeEquivalentTo(new EmployeeDirectoryEntry {
+				  Id = administratorId,
+				  DisplayName = "Ada Lovelace",
+				  UserName = "ada.lovelace",
+			  });
 	}
 
 	[Fact]
@@ -226,7 +241,11 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 			Password = "correct-horse-battery-staple",
 			Role = EmployeeRole.Auditor,
 		});
-		_ = await commands.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = disabledAuditor.Id, Enabled = false });
+		_ = await commands.SetEnabledAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = disabledAuditor.Id,
+			Enabled = false,
+		});
 
 		var requester = await commands.CreateEmployeeAsync(new() {
 			Context = ContextFor(administratorId),
@@ -281,6 +300,4 @@ public abstract class EmployeeQueryPortContractTestsBase : IAsyncLifetime
 
 		return result.AdministratorId;
 	}
-
-
 }

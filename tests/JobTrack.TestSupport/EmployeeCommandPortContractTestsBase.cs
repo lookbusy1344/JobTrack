@@ -33,7 +33,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 
 	public Task DisposeAsync() => database.DisposeAsync();
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private EmployeeCommands CreateSut() => new(CreateCommandPort(database.ConnectionString), new PasswordHasher<EmployeeCredentialSubject>());
 
@@ -198,7 +201,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
 
-		var result = await sut.AssignRoleAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId, Role = EmployeeRole.Worker });
+		var result = await sut.AssignRoleAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+			Role = EmployeeRole.Worker,
+		});
 
 		result.Roles.Should().ContainSingle().Which.Should().Be(EmployeeRole.Worker);
 	}
@@ -209,7 +216,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
 
-		var act = () => sut.AssignRoleAsync(new() { Context = ContextFor(workerId), TargetUserId = workerId, Role = EmployeeRole.RateManager });
+		var act = () => sut.AssignRoleAsync(new() {
+			Context = ContextFor(workerId),
+			TargetUserId = workerId,
+			Role = EmployeeRole.RateManager,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -250,7 +261,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
-		_ = await sut.AssignRoleAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId, Role = EmployeeRole.RateManager });
+		_ = await sut.AssignRoleAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+			Role = EmployeeRole.RateManager,
+		});
 
 		var result = await sut.RevokeRoleAsync(new() {
 			Context = ContextFor(administratorId),
@@ -282,7 +297,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
 
-		var act = () => sut.RevokeRoleAsync(new() { Context = ContextFor(workerId), TargetUserId = workerId, Role = EmployeeRole.Worker });
+		var act = () => sut.RevokeRoleAsync(new() {
+			Context = ContextFor(workerId),
+			TargetUserId = workerId,
+			Role = EmployeeRole.Worker,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -308,7 +327,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
 
-		var result = await sut.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId, Enabled = false });
+		var result = await sut.SetEnabledAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+			Enabled = false,
+		});
 
 		result.IsEnabled.Should().BeFalse();
 	}
@@ -337,7 +360,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var sut = CreateSut();
 
 		var act = () =>
-			sut.SetDefaultHourlyRateAsync(new() { Context = ContextFor(workerId), TargetUserId = workerId, DefaultHourlyRate = new(30m) });
+			sut.SetDefaultHourlyRateAsync(new() {
+				Context = ContextFor(workerId),
+				TargetUserId = workerId,
+				DefaultHourlyRate = new(30m),
+			});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -362,9 +389,17 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
-		_ = await sut.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId, Enabled = false });
+		_ = await sut.SetEnabledAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+			Enabled = false,
+		});
 
-		var result = await sut.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId, Enabled = false });
+		var result = await sut.SetEnabledAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+			Enabled = false,
+		});
 
 		result.IsEnabled.Should().BeFalse();
 	}
@@ -375,7 +410,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
 
-		var act = () => sut.SetEnabledAsync(new() { Context = ContextFor(workerId), TargetUserId = workerId, Enabled = false });
+		var act = () => sut.SetEnabledAsync(new() {
+			Context = ContextFor(workerId),
+			TargetUserId = workerId,
+			Enabled = false,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -402,7 +441,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var stampBefore = await GetSecurityStampAsync(workerId);
 		var sut = CreateSut();
 
-		_ = await sut.SetEnabledAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId, Enabled = false });
+		_ = await sut.SetEnabledAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+			Enabled = false,
+		});
 
 		var stampAfter = await GetSecurityStampAsync(workerId);
 		stampAfter.Should().NotBe(stampBefore);
@@ -481,7 +524,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		await SeedTwoFactorEnabledAsync(workerId);
 		var sut = CreateSut();
 
-		_ = await sut.ResetTwoFactorAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId });
+		_ = await sut.ResetTwoFactorAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+		});
 
 		var (enabled, keyProtected) = await GetTwoFactorStateAsync(workerId);
 		enabled.Should().BeFalse();
@@ -496,7 +542,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var stampBefore = await GetSecurityStampAsync(workerId);
 		var sut = CreateSut();
 
-		_ = await sut.ResetTwoFactorAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId });
+		_ = await sut.ResetTwoFactorAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+		});
 
 		var stampAfter = await GetSecurityStampAsync(workerId);
 		stampAfter.Should().NotBe(stampBefore);
@@ -508,7 +557,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
 
-		var act = () => sut.ResetTwoFactorAsync(new() { Context = ContextFor(workerId), TargetUserId = workerId });
+		var act = () => sut.ResetTwoFactorAsync(new() {
+			Context = ContextFor(workerId),
+			TargetUserId = workerId,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -519,7 +571,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (administratorId, _) = await SeedAdministratorAndWorkerAsync();
 		var sut = CreateSut();
 
-		var act = () => sut.ResetTwoFactorAsync(new() { Context = ContextFor(administratorId), TargetUserId = new(administratorId.Value + 999) });
+		var act = () => sut.ResetTwoFactorAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = new(administratorId.Value + 999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -531,7 +586,11 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var stampBefore = await GetSecurityStampAsync(workerId);
 		var sut = CreateSut();
 
-		_ = await sut.AssignRoleAsync(new() { Context = ContextFor(administratorId), TargetUserId = workerId, Role = EmployeeRole.RateManager });
+		_ = await sut.AssignRoleAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+			Role = EmployeeRole.RateManager,
+		});
 
 		var stampAfter = await GetSecurityStampAsync(workerId);
 		stampAfter.Should().NotBe(stampBefore);
@@ -545,7 +604,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		_ = await SeedJobNodeAsync(branchId, administratorId);
 		var sut = CreateSut();
 
-		var result = await sut.SetHomeNodeAsync(new() { Context = ContextFor(workerId), NodeId = branchId });
+		var result = await sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = branchId,
+		});
 
 		result.HomeNodeId.Should().Be(branchId);
 		(await GetHomeNodeIdAsync(workerId)).Should().Be(branchId.Value);
@@ -557,7 +619,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (administratorId, workerId, rootId) = await SeedAdministratorAndWorkerWithRootAsync();
 		var sut = CreateSut();
 
-		var result = await sut.SetHomeNodeAsync(new() { Context = ContextFor(workerId), NodeId = rootId });
+		var result = await sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = rootId,
+		});
 
 		result.HomeNodeId.Should().Be(rootId);
 	}
@@ -570,10 +635,13 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var leafId = await SeedJobNodeAsync(branchId, administratorId);
 		var sut = CreateSut();
 
-		var act = () => sut.SetHomeNodeAsync(new() { Context = ContextFor(workerId), NodeId = leafId });
+		var act = () => sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = leafId,
+		});
 
 		await act.Should().ThrowAsync<InvariantViolationException>()
-			.Where(ex => ex.ConstraintId == "home-node-must-not-be-leaf");
+				 .Where(ex => ex.ConstraintId == "home-node-must-not-be-leaf");
 	}
 
 	[Fact]
@@ -582,7 +650,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var (_, workerId, rootId) = await SeedAdministratorAndWorkerWithRootAsync();
 		var sut = CreateSut();
 
-		var act = () => sut.SetHomeNodeAsync(new() { Context = ContextFor(workerId), NodeId = new JobNodeId(rootId.Value + 999) });
+		var act = () => sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = new JobNodeId(rootId.Value + 999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -594,9 +665,15 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		var branchId = await SeedJobNodeAsync(rootId, administratorId);
 		_ = await SeedJobNodeAsync(branchId, administratorId);
 		var sut = CreateSut();
-		_ = await sut.SetHomeNodeAsync(new() { Context = ContextFor(workerId), NodeId = branchId });
+		_ = await sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = branchId,
+		});
 
-		var result = await sut.SetHomeNodeAsync(new() { Context = ContextFor(workerId), NodeId = null });
+		var result = await sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = null,
+		});
 
 		result.HomeNodeId.Should().BeNull();
 		(await GetHomeNodeIdAsync(workerId)).Should().BeNull();
@@ -813,7 +890,9 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		command.CommandText =
 			"UPDATE identity_user SET two_factor_enabled = @enabled, authenticator_key_protected = @key WHERE app_user_id = @appUserId;";
 		command.AddParameter("@enabled", true);
-		command.AddParameter("@key", new byte[] { 1, 2, 3 });
+		command.AddParameter("@key", new byte[] {
+			1, 2, 3,
+		});
 		command.AddParameter("@appUserId", appUserId.Value);
 
 		_ = await command.ExecuteNonQueryAsync();

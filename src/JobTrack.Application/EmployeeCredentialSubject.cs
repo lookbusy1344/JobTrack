@@ -12,7 +12,5 @@ namespace JobTrack.Application;
 /// </summary>
 public sealed class EmployeeCredentialSubject
 {
-	internal EmployeeCredentialSubject()
-	{
-	}
+	internal EmployeeCredentialSubject() { }
 }

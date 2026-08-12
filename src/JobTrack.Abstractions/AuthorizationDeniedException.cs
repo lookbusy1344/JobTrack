@@ -8,19 +8,13 @@ namespace JobTrack.Abstractions;
 public sealed class AuthorizationDeniedException : JobTrackException
 {
 	/// <summary>Creates an <see cref="AuthorizationDeniedException" />.</summary>
-	public AuthorizationDeniedException()
-	{
-	}
+	public AuthorizationDeniedException() { }
 
 	/// <summary>Creates an <see cref="AuthorizationDeniedException" /> with the given message.</summary>
 	public AuthorizationDeniedException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	/// <summary>Creates an <see cref="AuthorizationDeniedException" /> with the given message and inner exception.</summary>
 	public AuthorizationDeniedException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

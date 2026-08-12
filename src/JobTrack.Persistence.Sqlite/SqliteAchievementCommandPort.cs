@@ -48,10 +48,10 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 	{
 		await using var context = await CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await context.Database
-			.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+												   .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
-						   .FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)
 					   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
 
 		var now = clock.GetCurrentInstant();
@@ -77,9 +77,9 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 		}
 
 		await LeafAchievementTransition.ApplyAsync(
-				context, leafWork, request.NewAchievement, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
-				cancellationToken)
-			.ConfigureAwait(false);
+										   context, leafWork, request.NewAchievement, request.Context.Actor, now, request.Context.CorrelationId, request.Reason,
+										   cancellationToken)
+									   .ConfigureAwait(false);
 
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -113,7 +113,7 @@ internal sealed class SqliteAchievementCommandPort : IAchievementCommandPort
 	{
 		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken)
-			.ConfigureAwait(false);
+															.ConfigureAwait(false);
 
 		if (ancestorOwnerIds.Count == 0) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");

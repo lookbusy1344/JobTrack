@@ -74,7 +74,9 @@ public sealed class DecomposeModel(
 		// way it is: unassigned.
 		var defaultOwnerUserId = CurrentNode?.Node.OwnerUserId?.Value;
 		for (var i = Input.NewChildren.Count; i < MaxNewChildSlots; ++i) {
-			Input.NewChildren.Add(new() { OwnerUserId = defaultOwnerUserId });
+			Input.NewChildren.Add(new() {
+				OwnerUserId = defaultOwnerUserId,
+			});
 		}
 
 		return Page();
@@ -129,7 +131,10 @@ public sealed class DecomposeModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var request = new DecomposeWorkedLeafRequest {
 			Context = context,
 			LeafNodeId = new(LeafNodeId),
@@ -141,7 +146,10 @@ public sealed class DecomposeModel(
 
 		try {
 			var result = await jobTrackClient.Jobs.DecomposeWorkedLeafAsync(request, cancellationToken);
-			return RedirectToPage("/Jobs/Browse", new { nodeId = result.BranchId.Value });
+			return RedirectToPage("/Jobs/Browse", new
+			{
+				nodeId = result.BranchId.Value,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -175,9 +183,21 @@ public sealed class DecomposeModel(
 	{
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(LeafNodeId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new JobNodeId(LeafNodeId),
+				}, cancellationToken);
 			WorkPage = await jobTrackClient.Query.GetLeafWorkPageAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, JobNodeId = new(LeafNodeId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					JobNodeId = new(LeafNodeId),
+				}, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node no longer exists.";
@@ -187,7 +207,12 @@ public sealed class DecomposeModel(
 	private async Task LoadOwnerOptionsAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } },
+			new() {
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
+			},
 			cancellationToken);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Unassigned", string.Empty));
 	}

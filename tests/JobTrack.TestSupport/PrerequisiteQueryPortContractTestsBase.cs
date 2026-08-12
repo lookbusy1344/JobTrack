@@ -182,14 +182,20 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IAchievementCommandPort CreateAchievementPort(string connectionString);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>Attaches LeafWork to a seeded leaf and drives it Waiting -&gt; InProgress -&gt; Success.</summary>
 	private async Task SucceedAsync(JobNodeId nodeId)
 	{
 		var context = ContextFor(seededAdministratorId);
 		var attached = await CreateJobCommandPort(database.ConnectionString)
-			.AttachLeafWorkAsync(new() { Context = context, JobNodeId = nodeId });
+			.AttachLeafWorkAsync(new() {
+				Context = context,
+				JobNodeId = nodeId,
+			});
 		var achievementPort = CreateAchievementPort(database.ConnectionString);
 		var inProgress = await achievementPort.SetAchievementAsync(new() {
 			Context = context,
@@ -257,6 +263,4 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 
 		return (required.Id, dependent.Id, unrelated.Id);
 	}
-
-
 }

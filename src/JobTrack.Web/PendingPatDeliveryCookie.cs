@@ -57,7 +57,9 @@ internal static class PendingPatDeliveryCookie
 	// encrypted and never sent to a browser as literal JSON/HTML, so there is no injection surface
 	// to defend against by escaping, and the relaxed encoder keeps a non-ASCII label's actual
 	// footprint close to CanDeliver's byte-count estimate instead of triple-counting it.
-	private static readonly JsonSerializerOptions SerializerOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+	private static readonly JsonSerializerOptions SerializerOptions = new() {
+		Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+	};
 
 	/// <summary>
 	///     True when a token issued under <paramref name="label" /> would fit the cookie's payload
@@ -106,7 +108,7 @@ internal static class PendingPatDeliveryCookie
 	///     rather than a bystander request destroying it before the real owner ever sees it.
 	/// </summary>
 	internal static bool TryConsume(HttpContext httpContext, IDataProtectionProvider dataProtectionProvider, AppUserId actor, out string label,
-		out string plaintext)
+									out string plaintext)
 	{
 		ArgumentNullException.ThrowIfNull(httpContext);
 		ArgumentNullException.ThrowIfNull(dataProtectionProvider);

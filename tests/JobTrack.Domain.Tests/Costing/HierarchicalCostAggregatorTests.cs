@@ -17,8 +17,12 @@ public sealed class HierarchicalCostAggregatorTests
 	public void A_leaf_with_a_recorded_cost_reports_that_cost()
 	{
 		var leaf = Leaf(LeftId, RootId);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [LeftId] = leaf };
-		var leafCosts = new Dictionary<JobNodeId, Money> { [LeftId] = new(42m) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[LeftId] = leaf,
+		};
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[LeftId] = new(42m),
+		};
 
 		var costs = HierarchicalCostAggregator.Aggregate(LeftId, nodes, leafCosts);
 
@@ -29,7 +33,9 @@ public sealed class HierarchicalCostAggregatorTests
 	public void A_leaf_without_sessions_costs_zero()
 	{
 		var leaf = Leaf(LeftId, RootId);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [LeftId] = leaf };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[LeftId] = leaf,
+		};
 
 		var costs = HierarchicalCostAggregator.Aggregate(LeftId, nodes, new Dictionary<JobNodeId, Money>());
 
@@ -42,8 +48,15 @@ public sealed class HierarchicalCostAggregatorTests
 		var left = Leaf(LeftId, RootId);
 		var right = Leaf(RightId, RootId);
 		var root = new HierarchyNode(RootId, null, [LeftId, RightId], null);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RootId] = root, [LeftId] = left, [RightId] = right };
-		var leafCosts = new Dictionary<JobNodeId, Money> { [LeftId] = new(10m), [RightId] = new(15m) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RootId] = root,
+			[LeftId] = left,
+			[RightId] = right,
+		};
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[LeftId] = new(10m),
+			[RightId] = new(15m),
+		};
 
 		var costs = HierarchicalCostAggregator.Aggregate(RootId, nodes, leafCosts);
 
@@ -64,7 +77,10 @@ public sealed class HierarchicalCostAggregatorTests
 			[RightId] = right,
 			[grandchildId] = grandchild,
 		};
-		var leafCosts = new Dictionary<JobNodeId, Money> { [grandchildId] = new(5m), [RightId] = new(7m) };
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[grandchildId] = new(5m),
+			[RightId] = new(7m),
+		};
 
 		var costs = HierarchicalCostAggregator.Aggregate(RootId, nodes, leafCosts);
 
@@ -86,11 +102,16 @@ public sealed class HierarchicalCostAggregatorTests
 			[RightId] = right,
 			[grandchildId] = grandchild,
 		};
-		var leafCosts = new Dictionary<JobNodeId, Money> { [grandchildId] = new(5m), [RightId] = new(7m) };
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[grandchildId] = new(5m),
+			[RightId] = new(7m),
+		};
 
 		var totals = HierarchicalCostAggregator.SumSubtreeTotals([RootId, LeftId, RightId, grandchildId], nodes, leafCosts);
 
-		foreach (var rootId in new[] { RootId, LeftId, RightId, grandchildId }) {
+		foreach (var rootId in new[] {
+					 RootId, LeftId, RightId, grandchildId,
+				 }) {
 			totals[rootId].Should().Be(
 				HierarchicalCostAggregator.Aggregate(rootId, nodes, leafCosts)[rootId],
 				$"the summed total for {rootId.Value} must equal its own full aggregation");
@@ -103,8 +124,14 @@ public sealed class HierarchicalCostAggregatorTests
 		var left = Leaf(LeftId, RootId);
 		var right = Leaf(RightId, RootId);
 		var root = new HierarchyNode(RootId, null, [LeftId, RightId], null);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RootId] = root, [LeftId] = left, [RightId] = right };
-		var leafCosts = new Dictionary<JobNodeId, Money> { [LeftId] = new(10m) };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RootId] = root,
+			[LeftId] = left,
+			[RightId] = right,
+		};
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[LeftId] = new(10m),
+		};
 
 		var totals = HierarchicalCostAggregator.SumSubtreeTotals([RootId, LeftId, RightId], nodes, leafCosts);
 
@@ -129,7 +156,10 @@ public sealed class HierarchicalCostAggregatorTests
 			[new(8)] = foreignRoot,
 			[foreignId] = foreign,
 		};
-		var leafCosts = new Dictionary<JobNodeId, Money> { [LeftId] = new(10m), [foreignId] = new(99m) };
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[LeftId] = new(10m),
+			[foreignId] = new(99m),
+		};
 
 		var totals = HierarchicalCostAggregator.SumSubtreeTotals([RootId], nodes, leafCosts);
 
@@ -152,7 +182,9 @@ public sealed class HierarchicalCostAggregatorTests
 			nodes[id] = new(id, parentId, [new(level + 1)], null);
 		}
 
-		var leafCosts = new Dictionary<JobNodeId, Money> { [leafId] = new(1m) };
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[leafId] = new(1m),
+		};
 
 		var totals = HierarchicalCostAggregator.SumSubtreeTotals([new(0)], nodes, leafCosts);
 
@@ -174,7 +206,9 @@ public sealed class HierarchicalCostAggregatorTests
 			nodes[id] = new(id, parentId, [new(level + 1)], null);
 		}
 
-		var leafCosts = new Dictionary<JobNodeId, Money> { [leafId] = new(1m) };
+		var leafCosts = new Dictionary<JobNodeId, Money> {
+			[leafId] = new(1m),
+		};
 
 		var costs = HierarchicalCostAggregator.Aggregate(new(0), nodes, leafCosts);
 

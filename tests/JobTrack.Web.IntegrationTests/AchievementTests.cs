@@ -6,15 +6,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for achievement updates (unified-leaf-workflow plan Stage 5, ADR 0001/0045):
@@ -54,7 +47,10 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -72,7 +68,7 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Getting_the_achievement_page_redirects_to_the_unified_work_pages_status_section()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.redirect", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.redirect");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Redirect check");
 		var authCookie = await client.SignInAsync("achievement.redirect");
 
@@ -87,7 +83,7 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_work_page_shows_humanized_achievement_labels_not_raw_enum_names()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.dropdown", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.dropdown");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Label check");
 		var authCookie = await client.SignInAsync("achievement.dropdown");
 
@@ -104,7 +100,7 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_move_their_own_leaf_forward_to_in_progress()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.worker");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Pour foundation");
 		var authCookie = await client.SignInAsync("achievement.worker");
 
@@ -119,10 +115,13 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_cannot_reopen_a_terminal_achievement()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.reopen-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.reopen-worker");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Cancelled job");
 		var cancelled = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 			NewAchievement = Achievement.Cancelled,
 			Reason = "Client withdrew the request.",
@@ -141,11 +140,14 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_administrator_can_reopen_a_terminal_achievement()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.reopen-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.reopen-target");
 		var adminUserId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.reopen-admin", EmployeeRole.Administrator);
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Cancelled job for reopening");
 		var cancelled = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 			NewAchievement = Achievement.Cancelled,
 			Reason = "Client withdrew the request.",
@@ -165,10 +167,13 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_change_outcome_dropdown_offers_success_for_an_in_progress_leaf_not_only_cancel_or_unsuccessful()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.dropdown-success", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.dropdown-success");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Dropdown offers success");
 		_ = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 			WorkedByUserId = workerId,
 		});
@@ -189,15 +194,21 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_controlling_worker_can_change_an_in_progress_leafs_outcome_to_success_via_the_change_outcome_dropdown()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.dropdown-set-success", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achievement.dropdown-set-success");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Change outcome to success");
 		var session = await seedClient.Work.StartWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 			WorkedByUserId = workerId,
 		});
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = session.Id,
 			Version = session.Version,
 		});
@@ -209,21 +220,33 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var leafWork = await seedClient.Query.GetLeafWorkAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id });
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = leaf.Id,
+			});
 		leafWork.Achievement.Should().Be(Achievement.Success);
 	}
 
 	private async Task<JobNodeResult> AddWorkedLeafAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 
@@ -268,9 +291,4 @@ public sealed partial class AchievementTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
-
-
 }

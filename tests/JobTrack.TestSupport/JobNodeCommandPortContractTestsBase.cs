@@ -71,7 +71,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_node", EntityId = branch.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_node",
+				EntityId = branch.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle();
 		audit.Events[0].Operation.Should().Be("create-job-node");
@@ -172,7 +175,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
+			BeginWork = new() {
+				WorkedByUserId = workerId,
+			},
+		});
 
 		leaf.HasLeafWork.Should().BeTrue();
 		(await ReadAchievementIdAsync(leaf.Id)).Should().Be((long)Achievement.InProgress);
@@ -188,20 +195,27 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var correlationId = Guid.NewGuid();
 
 		var leaf = await port.AddChildAsync(new() {
-			Context = new() { Actor = jobManagerId, CorrelationId = correlationId },
+			Context = new() {
+				Actor = jobManagerId,
+				CorrelationId = correlationId,
+			},
 			ParentId = rootId,
 			Description = "Started on creation",
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
-			BeginWork = new() { WorkedByUserId = workerId },
+			BeginWork = new() {
+				WorkedByUserId = workerId,
+			},
 		});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { CorrelationId = correlationId }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				CorrelationId = correlationId,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Select(e => e.Operation).Should()
-			.BeEquivalentTo("create-job-node", "attach-leaf-work", "set-achievement", "start-work-session");
+			 .BeEquivalentTo("create-job-node", "attach-leaf-work", "set-achievement", "start-work-session");
 		audit.Events.Should().OnlyContain(e => e.ActorId == jobManagerId);
 		audit.Events.Single(e => e.Operation == "attach-leaf-work").EntityId.Should().Be(leaf.Id.Value);
 	}
@@ -216,7 +230,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, null, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, null, rootId) with {
+			BeginWork = new() {
+				WorkedByUserId = workerId,
+			},
+		});
 
 		leaf.OwnerUserId.Should().Be(workerId);
 		(await ReadOwnerUserIdAsync(leaf.Id)).Should().Be(workerId.Value);
@@ -230,7 +248,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
-			BeginWork = new() { WorkedByUserId = otherWorkerId },
+			BeginWork = new() {
+				WorkedByUserId = otherWorkerId,
+			},
 		});
 
 		leaf.OwnerUserId.Should().Be(workerId);
@@ -246,7 +266,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var childrenBefore = await CountChildrenAsync(rootId);
 
 		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId) with {
-			BeginWork = new() { WorkedByUserId = requesterId },
+			BeginWork = new() {
+				WorkedByUserId = requesterId,
+			},
 		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -266,10 +288,16 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 		var anchor = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = anchor.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = anchor.Id,
+		});
 
 		var act = () => port.AddChildAsync(CreateRequest(jobManagerId, workerId, anchor.Id) with {
-			BeginWork = new() { WorkedByUserId = workerId },
+			BeginWork = new() {
+				WorkedByUserId = workerId,
+			},
 		});
 
 		await act.Should().ThrowAsync<PrerequisiteBlockedException>();
@@ -283,7 +311,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var childrenBefore = await CountChildrenAsync(rootId);
 
-		var act = () => port.AddChildAsync(CreateRequest(workerId, workerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
+		var act = () => port.AddChildAsync(CreateRequest(workerId, workerId, rootId) with {
+			BeginWork = new() {
+				WorkedByUserId = workerId,
+			},
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		(await CountChildrenAsync(rootId)).Should().Be(childrenBefore);
@@ -412,7 +444,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_node", EntityId = leaf.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_node",
+				EntityId = leaf.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle(e => e.Operation == "edit-job-node");
 	}
@@ -534,7 +569,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var dependent = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
 		var act = () => port.MoveAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -591,7 +630,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		var result = await port.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = branch.Id, Version = branch.Version });
+		var result = await port.ArchiveAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = branch.Id,
+			Version = branch.Version,
+		});
 
 		result.ArchivedAt.Should().NotBeNull();
 		result.Version.Should().Be(2);
@@ -614,7 +657,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		await port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = branch.Id, Version = branch.Version });
+		await port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = branch.Id,
+			Version = branch.Version,
+		});
 
 		var act = () => port.EditAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -635,7 +682,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var parent = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		_ = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, parent.Id));
 
-		var act = () => port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = parent.Id, Version = parent.Version });
+		var act = () => port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = parent.Id,
+			Version = parent.Version,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-has-children-cannot-delete");
@@ -647,7 +698,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var act = () => port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = rootId, Version = 1 });
+		var act = () => port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = rootId,
+			Version = 1,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-is-root-cannot-delete");
@@ -660,9 +715,17 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var dependent = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
-		var act = () => port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = required.Id, Version = required.Version });
+		var act = () => port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = required.Id,
+			Version = required.Version,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-has-prerequisites-cannot-delete");
@@ -674,9 +737,16 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
-		await port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = leaf.Id, Version = leaf.Version });
+		await port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = leaf.Id,
+			Version = leaf.Version,
+		});
 
 		var act = () => port.EditAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -708,7 +778,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		await SeedJobRequestAsync(requestLeaf.Id, requesterId, holdingAreaId);
 		await SeedJobRequestNoteAsync(requestLeaf.Id, requesterId, "Any update on this?");
 
-		await port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = requestLeaf.Id, Version = requestLeaf.Version });
+		await port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = requestLeaf.Id,
+			Version = requestLeaf.Version,
+		});
 
 		(await CountRowsForNodeAsync("job_request", "job_node_id", requestLeaf.Id)).Should().Be(0);
 		(await CountRowsForNodeAsync("job_request_note", "job_node_id", requestLeaf.Id)).Should().Be(0);
@@ -727,7 +801,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 		await SeedNodeRateOverrideAsync(leaf.Id, workerId);
 
-		await port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = leaf.Id, Version = leaf.Version });
+		await port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = leaf.Id,
+			Version = leaf.Version,
+		});
 
 		(await CountRowsForNodeAsync("node_rate_override", "node_id", leaf.Id)).Should().Be(0);
 	}
@@ -745,7 +823,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var holdingNode = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		_ = await SeedHoldingAreaAsync(holdingNode.Id, "IT Intake");
 
-		var act = () => port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = holdingNode.Id, Version = holdingNode.Version });
+		var act = () => port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = holdingNode.Id,
+			Version = holdingNode.Version,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-holding-area-anchored");
@@ -790,7 +872,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 		_ = await SeedWorkSessionAsync(leaf.Id, workerId, DateTimeOffset.Parse("2026-01-01T09:00:00Z", CultureInfo.InvariantCulture),
 			DateTimeOffset.Parse("2026-01-01T10:00:00Z", CultureInfo.InvariantCulture));
 
@@ -811,11 +896,18 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.delete-no-reason", EmployeeRole.Administrator);
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 		_ = await SeedWorkSessionAsync(leaf.Id, workerId, DateTimeOffset.Parse("2026-01-01T09:00:00Z", CultureInfo.InvariantCulture),
 			DateTimeOffset.Parse("2026-01-01T10:00:00Z", CultureInfo.InvariantCulture));
 
-		var act = () => port.DeleteAsync(new() { Context = ContextFor(administratorId), NodeId = leaf.Id, Version = leaf.Version });
+		var act = () => port.DeleteAsync(new() {
+			Context = ContextFor(administratorId),
+			NodeId = leaf.Id,
+			Version = leaf.Version,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-delete-worked-leaf-reason-required");
@@ -828,7 +920,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var administratorId = await SeedEmployeeAsync("Ada Admin", "ada.admin.delete-with-reason", EmployeeRole.Administrator);
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 		_ = await SeedWorkSessionAsync(leaf.Id, workerId, DateTimeOffset.Parse("2026-01-01T09:00:00Z", CultureInfo.InvariantCulture),
 			DateTimeOffset.Parse("2026-01-01T10:00:00Z", CultureInfo.InvariantCulture));
 
@@ -917,7 +1012,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var child = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, branch.Id));
 		var grandchild = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, child.Id));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = grandchild.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = grandchild.Id,
+		});
 		_ = await SeedWorkSessionAsync(grandchild.Id, workerId, DateTimeOffset.Parse("2026-01-01T09:00:00Z", CultureInfo.InvariantCulture),
 			DateTimeOffset.Parse("2026-01-01T10:00:00Z", CultureInfo.InvariantCulture));
 
@@ -933,7 +1031,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		result.WorkSessionCount.Should().Be(1);
 		result.TotalWorkedDuration.Should().Be(Duration.FromHours(1));
 
-		foreach (var deleted in new[] { branch.Id, child.Id, grandchild.Id }) {
+		foreach (var deleted in new[] {
+					 branch.Id, child.Id, grandchild.Id,
+				 }) {
 			var act = () => port.EditAsync(new() {
 				Context = ContextFor(jobManagerId),
 				NodeId = deleted,
@@ -955,7 +1055,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var doomed = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var doomedChild = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, doomed.Id));
 		var survivor = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = doomedChild.Id, DependentJobId = survivor.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = doomedChild.Id,
+			DependentJobId = survivor.Id,
+		});
 
 		var result = await port.DeleteSubtreeAsync(new() {
 			Context = ContextFor(administratorId),
@@ -987,7 +1091,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		var child = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, branch.Id));
 
-		var result = await port.ArchiveSubtreeAsync(new() { Context = ContextFor(administratorId), RootId = branch.Id, Version = branch.Version });
+		var result = await port.ArchiveSubtreeAsync(new() {
+			Context = ContextFor(administratorId),
+			RootId = branch.Id,
+			Version = branch.Version,
+		});
 
 		result.NodeCount.Should().Be(2);
 		result.NewlyArchivedCount.Should().Be(2);
@@ -1013,7 +1121,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		// Owned by the worker for the same reason as A_non_administrator_cannot_delete_a_subtree.
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		var act = () => port.ArchiveSubtreeAsync(new() { Context = ContextFor(workerId), RootId = branch.Id, Version = branch.Version });
+		var act = () => port.ArchiveSubtreeAsync(new() {
+			Context = ContextFor(workerId),
+			RootId = branch.Id,
+			Version = branch.Version,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -1043,7 +1155,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		var act = () => port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = branch.Id, Version = branch.Version + 1 });
+		var act = () => port.DeleteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = branch.Id,
+			Version = branch.Version + 1,
+		});
 
 		await act.Should().ThrowAsync<ConcurrencyConflictException>();
 	}
@@ -1074,7 +1190,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var branch = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		_ = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, branch.Id));
 
-		var act = () => port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = branch.Id });
+		var act = () => port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = branch.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-has-children-cannot-attach-leaf-work");
@@ -1086,7 +1205,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 
-		var act = () => port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = rootId });
+		var act = () => port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = rootId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-is-root-cannot-attach-leaf-work");
@@ -1098,9 +1220,15 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
-		var act = () => port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		var act = () => port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("leaf-work-already-attached");
@@ -1114,7 +1242,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, otherWorkerId, rootId));
 
-		var act = () => port.AttachLeafWorkAsync(new() { Context = ContextFor(workerId), JobNodeId = leaf.Id });
+		var act = () => port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(workerId),
+			JobNodeId = leaf.Id,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -1125,7 +1256,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id, FullCriteria = "Done when shipped" });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+			FullCriteria = "Done when shipped",
+		});
 		var sessionId = await SeedWorkSessionAsync(leaf.Id, workerId, DateTimeOffset.UtcNow.AddHours(-2), DateTimeOffset.UtcNow.AddHours(-1));
 		var beforeDecompose = await ReadWorkSessionPreservedFieldsAsync(sessionId);
 
@@ -1136,7 +1271,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			BranchDescription = "Umbrella job",
 			ExistingWorkDescription = "The work already done",
 			NewChildren = [
-				new() { Description = "New sub-job", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					Description = "New sub-job", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -1191,7 +1328,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
-		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with { BeginWork = new() { WorkedByUserId = workerId } });
+		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId) with {
+			BeginWork = new() {
+				WorkedByUserId = workerId,
+			},
+		});
 		var sessionId = await ReadActiveSessionIdAsync(leaf.Id);
 		var beforeDecompose = await ReadWorkSessionPreservedFieldsAsync(sessionId);
 
@@ -1202,7 +1343,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			BranchDescription = "Umbrella job",
 			ExistingWorkDescription = "The work already under way",
 			NewChildren = [
-				new() { Description = "Newly identified sub-job", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					Description = "Newly identified sub-job", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -1227,7 +1370,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var requesterId = await SeedEmployeeAsync("Requesting User", "requesting.user.decompose-owner", EmployeeRole.Requester);
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
 		var act = () => port.DecomposeWorkedLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -1236,7 +1382,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			BranchDescription = "Umbrella job",
 			ExistingWorkDescription = "The work already done",
 			NewChildren = [
-				new() { Description = "Requester-owned child", OwnerUserId = requesterId, Priority = Priority.Medium },
+				new() {
+					Description = "Requester-owned child", OwnerUserId = requesterId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -1251,7 +1399,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var portA = CreateCommandPort(database.ConnectionString);
 		var portB = CreateCommandPort(database.ConnectionString);
 		var leaf = await portA.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		_ = await portA.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await portA.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
 		var results = await Task.WhenAll(
 			TryDecomposeAsync(portA, jobManagerId, leaf),
@@ -1303,8 +1454,12 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Version = leaf.Version,
 			BranchDescription = "Umbrella job",
 			NewChildren = [
-				new() { Description = "First named child", OwnerUserId = workerId, Priority = Priority.Medium },
-				new() { Description = "Second named child", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					Description = "First named child", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
+				new() {
+					Description = "Second named child", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -1367,7 +1522,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Version = branch.Version,
 			BranchDescription = "Umbrella job",
 			NewChildren = [
-				new() { Description = "Another child", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					Description = "Another child", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -1381,7 +1538,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var (rootId, jobManagerId, workerId) = await SeedRootAndUsersAsync();
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		_ = await port.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leaf.Id });
+		_ = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
 		var act = () => port.DecomposeWorkedLeafAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -1446,7 +1606,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		branch.Kind.Should().Be(NodeKind.Branch);
 		branch.ParentId.Should().Be(rootId);
 
-		var act = () => port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = childAId, DependentJobId = childBId });
+		var act = () => port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = childAId,
+			DependentJobId = childBId,
+		});
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-already-exists");
 	}
@@ -1462,7 +1626,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(jobManagerId),
 			ParentId = rootId,
 			Nodes = [
-				new() { LocalId = 1, Description = "Imported node", OwnerUserId = requesterId, Priority = Priority.Medium },
+				new() {
+					LocalId = 1, Description = "Imported node", OwnerUserId = requesterId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -1508,13 +1674,18 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(jobManagerId),
 			ParentId = rootId,
 			Nodes = [
-				new() { LocalId = 1, Description = "Solo node", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					LocalId = 1, Description = "Solo node", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_node", EntityId = rootId.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_node",
+				EntityId = rootId.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle(e => e.Operation == "import-subtree");
 	}
@@ -1529,7 +1700,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Context = ContextFor(workerId),
 			ParentId = rootId,
 			Nodes = [
-				new() { LocalId = 1, Description = "Solo node", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					LocalId = 1, Description = "Solo node", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -1593,10 +1766,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 					OwnerUserId = workerId,
 					Priority = Priority.Medium,
 					LeafWork = new() {
-						WorkedByUserId = workerId,
-						StartedAt = now - Duration.FromDays(3),
-						FinishedAt = now - Duration.FromDays(2),
-						Achievement = Achievement.Success,
+						WorkedByUserId = workerId, StartedAt = now - Duration.FromDays(3), FinishedAt = now - Duration.FromDays(2), Achievement = Achievement.Success,
 					},
 				},
 				new() {
@@ -1648,7 +1818,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 						FinishedAt = now - Duration.FromDays(3),
 						Achievement = achievement,
 						AdditionalSessions = [
-							new() { WorkedByUserId = workerId, StartedAt = now - Duration.FromDays(2), FinishedAt = now - Duration.FromDays(1) },
+							new() {
+								WorkedByUserId = workerId, StartedAt = now - Duration.FromDays(2), FinishedAt = now - Duration.FromDays(1),
+							},
 						],
 					},
 				},
@@ -1684,7 +1856,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 						FinishedAt = now - Duration.FromDays(1),
 						Achievement = Achievement.Success,
 						AdditionalSessions = [
-							new() { WorkedByUserId = workerId, StartedAt = now + Duration.FromDays(1), FinishedAt = null },
+							new() {
+								WorkedByUserId = workerId, StartedAt = now + Duration.FromDays(1), FinishedAt = null,
+							},
 						],
 					},
 				},
@@ -1724,7 +1898,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var leafId = imported.Nodes.Single().JobNodeId;
 		var version = await ReadNodeVersionAsync(leafId);
 
-		var act = () => port.ArchiveAsync(new() { Context = ContextFor(jobManagerId), NodeId = leafId, Version = version });
+		var act = () => port.ArchiveAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = leafId,
+			Version = version,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("leaf-closure-active-sessions");
@@ -1743,7 +1921,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		// about the batch's own edges alone.
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 		var anchor = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = anchor.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = anchor.Id,
+		});
 
 		var childrenBefore = await CountChildrenAsync(anchor.Id);
 
@@ -1757,10 +1939,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 					OwnerUserId = workerId,
 					Priority = Priority.Medium,
 					LeafWork = new() {
-						WorkedByUserId = workerId,
-						StartedAt = now - Duration.FromHours(2),
-						FinishedAt = now - Duration.FromHours(1),
-						Achievement = Achievement.Success,
+						WorkedByUserId = workerId, StartedAt = now - Duration.FromHours(2), FinishedAt = now - Duration.FromHours(1), Achievement = Achievement.Success,
 					},
 				},
 			],
@@ -1789,10 +1968,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 					OwnerUserId = workerId,
 					Priority = Priority.Medium,
 					LeafWork = new() {
-						WorkedByUserId = workerId,
-						StartedAt = now + Duration.FromDays(1),
-						FinishedAt = now + Duration.FromDays(2),
-						Achievement = Achievement.Success,
+						WorkedByUserId = workerId, StartedAt = now + Duration.FromDays(1), FinishedAt = now + Duration.FromDays(2), Achievement = Achievement.Success,
 					},
 				},
 			],
@@ -1830,7 +2006,9 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { CorrelationId = commandContext.CorrelationId }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				CorrelationId = commandContext.CorrelationId,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 		audit.Events.Count(e => e.Operation == "set-home-node").Should().Be(2);
 		audit.Events.Should().OnlyContain(e => e.ActorId == jobManagerId);
 	}
@@ -2083,7 +2261,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 		var dependent = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
 		var act = () => port.AddPrerequisiteAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -2122,7 +2304,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var leaf = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		var act = () => port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = leaf.Id, DependentJobId = leaf.Id });
+		var act = () => port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = leaf.Id,
+			DependentJobId = leaf.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-not-self");
@@ -2174,9 +2360,17 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var a = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 		var b = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = a.Id, DependentJobId = b.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = a.Id,
+			DependentJobId = b.Id,
+		});
 
-		var act = () => port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = b.Id, DependentJobId = a.Id });
+		var act = () => port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = b.Id,
+			DependentJobId = a.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-would-cycle");
@@ -2189,11 +2383,23 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var required = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 		var dependent = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
-		await port.RemovePrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await port.RemovePrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(jobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(jobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 	}
 
 	[Fact]
@@ -2244,7 +2450,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 
-		var result = await port.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassigned.Id });
+		var result = await port.PickUpAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = unassigned.Id,
+		});
 
 		result.OwnerUserId.Should().Be(workerId);
 	}
@@ -2262,11 +2471,17 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 
-		_ = await port.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassigned.Id });
+		_ = await port.PickUpAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = unassigned.Id,
+		});
 
 		var auditPort = CreateAuditQueryPort(database.ConnectionString);
 		var audit = await auditPort.SearchAuditEventsAsync(
-			new() { EntityType = "job_node", EntityId = unassigned.Id.Value }, null, AuditSearchTestDefaults.AllRowsLimit);
+			new() {
+				EntityType = "job_node",
+				EntityId = unassigned.Id.Value,
+			}, null, AuditSearchTestDefaults.AllRowsLimit);
 
 		audit.Events.Should().ContainSingle(e => e.Operation == "pick-up-job-node");
 		audit.Events[0].ActorId.Should().Be(workerId);
@@ -2280,8 +2495,14 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var owned = await port.AddChildAsync(CreateRequest(jobManagerId, workerId, rootId));
 
-		var workerAttempt = () => port.PickUpAsync(new() { Context = ContextFor(otherWorkerId), NodeId = owned.Id });
-		var jobManagerAttempt = () => port.PickUpAsync(new() { Context = ContextFor(jobManagerId), NodeId = owned.Id });
+		var workerAttempt = () => port.PickUpAsync(new() {
+			Context = ContextFor(otherWorkerId),
+			NodeId = owned.Id,
+		});
+		var jobManagerAttempt = () => port.PickUpAsync(new() {
+			Context = ContextFor(jobManagerId),
+			NodeId = owned.Id,
+		});
 
 		(await workerAttempt.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-already-claimed");
@@ -2309,7 +2530,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 
-		_ = await port.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassignedBranch.Id });
+		_ = await port.PickUpAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = unassignedBranch.Id,
+		});
 
 		var result = await port.EditAsync(new() {
 			Context = ContextFor(workerId),
@@ -2337,7 +2561,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 
-		var act = () => port.PickUpAsync(new() { Context = ContextFor(auditorId), NodeId = unassigned.Id });
+		var act = () => port.PickUpAsync(new() {
+			Context = ContextFor(auditorId),
+			NodeId = unassigned.Id,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -2361,7 +2588,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			DependentJobId = unassignedDependent.Id,
 		});
 
-		var result = await port.PickUpAsync(new() { Context = ContextFor(workerId), NodeId = unassignedDependent.Id });
+		var result = await port.PickUpAsync(new() {
+			Context = ContextFor(workerId),
+			NodeId = unassignedDependent.Id,
+		});
 
 		result.OwnerUserId.Should().Be(workerId);
 	}
@@ -2384,7 +2614,10 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	/// <summary>PostgreSQL binds <see cref="DateTimeOffset" /> directly; SQLite needs ADR 0007's unix-epoch-ticks encoding.</summary>
 	protected abstract object EncodeInstant(DateTimeOffset value);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static CreateJobNodeRequest CreateRequest(AppUserId actor, AppUserId? owner, JobNodeId parentId) => new() {
 		Context = ContextFor(actor),
@@ -2638,8 +2871,4 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		command.AddParameter("@appUserId", appUserId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
-
-
-
-
 }

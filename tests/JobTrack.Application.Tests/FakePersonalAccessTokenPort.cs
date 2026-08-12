@@ -52,15 +52,15 @@ internal sealed class FakePersonalAccessTokenPort : IPersonalAccessTokenPort
 
 		return Task.FromResult(EquatableArray.CopyOf(
 			_tokens.Where(t => t.AppUserId == request.TargetUserId)
-				.OrderByDescending(t => t.CreatedAt)
-				.Select(t => new PersonalAccessTokenSummaryResult {
-					Id = t.Id,
-					Label = t.Label,
-					CreatedAt = t.CreatedAt,
-					ExpiresAt = t.ExpiresAt,
-					RevokedAt = t.RevokedAt,
-					LastUsedAt = null,
-				})));
+				   .OrderByDescending(t => t.CreatedAt)
+				   .Select(t => new PersonalAccessTokenSummaryResult {
+					   Id = t.Id,
+					   Label = t.Label,
+					   CreatedAt = t.CreatedAt,
+					   ExpiresAt = t.ExpiresAt,
+					   RevokedAt = t.RevokedAt,
+					   LastUsedAt = null,
+				   })));
 	}
 
 	public Task RevokeAsync(RevokePersonalAccessTokenRequest request, CancellationToken cancellationToken = default)
@@ -98,7 +98,10 @@ internal sealed class FakePersonalAccessTokenPort : IPersonalAccessTokenPort
 		}
 
 		return Task.FromResult<AuthenticatedPersonalAccessTokenResult?>(
-			new() { UserId = token.AppUserId, TokenId = token.Id });
+			new() {
+				UserId = token.AppUserId,
+				TokenId = token.Id,
+			});
 	}
 
 	public void SeedRoles(AppUserId userId, params EmployeeRole[] roles)

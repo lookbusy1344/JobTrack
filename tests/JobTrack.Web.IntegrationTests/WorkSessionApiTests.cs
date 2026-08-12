@@ -8,16 +8,9 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the external HTTP API's work-session surface (plan §4.3 slice 2, ADR
@@ -62,7 +55,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -125,12 +121,18 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 	private async Task StartAndFinishSessionAsync(AppUserId workerId, JobNodeId leafId)
 	{
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 		});
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 		});
@@ -160,7 +162,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var authCookie = await client.SignInAsync("sessions.finish.worker");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 		});
@@ -188,7 +193,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var authCookie = await client.SignInAsync("sessions.finish.wrong-node");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 		});
@@ -212,7 +220,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var authCookie = await client.SignInAsync("sessions.finish.retry");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 		});
@@ -236,7 +247,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var start = Instant.FromUtc(2026, 1, 1, 9, 0);
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = start,
@@ -271,7 +285,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var authCookie = await client.SignInAsync("sessions.correct.wrong-node");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = Instant.FromUtc(2026, 1, 1, 9, 0),
@@ -319,7 +336,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "sessions.foreign.bearer-other");
 		var leafId = await AddChildAsync(rootId, otherWorkerId, "Fit cabinets");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -336,7 +356,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "sessions.bearer.worker");
 		var leafId = await AddChildAsync(rootId, workerId, "Fit cabinets");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -378,13 +401,19 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, userName);
 		var leafId = await AddChildAsync(rootId, workerId, $"{closure} history leaf");
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = Instant.FromUtc(2026, 1, 1, 9, 0),
 		});
 		var finished = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 			FinishedAt = Instant.FromUtc(2026, 1, 1, 10, 0),
@@ -412,7 +441,7 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		correctionResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		listResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		listed.RootElement.GetProperty("items").EnumerateArray().Should().ContainSingle()
-			.Which.GetProperty("finishedAt").ValueKind.Should().Be(JsonValueKind.String);
+			  .Which.GetProperty("finishedAt").ValueKind.Should().Be(JsonValueKind.String);
 	}
 
 	private async Task CloseLeafAsync(JobNodeId leafId, ClosedLeafKind closure)
@@ -420,18 +449,27 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 		switch (closure) {
 			case ClosedLeafKind.Terminal:
 				var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
-					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = administratorId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = leafId,
 				});
 				var inProgress = await seedClient.Work.SetAchievementAsync(new() {
-					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = administratorId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = leafId,
 					NewAchievement = Achievement.InProgress,
 					Reason = "Prepare terminal API fixture",
 					Version = leafWork.Version,
 				});
 				_ = await seedClient.Work.SetAchievementAsync(new() {
-					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = administratorId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = leafId,
 					NewAchievement = Achievement.Success,
 					Reason = "Close terminal API fixture",
@@ -440,11 +478,17 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 				break;
 			case ClosedLeafKind.Archived:
 				var node = await seedClient.Query.GetJobNodeAsync(new() {
-					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = administratorId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					NodeId = leafId,
 				});
 				_ = await seedClient.Jobs.ArchiveAsync(new() {
-					Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = administratorId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					NodeId = leafId,
 					Version = node.Node.Version,
 				});
@@ -456,7 +500,10 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 
 	private async Task<IssuedPersonalAccessTokenResult> IssueTokenAsync(AppUserId workerId, string label) =>
 		await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = label,
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -475,14 +522,20 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = result.Id,
 		});
 
@@ -526,7 +579,4 @@ public sealed partial class WorkSessionApiTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
 }

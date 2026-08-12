@@ -3,10 +3,8 @@ namespace JobTrack.Web.IntegrationTests;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using AwesomeAssertions;
-using Database;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
 using TestSupport;
 using Program = Program;
@@ -40,9 +38,7 @@ public sealed class ProductionSecurityConfigurationTests : IAsyncLifetime, IDisp
 		await database.DisposeAsync();
 	}
 
-	public void Dispose()
-	{
-	}
+	public void Dispose() { }
 
 	[Fact]
 	public void Startup_fails_closed_outside_development_without_forwarded_header_configuration()

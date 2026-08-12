@@ -49,7 +49,10 @@ public sealed class JobCommandsTests
 		return port;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static CreateJobNodeRequest CreateBranchRequest(AppUserId actor, AppUserId owner, JobNodeId parentId) => new() {
 		Context = ContextFor(actor),
@@ -83,7 +86,10 @@ public sealed class JobCommandsTests
 
 	private static ImportSubtreeNodeSpec WorkedNode(
 		long localId, long? parentLocalId, ImportSubtreeLeafWorkSpec leafWork, EquatableArray<long> prerequisiteLocalIds = default) =>
-		PlainNode(localId, parentLocalId) with { LeafWork = leafWork, PrerequisiteLocalIds = prerequisiteLocalIds };
+		PlainNode(localId, parentLocalId) with {
+			LeafWork = leafWork,
+			PrerequisiteLocalIds = prerequisiteLocalIds,
+		};
 
 	[Fact]
 	public async Task A_job_manager_can_create_a_branch_under_the_root()
@@ -102,7 +108,9 @@ public sealed class JobCommandsTests
 	public void Creating_a_node_rejects_an_unspecified_priority_synchronously()
 	{
 		var sut = new JobCommands(CreateSeededPort());
-		var request = CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId) with { Priority = Priority.Unspecified };
+		var request = CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId) with {
+			Priority = Priority.Unspecified,
+		};
 
 		Action act = () => _ = sut.AddChildAsync(request);
 
@@ -308,7 +316,11 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(port);
 		var branch = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 
-		var result = await sut.ArchiveAsync(new() { Context = ContextFor(JobManagerId), NodeId = branch.Id, Version = branch.Version });
+		var result = await sut.ArchiveAsync(new() {
+			Context = ContextFor(JobManagerId),
+			NodeId = branch.Id,
+			Version = branch.Version,
+		});
 
 		result.ArchivedAt.Should().Be(port.NowToReturn);
 	}
@@ -320,7 +332,11 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(port);
 		var branch = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 
-		await sut.DeleteAsync(new() { Context = ContextFor(JobManagerId), NodeId = branch.Id, Version = branch.Version });
+		await sut.DeleteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			NodeId = branch.Id,
+			Version = branch.Version,
+		});
 
 		var act = () => sut.EditAsync(new() {
 			Context = ContextFor(JobManagerId),
@@ -342,7 +358,11 @@ public sealed class JobCommandsTests
 		port.MarkUndeletable(branch.Id);
 
 		var act = () =>
-			sut.DeleteAsync(new() { Context = ContextFor(JobManagerId), NodeId = branch.Id, Version = branch.Version });
+			sut.DeleteAsync(new() {
+				Context = ContextFor(JobManagerId),
+				NodeId = branch.Id,
+				Version = branch.Version,
+			});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-not-deletable");
@@ -354,7 +374,11 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 
-		var act = () => sut.DeleteAsync(new() { Context = ContextFor(JobManagerId), NodeId = RootId, Version = 1 });
+		var act = () => sut.DeleteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			NodeId = RootId,
+			Version = 1,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-is-root-cannot-delete");
@@ -369,7 +393,11 @@ public sealed class JobCommandsTests
 		_ = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, parent.Id));
 
 		var act = () =>
-			sut.DeleteAsync(new() { Context = ContextFor(JobManagerId), NodeId = parent.Id, Version = parent.Version });
+			sut.DeleteAsync(new() {
+				Context = ContextFor(JobManagerId),
+				NodeId = parent.Id,
+				Version = parent.Version,
+			});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-has-children-cannot-delete");
@@ -382,9 +410,17 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(port);
 		var required = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 		var dependent = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		await sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
-		var act = () => sut.DeleteAsync(new() { Context = ContextFor(JobManagerId), NodeId = required.Id, Version = required.Version });
+		var act = () => sut.DeleteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			NodeId = required.Id,
+			Version = required.Version,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-has-prerequisites-cannot-delete");
@@ -396,9 +432,16 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		_ = await sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+		_ = await sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
-		await sut.DeleteAsync(new() { Context = ContextFor(JobManagerId), NodeId = leaf.Id, Version = leaf.Version });
+		await sut.DeleteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			NodeId = leaf.Id,
+			Version = leaf.Version,
+		});
 
 		var act = () => sut.EditAsync(new() {
 			Context = ContextFor(JobManagerId),
@@ -417,7 +460,10 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		_ = await sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+		_ = await sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leaf.Id,
+		});
 		port.MarkLeafWorked(leaf.Id);
 
 		var act = () => sut.DeleteAsync(new() {
@@ -436,10 +482,17 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		_ = await sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+		_ = await sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leaf.Id,
+		});
 		port.MarkLeafWorked(leaf.Id);
 
-		var act = () => sut.DeleteAsync(new() { Context = ContextFor(AdministratorId), NodeId = leaf.Id, Version = leaf.Version });
+		var act = () => sut.DeleteAsync(new() {
+			Context = ContextFor(AdministratorId),
+			NodeId = leaf.Id,
+			Version = leaf.Version,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-delete-worked-leaf-reason-required");
@@ -451,7 +504,10 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		_ = await sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+		_ = await sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leaf.Id,
+		});
 		port.MarkLeafWorked(leaf.Id);
 
 		await sut.DeleteAsync(new() {
@@ -511,7 +567,10 @@ public sealed class JobCommandsTests
 			Priority = Priority.Medium,
 		});
 
-		var act = () => sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = branch.Id });
+		var act = () => sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = branch.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-has-children-cannot-attach-leaf-work");
@@ -523,7 +582,10 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 
-		var act = () => sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = RootId });
+		var act = () => sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = RootId,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-is-root-cannot-attach-leaf-work");
@@ -535,9 +597,15 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		await sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+		await sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
-		var act = () => sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+		var act = () => sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("leaf-work-already-attached");
@@ -549,7 +617,10 @@ public sealed class JobCommandsTests
 		var port = CreateSeededPort();
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		await sut.AttachLeafWorkAsync(new() { Context = ContextFor(JobManagerId), JobNodeId = leaf.Id });
+		await sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(JobManagerId),
+			JobNodeId = leaf.Id,
+		});
 
 		var result = await sut.DecomposeWorkedLeafAsync(new() {
 			Context = ContextFor(JobManagerId),
@@ -558,7 +629,9 @@ public sealed class JobCommandsTests
 			BranchDescription = "Umbrella job",
 			ExistingWorkDescription = "The work already done",
 			NewChildren = [
-				new() { Description = "New sub-job", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
+				new() {
+					Description = "New sub-job", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -589,7 +662,9 @@ public sealed class JobCommandsTests
 			Version = leaf.Version,
 			BranchDescription = "Umbrella job",
 			NewChildren = [
-				new() { Description = "Named child", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
+				new() {
+					Description = "Named child", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -633,7 +708,10 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OtherWorkerId, RootId));
 
-		var act = () => sut.AttachLeafWorkAsync(new() { Context = ContextFor(OwnerWorkerId), JobNodeId = leaf.Id });
+		var act = () => sut.AttachLeafWorkAsync(new() {
+			Context = ContextFor(OwnerWorkerId),
+			JobNodeId = leaf.Id,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -646,7 +724,11 @@ public sealed class JobCommandsTests
 		var required = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 		var dependent = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 
-		await sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
 		var act = () => sut.AddPrerequisiteAsync(new() {
 			Context = ContextFor(JobManagerId),
@@ -664,7 +746,11 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(port);
 		var leaf = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 
-		var act = () => sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = leaf.Id, DependentJobId = leaf.Id });
+		var act = () => sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = leaf.Id,
+			DependentJobId = leaf.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-not-self");
@@ -678,7 +764,11 @@ public sealed class JobCommandsTests
 		var parent = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 		var child = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, parent.Id));
 
-		var act = () => sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = parent.Id, DependentJobId = child.Id });
+		var act = () => sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = parent.Id,
+			DependentJobId = child.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-is-hierarchy-edge");
@@ -692,9 +782,17 @@ public sealed class JobCommandsTests
 		var a = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 		var b = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 		await sut.AddPrerequisiteAsync(
-			new() { Context = ContextFor(JobManagerId), RequiredJobId = a.Id, DependentJobId = b.Id });
+			new() {
+				Context = ContextFor(JobManagerId),
+				RequiredJobId = a.Id,
+				DependentJobId = b.Id,
+			});
 
-		var act = () => sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = b.Id, DependentJobId = a.Id });
+		var act = () => sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = b.Id,
+			DependentJobId = a.Id,
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-would-cycle");
@@ -707,11 +805,23 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(port);
 		var required = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
 		var dependent = await sut.AddChildAsync(CreateBranchRequest(JobManagerId, OwnerWorkerId, RootId));
-		await sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
-		await sut.RemovePrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await sut.RemovePrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 
-		await sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = required.Id, DependentJobId = dependent.Id });
+		await sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = required.Id,
+			DependentJobId = dependent.Id,
+		});
 	}
 
 	[Fact]
@@ -798,7 +908,11 @@ public sealed class JobCommandsTests
 		});
 		branch.Kind.Should().Be(NodeKind.Branch);
 
-		var act = () => sut.AddPrerequisiteAsync(new() { Context = ContextFor(JobManagerId), RequiredJobId = childAId, DependentJobId = childBId });
+		var act = () => sut.AddPrerequisiteAsync(new() {
+			Context = ContextFor(JobManagerId),
+			RequiredJobId = childAId,
+			DependentJobId = childBId,
+		});
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-prerequisite-already-exists");
 	}
@@ -808,7 +922,11 @@ public sealed class JobCommandsTests
 	{
 		var sut = new JobCommands(CreateSeededPort());
 
-		var act = () => sut.ImportSubtreeAsync(new() { Context = ContextFor(JobManagerId), ParentId = RootId, Nodes = [] });
+		var act = () => sut.ImportSubtreeAsync(new() {
+			Context = ContextFor(JobManagerId),
+			ParentId = RootId,
+			Nodes = [],
+		});
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("import-subtree-empty");
@@ -823,8 +941,12 @@ public sealed class JobCommandsTests
 			Context = ContextFor(JobManagerId),
 			ParentId = RootId,
 			Nodes = [
-				new() { LocalId = 1, Description = "First", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
-				new() { LocalId = 1, Description = "Second", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
+				new() {
+					LocalId = 1, Description = "First", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium,
+				},
+				new() {
+					LocalId = 1, Description = "Second", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -841,7 +963,9 @@ public sealed class JobCommandsTests
 			Context = ContextFor(JobManagerId),
 			ParentId = RootId,
 			Nodes = [
-				new() { LocalId = 1, Description = "Home branch", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium },
+				new() {
+					LocalId = 1, Description = "Home branch", OwnerUserId = OwnerWorkerId, Priority = Priority.Medium,
+				},
 				new() {
 					LocalId = 2,
 					ParentLocalId = 1,
@@ -896,7 +1020,9 @@ public sealed class JobCommandsTests
 			Context = ContextFor(OtherWorkerId),
 			ParentId = RootId,
 			Nodes = [
-				new() { LocalId = 1, Description = "Branch", OwnerUserId = OtherWorkerId, Priority = Priority.Medium },
+				new() {
+					LocalId = 1, Description = "Branch", OwnerUserId = OtherWorkerId, Priority = Priority.Medium,
+				},
 			],
 		});
 
@@ -926,7 +1052,9 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(CreateSeededPort());
 
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
-			WorkedNode(1, null, WorkFrom(TwoDaysAgo, OneDayAgo) with { Achievement = achievement }),
+			WorkedNode(1, null, WorkFrom(TwoDaysAgo, OneDayAgo) with {
+				Achievement = achievement,
+			}),
 		]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -952,7 +1080,9 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(CreateSeededPort());
 		var work = WorkFrom(ThreeDaysAgo, TwoDaysAgo) with {
 			AdditionalSessions = [
-				new() { WorkedByUserId = OwnerWorkerId, StartedAt = OneDayAgo, FinishedAt = TwoDaysAgo },
+				new() {
+					WorkedByUserId = OwnerWorkerId, StartedAt = OneDayAgo, FinishedAt = TwoDaysAgo,
+				},
 			],
 		};
 
@@ -968,7 +1098,9 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(CreateSeededPort());
 
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
-			WorkedNode(1, null, WorkFrom(TwoDaysAgo, null) with { Achievement = Achievement.Success }),
+			WorkedNode(1, null, WorkFrom(TwoDaysAgo, null) with {
+				Achievement = Achievement.Success,
+			}),
 		]));
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
@@ -981,7 +1113,9 @@ public sealed class JobCommandsTests
 		var sut = new JobCommands(CreateSeededPort());
 		var work = WorkFrom(ThreeDaysAgo, TwoDaysAgo) with {
 			AdditionalSessions = [
-				new() { WorkedByUserId = OtherWorkerId, StartedAt = OneDayAgo, FinishedAt = null },
+				new() {
+					WorkedByUserId = OtherWorkerId, StartedAt = OneDayAgo, FinishedAt = null,
+				},
 			],
 		};
 
@@ -1014,7 +1148,9 @@ public sealed class JobCommandsTests
 
 		// Node 1 is left open, so it never reaches Success and cannot satisfy node 2's gate.
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
-			WorkedNode(1, null, WorkFrom(ThreeDaysAgo, null) with { Achievement = Achievement.InProgress }),
+			WorkedNode(1, null, WorkFrom(ThreeDaysAgo, null) with {
+				Achievement = Achievement.InProgress,
+			}),
 			WorkedNode(2, null, WorkFrom(TwoDaysAgo, OneDayAgo), [1]),
 		]));
 
@@ -1030,7 +1166,9 @@ public sealed class JobCommandsTests
 		// Node 3 requires branch 1, whose leaf 2 is cancelled -- so the branch never succeeds.
 		var act = () => sut.ImportSubtreeAsync(ImportRequestWith([
 			PlainNode(1),
-			WorkedNode(2, 1, WorkFrom(ThreeDaysAgo, TwoDaysAgo) with { Achievement = Achievement.Cancelled }),
+			WorkedNode(2, 1, WorkFrom(ThreeDaysAgo, TwoDaysAgo) with {
+				Achievement = Achievement.Cancelled,
+			}),
 			WorkedNode(3, null, WorkFrom(OneDayAgo, OneDayAgo.Plus(Duration.FromHours(1))), [1]),
 		]));
 
@@ -1047,7 +1185,9 @@ public sealed class JobCommandsTests
 		var result = await sut.ImportSubtreeAsync(ImportRequestWith([
 			WorkedNode(1, null, WorkFrom(ThreeDaysAgo, TwoDaysAgo)),
 			WorkedNode(
-				2, null, WorkFrom(OneDayAgo, null) with { Achievement = Achievement.InProgress },
+				2, null, WorkFrom(OneDayAgo, null) with {
+					Achievement = Achievement.InProgress,
+				},
 				[1]),
 		]));
 

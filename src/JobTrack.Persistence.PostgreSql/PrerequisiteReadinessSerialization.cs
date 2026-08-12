@@ -19,6 +19,6 @@ internal static class PrerequisiteReadinessSerialization
 	public static async Task<bool> HasActiveDependentWorkAsync(
 		DbContext context, JobNodeId requiredJobId, CancellationToken cancellationToken) =>
 		await context.Database.SqlQuery<bool>(
-				$"SELECT jobtrack_has_active_dependent_work({requiredJobId.Value}) AS \"Value\"")
-			.SingleAsync(cancellationToken).ConfigureAwait(false);
+						 $"SELECT jobtrack_has_active_dependent_work({requiredJobId.Value}) AS \"Value\"")
+					 .SingleAsync(cancellationToken).ConfigureAwait(false);
 }

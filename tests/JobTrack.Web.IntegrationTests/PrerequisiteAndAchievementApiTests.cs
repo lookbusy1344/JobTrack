@@ -7,16 +7,9 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the external HTTP API's prerequisite and achievement surface (plan §4.3
@@ -54,7 +47,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -77,12 +73,18 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var requiredLeafTwoId = await AddChildAsync(rootId, workerId, "Install plumbing");
 		var dependentLeafId = await AddChildAsync(rootId, workerId, "Frame walls");
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredLeafOneId,
 			DependentJobId = dependentLeafId,
 		});
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredLeafTwoId,
 			DependentJobId = dependentLeafId,
 		});
@@ -147,7 +149,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var requiredLeafId = await AddChildAsync(rootId, workerId, "Pour foundation");
 		var dependentLeafId = await AddChildAsync(rootId, workerId, "Frame walls");
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredLeafId,
 			DependentJobId = dependentLeafId,
 		});
@@ -189,7 +194,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var requiredLeafId = await AddChildAsync(rootId, workerId, "Pour foundation");
 		var dependentLeafId = await AddChildAsync(rootId, workerId, "Frame walls");
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredLeafId,
 			DependentJobId = dependentLeafId,
 		});
@@ -228,7 +236,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var authCookie = await client.SignInAsync("achieve.set.worker");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var current = await seedClient.Query.GetLeafWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 
@@ -258,7 +269,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var authCookie = await client.SignInAsync("achieve.set.retry");
 		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 		var current = await seedClient.Query.GetLeafWorkAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 		var requestBody = $$"""
@@ -282,7 +296,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "achieve.reopen.worker");
 		var leafId = await AddWorkedLeafAsync(rootId, workerId, "Fit cabinets");
 		var cancelled = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			NewAchievement = Achievement.Cancelled,
 			Reason = "No longer needed",
@@ -315,7 +332,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var requiredLeafId = await AddChildAsync(rootId, workerId, "Pour foundation");
 		var dependentLeafId = await AddChildAsync(rootId, workerId, "Frame walls");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -336,7 +356,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 		var branchB = await AddChildAsync(rootId, ownerB, "Branch B");
 		var leafUnderB = await AddWorkedLeafAsync(branchB, administratorId, "Leaf under B");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = ownerA, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = ownerA,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = ownerA,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -354,7 +377,10 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -367,14 +393,20 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 	private async Task<JobNodeId> AddWorkedLeafAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = result.Id,
 		});
 
@@ -437,7 +469,4 @@ public sealed partial class PrerequisiteAndAchievementApiTests : IAsyncLifetime,
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
 }

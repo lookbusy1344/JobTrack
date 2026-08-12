@@ -1,7 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -34,7 +33,15 @@ public abstract class ConcurrentWorkBrowserTestsBase
 	protected ConcurrentWorkBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -70,7 +77,9 @@ public abstract class ConcurrentWorkBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Heading, new() { Name = "Concurrent work" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Heading, new() {
+			Name = "Concurrent work",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -83,10 +92,14 @@ public abstract class ConcurrentWorkBrowserTestsBase
 
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
-		await page.GetByRole(AriaRole.Link, new() { Name = "Info" }).ClickAsync();
+		await page.GetByRole(AriaRole.Link, new() {
+			Name = "Info",
+		}).ClickAsync();
 
 		await page.WaitForURLAsync(url => url.Contains("/Jobs/ConcurrentWork", StringComparison.Ordinal));
-		(await page.GetByRole(AriaRole.Heading, new() { Name = "Concurrent work" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Heading, new() {
+			Name = "Concurrent work",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -102,22 +115,14 @@ public abstract class ConcurrentWorkBrowserTestsBase
 
 		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/ConcurrentWork");
 	}
-
-
-
-
 }
 
 public sealed class SqliteConcurrentWorkBrowserTests : ConcurrentWorkBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteConcurrentWorkBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteConcurrentWorkBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlConcurrentWorkBrowserTests : ConcurrentWorkBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlConcurrentWorkBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlConcurrentWorkBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

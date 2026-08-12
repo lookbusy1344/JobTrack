@@ -1,7 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -34,7 +33,15 @@ public abstract class PrerequisitesAchievementBrowserTestsBase
 	protected PrerequisitesAchievementBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -70,7 +77,9 @@ public abstract class PrerequisitesAchievementBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Search" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "Search",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -95,10 +104,16 @@ public abstract class PrerequisitesAchievementBrowserTestsBase
 		await page.Keyboard.TypeAsync(RequiredJobDescription);
 		await page.Keyboard.PressAsync("Enter");
 
-		await page.GetByRole(AriaRole.Radiogroup, new() { Name = $"Dependency for {RequiredJobDescription}" })
-			.GetByRole(AriaRole.Radio, new() { Name = "Prerequisite for current" })
-			.CheckAsync();
-		await page.GetByRole(AriaRole.Button, new() { Name = "Add selected" }).ClickAsync();
+		await page.GetByRole(AriaRole.Radiogroup, new() {
+			Name = $"Dependency for {RequiredJobDescription}",
+		})
+				  .GetByRole(AriaRole.Radio, new() {
+					  Name = "Prerequisite for current",
+				  })
+				  .CheckAsync();
+		await page.GetByRole(AriaRole.Button, new() {
+			Name = "Add selected",
+		}).ClickAsync();
 
 		await page.WaitForSelectorAsync("text=Dependency added.");
 	}
@@ -145,20 +160,14 @@ public abstract class PrerequisitesAchievementBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqlitePrerequisitesAchievementBrowserTests : PrerequisitesAchievementBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqlitePrerequisitesAchievementBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqlitePrerequisitesAchievementBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlPrerequisitesAchievementBrowserTests : PrerequisitesAchievementBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlPrerequisitesAchievementBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlPrerequisitesAchievementBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

@@ -25,16 +25,16 @@ internal static class IdentityUserWriteLock
 		DbContext context, AppUserId appUserId, CancellationToken cancellationToken)
 	{
 		var affected = await context.Set<IdentityUserEntity>()
-			.Where(identityUser => identityUser.AppUserId == appUserId)
-			.ExecuteUpdateAsync(
-				setters => setters.SetProperty(identityUser => identityUser.ConcurrencyStamp, identityUser => identityUser.ConcurrencyStamp),
-				cancellationToken)
-			.ConfigureAwait(false);
+									.Where(identityUser => identityUser.AppUserId == appUserId)
+									.ExecuteUpdateAsync(
+										setters => setters.SetProperty(identityUser => identityUser.ConcurrencyStamp, identityUser => identityUser.ConcurrencyStamp),
+										cancellationToken)
+									.ConfigureAwait(false);
 		if (affected == 0) {
 			throw new EntityNotFoundException($"Employee {appUserId} does not exist.");
 		}
 
 		return await context.Set<IdentityUserEntity>().AsNoTracking()
-			.SingleAsync(identityUser => identityUser.AppUserId == appUserId, cancellationToken).ConfigureAwait(false);
+							.SingleAsync(identityUser => identityUser.AppUserId == appUserId, cancellationToken).ConfigureAwait(false);
 	}
 }

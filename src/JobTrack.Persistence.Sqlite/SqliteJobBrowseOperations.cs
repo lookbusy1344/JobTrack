@@ -16,9 +16,7 @@ internal sealed class SqliteJobBrowseOperations(string connectionString, IReadOn
 {
 	/// <summary>Creates the seam over the given SQLite connection string.</summary>
 	public SqliteJobBrowseOperations(string connectionString)
-		: this(connectionString, [])
-	{
-	}
+		: this(connectionString, []) { }
 
 	public async Task<bool> IsSubtreeSucceededAsync(DbContext context, long rootId, CancellationToken cancellationToken) =>
 		await JobNodeHierarchyQueries.IsSubtreeAchievedSqliteAsync(

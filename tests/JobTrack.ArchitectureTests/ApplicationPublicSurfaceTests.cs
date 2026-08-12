@@ -31,13 +31,13 @@ public sealed class ApplicationPublicSurfaceTests
 	{
 		var applicationAssembly = typeof(IJobTrackClient).Assembly;
 		var approvedTypes = FindFacadeContractGraph(applicationAssembly)
-			.Concat(ApprovedSupportingTypes)
-			.ToHashSet();
+							.Concat(ApprovedSupportingTypes)
+							.ToHashSet();
 		var unexpectedTypes = applicationAssembly.GetExportedTypes()
-			.Where(type => !approvedTypes.Contains(type))
-			.Select(type => type.FullName)
-			.Order(StringComparer.Ordinal)
-			.ToList();
+												 .Where(type => !approvedTypes.Contains(type))
+												 .Select(type => type.FullName)
+												 .Order(StringComparer.Ordinal)
+												 .ToList();
 
 		unexpectedTypes.Should().BeEmpty(
 			"new public application types must be reachable facade contracts or added to the narrow reviewed supporting-type allowlist");

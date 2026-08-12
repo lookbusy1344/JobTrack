@@ -2,14 +2,10 @@ namespace JobTrack.Web.IntegrationTests;
 
 using System.Net;
 using AwesomeAssertions;
-using Database;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     ADR 0066 Stage 6: <c>/health/live</c> (process-only liveness) and <c>/health/ready</c>
@@ -33,7 +29,10 @@ public sealed class HealthEndpointTests : IAsyncLifetime, IDisposable
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -79,9 +78,14 @@ public sealed class HealthEndpointTests : IAsyncLifetime, IDisposable
 	public async Task Health_ready_returns_503_without_leaking_exception_or_version_detail_when_the_database_is_unreachable()
 	{
 		var unreachablePath = Path.Combine(Path.GetTempPath(), $"jobtrack_missing_{Guid.NewGuid():N}", "unreachable.db");
-		var unreachableConnectionString = new SqliteConnectionStringBuilder { DataSource = unreachablePath }.ConnectionString;
+		var unreachableConnectionString = new SqliteConnectionStringBuilder {
+			DataSource = unreachablePath,
+		}.ConnectionString;
 		using var unreachableFactory = new TestWebApplicationFactory(unreachableConnectionString);
-		using var unreachableClient = unreachableFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		using var unreachableClient = unreachableFactory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 
 		using var response = await unreachableClient.GetAsync("/health/ready");
 
@@ -126,7 +130,4 @@ public sealed class HealthEndpointTests : IAsyncLifetime, IDisposable
 			response.StatusCode.Should().NotBe((HttpStatusCode)429);
 		}
 	}
-
-
-
 }

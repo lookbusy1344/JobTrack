@@ -57,14 +57,27 @@ public sealed class CostReportModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.AppUserId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var nodeId = new JobNodeId(NodeId);
 		var asOf = asOfInstant ?? clock.GetCurrentInstant();
 
 		try {
-			Node = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = nodeId }, cancellationToken);
-			Readiness = await jobTrackClient.Query.GetReadinessAsync(new() { Context = context, NodeId = nodeId }, cancellationToken);
-			CostDetails = await jobTrackClient.Costs.GetCostDetailsAsync(new() { Context = context, NodeId = nodeId, AsOf = asOf },
+			Node = await jobTrackClient.Query.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = nodeId,
+			}, cancellationToken);
+			Readiness = await jobTrackClient.Query.GetReadinessAsync(new() {
+				Context = context,
+				NodeId = nodeId,
+			}, cancellationToken);
+			CostDetails = await jobTrackClient.Costs.GetCostDetailsAsync(new() {
+				Context = context,
+				NodeId = nodeId,
+				AsOf = asOf,
+			},
 				cancellationToken);
 		}
 		catch (AuthorizationDeniedException) {

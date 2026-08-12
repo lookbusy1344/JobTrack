@@ -19,7 +19,10 @@ public sealed class JobQueriesConcurrentWorkTests
 	private static readonly JobNodeId OtherId = new(20);
 	private static readonly Instant Now = Instant.FromUtc(2026, 3, 2, 18, 0);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static Instant At(int hour) => Instant.FromUtc(2026, 3, 2, hour, 0);
 
@@ -77,7 +80,10 @@ public sealed class JobQueriesConcurrentWorkTests
 		SeedSession(sessionPort, 1, SubjectId, WorkerId, 9, 12);
 		var sut = CreateSut(NodePortWith(SubjectId), sessionPort);
 
-		var result = await sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = SubjectId });
+		var result = await sut.GetConcurrentWorkAsync(new() {
+			Context = ContextFor(ActorId),
+			NodeId = SubjectId,
+		});
 
 		result.Rows.Should().BeEmpty();
 		result.IsTruncated.Should().BeFalse();
@@ -92,7 +98,10 @@ public sealed class JobQueriesConcurrentWorkTests
 		SeedSession(sessionPort, 2, OtherId, WorkerId, 11, 13);
 		var sut = CreateSut(NodePortWith(SubjectId, OtherId), sessionPort);
 
-		var result = await sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = SubjectId });
+		var result = await sut.GetConcurrentWorkAsync(new() {
+			Context = ContextFor(ActorId),
+			NodeId = SubjectId,
+		});
 
 		var row = result.Rows.Should().ContainSingle().Subject;
 		row.WorkedByUserId.Should().Be(WorkerId);
@@ -113,7 +122,11 @@ public sealed class JobQueriesConcurrentWorkTests
 		var sut = CreateSut(NodePortWith(SubjectId, OtherId), sessionPort);
 
 		var result = await sut.GetConcurrentWorkAsync(
-			new() { Context = ContextFor(ActorId), NodeId = SubjectId, AsOf = At(12) });
+			new() {
+				Context = ContextFor(ActorId),
+				NodeId = SubjectId,
+				AsOf = At(12),
+			});
 
 		result.AsOf.Should().Be(At(12));
 		result.Rows.Should().ContainSingle().Which.TotalOverlap.Should().Be(Duration.FromHours(2));
@@ -127,7 +140,10 @@ public sealed class JobQueriesConcurrentWorkTests
 		SeedSession(sessionPort, 2, OtherId, WorkerId, 17, null);
 		var sut = CreateSut(NodePortWith(SubjectId, OtherId), sessionPort);
 
-		var result = await sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = SubjectId });
+		var result = await sut.GetConcurrentWorkAsync(new() {
+			Context = ContextFor(ActorId),
+			NodeId = SubjectId,
+		});
 
 		result.AsOf.Should().Be(Now);
 		result.Rows.Should().ContainSingle().Which.TotalOverlap.Should().Be(Duration.FromHours(1));
@@ -141,7 +157,10 @@ public sealed class JobQueriesConcurrentWorkTests
 		SeedSession(sessionPort, 2, OtherId, WorkerId, 11, 13);
 		var sut = CreateSut(NodePortWith(SubjectId), sessionPort);
 
-		var result = await sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = SubjectId });
+		var result = await sut.GetConcurrentWorkAsync(new() {
+			Context = ContextFor(ActorId),
+			NodeId = SubjectId,
+		});
 
 		result.Rows.Should().BeEmpty();
 	}
@@ -151,7 +170,10 @@ public sealed class JobQueriesConcurrentWorkTests
 	{
 		var sut = CreateSut(NodePortWith(SubjectId), new());
 
-		var act = () => sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = new(9999) });
+		var act = () => sut.GetConcurrentWorkAsync(new() {
+			Context = ContextFor(ActorId),
+			NodeId = new(9999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -161,7 +183,10 @@ public sealed class JobQueriesConcurrentWorkTests
 	{
 		var sut = CreateSut(NodePortWith(SubjectId), new(), EmployeeRole.Requester);
 
-		var act = () => sut.GetConcurrentWorkAsync(new() { Context = ContextFor(ActorId), NodeId = SubjectId });
+		var act = () => sut.GetConcurrentWorkAsync(new() {
+			Context = ContextFor(ActorId),
+			NodeId = SubjectId,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}

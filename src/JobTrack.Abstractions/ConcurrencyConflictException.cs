@@ -8,19 +8,13 @@ namespace JobTrack.Abstractions;
 public sealed class ConcurrencyConflictException : JobTrackException
 {
 	/// <summary>Creates a <see cref="ConcurrencyConflictException" />.</summary>
-	public ConcurrencyConflictException()
-	{
-	}
+	public ConcurrencyConflictException() { }
 
 	/// <summary>Creates a <see cref="ConcurrencyConflictException" /> with the given message.</summary>
 	public ConcurrencyConflictException(string message)
-		: base(message)
-	{
-	}
+		: base(message) { }
 
 	/// <summary>Creates a <see cref="ConcurrencyConflictException" /> with the given message and inner exception.</summary>
 	public ConcurrencyConflictException(string message, Exception innerException)
-		: base(message, innerException)
-	{
-	}
+		: base(message, innerException) { }
 }

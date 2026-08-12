@@ -63,19 +63,28 @@ public sealed class ExternalApiClientProofTests
 		});
 		var workerId = await SeedWorkerAsync(seedClient, bootstrap.AdministratorId);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrap.AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = bootstrap.RootJobNodeId,
 			Description = "Fit cabinets",
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrap.AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 		await IdentityTestSupport.ClearRequiresPasswordChangeAsync(provider, database.ConnectionString);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "external-api-client-proof",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -113,22 +122,38 @@ public sealed class ExternalApiClientProofTests
 		// achievement advance to InProgress uses the library-side seed client purely as test setup
 		// (StartSessionAsync, unlike StartWorkAsync, does not itself auto-advance achievement).
 		var leafWork = await seedClient.Query.GetLeafWorkAsync(
-			new() { Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leaf.Id });
+			new() {
+				Context = new() {
+					Actor = bootstrap.AdministratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = leaf.Id,
+			});
 		_ = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrap.AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 			NewAchievement = Achievement.InProgress,
 			Reason = "Prepare client-proof completion fixture",
 			Version = leafWork.Version,
 		});
 		var completed = await apiClient.CompleteLeafAsync(
-			leaf.Id.Value, leafWork.Version + 1, [new() { Id = session.Id, Version = session.Version }]);
+			leaf.Id.Value, leafWork.Version + 1, [
+				new() {
+					Id = session.Id, Version = session.Version,
+				},
+			]);
 		completed.Achievement.Should().Be("Success");
 		completed.FinishedSessions.Should().ContainSingle(finished => finished.Id == session.Id);
 
 		// Revocation handling: once the token is revoked, the next call fails cleanly, not a crash.
 		await seedClient.Tokens.RevokeAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			TokenId = issued.Id,
 		});
@@ -141,7 +166,10 @@ public sealed class ExternalApiClientProofTests
 		var requesterId = await SeedRequesterAsync(seedClient, bootstrap.AdministratorId);
 		await IdentityTestSupport.ClearRequiresPasswordChangeAsync(provider, database.ConnectionString);
 		var requesterToken = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = requesterId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = requesterId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = requesterId,
 			Label = "external-api-client-proof-requester",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -169,13 +197,16 @@ public sealed class ExternalApiClientProofTests
 		requesterDetail.RequesterUserName.Should().Be("requester.client-proof");
 		requesterDetail.Status.Should().Be("Submitted");
 		requesterDetail.Subtree.Should().ContainSingle(node => node.JobNodeId == submitted.JobNodeId)
-			.Which.AllocatedHours.Should().Be(0m);
+					   .Which.AllocatedHours.Should().Be(0m);
 
 		var requesterNote = await requesterApiClient.AddRequestNoteAsync(submitted.JobNodeId, "Any update?", false);
 		requesterNote.VisibleToRequester.Should().BeTrue("a requester-authored note is always visible to the requester");
 
 		var adminToken = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrap.AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = bootstrap.AdministratorId,
 			Label = "external-api-client-proof-admin",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -200,7 +231,10 @@ public sealed class ExternalApiClientProofTests
 	private static async Task<AppUserId> SeedRequesterAsync(IJobTrackClient seedClient, AppUserId administratorId)
 	{
 		var result = await seedClient.Employees.CreateEmployeeAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			DisplayName = "Client Proof Requester",
 			IanaTimeZone = "Etc/UTC",
 			UserName = "requester.client-proof",
@@ -276,7 +310,10 @@ public sealed class ExternalApiClientProofTests
 	private static async Task<AppUserId> SeedWorkerAsync(IJobTrackClient seedClient, AppUserId administratorId)
 	{
 		var result = await seedClient.Employees.CreateEmployeeAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			DisplayName = "Client Proof Worker",
 			IanaTimeZone = "Etc/UTC",
 			UserName = "worker.client-proof",

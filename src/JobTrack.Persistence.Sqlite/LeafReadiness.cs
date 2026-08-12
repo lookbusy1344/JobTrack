@@ -29,13 +29,13 @@ internal static class LeafReadiness
 		DbContext context, JobNodeId leafId, CancellationToken cancellationToken)
 	{
 		var ancestorChain = await JobNodeHierarchyQueries.GetAncestorChainAsync(context, leafId.Value, cancellationToken)
-			.ConfigureAwait(false);
+														 .ConfigureAwait(false);
 		var ancestorIds = ancestorChain.Select(a => new JobNodeId(a.Id)).ToArray();
 
 		var edges = await context.Set<JobPrerequisiteEntity>().AsNoTracking()
-			.Where(jp => ancestorIds.Contains(jp.ToId))
-			.Select(jp => new PrerequisiteEdge(jp.FromId, jp.ToId))
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(jp => ancestorIds.Contains(jp.ToId))
+								 .Select(jp => new PrerequisiteEdge(jp.FromId, jp.ToId))
+								 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
 		foreach (var ancestor in ancestorChain) {
@@ -50,11 +50,11 @@ internal static class LeafReadiness
 			}
 
 			var subtree = await JobNodeHierarchyQueries.GetSubtreeAchievementsAsync(context, requiredJobId.Value, cancellationToken)
-				.ConfigureAwait(false);
+													   .ConfigureAwait(false);
 			var childIdsByParent = subtree
-				.Where(row => row.ParentId is not null)
-				.GroupBy(row => row.ParentId!.Value)
-				.ToDictionary(group => group.Key, group => group.Select(row => new JobNodeId(row.Id)).ToArray());
+								   .Where(row => row.ParentId is not null)
+								   .GroupBy(row => row.ParentId!.Value)
+								   .ToDictionary(group => group.Key, group => group.Select(row => new JobNodeId(row.Id)).ToArray());
 
 			foreach (var row in subtree) {
 				var id = new JobNodeId(row.Id);

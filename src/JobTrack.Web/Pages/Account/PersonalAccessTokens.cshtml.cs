@@ -97,7 +97,10 @@ public sealed class PersonalAccessTokensModel(
 
 		try {
 			var result = await jobTrackClient.Tokens.IssueAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = actor.Value,
 				Label = Issue.Label,
 				Lifetime = Duration.FromDays(Issue.LifetimeDays),
@@ -106,7 +109,10 @@ public sealed class PersonalAccessTokensModel(
 			// Publish only after the database commit above -- an unpublished failure between commit
 			// and here simply has no delivery cookie, matching the old store's accepted window.
 			PendingPatDeliveryCookie.Publish(HttpContext, dataProtectionProvider, actor.Value, result.Label, result.Token);
-			return RedirectToPage(null, new { issued = true });
+			return RedirectToPage(null, new
+			{
+				issued = true,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -130,7 +136,10 @@ public sealed class PersonalAccessTokensModel(
 		try {
 			await jobTrackClient.Tokens.RevokeAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					TargetUserId = actor.Value,
 					TokenId = new(tokenId),
 				}, cancellationToken);
@@ -156,7 +165,13 @@ public sealed class PersonalAccessTokensModel(
 
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 		Tokens = await jobTrackClient.Tokens.ListAsync(
-			new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, TargetUserId = actor.Value }, cancellationToken);
+			new() {
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = Guid.NewGuid(),
+				},
+				TargetUserId = actor.Value,
+			}, cancellationToken);
 	}
 
 	public sealed class IssueTokenInput

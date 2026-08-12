@@ -17,7 +17,9 @@ public sealed class AchievementCalculatorTests
 	public void A_leaf_achieved_to_success_is_achieved()
 	{
 		var leaf = Leaf(LeftId, RootId, Achievement.Success);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [LeftId] = leaf };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[LeftId] = leaf,
+		};
 
 		AchievementCalculator.IsAchieved(LeftId, nodes).Should().BeTrue();
 	}
@@ -30,7 +32,9 @@ public sealed class AchievementCalculatorTests
 	public void A_leaf_not_achieved_to_success_is_not_achieved(Achievement achievement)
 	{
 		var leaf = Leaf(LeftId, RootId, achievement);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [LeftId] = leaf };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[LeftId] = leaf,
+		};
 
 		AchievementCalculator.IsAchieved(LeftId, nodes).Should().BeFalse();
 	}
@@ -39,7 +43,9 @@ public sealed class AchievementCalculatorTests
 	public void A_leaf_without_leaf_work_is_not_achieved()
 	{
 		var leaf = Leaf(LeftId, RootId, null);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [LeftId] = leaf };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[LeftId] = leaf,
+		};
 
 		AchievementCalculator.IsAchieved(LeftId, nodes).Should().BeFalse();
 	}
@@ -50,7 +56,11 @@ public sealed class AchievementCalculatorTests
 		var left = Leaf(LeftId, RootId, Achievement.Success);
 		var right = Leaf(RightId, RootId, Achievement.Success);
 		var root = new HierarchyNode(RootId, null, [LeftId, RightId], null);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RootId] = root, [LeftId] = left, [RightId] = right };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RootId] = root,
+			[LeftId] = left,
+			[RightId] = right,
+		};
 
 		AchievementCalculator.IsAchieved(RootId, nodes).Should().BeTrue();
 	}
@@ -61,7 +71,11 @@ public sealed class AchievementCalculatorTests
 		var left = Leaf(LeftId, RootId, Achievement.Success);
 		var right = Leaf(RightId, RootId, Achievement.InProgress);
 		var root = new HierarchyNode(RootId, null, [LeftId, RightId], null);
-		var nodes = new Dictionary<JobNodeId, HierarchyNode> { [RootId] = root, [LeftId] = left, [RightId] = right };
+		var nodes = new Dictionary<JobNodeId, HierarchyNode> {
+			[RootId] = root,
+			[LeftId] = left,
+			[RightId] = right,
+		};
 
 		AchievementCalculator.IsAchieved(RootId, nodes).Should().BeFalse();
 	}
@@ -132,6 +146,6 @@ public sealed class AchievementCalculatorTests
 		var act = () => AchievementCalculator.IsAchieved(new(1), new Dictionary<JobNodeId, HierarchyNode>());
 
 		act.Should().Throw<InvariantViolationException>()
-			.Which.ConstraintId.Should().Be("hierarchy.missing-node");
+		   .Which.ConstraintId.Should().Be("hierarchy.missing-node");
 	}
 }

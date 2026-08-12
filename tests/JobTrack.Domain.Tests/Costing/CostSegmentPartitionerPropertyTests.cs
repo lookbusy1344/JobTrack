@@ -27,9 +27,9 @@ public sealed class CostSegmentPartitionerPropertyTests
 
 		foreach (var session in sessions) {
 			var actualTicks = actual
-				.Where(allocation => allocation.SessionId == session.SessionId)
-				.Aggregate(Rational.Zero, (total, allocation) =>
-					total + new Rational(allocation.Share.SegmentTicks, allocation.Share.ConcurrencyDivisor));
+							  .Where(allocation => allocation.SessionId == session.SessionId)
+							  .Aggregate(Rational.Zero, (total, allocation) =>
+								  total + new Rational(allocation.Share.SegmentTicks, allocation.Share.ConcurrencyDivisor));
 			actualTicks.Should().Be(expectedTicks[session.SessionId]);
 		}
 	}
@@ -108,19 +108,19 @@ public sealed class CostSegmentPartitionerPropertyTests
 	{
 		var count = Math.Min(Math.Min(starts.Length, lengths.Length), MaximumSessionCount);
 		var sessions = Enumerable.Range(0, count)
-			.Select(index => {
-				var start = Math.Abs((long)starts[index]) % (SampleTickCount - 1);
-				var available = SampleTickCount - start;
-				var length = 1 + (Math.Abs((long)lengths[index]) % available);
-				return new CostableSession(
-					new(index + 1),
-					new(index + 2),
-					new(Epoch.PlusTicks(start), Epoch.PlusTicks(start + length)));
-			})
-			.ToArray();
+								 .Select(index => {
+									 var start = Math.Abs((long)starts[index]) % (SampleTickCount - 1);
+									 var available = SampleTickCount - start;
+									 var length = 1 + Math.Abs((long)lengths[index]) % available;
+									 return new CostableSession(
+										 new(index + 1),
+										 new(index + 2),
+										 new(Epoch.PlusTicks(start), Epoch.PlusTicks(start + length)));
+								 })
+								 .ToArray();
 		var leaves = sessions
-			.Select(session => new HierarchyNode(session.NodeId, RootId, [], Achievement.InProgress))
-			.ToArray();
+					 .Select(session => new HierarchyNode(session.NodeId, RootId, [], Achievement.InProgress))
+					 .ToArray();
 		var root = new HierarchyNode(RootId, null, [.. leaves.Select(leaf => leaf.Id)], null);
 		return (sessions, leaves.Append(root).ToDictionary(node => node.Id));
 	}
@@ -141,14 +141,14 @@ public sealed class CostSegmentPartitionerPropertyTests
 
 	private static IEnumerable<(WorkInterval Segment, long SessionId, long NodeId, long Ticks, int Divisor)> Canonical(
 		IEnumerable<SessionSegmentAllocation> allocations) => allocations
-		.OrderBy(allocation => allocation.Segment.Start)
-		.ThenBy(allocation => allocation.SessionId.Value)
-		.Select(allocation => (
-			allocation.Segment,
-			allocation.SessionId.Value,
-			allocation.NodeId.Value,
-			allocation.Share.SegmentTicks,
-			allocation.Share.ConcurrencyDivisor));
+															  .OrderBy(allocation => allocation.Segment.Start)
+															  .ThenBy(allocation => allocation.SessionId.Value)
+															  .Select(allocation => (
+																  allocation.Segment,
+																  allocation.SessionId.Value,
+																  allocation.NodeId.Value,
+																  allocation.Share.SegmentTicks,
+																  allocation.Share.ConcurrencyDivisor));
 
 	private readonly record struct Rational
 	{
@@ -166,7 +166,7 @@ public sealed class CostSegmentPartitionerPropertyTests
 		public BigInteger Denominator { get; }
 
 		public static Rational operator +(Rational left, Rational right) => new(
-			(left.Numerator * right.Denominator) + (right.Numerator * left.Denominator),
+			left.Numerator * right.Denominator + right.Numerator * left.Denominator,
 			left.Denominator * right.Denominator);
 	}
 }

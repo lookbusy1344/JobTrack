@@ -23,9 +23,7 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	private readonly NpgsqlDataSource managementDataSource;
 
 	public PostgreSqlPersonalAccessTokenPort(NpgsqlDataSource dataSource, IClock clock)
-		: this(dataSource, dataSource, clock)
-	{
-	}
+		: this(dataSource, dataSource, clock) { }
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlPersonalAccessTokenPort(
@@ -51,13 +49,15 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 		PersonalAccessTokenPolicy.EnsureValidExpiry(request.CreatedAt, request.ExpiresAt);
 
 		var tokenId = await PostgreSqlPersonalAccessTokenFunctions.IssueAsync(
-				context, request.TargetUserId, request.TokenHash, request.Label, request.CreatedAt, request.ExpiresAt, cancellationToken)
-			.ConfigureAwait(false);
+																	  context, request.TargetUserId, request.TokenHash, request.Label, request.CreatedAt, request.ExpiresAt, cancellationToken)
+																  .ConfigureAwait(false);
 
 		AuditEventWriter.Add(
 			context, request.Context.Actor, request.CreatedAt, "issue-personal-access-token", "personal_access_token",
 			tokenId.Value, request.Context.CorrelationId, null, null,
-			new Dictionary<string, string?> { ["label"] = request.Label });
+			new Dictionary<string, string?> {
+				["label"] = request.Label,
+			});
 
 		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -79,7 +79,7 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 			.ConfigureAwait(false);
 
 		var tokens = await PostgreSqlPersonalAccessTokenFunctions.ListAsync(context, request.TargetUserId, cancellationToken)
-			.ConfigureAwait(false);
+																 .ConfigureAwait(false);
 
 		return [
 			.. tokens.Select(t => new PersonalAccessTokenSummaryResult {
@@ -129,7 +129,7 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.TargetUserId, now, cancellationToken).ConfigureAwait(false);
 
 		var revoked = await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, request.TargetUserId, now, cancellationToken)
-			.ConfigureAwait(false);
+																  .ConfigureAwait(false);
 
 		if (revoked > 0) {
 			AuditEventWriter.Add(
@@ -156,12 +156,15 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 
 		var now = clock.GetCurrentInstant();
 		var token = await PostgreSqlPersonalAccessTokenFunctions.TryAuthenticateAsync(context, tokenHash, now, cancellationToken)
-			.ConfigureAwait(false);
+																.ConfigureAwait(false);
 		if (token is null) {
 			return null;
 		}
 
-		return new() { UserId = new(token.AppUserId), TokenId = new(token.Id) };
+		return new() {
+			UserId = new(token.AppUserId),
+			TokenId = new(token.Id),
+		};
 	}
 
 	private PostgreSqlJobTrackDbContext CreateManagementContext() => CreateContext(managementDataSource);
@@ -171,8 +174,8 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	private static PostgreSqlJobTrackDbContext CreateContext(NpgsqlDataSource dataSource)
 	{
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-			.UseNpgsql(dataSource, o => o.UseNodaTime())
-			.Options;
+					  .UseNpgsql(dataSource, o => o.UseNodaTime())
+					  .Options;
 
 		return new(options);
 	}
@@ -183,9 +186,9 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 		var actorIdentityUser = await LoadActingIdentityUserAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 
 		var actorRoles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+									  .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
+									  .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+									  .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		if (!PersonalAccessTokenAccessPolicy.CanManage(actorId, targetUserId, actorRoles)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage tokens for {targetUserId}.");
@@ -206,9 +209,9 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.Where(iu => iu.AppUserId == actorId)
-									.Select(iu => new PatActorAccountState(iu.Id, iu.IsEnabled, iu.LockoutEnabled, iu.LockoutEnd))
-									.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
+											 .Where(iu => iu.AppUserId == actorId)
+											 .Select(iu => new PatActorAccountState(iu.Id, iu.IsEnabled, iu.LockoutEnabled, iu.LockoutEnd))
+											 .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(
 			actorIdentityUser.IsEnabled, actorIdentityUser.LockoutEnabled, actorIdentityUser.LockoutEnd, actorId, now);

@@ -1,7 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 using NodaTime;
@@ -34,7 +33,15 @@ public abstract class ScheduleBrowserTestsBase
 	protected ScheduleBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -66,7 +73,9 @@ public abstract class ScheduleBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Add rota version" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "Add rota version",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -96,7 +105,9 @@ public abstract class ScheduleBrowserTestsBase
 		// against the same shared BrowserFixture administrator within this test class.
 		await page.Locator("#VersionInput_EffectiveStart").FillAsync("2011-01-01");
 		await page.Locator("#VersionInput_EffectiveEnd").FillAsync("2011-06-01");
-		await page.GetByRole(AriaRole.Button, new() { Name = "Add rota version" }).ClickAsync();
+		await page.GetByRole(AriaRole.Button, new() {
+			Name = "Add rota version",
+		}).ClickAsync();
 
 		await page.WaitForSelectorAsync("text=Rota version added.");
 	}
@@ -157,20 +168,14 @@ public abstract class ScheduleBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqliteScheduleBrowserTests : ScheduleBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteScheduleBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteScheduleBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlScheduleBrowserTests : ScheduleBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlScheduleBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlScheduleBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

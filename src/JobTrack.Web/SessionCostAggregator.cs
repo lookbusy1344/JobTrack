@@ -26,7 +26,7 @@ internal static class SessionCostAggregator
 		foreach (var entry in trace) {
 			amounts[entry.SessionId] = amounts.GetValueOrDefault(entry.SessionId) + entry.UnroundedContribution.Amount;
 			durations[entry.SessionId] = durations.GetValueOrDefault(entry.SessionId, AllocatedDuration.Zero)
-				.Add(AllocatedDuration.FromShare(entry.AllocatedDuration));
+												  .Add(AllocatedDuration.FromShare(entry.AllocatedDuration));
 		}
 
 		return amounts.ToDictionary(entry => entry.Key, entry => (new Money(entry.Value).RoundToPennies(), durations[entry.Key]));

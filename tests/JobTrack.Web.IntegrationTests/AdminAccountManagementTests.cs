@@ -5,14 +5,8 @@ using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the Administrator-only account-management page (plan §8.3), closing
@@ -37,7 +31,10 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -140,7 +137,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	[Fact]
 	public async Task A_non_administrator_cannot_create_an_employee()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.create-denied", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.create-denied");
 		var workerAuthCookie = await client.SignInAsync("worker.create-denied");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/ManageEmployeeAccount?handler=CreateEmployee");
@@ -163,7 +160,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	public async Task Disabling_an_employee_with_a_live_session_ends_that_session_on_its_next_request()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.disable-live", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.disable-live", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.disable-live");
 		var workerAuthCookie = await client.SignInAsync("worker.disable-live");
 		var adminAuthCookie = await client.SignInAsync("admin.disable-live");
 
@@ -189,7 +186,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	public async Task A_disabled_employee_cannot_sign_in_again()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.disable-then-login", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.disable-then-login", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.disable-then-login");
 		var adminAuthCookie = await client.SignInAsync("admin.disable-then-login");
 		_ = await PostSetEnabledAsync(adminAuthCookie, workerId, false);
 
@@ -211,7 +208,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	public async Task An_administrator_can_reset_a_password_forcing_a_change_at_next_sign_in()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.reset", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset");
 		var adminAuthCookie = await client.SignInAsync("admin.reset");
 
 		var resetResponse = await PostResetPasswordAsync(adminAuthCookie, workerId, NewPassword);
@@ -235,7 +232,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	public async Task An_administrator_resetting_a_password_ends_the_employees_live_session_on_its_next_request()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.reset-live", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-live", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-live");
 		var workerAuthCookie = await client.SignInAsync("worker.reset-live");
 		var adminAuthCookie = await client.SignInAsync("admin.reset-live");
 
@@ -259,8 +256,8 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	[Fact]
 	public async Task A_non_administrator_cannot_disable_an_account()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.set-enabled-denied", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.set-enabled-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.set-enabled-denied");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.set-enabled-target");
 		var workerAuthCookie = await client.SignInAsync("worker.set-enabled-denied");
 
 		// [Authorize(Policy = Administrator)] denies GET too, so there is no page render to pull a
@@ -283,7 +280,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	public async Task An_administrator_can_set_an_employees_default_hourly_rate()
 	{
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.default-rate", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.default-rate", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.default-rate");
 		var adminAuthCookie = await client.SignInAsync("admin.default-rate");
 
 		var response = await PostSetDefaultHourlyRateAsync(adminAuthCookie, workerId, 30m);
@@ -298,8 +295,8 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	[Fact]
 	public async Task A_non_administrator_cannot_set_an_employees_default_hourly_rate()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.default-rate-denied", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.default-rate-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.default-rate-denied");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.default-rate-target");
 		var workerAuthCookie = await client.SignInAsync("worker.default-rate-denied");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/ManageEmployeeAccount?handler=SetDefaultHourlyRate");
@@ -318,8 +315,8 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	[Fact]
 	public async Task A_non_administrator_cannot_reset_a_password()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-denied", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-denied");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-target");
 		var workerAuthCookie = await client.SignInAsync("worker.reset-denied");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/ManageEmployeeAccount?handler=ResetPassword");
@@ -339,7 +336,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	public async Task An_administrator_can_reset_two_factor()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.reset-2fa", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa");
 		await SeedTwoFactorEnabledAsync(workerId);
 		var adminAuthCookie = await client.SignInAsync("admin.reset-2fa");
 
@@ -359,7 +356,7 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	public async Task An_administrator_resetting_two_factor_ends_the_employees_live_session_on_its_next_request()
 	{
 		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.reset-2fa-live", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa-live", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa-live");
 		var workerAuthCookie = await client.SignInAsync("worker.reset-2fa-live");
 		await SeedTwoFactorEnabledAsync(workerId);
 		var adminAuthCookie = await client.SignInAsync("admin.reset-2fa-live");
@@ -384,8 +381,8 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	[Fact]
 	public async Task A_non_administrator_cannot_reset_two_factor()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa-denied", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa-denied");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-2fa-target");
 		var workerAuthCookie = await client.SignInAsync("worker.reset-2fa-denied");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/ManageEmployeeAccount?handler=ResetTwoFactor");
@@ -511,7 +508,9 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		await using var command = connection.CreateCommand();
 		command.CommandText =
 			"UPDATE identity_user SET two_factor_enabled = 1, authenticator_key_protected = $key WHERE app_user_id = $appUserId;";
-		_ = command.Parameters.AddWithValue("$key", new byte[] { 1, 2, 3 });
+		_ = command.Parameters.AddWithValue("$key", new byte[] {
+			1, 2, 3,
+		});
 		_ = command.Parameters.AddWithValue("$appUserId", appUserId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
@@ -572,8 +571,6 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
@@ -600,7 +597,4 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 
 		return decimal.Parse((string)(await command.ExecuteScalarAsync())!, CultureInfo.InvariantCulture);
 	}
-
-
-
 }

@@ -21,7 +21,10 @@ public sealed class EmployeeCommandsTests
 	private static EmployeeCommands CreateSut(FakeEmployeeCommandPort port) =>
 		new(port, new PasswordHasher<EmployeeCredentialSubject>());
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	[Fact]
 	public async Task An_administrator_can_create_a_new_employee()
@@ -120,7 +123,11 @@ public sealed class EmployeeCommandsTests
 		var sut = CreateSut(CreateSeededPort());
 
 		var act = () =>
-			sut.SetDefaultHourlyRateAsync(new() { Context = ContextFor(WorkerId), TargetUserId = WorkerId, DefaultHourlyRate = new(30m) });
+			sut.SetDefaultHourlyRateAsync(new() {
+				Context = ContextFor(WorkerId),
+				TargetUserId = WorkerId,
+				DefaultHourlyRate = new(30m),
+			});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -190,7 +197,11 @@ public sealed class EmployeeCommandsTests
 	public void Assigning_a_role_rejects_none_synchronously()
 	{
 		var sut = CreateSut(CreateSeededPort());
-		var request = new AssignEmployeeRoleRequest { Context = ContextFor(AdministratorId), TargetUserId = WorkerId, Role = EmployeeRole.None };
+		var request = new AssignEmployeeRoleRequest {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			Role = EmployeeRole.None,
+		};
 
 		Action act = () => _ = sut.AssignRoleAsync(request);
 
@@ -202,7 +213,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var result = await sut.AssignRoleAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = WorkerId, Role = EmployeeRole.Worker });
+		var result = await sut.AssignRoleAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			Role = EmployeeRole.Worker,
+		});
 
 		result.Roles.Should().ContainSingle().Which.Should().Be(EmployeeRole.Worker);
 	}
@@ -212,7 +227,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.AssignRoleAsync(new() { Context = ContextFor(WorkerId), TargetUserId = WorkerId, Role = EmployeeRole.RateManager });
+		var act = () => sut.AssignRoleAsync(new() {
+			Context = ContextFor(WorkerId),
+			TargetUserId = WorkerId,
+			Role = EmployeeRole.RateManager,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -222,7 +241,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.AssignRoleAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = new(999), Role = EmployeeRole.Worker });
+		var act = () => sut.AssignRoleAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = new(999),
+			Role = EmployeeRole.Worker,
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -247,7 +270,11 @@ public sealed class EmployeeCommandsTests
 	public void Revoking_a_role_rejects_none_synchronously()
 	{
 		var sut = CreateSut(CreateSeededPort());
-		var request = new RevokeEmployeeRoleRequest { Context = ContextFor(AdministratorId), TargetUserId = WorkerId, Role = EmployeeRole.None };
+		var request = new RevokeEmployeeRoleRequest {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			Role = EmployeeRole.None,
+		};
 
 		Action act = () => _ = sut.RevokeRoleAsync(request);
 
@@ -273,7 +300,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.RevokeRoleAsync(new() { Context = ContextFor(WorkerId), TargetUserId = WorkerId, Role = EmployeeRole.Worker });
+		var act = () => sut.RevokeRoleAsync(new() {
+			Context = ContextFor(WorkerId),
+			TargetUserId = WorkerId,
+			Role = EmployeeRole.Worker,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -283,7 +314,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.RevokeRoleAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = new(999), Role = EmployeeRole.Worker });
+		var act = () => sut.RevokeRoleAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = new(999),
+			Role = EmployeeRole.Worker,
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -293,7 +328,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var result = await sut.SetEnabledAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = WorkerId, Enabled = false });
+		var result = await sut.SetEnabledAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			Enabled = false,
+		});
 
 		result.IsEnabled.Should().BeFalse();
 	}
@@ -303,9 +342,17 @@ public sealed class EmployeeCommandsTests
 	{
 		var port = CreateSeededPort();
 		var sut = CreateSut(port);
-		_ = await sut.SetEnabledAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = WorkerId, Enabled = false });
+		_ = await sut.SetEnabledAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			Enabled = false,
+		});
 
-		var result = await sut.SetEnabledAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = WorkerId, Enabled = false });
+		var result = await sut.SetEnabledAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+			Enabled = false,
+		});
 
 		result.IsEnabled.Should().BeFalse();
 	}
@@ -315,7 +362,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.SetEnabledAsync(new() { Context = ContextFor(WorkerId), TargetUserId = WorkerId, Enabled = false });
+		var act = () => sut.SetEnabledAsync(new() {
+			Context = ContextFor(WorkerId),
+			TargetUserId = WorkerId,
+			Enabled = false,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -325,7 +376,11 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.SetEnabledAsync(new() { Context = ContextFor(AdministratorId), TargetUserId = new(999), Enabled = false });
+		var act = () => sut.SetEnabledAsync(new() {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = new(999),
+			Enabled = false,
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -452,7 +507,10 @@ public sealed class EmployeeCommandsTests
 		port.SeedNode(new(10), false);
 		var sut = CreateSut(port);
 
-		var result = await sut.SetHomeNodeAsync(new() { Context = ContextFor(WorkerId), NodeId = new JobNodeId(10) });
+		var result = await sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(WorkerId),
+			NodeId = new JobNodeId(10),
+		});
 
 		result.HomeNodeId.Should().Be(new JobNodeId(10));
 	}
@@ -464,7 +522,10 @@ public sealed class EmployeeCommandsTests
 		port.SeedNode(new(10), true);
 		var sut = CreateSut(port);
 
-		var act = () => sut.SetHomeNodeAsync(new() { Context = ContextFor(WorkerId), NodeId = new JobNodeId(10) });
+		var act = () => sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(WorkerId),
+			NodeId = new JobNodeId(10),
+		});
 
 		await act.Should().ThrowAsync<InvariantViolationException>();
 	}
@@ -474,7 +535,10 @@ public sealed class EmployeeCommandsTests
 	{
 		var sut = CreateSut(CreateSeededPort());
 
-		var act = () => sut.SetHomeNodeAsync(new() { Context = ContextFor(WorkerId), NodeId = new JobNodeId(999) });
+		var act = () => sut.SetHomeNodeAsync(new() {
+			Context = ContextFor(WorkerId),
+			NodeId = new JobNodeId(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}

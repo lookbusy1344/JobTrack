@@ -4,10 +4,8 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
-using Database;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using TestSupport;
 using Program = Program;
 
@@ -33,15 +31,15 @@ public sealed partial class LoginRateLimitConfigurationTests : IAsyncLifetime, I
 
 	public async Task DisposeAsync() => await database.DisposeAsync();
 
-	public void Dispose()
-	{
-	}
+	public void Dispose() { }
 
 	[Fact]
 	public async Task A_configured_permit_limit_of_one_rejects_the_second_submitted_attempt_within_the_window()
 	{
 		using var factory = new ConfiguredRateLimitWebApplicationFactory(database.ConnectionString, 1);
-		using var client = factory.CreateClient(new() { AllowAutoRedirect = false });
+		using var client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+		});
 
 		var firstForm = await GetLoginFormAsync(client);
 		var secondForm = await GetLoginFormAsync(client);
@@ -59,7 +57,9 @@ public sealed partial class LoginRateLimitConfigurationTests : IAsyncLifetime, I
 	public async Task A_configured_permit_limit_of_one_does_not_share_budget_between_different_usernames()
 	{
 		using var factory = new ConfiguredRateLimitWebApplicationFactory(database.ConnectionString, 1);
-		using var client = factory.CreateClient(new() { AllowAutoRedirect = false });
+		using var client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+		});
 
 		var firstForm = await GetLoginFormAsync(client);
 		var secondForm = await GetLoginFormAsync(client);

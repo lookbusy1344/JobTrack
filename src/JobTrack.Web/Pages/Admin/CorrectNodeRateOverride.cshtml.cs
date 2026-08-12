@@ -71,7 +71,10 @@ public sealed class CorrectNodeRateOverrideModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			_ = await jobTrackClient.Rates.CorrectNodeRateOverrideAsync(new() {
@@ -83,7 +86,10 @@ public sealed class CorrectNodeRateOverrideModel(
 				Override = new(new(Input.NodeId), new(Input.AmountPerHour), effectiveStart, effectiveEnd),
 			}, cancellationToken);
 
-			return RedirectToPage("/Admin/Rates", new { userId = UserId });
+			return RedirectToPage("/Admin/Rates", new
+			{
+				userId = UserId,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -110,7 +116,13 @@ public sealed class CorrectNodeRateOverrideModel(
 	{
 		try {
 			var snapshot = await jobTrackClient.Query.GetRatesAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, UserId = new(UserId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					UserId = new(UserId),
+				}, cancellationToken);
 
 			Override = snapshot.NodeRateOverrides.FirstOrDefault(o => o.Id == new NodeRateOverrideId(OverrideId));
 			if (Override is null) {

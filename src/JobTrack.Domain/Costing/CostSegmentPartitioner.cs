@@ -215,7 +215,9 @@ public static class CostSegmentPartitioner
 		// A flat list sorted and deduplicated once at the end, not a SortedSet: the boundary count grows
 		// with the costed window, and per-instant tree nodes were measurable allocation churn next to
 		// the sweep itself.
-		var boundaries = new List<Instant> { bounds.Start, bounds.End };
+		var boundaries = new List<Instant> {
+			bounds.Start, bounds.End,
+		};
 		// Every piece on the same leaf walks the same ancestor chain and contributes the same override
 		// edges; walking each node once is enough, since `boundaries` is deduplicated either way.
 		var walkedNodes = new HashSet<JobNodeId>();

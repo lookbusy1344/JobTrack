@@ -1,7 +1,6 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -135,7 +134,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ExcludeBlocked = true });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			ExcludeBlocked = true,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([
@@ -156,7 +157,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { InProgressOnly = true });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			InProgressOnly = true,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.InProgressLeafId]);
@@ -173,14 +176,20 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var port = CreatePort(database.ConnectionString);
 
 		var ownedByWorker = await port.GetAwaitingProgressInputsAsync(
-			DefaultFilter() with { InProgressOnly = true, Ownership = OwnershipFilter.OwnedBy(tree.WorkerId) });
+			DefaultFilter() with {
+				InProgressOnly = true,
+				Ownership = OwnershipFilter.OwnedBy(tree.WorkerId),
+			});
 		var workerEntries = AwaitingProgressCalculator.GetAwaitingProgress(
 			ownedByWorker.NodesById, ownedByWorker.FactsById, ownedByWorker.Prerequisites);
 
 		workerEntries.Should().BeEmpty("the worker owns only the still-Waiting leaf, which is not in progress");
 
 		var ownedByJobManager = await port.GetAwaitingProgressInputsAsync(
-			DefaultFilter() with { InProgressOnly = true, Ownership = OwnershipFilter.OwnedBy(tree.JobManagerId) });
+			DefaultFilter() with {
+				InProgressOnly = true,
+				Ownership = OwnershipFilter.OwnedBy(tree.JobManagerId),
+			});
 		var jobManagerEntries = AwaitingProgressCalculator.GetAwaitingProgress(
 			ownedByJobManager.NodesById, ownedByJobManager.FactsById, ownedByJobManager.Prerequisites);
 
@@ -210,7 +219,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		});
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			ActiveWorkerUserId = tree.WorkerId,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
@@ -231,10 +242,16 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			WorkedByUserId = tree.WorkerId,
 		});
 		_ = await sessionPort.FinishSessionAsync(
-			new() { Context = ContextFor(tree.JobManagerId), SessionId = session.Id, Version = session.Version });
+			new() {
+				Context = ContextFor(tree.JobManagerId),
+				SessionId = session.Id,
+				Version = session.Version,
+			});
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			ActiveWorkerUserId = tree.WorkerId,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Should().BeEmpty();
@@ -257,9 +274,14 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		});
 		var port = CreatePort(database.ConnectionString);
 
-		var withoutFlag = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId });
+		var withoutFlag = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			ActiveWorkerUserId = tree.WorkerId,
+		});
 		var withFlag = await port.GetAwaitingProgressInputsAsync(
-			DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId, InProgressOnly = true });
+			DefaultFilter() with {
+				ActiveWorkerUserId = tree.WorkerId,
+				InProgressOnly = true,
+			});
 
 		var withoutFlagEntries = AwaitingProgressCalculator.GetAwaitingProgress(
 			withoutFlag.NodesById, withoutFlag.FactsById, withoutFlag.Prerequisites);
@@ -292,7 +314,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var port = CreatePort(database.ConnectionString);
 
 		var result = await port.GetAwaitingProgressInputsAsync(
-			DefaultFilter() with { ActiveWorkerUserId = tree.WorkerId, Ownership = OwnershipFilter.OwnedBy(tree.JobManagerId) });
+			DefaultFilter() with {
+				ActiveWorkerUserId = tree.WorkerId,
+				Ownership = OwnershipFilter.OwnedBy(tree.JobManagerId),
+			});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.RequiredLeafId], "the worker's other open session is on a leaf she owns herself");
@@ -315,7 +340,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		});
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ExcludeBlocked = true });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			ExcludeBlocked = true,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.OutsideBranchLeafId]);
@@ -331,15 +358,25 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		_ = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var unpaged = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { ExcludeBlocked = true });
+		var unpaged = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			ExcludeBlocked = true,
+		});
 		var unpagedEntries = AwaitingProgressCalculator.GetAwaitingProgress(unpaged.NodesById, unpaged.FactsById, unpaged.Prerequisites);
 
 		var firstPageResult = await port.GetAwaitingProgressInputsAsync(
-			DefaultFilter() with { ExcludeBlocked = true, Offset = 0, Limit = 3 });
+			DefaultFilter() with {
+				ExcludeBlocked = true,
+				Offset = 0,
+				Limit = 3,
+			});
 		var firstPage = AwaitingProgressCalculator.GetAwaitingProgress(
 			firstPageResult.NodesById, firstPageResult.FactsById, firstPageResult.Prerequisites);
 		var secondPageResult = await port.GetAwaitingProgressInputsAsync(
-			DefaultFilter() with { ExcludeBlocked = true, Offset = 3, Limit = 3 });
+			DefaultFilter() with {
+				ExcludeBlocked = true,
+				Offset = 3,
+				Limit = 3,
+			});
 		var secondPage = AwaitingProgressCalculator.GetAwaitingProgress(
 			secondPageResult.NodesById, secondPageResult.FactsById, secondPageResult.Prerequisites);
 
@@ -380,7 +417,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Ownership = OwnershipFilter.OwnedBy(tree.WorkerId) });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			Ownership = OwnershipFilter.OwnedBy(tree.WorkerId),
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
@@ -392,7 +431,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Ownership = OwnershipFilter.Unassigned });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			Ownership = OwnershipFilter.Unassigned,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.UnassignedLeafId]);
@@ -404,7 +445,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SearchText = "cabinets" });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			SearchText = "cabinets",
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
@@ -416,7 +459,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SearchText = "ångström" });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			SearchText = "ångström",
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([tree.WaitingLeafId]);
@@ -428,7 +473,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SubtreeRootId = tree.BranchId });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			SubtreeRootId = tree.BranchId,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Select(e => e.Id).Should().BeEquivalentTo([
@@ -442,7 +489,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var tree = await SeedScenarioAsync();
 		var port = CreatePort(database.ConnectionString);
 
-		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { SubtreeRootId = tree.SuccessLeafId });
+		var result = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			SubtreeRootId = tree.SuccessLeafId,
+		});
 		var entries = AwaitingProgressCalculator.GetAwaitingProgress(result.NodesById, result.FactsById, result.Prerequisites);
 
 		entries.Should().BeEmpty();
@@ -459,7 +508,9 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 
 		var subtreeCommands = new CommandCountInterceptor();
 		var subtreePort = CreatePort(database.ConnectionString, [subtreeCommands]);
-		_ = await subtreePort.GetAwaitingProgressInputsAsync(DefaultFilter() with { SubtreeRootId = tree.BranchId });
+		_ = await subtreePort.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			SubtreeRootId = tree.BranchId,
+		});
 
 		subtreeCommands.Count.Should().Be(unfilteredCommands.Count);
 	}
@@ -478,10 +529,16 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		var unpaged = await port.GetAwaitingProgressInputsAsync(DefaultFilter());
 		var unpagedEntries = AwaitingProgressCalculator.GetAwaitingProgress(unpaged.NodesById, unpaged.FactsById, unpaged.Prerequisites);
 
-		var firstPageResult = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Offset = 0, Limit = 3 });
+		var firstPageResult = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			Offset = 0,
+			Limit = 3,
+		});
 		var firstPage = AwaitingProgressCalculator.GetAwaitingProgress(
 			firstPageResult.NodesById, firstPageResult.FactsById, firstPageResult.Prerequisites);
-		var secondPageResult = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with { Offset = 3, Limit = 4 });
+		var secondPageResult = await port.GetAwaitingProgressInputsAsync(DefaultFilter() with {
+			Offset = 3,
+			Limit = 4,
+		});
 		var secondPage = AwaitingProgressCalculator.GetAwaitingProgress(
 			secondPageResult.NodesById, secondPageResult.FactsById, secondPageResult.Prerequisites);
 
@@ -535,7 +592,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			OwnerUserId = administratorId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = context, JobNodeId = candidateLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = candidateLeaf.Id,
+		});
 
 		var branchDecoy = await jobNodePort.AddChildAsync(new() {
 			Context = context,
@@ -554,7 +614,11 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 		});
 		await FinishAsSuccessAsync(jobNodePort, achievementPort, context, requiredLeaf.Id);
 
-		await jobNodePort.AddPrerequisiteAsync(new() { Context = context, RequiredJobId = requiredLeaf.Id, DependentJobId = candidateLeaf.Id });
+		await jobNodePort.AddPrerequisiteAsync(new() {
+			Context = context,
+			RequiredJobId = requiredLeaf.Id,
+			DependentJobId = candidateLeaf.Id,
+		});
 
 		var decoyIds = new List<JobNodeId>();
 		for (var index = 0; index < 30; ++index) {
@@ -579,12 +643,19 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 	}
 
 	/// <summary>A generous default page covering every leaf <see cref="SeedScenarioAsync" /> creates.</summary>
-	private static AwaitingProgressQueryFilter DefaultFilter() => new() { Ownership = OwnershipFilter.All, Offset = 0, Limit = 100 };
+	private static AwaitingProgressQueryFilter DefaultFilter() => new() {
+		Ownership = OwnershipFilter.All,
+		Offset = 0,
+		Limit = 100,
+	};
 
 	private static async Task FinishAsSuccessAsync(
 		IJobNodeCommandPort jobNodePort, IAchievementCommandPort achievementPort, CommandContext context, JobNodeId nodeId)
 	{
-		var attached = await jobNodePort.AttachLeafWorkAsync(new() { Context = context, JobNodeId = nodeId });
+		var attached = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = nodeId,
+		});
 		var inProgress = await achievementPort.SetAchievementAsync(new() {
 			Context = context,
 			JobNodeId = nodeId,
@@ -623,7 +694,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 
 	internal abstract IAwaitingProgressQueryPort CreatePort(string connectionString, IReadOnlyList<IInterceptor> interceptors);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>
 	///     Seeds root (administrator-owned) -&gt; branch "Kitchen renovation", with: a worker-owned
@@ -673,7 +747,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			OwnerUserId = workerId,
 			Priority = Priority.High,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = waitingLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = waitingLeaf.Id,
+		});
 
 		var inProgressLeaf = await jobNodePort.AddChildAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -683,7 +760,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			Priority = Priority.Medium,
 		});
 		var inProgressLeafWork = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = inProgressLeaf.Id });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = inProgressLeaf.Id,
+			});
 		_ = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = inProgressLeaf.Id,
@@ -699,7 +779,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			OwnerUserId = null,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = unassignedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = unassignedLeaf.Id,
+		});
 
 		var successLeaf = await jobNodePort.AddChildAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -709,7 +792,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			Priority = Priority.Medium,
 		});
 		var successLeafWork = await jobNodePort.AttachLeafWorkAsync(
-			new() { Context = ContextFor(jobManagerId), JobNodeId = successLeaf.Id });
+			new() {
+				Context = ContextFor(jobManagerId),
+				JobNodeId = successLeaf.Id,
+			});
 		var inProgressSuccessLeafWork = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(jobManagerId),
 			JobNodeId = successLeaf.Id,
@@ -740,9 +826,16 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			OwnerUserId = jobManagerId,
 			Priority = Priority.Low,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = archivedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = archivedLeaf.Id,
+		});
 		_ = await jobNodePort.ArchiveAsync(
-			new() { Context = ContextFor(jobManagerId), NodeId = archivedLeaf.Id, Version = archivedLeaf.Version });
+			new() {
+				Context = ContextFor(jobManagerId),
+				NodeId = archivedLeaf.Id,
+				Version = archivedLeaf.Version,
+			});
 
 		var requiredLeaf = await jobNodePort.AddChildAsync(new() {
 			Context = ContextFor(jobManagerId),
@@ -751,7 +844,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			OwnerUserId = jobManagerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = requiredLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = requiredLeaf.Id,
+		});
 		var blockedLeaf = await jobNodePort.AddChildAsync(new() {
 			Context = ContextFor(jobManagerId),
 			ParentId = branch.Id,
@@ -759,7 +855,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			OwnerUserId = jobManagerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = blockedLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = blockedLeaf.Id,
+		});
 		await jobNodePort.AddPrerequisiteAsync(new() {
 			Context = ContextFor(jobManagerId),
 			RequiredJobId = requiredLeaf.Id,
@@ -776,7 +875,10 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 			OwnerUserId = jobManagerId,
 			Priority = Priority.Medium,
 		});
-		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = outsideBranchLeaf.Id });
+		_ = await jobNodePort.AttachLeafWorkAsync(new() {
+			Context = ContextFor(jobManagerId),
+			JobNodeId = outsideBranchLeaf.Id,
+		});
 
 		return new(
 			jobManagerId, workerId, branch.Id, waitingLeaf.Id, inProgressLeaf.Id, successLeaf.Id, noLeafWorkLeaf.Id, archivedLeaf.Id,

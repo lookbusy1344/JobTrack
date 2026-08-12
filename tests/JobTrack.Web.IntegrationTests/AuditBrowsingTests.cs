@@ -4,16 +4,10 @@ using System.Net;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for audit browsing with permission-sensitive detail (plan §8.5 slice 9, spec
@@ -47,7 +41,10 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 		});
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -66,7 +63,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	public async Task An_auditor_sees_ordinary_events_but_has_rate_events_redacted()
 	{
 		var administratorId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.malformed-filter-admin", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.auditor", EmployeeRole.Auditor);
 		await SeedRateChangeAsync(administratorId, workerId);
 		var authCookie = await client.SignInAsync("audit.auditor");
@@ -84,7 +81,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	public async Task An_administrator_sees_rate_event_detail_unredacted()
 	{
 		var administratorId = await SeedAdministratorAsync();
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.worker-admin", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.worker-admin");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.admin", EmployeeRole.Administrator);
 		await SeedRateChangeAsync(administratorId, workerId);
 		var authCookie = await client.SignInAsync("audit.admin");
@@ -101,7 +98,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	public async Task A_malformed_audit_time_filter_is_rejected_instead_of_being_dropped()
 	{
 		var administratorId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.malformed-filter-admin", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.malformed-filter-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.malformed-filter-worker");
 		await SeedRateChangeAsync(administratorId, workerId);
 		var authCookie = await client.SignInAsync("audit.malformed-filter-admin");
 
@@ -138,7 +135,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_cannot_open_audit_search()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.self", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.self");
 		var authCookie = await client.SignInAsync("audit.self");
 
 		var response = await client.GetAuthenticatedAsync("/Audit/Index", authCookie);
@@ -156,7 +153,10 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 		});
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private async Task SeedManyJobNodeEventsAsync(AppUserId actorId, int count)
 	{
@@ -240,9 +240,4 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 		var end = body.IndexOf('"', start);
 		return end < 0 ? null : body[start..end];
 	}
-
-
-
-
-
 }

@@ -41,7 +41,10 @@ public sealed partial class CostQueriesGrowthSignalTests
 		return port;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static void AssertGrowthSignalValues(CapturingLogger<CostQueries> logger, string operation)
 	{
@@ -72,7 +75,11 @@ public sealed partial class CostQueriesGrowthSignalTests
 		var logger = new CapturingLogger<CostQueries>();
 		var sut = new CostQueries(port, logger);
 
-		_ = await sut.GetHierarchyTotalsAsync(new() { Context = ContextFor(CostViewerId), NodeId = BranchId, AsOf = At(24) });
+		_ = await sut.GetHierarchyTotalsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = BranchId,
+			AsOf = At(24),
+		});
 
 		var growthSignalLines = logger.Messages.Where(message => message.StartsWith("cost_read_growth_signal", StringComparison.Ordinal)).ToArray();
 		growthSignalLines.Should().ContainSingle();
@@ -97,7 +104,11 @@ public sealed partial class CostQueriesGrowthSignalTests
 		var logger = new CapturingLogger<CostQueries>();
 		var sut = new CostQueries(port, logger);
 
-		_ = await sut.GetCostDetailsAsync(new() { Context = ContextFor(CostViewerId), NodeId = LeafId, AsOf = At(24) });
+		_ = await sut.GetCostDetailsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeId = LeafId,
+			AsOf = At(24),
+		});
 
 		var growthSignalLines = logger.Messages.Where(message => message.StartsWith("cost_read_growth_signal", StringComparison.Ordinal)).ToArray();
 		growthSignalLines.Should().ContainSingle();
@@ -122,7 +133,11 @@ public sealed partial class CostQueriesGrowthSignalTests
 		var logger = new CapturingLogger<CostQueries>();
 		var sut = new CostQueries(port, logger);
 
-		_ = await sut.GetBulkNodeCostsAsync(new() { Context = ContextFor(CostViewerId), NodeIds = [BranchId], AsOf = At(24) });
+		_ = await sut.GetBulkNodeCostsAsync(new() {
+			Context = ContextFor(CostViewerId),
+			NodeIds = [BranchId],
+			AsOf = At(24),
+		});
 
 		var growthSignalLines = logger.Messages.Where(message => message.StartsWith("cost_read_growth_signal", StringComparison.Ordinal)).ToArray();
 		growthSignalLines.Should().ContainSingle();

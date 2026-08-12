@@ -20,7 +20,12 @@ internal sealed class CapturingLogger<T> : ILogger<T>
 		var properties = state is IEnumerable<KeyValuePair<string, object?>> structuredState
 			? structuredState.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal)
 			: new(StringComparer.Ordinal);
-		Entries.Add(new() { Level = logLevel, EventId = eventId, Message = message, Properties = properties });
+		Entries.Add(new() {
+			Level = logLevel,
+			EventId = eventId,
+			Message = message,
+			Properties = properties,
+		});
 		Messages.Add(message);
 	}
 }

@@ -17,7 +17,11 @@ internal sealed class InProcessApiRateLimitStore : IApiRateLimitStore, IDisposab
 
 	internal InProcessApiRateLimitStore(int permitLimit, TimeSpan window) =>
 		limiter = PartitionedRateLimiter.Create<string, string>(key =>
-			RateLimitPartition.GetFixedWindowLimiter(key, _ => new() { PermitLimit = permitLimit, Window = window, QueueLimit = 0 }));
+			RateLimitPartition.GetFixedWindowLimiter(key, _ => new() {
+				PermitLimit = permitLimit,
+				Window = window,
+				QueueLimit = 0,
+			}));
 
 	public async ValueTask<RateLimitOutcome> TryAcquireAsync(string partitionKey, CancellationToken cancellationToken)
 	{

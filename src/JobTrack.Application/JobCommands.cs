@@ -182,7 +182,9 @@ internal sealed class JobCommands : IJobCommands
 			throw new ArgumentException("HomeNodeUserIds must not contain duplicate accounts.", nameof(request));
 		}
 
-		var orderedRequest = request with { Nodes = SubtreeImportPlanner.BuildCreationOrder(request.Nodes) };
+		var orderedRequest = request with {
+			Nodes = SubtreeImportPlanner.BuildCreationOrder(request.Nodes),
+		};
 
 		return JobTrackOperation.TraceAsync(
 			"jobs.import-subtree", request.Context, JobTrackOperation.WithNodeId(request.ParentId),

@@ -60,15 +60,21 @@ public static class SetScheduleCommand
 			return 1;
 		}
 
-		var context = new CommandContext { Actor = actor.AppUserId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.AppUserId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var weeklyIntervals = options.Days
-			.Select(day => new WeeklyInterval(day, options.Start, options.End))
-			.ToArray();
+									 .Select(day => new WeeklyInterval(day, options.Start, options.End))
+									 .ToArray();
 
 		ScheduleSnapshotResult existing;
 		try {
 			existing = await jobTrackClient.Query.GetScheduleAsync(
-				new() { Context = context, UserId = target.AppUserId }, cancellationToken);
+				new() {
+					Context = context,
+					UserId = target.AppUserId,
+				}, cancellationToken);
 		}
 		catch (JobTrackException ex) {
 			io.WriteError($"Failed to read the current schedule for '{options.Username}': {ex.Message}");
@@ -108,7 +114,11 @@ public static class SetScheduleCommand
 					cancellationToken);
 			} else {
 				_ = await jobTrackClient.Schedules.AddScheduleVersionAsync(
-					new() { Context = context, UserId = target.AppUserId, Schedule = schedule },
+					new() {
+						Context = context,
+						UserId = target.AppUserId,
+						Schedule = schedule,
+					},
 					cancellationToken);
 			}
 		}

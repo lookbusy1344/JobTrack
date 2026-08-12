@@ -119,7 +119,7 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		}));
 
 		results.Count(succeeded => succeeded).Should()
-			.Be(PermitLimit, "exactly the configured permit limit must succeed, regardless of concurrent contention");
+			   .Be(PermitLimit, "exactly the configured permit limit must succeed, regardless of concurrent contention");
 	}
 
 	[Fact]
@@ -168,8 +168,8 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 
 		outcomes.Should().Equal(true, true, true, false);
 		var livePartitionCount = await context.Database
-			.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
-			.SingleAsync();
+											  .SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
+											  .SingleAsync();
 		livePartitionCount.Should().Be(MaxPartitionCount);
 	}
 
@@ -188,8 +188,8 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		}
 
 		var livePartitionCount = await context.Database
-			.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
-			.SingleAsync();
+											  .SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
+											  .SingleAsync();
 		livePartitionCount.Should().BeLessThanOrEqualTo(MaxPartitionCount);
 	}
 
@@ -208,8 +208,8 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		results.Count(result => result.OutAllowed).Should().Be(MaxPartitionCount);
 		await using var verificationContext = CreateContext();
 		var livePartitionCount = await verificationContext.Database
-			.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
-			.SingleAsync();
+														  .SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
+														  .SingleAsync();
 		livePartitionCount.Should().Be(MaxPartitionCount);
 	}
 
@@ -225,25 +225,25 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		PostgreSqlJobTrackIdentityDbContext context, byte[] partitionDigest, byte[]? backstopDigest, DateTimeOffset now, int windowSeconds,
 		int permitLimit, int backstopPermitLimit) =>
 		await context.Database
-			.SqlQuery<RateLimitConsumeResult>(
-				$"""
-				 SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned"
-				 FROM rate_limit_try_consume(
-				     {LoginPurpose}, {partitionDigest}, {backstopDigest}, {now}, {windowSeconds}, {permitLimit}, {backstopPermitLimit})
-				 """)
-			.SingleAsync();
+					 .SqlQuery<RateLimitConsumeResult>(
+						 $"""
+						  SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned"
+						  FROM rate_limit_try_consume(
+						      {LoginPurpose}, {partitionDigest}, {backstopDigest}, {now}, {windowSeconds}, {permitLimit}, {backstopPermitLimit})
+						  """)
+					 .SingleAsync();
 
 	private static async Task<RateLimitConsumeResult> TryConsumeBoundedAsync(
 		PostgreSqlJobTrackIdentityDbContext context, byte[] partitionDigest, byte[]? backstopDigest, DateTimeOffset now, int windowSeconds,
 		int permitLimit, int backstopPermitLimit, int maxPartitionCount) =>
 		await context.Database
-			.SqlQuery<RateLimitConsumeResult>(
-				$"""
-				 SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned"
-				 FROM rate_limit_try_consume(
-				     {LoginPurpose}, {partitionDigest}, {backstopDigest}, {now}, {windowSeconds}, {permitLimit}, {backstopPermitLimit}, {maxPartitionCount})
-				 """)
-			.SingleAsync();
+					 .SqlQuery<RateLimitConsumeResult>(
+						 $"""
+						  SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned"
+						  FROM rate_limit_try_consume(
+						      {LoginPurpose}, {partitionDigest}, {backstopDigest}, {now}, {windowSeconds}, {permitLimit}, {backstopPermitLimit}, {maxPartitionCount})
+						  """)
+					 .SingleAsync();
 
 	private static byte[] Digest(string rawKey) => SHA256.HashData(Encoding.UTF8.GetBytes(rawKey));
 

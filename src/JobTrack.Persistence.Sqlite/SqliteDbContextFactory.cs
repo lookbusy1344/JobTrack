@@ -46,8 +46,8 @@ internal static class SqliteDbContextFactory
 		await context.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 		SqliteTextSearchFunctions.Register((SqliteConnection)context.Database.GetDbConnection());
 		_ = await context.Database
-			.ExecuteSqlRawAsync(SqliteConnectionPragmas.ConfigureConnectionSql, cancellationToken)
-			.ConfigureAwait(false);
+						 .ExecuteSqlRawAsync(SqliteConnectionPragmas.ConfigureConnectionSql, cancellationToken)
+						 .ConfigureAwait(false);
 
 		return context;
 	}

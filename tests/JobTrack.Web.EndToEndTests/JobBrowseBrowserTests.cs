@@ -2,7 +2,6 @@ namespace JobTrack.Web.EndToEndTests;
 
 using System.Globalization;
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -132,28 +131,57 @@ public abstract class JobBrowseBrowserTestsBase
 	protected JobBrowseBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
-	public static TheoryData<int, int> WideViewportMatrix => new() { { DesktopWidth, DesktopHeight }, { WideDesktopWidth, WideDesktopHeight } };
+	public static TheoryData<int, int> WideViewportMatrix => new() {
+		{
+			DesktopWidth, DesktopHeight
+		}, {
+			WideDesktopWidth, WideDesktopHeight
+		},
+	};
 
 	public static TheoryData<int, int, int, double, double> DescriptionColumnViewportMatrix => new() {
-		{ ReflowWidth, ReflowHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
-		{ SmallPhoneWidth, SmallPhoneHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
-		{ LargePhoneWidth, LargePhoneHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare },
-		{ TabletWidth, TabletHeight, 4, MediumDescriptionMinimumShare, MediumDescriptionMaximumShare },
-		{ LaptopWidth, LaptopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
-		{ DesktopWidth, DesktopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare },
-		{ WideDesktopWidth, WideDesktopHeight, 7, WideDescriptionMinimumShare, WideDescriptionMaximumShare },
+		{
+			ReflowWidth, ReflowHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare
+		}, {
+			SmallPhoneWidth, SmallPhoneHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare
+		}, {
+			LargePhoneWidth, LargePhoneHeight, 3, NarrowDescriptionMinimumShare, NarrowDescriptionMaximumShare
+		}, {
+			TabletWidth, TabletHeight, 4, MediumDescriptionMinimumShare, MediumDescriptionMaximumShare
+		}, {
+			LaptopWidth, LaptopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare
+		}, {
+			DesktopWidth, DesktopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare
+		}, {
+			WideDesktopWidth, WideDesktopHeight, 7, WideDescriptionMinimumShare, WideDescriptionMaximumShare
+		},
 	};
 
 	public static TheoryData<int, int, bool> BlockerColumnViewportMatrix => new() {
-		{ ReflowWidth, ReflowHeight, true }, { DesktopWidth, DesktopHeight, false },
+		{
+			ReflowWidth, ReflowHeight, true
+		}, {
+			DesktopWidth, DesktopHeight, false
+		},
 	};
 
 	public static TheoryData<int, int, double, double> MidWidthCostViewportMatrix => new() {
-		{ TabletWidth, TabletHeight, TabletCostMinimumShare, TabletCostMaximumShare },
-		{ LaptopWidth, LaptopHeight, LaptopCostMinimumShare, LaptopCostMaximumShare },
+		{
+			TabletWidth, TabletHeight, TabletCostMinimumShare, TabletCostMaximumShare
+		}, {
+			LaptopWidth, LaptopHeight, LaptopCostMinimumShare, LaptopCostMaximumShare
+		},
 	};
 
 	[Theory]
@@ -318,7 +346,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
 		(await page.Locator($"#jt-history-list a[href='/Jobs/Browse?nodeId={firstLeafId.Value}']").CountAsync()).Should()
-			.Be(1, "the first job is now a breadcrumb");
+																												.Be(1, "the first job is now a breadcrumb");
 
 		await page.Locator("#jt-history-clear").ClickAsync();
 
@@ -389,7 +417,10 @@ public abstract class JobBrowseBrowserTestsBase
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
 
-		var clear = page.GetByRole(AriaRole.Button, new() { Name = "Clear recently visited", Exact = true });
+		var clear = page.GetByRole(AriaRole.Button, new() {
+			Name = "Clear recently visited",
+			Exact = true,
+		});
 		await clear.FocusAsync();
 		(await page.EvaluateAsync<string>("document.activeElement.id")).Should().Be("jt-history-clear");
 		await clear.PressAsync("Enter");
@@ -417,7 +448,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var historyAfterSignOut = await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')");
 		historyAfterSignOut.Should()
-			.BeNullOrEmpty("signing out must clear a signed-out account's breadcrumbs so they don't leak into the next session");
+						   .BeNullOrEmpty("signing out must clear a signed-out account's breadcrumbs so they don't leak into the next session");
 	}
 
 	[Fact]
@@ -490,7 +521,9 @@ public abstract class JobBrowseBrowserTestsBase
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={NonExistentNodeId}");
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
-		var historyLink = page.Locator("#jt-history-list a", new() { HasTextString = "Deleted job" });
+		var historyLink = page.Locator("#jt-history-list a", new() {
+			HasTextString = "Deleted job",
+		});
 		(await historyLink.CountAsync()).Should().Be(0, "a breadcrumb pointing at a node that no longer exists should be dropped, not kept forever");
 	}
 
@@ -515,13 +548,20 @@ public abstract class JobBrowseBrowserTestsBase
 		// leaf away and the assertions below would read as a reflow failure.
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
-		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
+		var phoneRow = phone.Locator("tbody tr", new() {
+			HasTextString = "Fit cabinets",
+		}).First;
 		(await phoneRow.Locator(".jt-tree-name-link").First.IsVisibleAsync()).Should().BeTrue("the name is the point of the row");
 		(await phoneRow.Locator(".jt-tree-icon").First.IsVisibleAsync()).Should().BeTrue("the kind glyph replaces the dropped Kind column");
-		(await phoneRow.GetByRole(AriaRole.Link, new() { Name = "Sessions", Exact = true }).IsVisibleAsync()).Should()
-			.BeTrue("Sessions is the one row action that must stay reachable on a phone");
-		(await phoneRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should()
-			.BeFalse("Start is one tap away via Sessions/Browse and would crowd a phone-width row");
+		(await phoneRow.GetByRole(AriaRole.Link, new() {
+			Name = "Sessions",
+			Exact = true,
+		}).IsVisibleAsync()).Should()
+								.BeTrue("Sessions is the one row action that must stay reachable on a phone");
+		(await phoneRow.Locator("button", new() {
+			HasTextString = "Start",
+		}).First.IsVisibleAsync()).Should()
+									  .BeFalse("Start is one tap away via Sessions/Browse and would crowd a phone-width row");
 		(await phoneRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeFalse("owner/priority/cost/span are secondary on a phone");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
@@ -529,12 +569,16 @@ public abstract class JobBrowseBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(desktop, fixture.BaseAddress);
 		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
-		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
+		var desktopRow = desktop.Locator("tbody tr", new() {
+			HasTextString = "Fit cabinets",
+		}).First;
 		// .Last, not .First: the first .jt-col-secondary in the row is Priority, which this table alone
 		// holds back to xxl so Description can have its twelfth. Deadline is the one that returns at lg.
 		(await desktopRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeTrue("the columns come back when there is room for them");
-		(await desktopRow.Locator("button", new() { HasTextString = "Start" }).First.IsVisibleAsync()).Should()
-			.BeTrue("Start comes back when there is room for it");
+		(await desktopRow.Locator("button", new() {
+			HasTextString = "Start",
+		}).First.IsVisibleAsync()).Should()
+									  .BeTrue("Start comes back when there is room for it");
 	}
 
 	[Theory]
@@ -556,7 +600,10 @@ public abstract class JobBrowseBrowserTestsBase
 			"elements => elements.filter(element => element.getClientRects().length > 0).length");
 		var tableWidth = await ColumnWidthAsync(table);
 		var descriptionWidth = await ColumnWidthAsync(
-			table.GetByRole(AriaRole.Columnheader, new() { Name = "Description", Exact = true }));
+			table.GetByRole(AriaRole.Columnheader, new() {
+				Name = "Description",
+				Exact = true,
+			}));
 
 		visibleColumnCount.Should().Be(expectedVisibleColumns);
 		(descriptionWidth / tableWidth).Should().BeInRange(minimumDescriptionShare, maximumDescriptionShare,
@@ -578,7 +625,10 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var table = page.Locator(".jt-browse-children-table");
 		var tableWidth = await ColumnWidthAsync(table);
-		var costWidth = await ColumnWidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Cost", Exact = true }));
+		var costWidth = await ColumnWidthAsync(table.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Cost",
+			Exact = true,
+		}));
 
 		(costWidth / tableWidth).Should().BeInRange(minimumCostShare, maximumCostShare,
 			$"Cost should follow its responsive Bootstrap column allocation at the {width}px mid-width viewport");
@@ -607,7 +657,9 @@ public abstract class JobBrowseBrowserTestsBase
 		var page = await context.NewPageAsync();
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
-		await page.GetByText("Inherited blockers (from ancestor prerequisites)", new() { Exact = true }).ClickAsync();
+		await page.GetByText("Inherited blockers (from ancestor prerequisites)", new() {
+			Exact = true,
+		}).ClickAsync();
 
 		var groups = page.Locator("details.jt-card .row > .col-12.col-md-6");
 		(await groups.CountAsync()).Should().Be(2);
@@ -645,20 +697,27 @@ public abstract class JobBrowseBrowserTestsBase
 		// reason given on the secondary-column reflow test above.
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
-		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
+		var phoneRow = phone.Locator("tbody tr", new() {
+			HasTextString = "Responsive active worker leaf",
+		}).First;
 		var phoneActivePill = phoneRow.Locator(".jt-col-active .status-pill-active.status-pill--icon");
 		(await phoneRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
 		(await phoneActivePill.IsVisibleAsync()).Should().BeTrue();
 		(await phoneActivePill.GetAttributeAsync("title")).Should().Be($"{RequiredSimultaneousWorkerCount} active");
 		(await VisibleTextOfAsync(phoneActivePill)).Should().BeEmpty("the one-column phone pill carries only its coloured icon");
-		(await phoneRow.GetByRole(AriaRole.Link, new() { Name = "Sessions", Exact = true }).IsVisibleAsync()).Should().BeTrue();
+		(await phoneRow.GetByRole(AriaRole.Link, new() {
+			Name = "Sessions",
+			Exact = true,
+		}).IsVisibleAsync()).Should().BeTrue();
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
 		await BrowserTestSupport.SignInAdministratorAsync(desktop, fixture.BaseAddress);
 		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
-		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
+		var desktopRow = desktop.Locator("tbody tr", new() {
+			HasTextString = "Responsive active worker leaf",
+		}).First;
 		(await desktopRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
 		// The table-cell pill is compact -- glyph and bare count only, per _ActiveSincePill's Compact
 		// branch -- with the full wording carried in its title tooltip rather than rendered text.
@@ -700,7 +759,9 @@ public abstract class JobBrowseBrowserTestsBase
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, $"a long title with two active workers should not overflow at {width}x{height}");
 
-		var row = page.Locator("tbody tr", new() { HasTextString = TwoActiveWorkerRowTitle }).First;
+		var row = page.Locator("tbody tr", new() {
+			HasTextString = TwoActiveWorkerRowTitle,
+		}).First;
 		var activePill = row.Locator(".jt-col-active .status-pill-active.status-pill--compact");
 		(await activePill.GetAttributeAsync("title")).Should().Be($"{TwoActiveWorkerCount} active");
 		(await VisibleTextOfAsync(activePill)).Should().Be(TwoActiveWorkerCount.ToString(CultureInfo.InvariantCulture));
@@ -712,7 +773,10 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var table = page.Locator(".jt-browse-children-table");
 		var tableWidth = await ColumnWidthAsync(table);
-		var descriptionWidth = await ColumnWidthAsync(table.GetByRole(AriaRole.Columnheader, new() { Name = "Description", Exact = true }));
+		var descriptionWidth = await ColumnWidthAsync(table.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Description",
+			Exact = true,
+		}));
 		(descriptionWidth / tableWidth).Should().BeGreaterThanOrEqualTo(MinimumWideDescriptionShare,
 			$"the node title must keep at least three of twelve columns at {width}x{height}");
 	}
@@ -776,21 +840,25 @@ public abstract class JobBrowseBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(phone, fixture.BaseAddress);
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
-		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Active Worker 1" }).First;
+		var phoneRow = phone.Locator("tbody tr", new() {
+			HasTextString = "Active Worker 1",
+		}).First;
 		(await phoneRow.GetByTitle("Pause job").IsVisibleAsync()).Should().BeTrue("Pause is the one row action that must stay reachable on a phone");
 		(await phoneRow.Locator(".jt-session-started").IsVisibleAsync()).Should().BeFalse("Started is one tap away via the row's own session");
 		(await phoneRow.GetByTitle("Correct").IsVisibleAsync()).Should().BeFalse("an active row keeps Pause, not Correct, as its one phone action");
 		(await phoneRow.GetByTitle("Backdate finish").IsVisibleAsync()).Should()
-			.BeFalse("the backdate trigger is one tap away via the row's own session");
+																	   .BeFalse("the backdate trigger is one tap away via the row's own session");
 		(await phoneRow.Locator(".status-pill-active.status-pill--compact").IsVisibleAsync()).Should()
-			.BeTrue("the compact amber active pill (carrying the start time) stays visible on a phone");
+																							 .BeTrue("the compact amber active pill (carrying the start time) stays visible on a phone");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
 		await BrowserTestSupport.SignInAdministratorAsync(desktop, fixture.BaseAddress);
 		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
-		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Active Worker 1" }).First;
+		var desktopRow = desktop.Locator("tbody tr", new() {
+			HasTextString = "Active Worker 1",
+		}).First;
 		(await desktopRow.Locator(".jt-session-started").IsVisibleAsync()).Should().BeTrue("Started comes back when there is room for it");
 		(await desktopRow.GetByTitle("Correct").IsVisibleAsync()).Should().BeTrue("Correct comes back when there is room for it");
 	}
@@ -811,10 +879,16 @@ public abstract class JobBrowseBrowserTestsBase
 		await tablet.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var tabletTable = tablet.Locator(".jt-table-block table");
-		(await tabletTable.GetByRole(AriaRole.Columnheader, new() { Name = "Cost", Exact = true }).IsVisibleAsync()).Should()
-			.BeTrue("Cost is visible at the tablet breakpoint");
-		(await tabletTable.GetByRole(AriaRole.Columnheader, new() { Name = "Started", Exact = true }).IsVisibleAsync()).Should()
-			.BeFalse("Started has already narrowed away at the tablet breakpoint");
+		(await tabletTable.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Cost",
+			Exact = true,
+		}).IsVisibleAsync()).Should()
+								.BeTrue("Cost is visible at the tablet breakpoint");
+		(await tabletTable.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Started",
+			Exact = true,
+		}).IsVisibleAsync()).Should()
+								.BeFalse("Started has already narrowed away at the tablet breakpoint");
 
 		await using var laptopContext = await fixture.NewContextAsync(LaptopWidth, LaptopHeight);
 		var laptop = await laptopContext.NewPageAsync();
@@ -822,10 +896,16 @@ public abstract class JobBrowseBrowserTestsBase
 		await laptop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var laptopTable = laptop.Locator(".jt-table-block table");
-		(await laptopTable.GetByRole(AriaRole.Columnheader, new() { Name = "Cost", Exact = true }).IsVisibleAsync()).Should()
-			.BeTrue("Cost stays visible at the laptop breakpoint");
-		(await laptopTable.GetByRole(AriaRole.Columnheader, new() { Name = "Started", Exact = true }).IsVisibleAsync()).Should()
-			.BeTrue("Started returns once the laptop breakpoint gives it room");
+		(await laptopTable.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Cost",
+			Exact = true,
+		}).IsVisibleAsync()).Should()
+								.BeTrue("Cost stays visible at the laptop breakpoint");
+		(await laptopTable.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Started",
+			Exact = true,
+		}).IsVisibleAsync()).Should()
+								.BeTrue("Started returns once the laptop breakpoint gives it room");
 	}
 
 	[Fact]
@@ -844,7 +924,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var phoneRow = phone.Locator("tbody tr").First;
 		(await phoneRow.GetByTitle("Correct").IsVisibleAsync()).Should()
-			.BeTrue("a finished row has no Pause, so Correct must be its one phone action");
+															   .BeTrue("a finished row has no Pause, so Correct must be its one phone action");
 		(await phoneRow.GetByTitle("Pause job").IsVisibleAsync()).Should().BeFalse("a finished session has nothing to pause");
 	}
 
@@ -894,7 +974,9 @@ public abstract class JobBrowseBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
-		var lastRow = page.Locator("tbody tr", new() { HasTextString = "Popover last leaf" }).Last;
+		var lastRow = page.Locator("tbody tr", new() {
+			HasTextString = "Popover last leaf",
+		}).Last;
 		var trigger = lastRow.GetByTitle("Start for…");
 		await trigger.ScrollIntoViewIfNeededAsync();
 		await trigger.ClickAsync();
@@ -970,7 +1052,9 @@ public abstract class JobBrowseBrowserTestsBase
 				return hit.closest(selector) !== null ? expected : hit.outerHTML.slice(0, 120);
 			}
 			""",
-			new object[] { expectedAncestorSelector, point == SamplePoint.BottomEdge, PopoverEdgeSampleInset, TopmostIsExpectedElement });
+			new object[] {
+				expectedAncestorSelector, point == SamplePoint.BottomEdge, PopoverEdgeSampleInset, TopmostIsExpectedElement,
+			});
 
 	/// <summary>
 	///     Every element whose computed overflow scrolls in either axis, described for a failure message.
@@ -1142,20 +1226,14 @@ public abstract class JobBrowseBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqliteJobBrowseBrowserTests : JobBrowseBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteJobBrowseBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteJobBrowseBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlJobBrowseBrowserTests : JobBrowseBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlJobBrowseBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlJobBrowseBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

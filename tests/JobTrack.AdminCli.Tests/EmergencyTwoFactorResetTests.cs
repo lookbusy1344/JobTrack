@@ -123,7 +123,10 @@ public sealed class EmergencyTwoFactorResetTests
 			await SeedTwoFactorEnabledAsync(database.ConnectionString, SchemaProvider.Sqlite, identityUserId);
 			var jobTrackClient = JobTrackSqlite.Create(database.ConnectionString);
 			var issued = await jobTrackClient.Tokens.IssueAsync(new() {
-				Context = new() { Actor = new(appUserId), CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = new(appUserId),
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = new(appUserId),
 				Label = "cli-test-token",
 				ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -144,7 +147,9 @@ public sealed class EmergencyTwoFactorResetTests
 
 			exitCode.Should().Be(0);
 			var authenticated = await jobTrackClient.Tokens.TryAuthenticateAsync(
-				new() { Token = issued.Token });
+				new() {
+					Token = issued.Token,
+				});
 			authenticated.Should().BeNull("the emergency two-factor reset must revoke every personal access token for the reset employee");
 		}
 		finally {
@@ -346,7 +351,9 @@ public sealed class EmergencyTwoFactorResetTests
 		command.CommandText =
 			$"UPDATE identity_user SET two_factor_enabled = {p}enabled, authenticator_key_protected = {p}key WHERE id = {p}id;";
 		AddParameter(command, p + "enabled", true);
-		AddParameter(command, p + "key", new byte[] { 1, 2, 3 });
+		AddParameter(command, p + "key", new byte[] {
+			1, 2, 3,
+		});
 		AddParameter(command, p + "id", identityUserId);
 
 		_ = await command.ExecuteNonQueryAsync();

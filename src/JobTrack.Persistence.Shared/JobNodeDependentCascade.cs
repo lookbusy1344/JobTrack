@@ -32,9 +32,9 @@ internal static class JobNodeDependentCascade
 		DbContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
 		var anchoredAreas = await context.Set<RequestHoldingAreaEntity>().AsNoTracking()
-			.Where(h => h.JobNodeId == nodeId)
-			.Select(h => h.Name)
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+										 .Where(h => h.JobNodeId == nodeId)
+										 .Select(h => h.Name)
+										 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		if (anchoredAreas.Count > 0) {
 			throw new InvariantViolationException(
@@ -44,17 +44,17 @@ internal static class JobNodeDependentCascade
 		}
 
 		var noteCount = await context.Set<JobRequestNoteEntity>().AsNoTracking()
-			.CountAsync(n => n.JobNodeId == nodeId, cancellationToken).ConfigureAwait(false);
+									 .CountAsync(n => n.JobNodeId == nodeId, cancellationToken).ConfigureAwait(false);
 
 		var rateOverrideCount = await context.Set<NodeRateOverrideEntity>()
-			.Where(o => o.NodeId == nodeId)
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+											 .Where(o => o.NodeId == nodeId)
+											 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		// The note thread goes with it at the database, so nothing here deletes job_request_note
 		// directly -- ADR 0034's append-only trigger still refuses that while the request exists.
 		var requestCount = await context.Set<JobRequestEntity>()
-			.Where(r => r.JobNodeId == nodeId)
-			.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+										.Where(r => r.JobNodeId == nodeId)
+										.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
 		var snapshot = new Dictionary<string, string?>();
 

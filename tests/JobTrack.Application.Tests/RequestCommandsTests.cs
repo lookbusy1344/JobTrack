@@ -12,7 +12,10 @@ public sealed class RequestCommandsTests
 	private static readonly AppUserId RequesterId = new(10);
 	private static readonly Instant Now = Instant.FromUtc(2026, 1, 2, 12, 0);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static RequestCommands CreateSut(FakeJobRequestCommandPort port) =>
 		new(port, new FakeRequesterDurationQueries(new Dictionary<JobNodeId, AllocatedDuration>()),
@@ -90,7 +93,9 @@ public sealed class RequestCommandsTests
 		var readyId = new JobNodeId(100);
 		var blockedId = new JobNodeId(200);
 		var requiredId = new JobNodeId(300);
-		var requestPort = new FakeJobRequestCommandPort { SummaryResults = [Summary(readyId), Summary(blockedId)] };
+		var requestPort = new FakeJobRequestCommandPort {
+			SummaryResults = [Summary(readyId), Summary(blockedId)],
+		};
 		var readinessPort = new FakeReadinessQueryPort {
 			NodesById = new() {
 				[readyId] = new(readyId, null, [], null),
@@ -155,7 +160,10 @@ public sealed class RequestCommandsTests
 		});
 		var sut = new RequestCommands(requestPort, durationQueries, new FakeReadinessQueryPort(), new FixedClock(Now));
 
-		var result = await sut.GetDetailAsync(new() { Context = ContextFor(RequesterId), NodeId = rootId });
+		var result = await sut.GetDetailAsync(new() {
+			Context = ContextFor(RequesterId),
+			NodeId = rootId,
+		});
 
 		result.Subtree.Single(node => node.JobNodeId == rootId).AllocatedDuration.Should().Be(rootDuration);
 		result.Subtree.Single(node => node.JobNodeId == leafId).AllocatedDuration.Should().Be(leafDuration);
@@ -166,11 +174,16 @@ public sealed class RequestCommandsTests
 	[Fact]
 	public async Task GetDetailAsync_does_not_query_work_duration_until_request_access_is_authorized()
 	{
-		var requestPort = new FakeJobRequestCommandPort { GetDetailException = new AuthorizationDeniedException("Not this request.") };
+		var requestPort = new FakeJobRequestCommandPort {
+			GetDetailException = new AuthorizationDeniedException("Not this request."),
+		};
 		var durationQueries = new FakeRequesterDurationQueries(new Dictionary<JobNodeId, AllocatedDuration>());
 		var sut = new RequestCommands(requestPort, durationQueries, new FakeReadinessQueryPort(), new FixedClock(Now));
 
-		var act = () => sut.GetDetailAsync(new() { Context = ContextFor(RequesterId), NodeId = new(100) });
+		var act = () => sut.GetDetailAsync(new() {
+			Context = ContextFor(RequesterId),
+			NodeId = new(100),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		durationQueries.CallCount.Should().Be(0);
@@ -186,7 +199,9 @@ public sealed class RequestCommandsTests
 	{
 		var anchorId = new JobNodeId(100);
 		var blockerId = new JobNodeId(200);
-		var requestPort = new FakeJobRequestCommandPort { DetailResult = DetailFor(anchorId) };
+		var requestPort = new FakeJobRequestCommandPort {
+			DetailResult = DetailFor(anchorId),
+		};
 		var readiness = new FakeReadinessQueryPort {
 			NodesById = new() {
 				[anchorId] = new(anchorId, null, [], Achievement.InProgress),
@@ -197,7 +212,10 @@ public sealed class RequestCommandsTests
 		var sut = new RequestCommands(
 			requestPort, new FakeRequesterDurationQueries(new Dictionary<JobNodeId, AllocatedDuration>()), readiness, new FixedClock(Now));
 
-		var result = await sut.GetDetailAsync(new() { Context = ContextFor(RequesterId), NodeId = anchorId });
+		var result = await sut.GetDetailAsync(new() {
+			Context = ContextFor(RequesterId),
+			NodeId = anchorId,
+		});
 
 		result.IsReady.Should().BeFalse();
 		readiness.LastNodeId.Should().Be(anchorId);
@@ -208,7 +226,9 @@ public sealed class RequestCommandsTests
 	{
 		var anchorId = new JobNodeId(100);
 		var blockerId = new JobNodeId(200);
-		var requestPort = new FakeJobRequestCommandPort { DetailResult = DetailFor(anchorId) };
+		var requestPort = new FakeJobRequestCommandPort {
+			DetailResult = DetailFor(anchorId),
+		};
 		var readiness = new FakeReadinessQueryPort {
 			NodesById = new() {
 				[anchorId] = new(anchorId, null, [], Achievement.InProgress),
@@ -219,7 +239,10 @@ public sealed class RequestCommandsTests
 		var sut = new RequestCommands(
 			requestPort, new FakeRequesterDurationQueries(new Dictionary<JobNodeId, AllocatedDuration>()), readiness, new FixedClock(Now));
 
-		var result = await sut.GetDetailAsync(new() { Context = ContextFor(RequesterId), NodeId = anchorId });
+		var result = await sut.GetDetailAsync(new() {
+			Context = ContextFor(RequesterId),
+			NodeId = anchorId,
+		});
 
 		result.IsReady.Should().BeTrue();
 	}
@@ -241,7 +264,10 @@ public sealed class RequestCommandsTests
 		};
 		var sut = CreateSut(requestPort);
 
-		var result = await sut.GetDetailAsync(new() { Context = ContextFor(RequesterId), NodeId = anchorId });
+		var result = await sut.GetDetailAsync(new() {
+			Context = ContextFor(RequesterId),
+			NodeId = anchorId,
+		});
 
 		result.Kind.Should().Be(NodeKind.Leaf);
 		result.SubtreeAchievement.Should().Be(BranchAchievement.Unfinished);
@@ -251,12 +277,17 @@ public sealed class RequestCommandsTests
 	[Fact]
 	public async Task GetDetailAsync_does_not_query_readiness_until_request_access_is_authorized()
 	{
-		var requestPort = new FakeJobRequestCommandPort { GetDetailException = new AuthorizationDeniedException("Not this request.") };
+		var requestPort = new FakeJobRequestCommandPort {
+			GetDetailException = new AuthorizationDeniedException("Not this request."),
+		};
 		var readiness = new FakeReadinessQueryPort();
 		var sut = new RequestCommands(
 			requestPort, new FakeRequesterDurationQueries(new Dictionary<JobNodeId, AllocatedDuration>()), readiness, new FixedClock(Now));
 
-		var act = () => sut.GetDetailAsync(new() { Context = ContextFor(RequesterId), NodeId = new(100) });
+		var act = () => sut.GetDetailAsync(new() {
+			Context = ContextFor(RequesterId),
+			NodeId = new(100),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		readiness.CallCount.Should().Be(0);
@@ -316,7 +347,9 @@ public sealed class RequestCommandsTests
 
 			var nodes = NodesById.Count > 0
 				? NodesById
-				: new() { [nodeId] = new(nodeId, null, [], null) };
+				: new() {
+					[nodeId] = new(nodeId, null, [], null),
+				};
 
 			return Task.FromResult<ReadinessQueryResult>(new() {
 				NodesById = EquatableDictionaryFactory.CopyOf(nodes),

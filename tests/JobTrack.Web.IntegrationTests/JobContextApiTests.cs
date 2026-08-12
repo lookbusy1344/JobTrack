@@ -6,16 +6,12 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the read-only job-context external API surface (plan §4.3 slice 1, ADR
@@ -55,7 +51,10 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -82,7 +81,7 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 		response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
 		jsonDocument.RootElement.GetProperty("type").GetString()
-			.Should().Be(RequiresPasswordChangeEndpointFilter.PasswordChangeRequiredProblemType);
+					.Should().Be(RequiresPasswordChangeEndpointFilter.PasswordChangeRequiredProblemType);
 	}
 
 	[Fact]
@@ -248,7 +247,10 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		var workerId = await SeedEmployeeAsync("jobs.bearer.worker");
 		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -273,7 +275,10 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -286,12 +291,18 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 	private async Task ArchiveAsync(JobNodeId nodeId)
 	{
 		var node = await seedClient.Query.GetJobNodeAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = nodeId,
 		});
 
 		_ = await seedClient.Jobs.ArchiveAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = nodeId,
 			Version = node.Node.Version,
 		});
@@ -299,7 +310,10 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 
 	private async Task AddPrerequisiteAsync(JobNodeId requiredJobId, JobNodeId dependentJobId) =>
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredJobId,
 			DependentJobId = dependentJobId,
 		});
@@ -368,7 +382,4 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
 }

@@ -6,15 +6,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for prerequisite editing (plan §8.5 slice 5, spec §6): adding and removing
@@ -51,7 +44,10 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -139,7 +135,7 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_who_cannot_manage_either_endpoint_is_denied_when_adding()
 	{
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "prereq.owner-manager", EmployeeRole.JobManager);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "prereq.denied-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "prereq.denied-worker");
 		var required = await AddChildAsync(rootId, managerId, "Owned by manager");
 		var dependent = await AddChildAsync(rootId, managerId, "Also owned by manager");
 		var authCookie = await client.SignInAsync("prereq.denied-worker");
@@ -155,7 +151,10 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
 		await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -170,9 +169,7 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 
 		var form = new List<KeyValuePair<string, string>> {
-			new("NodeId", nodeId.Value.ToString(CultureInfo.InvariantCulture)),
-			new("SearchText", searchText),
-			new("__RequestVerificationToken", token),
+			new("NodeId", nodeId.Value.ToString(CultureInfo.InvariantCulture)), new("SearchText", searchText), new("__RequestVerificationToken", token),
 		};
 		form.AddRange(requiresIds.Select(id =>
 			new KeyValuePair<string, string>($"Input.Selections[{id.Value.ToString(CultureInfo.InvariantCulture)}]", "Requires")));
@@ -226,17 +223,6 @@ public sealed partial class PrerequisitesTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
-
-
-
-
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
-
-
 }

@@ -55,7 +55,9 @@ public sealed class PostgreSqlSchemaVersionStore : ISchemaVersionStore
 		_ = command.Parameters.AddWithValue("checksum", appliedVersion.Checksum);
 		_ = command.Parameters.AddWithValue("appliedBy", appliedVersion.AppliedBy);
 		_ = command.Parameters.AddWithValue("applicationVersion", appliedVersion.ApplicationVersion);
-		_ = command.Parameters.Add(new("appliedAt", NpgsqlDbType.TimestampTz) { Value = appliedVersion.AppliedAtUtc });
+		_ = command.Parameters.Add(new("appliedAt", NpgsqlDbType.TimestampTz) {
+			Value = appliedVersion.AppliedAtUtc,
+		});
 
 		_ = await command.ExecuteNonQueryAsync(cancellationToken);
 	}

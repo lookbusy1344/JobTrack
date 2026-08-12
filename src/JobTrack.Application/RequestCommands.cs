@@ -74,12 +74,12 @@ internal sealed class RequestCommands : IRequestCommands
 				// outside the requester-safe subtree. Materialize every listed anchor in one batch so
 				// adding the blocked marker never becomes a query per request.
 				var readinessInputs = await _readinessQueryPort
-					.GetReadinessInputsForNodesAsync([.. summaries.Select(summary => summary.JobNodeId)], cancellationToken)
-					.ConfigureAwait(false);
+											.GetReadinessInputsForNodesAsync([.. summaries.Select(summary => summary.JobNodeId)], cancellationToken)
+											.ConfigureAwait(false);
 
 				return EquatableArray.CopyOf(summaries.Select(summary => summary with {
 					IsReady = ReadinessCalculator
-						.IsReady(summary.JobNodeId, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
+							  .IsReady(summary.JobNodeId, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
 				}));
 			});
 	}
@@ -127,8 +127,8 @@ internal sealed class RequestCommands : IRequestCommands
 				// internal projections read work-derived and prerequisite-derived facts.
 				var detail = await _port.GetDetailAsync(request, cancellationToken).ConfigureAwait(false);
 				var durations = await _durationQueries.GetRequesterVisibleHierarchyAsync(
-						request.NodeId, _clock.GetCurrentInstant(), cancellationToken)
-					.ConfigureAwait(false);
+														  request.NodeId, _clock.GetCurrentInstant(), cancellationToken)
+													  .ConfigureAwait(false);
 
 				// Readiness aggregates prerequisites declared on the anchor and on every ancestor (spec
 				// §6), which reach outside the requester-safe subtree the request port projects -- so it

@@ -25,7 +25,11 @@ internal sealed class FakeScheduleQueryPort : IScheduleQueryPort
 			throw new EntityNotFoundException($"Employee {userId} does not exist.");
 		}
 
-		return Task.FromResult(new ScheduleQueryResult { ActorRoles = actorRoles, Versions = [.. versions], Exceptions = [.. _exceptions[userId]] });
+		return Task.FromResult(new ScheduleQueryResult {
+			ActorRoles = actorRoles,
+			Versions = [.. versions],
+			Exceptions = [.. _exceptions[userId]],
+		});
 	}
 
 	public void SeedRoles(AppUserId actorId, params EmployeeRole[] roles) => _roles[actorId] = [.. roles];

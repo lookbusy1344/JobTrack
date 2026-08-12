@@ -79,7 +79,7 @@ public sealed class SetScheduleCommandTests
 				clock, CancellationToken.None);
 
 			(await ReadScheduleAsync(client)).Versions.Single().Schedule.EffectiveStart
-				.Should().Be(ProvisionedEffectiveStart);
+											 .Should().Be(ProvisionedEffectiveStart);
 		});
 
 	[Fact]
@@ -89,12 +89,14 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, "Mon", "09:00", "17:00") with { EffectiveStart = new LocalDate(2026, 6, 1) },
+				Options(AdminUserName, "Mon", "09:00", "17:00") with {
+					EffectiveStart = new LocalDate(2026, 6, 1),
+				},
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(0);
 			(await ReadScheduleAsync(client)).Versions.Single().Schedule.EffectiveStart
-				.Should().Be(new(2026, 6, 1));
+											 .Should().Be(new(2026, 6, 1));
 		});
 
 	[Fact]
@@ -149,7 +151,9 @@ public sealed class SetScheduleCommandTests
 
 			var exitCode = await SetScheduleCommand.RunAsync(
 				console, userManager, client,
-				Options(AdminUserName, "Mon", "09:00", "17:00") with { ActorUsername = "no.such.admin" },
+				Options(AdminUserName, "Mon", "09:00", "17:00") with {
+					ActorUsername = "no.such.admin",
+				},
 				clock, CancellationToken.None);
 
 			exitCode.Should().Be(1);
@@ -178,10 +182,16 @@ public sealed class SetScheduleCommandTests
 			"--days", days, "--start", start, "--end", end, "--iana-time-zone", ianaTimeZone,
 		]));
 
-	private static CommandContext Context() => new() { Actor = new(1), CorrelationId = Guid.NewGuid() };
+	private static CommandContext Context() => new() {
+		Actor = new(1),
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static async Task<ScheduleSnapshotResult> ReadScheduleAsync(IJobTrackClient client) =>
-		await client.Query.GetScheduleAsync(new() { Context = Context(), UserId = new(1) });
+		await client.Query.GetScheduleAsync(new() {
+			Context = Context(),
+			UserId = new(1),
+		});
 
 	/// <summary>
 	///     Closes the provisioned open-ended version and adds a second one after it, so the account has

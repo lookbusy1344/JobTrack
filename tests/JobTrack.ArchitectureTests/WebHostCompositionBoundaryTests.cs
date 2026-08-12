@@ -74,11 +74,11 @@ public sealed class WebHostCompositionBoundaryTests
 	{
 		var identityProjectDirectory = Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Identity");
 		var violations = Directory.EnumerateFiles(identityProjectDirectory, "*.cs", SearchOption.AllDirectories)
-			.Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-						   && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-			.Where(path => File.ReadAllText(path).Contains("audit_event", StringComparison.Ordinal))
-			.Select(path => Path.GetFileName(path))
-			.ToList();
+								  .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+												 && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+								  .Where(path => File.ReadAllText(path).Contains("audit_event", StringComparison.Ordinal))
+								  .Select(path => Path.GetFileName(path))
+								  .ToList();
 
 		violations.Should().BeEmpty(
 			"authentication audit writes must go through the application client and persistence ports, not the Identity adapter");
@@ -89,8 +89,8 @@ public sealed class WebHostCompositionBoundaryTests
 		var webProjectDirectory = Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web");
 
 		return Directory.EnumerateFiles(webProjectDirectory, "*.cs", SearchOption.AllDirectories)
-			.Concat(Directory.EnumerateFiles(webProjectDirectory, "*.cshtml", SearchOption.AllDirectories))
-			.Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-						   && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+						.Concat(Directory.EnumerateFiles(webProjectDirectory, "*.cshtml", SearchOption.AllDirectories))
+						.Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+									   && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 	}
 }

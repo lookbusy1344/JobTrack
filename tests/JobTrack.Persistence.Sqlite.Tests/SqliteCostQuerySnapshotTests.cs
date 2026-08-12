@@ -9,7 +9,9 @@ public sealed class SqliteCostQuerySnapshotTests
 	[Fact]
 	public async Task Cost_query_snapshot_is_deferred_until_the_first_read()
 	{
-		var connectionString = new SqliteConnectionStringBuilder { DataSource = Path.GetTempFileName() }.ConnectionString;
+		var connectionString = new SqliteConnectionStringBuilder {
+			DataSource = Path.GetTempFileName(),
+		}.ConnectionString;
 		await using var firstConnection = new SqliteConnection(connectionString);
 		await firstConnection.OpenAsync();
 		await using var setup = firstConnection.CreateCommand();

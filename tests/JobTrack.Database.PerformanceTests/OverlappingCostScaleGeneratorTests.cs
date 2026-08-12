@@ -67,7 +67,7 @@ public sealed class OverlappingCostScaleGeneratorTests : IAsyncLifetime
 			var totalSlots = LeavesPerWorker + OverlapDepth - 1;
 			var observedMax = 0;
 			for (var m = 1; m <= totalSlots; ++m) {
-				var sampleInstant = BaseInstant + TimeSpan.FromTicks((Slot.Ticks * (m - 1)) + (Slot.Ticks / 2));
+				var sampleInstant = BaseInstant + TimeSpan.FromTicks(Slot.Ticks * (m - 1) + Slot.Ticks / 2);
 				var observed = sessions.Count(session => session.StartedAt <= sampleInstant && sampleInstant < session.FinishedAt);
 				var expected = ExpectedDepth(m, LeavesPerWorker, OverlapDepth);
 				observed.Should().Be(expected, $"worker {workerId} slot {m} should match the closed-form staircase depth");
@@ -131,7 +131,7 @@ public sealed class OverlappingCostScaleGeneratorTests : IAsyncLifetime
 	}
 
 	private static async Task<List<(DateTimeOffset StartedAt, DateTimeOffset FinishedAt)>> QuerySessionsAsync(NpgsqlConnection connection,
-		long workerId)
+																											  long workerId)
 	{
 		await using var command = connection.CreateCommand();
 		command.CommandText = """

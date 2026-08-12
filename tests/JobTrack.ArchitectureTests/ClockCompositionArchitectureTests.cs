@@ -38,12 +38,12 @@ public sealed class ClockCompositionArchitectureTests
 		var srcDirectory = Path.Combine(solutionRoot, "src");
 
 		var violations = Directory.EnumerateFiles(srcDirectory, "*.cs", SearchOption.AllDirectories)
-			.Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
-						   && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
-			.Where(path => !CompositionRootAllowlist.Contains(Path.GetRelativePath(solutionRoot, path)))
-			.Where(path => DirectClockReadTokens.Any(token => File.ReadAllText(path).Contains(token, StringComparison.Ordinal)))
-			.Select(path => Path.GetRelativePath(solutionRoot, path))
-			.ToList();
+								  .Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
+												 && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
+								  .Where(path => !CompositionRootAllowlist.Contains(Path.GetRelativePath(solutionRoot, path)))
+								  .Where(path => DirectClockReadTokens.Any(token => File.ReadAllText(path).Contains(token, StringComparison.Ordinal)))
+								  .Select(path => Path.GetRelativePath(solutionRoot, path))
+								  .ToList();
 
 		violations.Should().BeEmpty(
 			"ADR 0016 requires DI-registered IClock as the sole source of \"now\" everywhere outside the " +

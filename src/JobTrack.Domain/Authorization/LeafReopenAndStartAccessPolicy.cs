@@ -30,7 +30,7 @@ public static class LeafReopenAndStartAccessPolicy
 
 		var hasElevatedOrControlAuthority = actorRoles.Contains(EmployeeRole.Administrator)
 											|| actorRoles.Contains(EmployeeRole.JobManager)
-											|| (actorRoles.Contains(EmployeeRole.Worker) && facts.ActorControlsNode);
+											|| actorRoles.Contains(EmployeeRole.Worker) && facts.ActorControlsNode;
 
 		if (hasElevatedOrControlAuthority) {
 			return true;

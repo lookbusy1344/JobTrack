@@ -4,13 +4,9 @@ using System.Net;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using Database;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     JSON-parsed OpenAPI contract tests for the external HTTP API (remediation plan §3.2, ADR 0030):
@@ -123,7 +119,10 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 		});
 		await IdentityTestSupport.ClearRequiresPasswordChangeAsync(SchemaProvider.Sqlite, database.ConnectionString);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrap.AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = bootstrap.AdministratorId,
 			Label = "openapi-contract-tests",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -233,8 +232,7 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 	public void Growable_collection_operations_document_their_paging_parameters()
 	{
 		foreach (var (method, path) in new[] {
-					 ("GET", "/api/jobs/search"), ("GET", "/api/jobs/{nodeId}/children"), ("GET", "/api/jobs/{nodeId}/sessions"),
-					 ("GET", "/api/jobs/{nodeId}/prerequisites"),
+					 ("GET", "/api/jobs/search"), ("GET", "/api/jobs/{nodeId}/children"), ("GET", "/api/jobs/{nodeId}/sessions"), ("GET", "/api/jobs/{nodeId}/prerequisites"),
 				 }) {
 			var parameterNames = GetParameterNames(document, method, path);
 
@@ -287,8 +285,8 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 		var operation = GetOperation(document, method, path);
 
 		return operation["parameters"]?.AsArray()
-				   .Select(parameter => parameter!["name"]!.GetValue<string>())
-				   .ToArray()
+									  .Select(parameter => parameter!["name"]!.GetValue<string>())
+									  .ToArray()
 			   ?? [];
 	}
 
@@ -302,5 +300,4 @@ public sealed class OpenApiContractTests : IAsyncLifetime, IDisposable
 
 		public string[] ProblemStatusCodes { get; } = problemStatusCodes;
 	}
-
 }

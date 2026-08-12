@@ -6,17 +6,10 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for personal schedule and exception management (plan §8.5 slice 6, spec
@@ -50,7 +43,10 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 		});
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -68,7 +64,7 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_add_their_own_schedule_version_and_exception()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.worker");
 		var authCookie = await client.SignInAsync("schedule.worker");
 
 		var (versionCookie, versionToken) = await GetFormAsync(authCookie, workerId);
@@ -96,7 +92,7 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_unparsable_exception_start_or_end_shows_an_error_bubble_instead_of_being_silently_swallowed()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.bad-datetime", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.bad-datetime");
 		var authCookie = await client.SignInAsync("schedule.bad-datetime");
 
 		var (versionCookie, versionToken) = await GetFormAsync(authCookie, workerId);
@@ -117,7 +113,7 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_schedule_page_defaults_the_effective_start_to_today_and_uses_human_friendly_field_labels()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.labels", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.labels");
 		var authCookie = await client.SignInAsync("schedule.labels");
 
 		var response = await client.GetAuthenticatedAsync($"/Rota/Index?userId={workerId.Value}", authCookie);
@@ -141,8 +137,8 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_cannot_add_a_schedule_version_for_another_employee()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.self", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.other", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.self");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.other");
 		var authCookie = await client.SignInAsync("schedule.self");
 
 		var (cookie, token) = await GetFormAsync(authCookie, otherWorkerId);
@@ -155,7 +151,7 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Adding_a_schedule_version_with_an_unrecognized_zone_id_returns_the_page_with_validation()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.bad-zone", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.bad-zone");
 		var authCookie = await client.SignInAsync("schedule.bad-zone");
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
@@ -170,8 +166,8 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_cannot_view_another_employees_schedule()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.viewer", EmployeeRole.Worker);
-		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.viewed", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.viewer");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.viewed");
 		var authCookie = await client.SignInAsync("schedule.viewer");
 
 		var response = await client.GetAuthenticatedAsync($"/Rota/Index?userId={otherWorkerId.Value}", authCookie);
@@ -185,7 +181,7 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	public async Task An_administrator_can_add_a_schedule_version_for_another_employee()
 	{
 		var adminUserId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.admin", EmployeeRole.Administrator);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.target");
 		var authCookie = await client.SignInAsync("schedule.admin");
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
@@ -200,7 +196,7 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_cost_viewer_cannot_open_schedule_administration()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.target-denied", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.target-denied");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.viewer-denied", EmployeeRole.CostViewer);
 		var authCookie = await client.SignInAsync("schedule.viewer-denied");
 
@@ -213,9 +209,12 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_correct_their_own_schedule_version()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.correct-version", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.correct-version");
 		var added = await seedClient.Schedules.AddScheduleVersionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Schedule = new(
 				DateTimeZoneProviders.Tzdb["Europe/London"], new(2026, 1, 1), null,
@@ -234,9 +233,12 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_correct_their_own_schedule_exception()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.correct-exception", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.correct-exception");
 		var added = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Entry = new(
 				ScheduleExceptionEffect.RemoveWorkingTime,
@@ -271,7 +273,13 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
 		var snapshot = await seedClient.Query.GetScheduleAsync(
-			new() { Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() }, UserId = workerId });
+			new() {
+				Context = new() {
+					Actor = workerId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				UserId = workerId,
+			});
 
 		var interval = snapshot.Exceptions.Should().ContainSingle().Which.Entry.Interval;
 		interval.Start.Should().Be(Instant.FromUtc(2026, 6, 14, 21, 0), "09:00 NZST (UTC+12) on 15 June is 21:00 UTC the day before");
@@ -382,17 +390,6 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
-
-
-
-
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
-
-
 }

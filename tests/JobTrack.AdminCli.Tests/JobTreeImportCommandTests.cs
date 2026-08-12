@@ -119,7 +119,10 @@ public sealed class JobTreeImportCommandTests
 			var client = JobTrackSqlite.Create(database.ConnectionString);
 
 			var rootId = await BootstrapAdministratorAsync(client, "ada.branch");
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
 			var branch = await client.Jobs.AddChildAsync(new() {
 				Context = context,
 				ParentId = rootId,
@@ -135,9 +138,15 @@ public sealed class JobTreeImportCommandTests
 				console, userManager, client, "ada.branch", branch.Id, SingleNodeJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(0);
-			var branchChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = branch.Id });
+			var branchChildren = await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = branch.Id,
+			});
 			branchChildren.Should().ContainSingle(n => n.Description == "Under the branch");
-			var rootChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
+			var rootChildren = await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			});
 			rootChildren.Should().ContainSingle(n => n.Description == "Existing branch");
 		}
 		finally {
@@ -204,8 +213,14 @@ public sealed class JobTreeImportCommandTests
 			console.Errors.Should().ContainSingle();
 			console.Lines.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			var rootChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			var rootChildren = await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			});
 			rootChildren.Should().BeEmpty();
 		}
 		finally {
@@ -250,8 +265,14 @@ public sealed class JobTreeImportCommandTests
 			console.Errors.Should().ContainSingle();
 			console.Lines.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			var rootChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			var rootChildren = await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			});
 			rootChildren.Should().BeEmpty();
 		}
 		finally {
@@ -297,25 +318,46 @@ public sealed class JobTreeImportCommandTests
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			var children = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			var children = await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			});
 			var survey = children.Single(n => n.Description == "Survey");
 			var dig = children.Single(n => n.Description == "Dig");
 			var abandoned = children.Single(n => n.Description == "Abandoned");
 
-			(await client.Query.GetLeafWorkAsync(new() { Context = context, JobNodeId = survey.Id }))
+			(await client.Query.GetLeafWorkAsync(new() {
+				Context = context,
+				JobNodeId = survey.Id,
+			}))
 				.Achievement.Should().Be(Achievement.Success);
-			(await client.Query.GetLeafWorkAsync(new() { Context = context, JobNodeId = dig.Id }))
+			(await client.Query.GetLeafWorkAsync(new() {
+				Context = context,
+				JobNodeId = dig.Id,
+			}))
 				.Achievement.Should().Be(Achievement.InProgress);
-			(await client.Query.GetLeafWorkAsync(new() { Context = context, JobNodeId = abandoned.Id }))
+			(await client.Query.GetLeafWorkAsync(new() {
+				Context = context,
+				JobNodeId = abandoned.Id,
+			}))
 				.Achievement.Should().Be(Achievement.Unsuccessful);
 
-			var surveySession = (await client.Query.GetLeafSessionsAsync(new() { Context = context, LeafWorkId = survey.Id })).Single();
+			var surveySession = (await client.Query.GetLeafSessionsAsync(new() {
+				Context = context,
+				LeafWorkId = survey.Id,
+			})).Single();
 			surveySession.StartedAt.Should().BeInRange(before - Duration.FromDays(3), after - Duration.FromDays(3));
 			surveySession.FinishedAt.Should().NotBeNull();
 			surveySession.FinishedAt!.Value.Should().BeInRange(before - Duration.FromDays(2), after - Duration.FromDays(2));
 
-			var digSession = (await client.Query.GetLeafSessionsAsync(new() { Context = context, LeafWorkId = dig.Id })).Single();
+			var digSession = (await client.Query.GetLeafSessionsAsync(new() {
+				Context = context,
+				LeafWorkId = dig.Id,
+			})).Single();
 			digSession.StartedAt.Should().BeInRange(before - Duration.FromDays(1), after - Duration.FromDays(1));
 			digSession.FinishedAt.Should().BeNull();
 		}
@@ -359,8 +401,14 @@ public sealed class JobTreeImportCommandTests
 			console.Errors.Should().ContainSingle();
 			console.Lines.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			var rootChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			var rootChildren = await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			});
 			rootChildren.Should().BeEmpty();
 		}
 		finally {
@@ -397,8 +445,14 @@ public sealed class JobTreeImportCommandTests
 			console.Errors.Should().ContainSingle(error => error.Contains("open", StringComparison.Ordinal));
 			console.Lines.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			var rootChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			var rootChildren = await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			});
 			rootChildren.Should().BeEmpty();
 		}
 		finally {
@@ -443,10 +497,19 @@ public sealed class JobTreeImportCommandTests
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			var house = (await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId }))
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			var house = (await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			}))
 				.Single(n => n.Description == "Build a house");
-			var profile = await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new(1) });
+			var profile = await client.Query.GetEmployeeProfileAsync(new() {
+				Context = context,
+				TargetUserId = new(1),
+			});
 			profile.HomeNodeId.Should().Be(house.Id);
 		}
 		finally {
@@ -476,7 +539,10 @@ public sealed class JobTreeImportCommandTests
 			var client = JobTrackSqlite.Create(database.ConnectionString);
 
 			var rootId = await BootstrapAdministratorAsync(client, "ada.admin");
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
 			var worker = await client.Employees.CreateEmployeeAsync(new() {
 				Context = context,
 				DisplayName = "Grace Worker",
@@ -501,11 +567,20 @@ public sealed class JobTreeImportCommandTests
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
 
-			var house = (await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId }))
+			var house = (await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			}))
 				.Single(n => n.Description == "Build a house");
-			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new(1) }))
+			(await client.Query.GetEmployeeProfileAsync(new() {
+				Context = context,
+				TargetUserId = new(1),
+			}))
 				.HomeNodeId.Should().Be(house.Id);
-			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = worker.Id }))
+			(await client.Query.GetEmployeeProfileAsync(new() {
+				Context = context,
+				TargetUserId = worker.Id,
+			}))
 				.HomeNodeId.Should().Be(house.Id);
 		}
 		finally {
@@ -531,7 +606,10 @@ public sealed class JobTreeImportCommandTests
 			var client = JobTrackSqlite.Create(database.ConnectionString);
 
 			var rootId = await BootstrapAdministratorAsync(client, "ada.duplicate-home");
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
 			var worker = await client.Employees.CreateEmployeeAsync(new() {
 				Context = context,
 				DisplayName = "Grace Worker",
@@ -556,7 +634,10 @@ public sealed class JobTreeImportCommandTests
 			exitCode.Should().Be(0);
 			console.Errors.Should().BeEmpty();
 			console.Lines.Count(line => line.Contains("grace.duplicate-home", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
-			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = worker.Id }))
+			(await client.Query.GetEmployeeProfileAsync(new() {
+				Context = context,
+				TargetUserId = worker.Id,
+			}))
 				.HomeNodeId.Should().NotBeNull();
 		}
 		finally {
@@ -598,8 +679,14 @@ public sealed class JobTreeImportCommandTests
 			console.Errors.Should().ContainSingle();
 			console.Lines.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			(await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId })).Should().BeEmpty();
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			(await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			})).Should().BeEmpty();
 		}
 		finally {
 			await database.DisposeAsync();
@@ -642,8 +729,14 @@ public sealed class JobTreeImportCommandTests
 			console.Errors.Should().ContainSingle();
 			console.Lines.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			(await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId })).Should().BeEmpty();
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			(await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			})).Should().BeEmpty();
 		}
 		finally {
 			await database.DisposeAsync();
@@ -685,8 +778,14 @@ public sealed class JobTreeImportCommandTests
 			console.Errors.Should().ContainSingle(error => error.Contains("no.such.user", StringComparison.Ordinal));
 			console.Lines.Should().BeEmpty();
 
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			(await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId })).Should().BeEmpty();
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			(await client.Query.GetJobChildrenAsync(new() {
+				Context = context,
+				ParentId = rootId,
+			})).Should().BeEmpty();
 		}
 		finally {
 			await database.DisposeAsync();
@@ -721,8 +820,14 @@ public sealed class JobTreeImportCommandTests
 				console, userManager, client, "ada.nohome", rootId, TreeJson, SystemClock.Instance, [], CancellationToken.None);
 
 			exitCode.Should().Be(0);
-			var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
-			(await client.Query.GetEmployeeProfileAsync(new() { Context = context, TargetUserId = new(1) }))
+			var context = new CommandContext {
+				Actor = new(1),
+				CorrelationId = Guid.NewGuid(),
+			};
+			(await client.Query.GetEmployeeProfileAsync(new() {
+				Context = context,
+				TargetUserId = new(1),
+			}))
 				.HomeNodeId.Should().BeNull();
 		}
 		finally {
@@ -747,19 +852,31 @@ public sealed class JobTreeImportCommandTests
 
 	private static async Task AssertImportedTreeAsync(IJobTrackClient client, JobNodeId rootId)
 	{
-		var context = new CommandContext { Actor = new(1), CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = new(1),
+			CorrelationId = Guid.NewGuid(),
+		};
 
-		var rootChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = rootId });
+		var rootChildren = await client.Query.GetJobChildrenAsync(new() {
+			Context = context,
+			ParentId = rootId,
+		});
 		rootChildren.Select(n => n.Description).Should().BeEquivalentTo("Design", "Build");
 
 		var buildNode = rootChildren.Single(n => n.Description == "Build");
-		var buildChildren = await client.Query.GetJobChildrenAsync(new() { Context = context, ParentId = buildNode.Id });
+		var buildChildren = await client.Query.GetJobChildrenAsync(new() {
+			Context = context,
+			ParentId = buildNode.Id,
+		});
 		buildChildren.Select(n => n.Description).Should().BeEquivalentTo("Build - step 1", "Build - step 2");
 
 		var step1 = buildChildren.Single(n => n.Description == "Build - step 1");
 		var step2 = buildChildren.Single(n => n.Description == "Build - step 2");
 
-		var step2Prerequisites = await client.Query.GetPrerequisitesAsync(new() { Context = context, NodeId = step2.Id });
+		var step2Prerequisites = await client.Query.GetPrerequisitesAsync(new() {
+			Context = context,
+			NodeId = step2.Id,
+		});
 		step2Prerequisites.Should().ContainSingle(edge => edge.Equals(new(step1.Id, step2.Id)));
 	}
 

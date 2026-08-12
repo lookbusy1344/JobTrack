@@ -27,13 +27,13 @@ internal static class UnassignedNodeClaim
 		DbContext context, JobNodeId nodeId, AppUserId claimantUserId, CancellationToken cancellationToken)
 	{
 		var affected = await context.Set<JobNodeEntity>()
-			.Where(n => n.Id == nodeId && n.OwnerUserId == null)
-			.ExecuteUpdateAsync(
-				setters => setters
-					.SetProperty(n => n.OwnerUserId, claimantUserId)
-					.SetProperty(n => n.RowVersion, n => n.RowVersion + 1),
-				cancellationToken)
-			.ConfigureAwait(false);
+									.Where(n => n.Id == nodeId && n.OwnerUserId == null)
+									.ExecuteUpdateAsync(
+										setters => setters
+												   .SetProperty(n => n.OwnerUserId, claimantUserId)
+												   .SetProperty(n => n.RowVersion, n => n.RowVersion + 1),
+										cancellationToken)
+									.ConfigureAwait(false);
 
 		return affected > 0;
 	}

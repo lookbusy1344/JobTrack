@@ -1,7 +1,6 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using AwesomeAssertions;
-using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
 
@@ -35,7 +34,15 @@ public abstract class JobNodeStructureBrowserTestsBase
 	protected JobNodeStructureBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
 
 	public static TheoryData<int, int> ViewportMatrix => new() {
-		{ SmallPhoneWidth, SmallPhoneHeight }, { LargePhoneWidth, LargePhoneHeight }, { TabletWidth, TabletHeight }, { DesktopWidth, DesktopHeight },
+		{
+			SmallPhoneWidth, SmallPhoneHeight
+		}, {
+			LargePhoneWidth, LargePhoneHeight
+		}, {
+			TabletWidth, TabletHeight
+		}, {
+			DesktopWidth, DesktopHeight
+		},
 	};
 
 	[Theory]
@@ -68,8 +75,12 @@ public abstract class JobNodeStructureBrowserTestsBase
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "WCAG 1.4.10 Reflow requires no horizontal scrolling at a 320 CSS px viewport");
 
 		(await page.Locator("#Input_Description").IsVisibleAsync()).Should().BeTrue();
-		(await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).IsVisibleAsync()).Should().BeTrue();
-		(await page.GetByRole(AriaRole.Link, new() { Name = "Cancel" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Button, new() {
+			Name = "Save",
+		}).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Link, new() {
+			Name = "Cancel",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -91,7 +102,9 @@ public abstract class JobNodeStructureBrowserTestsBase
 		await page.Keyboard.PressAsync("Enter");
 
 		await page.WaitForURLAsync(url => url.Contains("/Jobs/Browse", StringComparison.Ordinal));
-		(await page.GetByRole(AriaRole.Heading, new() { Name = "Keyboard-driven leaf" }).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Heading, new() {
+			Name = "Keyboard-driven leaf",
+		}).IsVisibleAsync()).Should().BeTrue();
 	}
 
 	[Fact]
@@ -102,7 +115,9 @@ public abstract class JobNodeStructureBrowserTestsBase
 
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Create?ParentId={fixture.RootJobNodeId.Value}&Kind=Leaf");
-		await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+		await page.GetByRole(AriaRole.Button, new() {
+			Name = "Save",
+		}).ClickAsync();
 
 		var descriptionError = await page.Locator("span[data-valmsg-for='Input.Description']").InnerTextAsync();
 		descriptionError.Should().NotBeNullOrWhiteSpace();
@@ -176,20 +191,14 @@ public abstract class JobNodeStructureBrowserTestsBase
 
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
-
-
 }
 
 public sealed class SqliteJobNodeStructureBrowserTests : JobNodeStructureBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteJobNodeStructureBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteJobNodeStructureBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlJobNodeStructureBrowserTests : JobNodeStructureBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlJobNodeStructureBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlJobNodeStructureBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

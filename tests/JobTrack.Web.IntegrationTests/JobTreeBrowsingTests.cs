@@ -6,17 +6,13 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for job-tree browsing, search, ownership/archive filters, and readiness
@@ -46,7 +42,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -275,12 +274,12 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		(body.Split("status-pill status-pill-inactive status-pill--compact\">Unstarted</span>").Length - 1).Should()
-			.Be(2, "both workless and Waiting leaves have never had a session");
+																										   .Be(2, "both workless and Waiting leaves have never had a session");
 		(body.Split("status-pill status-pill-unack status-pill--compact\">Unack</span>").Length - 1).Should()
-			.Be(1, "an unacknowledged request is the more specific open state");
+																									.Be(1, "an unacknowledged request is the more specific open state");
 		body.Should().Contain("status-pill-unack", "the request state has its own blue-tinted pill rather than the neutral Unstarted treatment");
 		(body.Split("status-pill status-pill-paused status-pill--compact").Length - 1).Should()
-			.Be(1, "a leaf with session history retains the existing paused state");
+																					  .Be(1, "a leaf with session history retains the existing paused state");
 	}
 
 	[Fact]
@@ -794,7 +793,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = bootstrappedAdminId!.Value, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrappedAdminId!.Value,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -807,7 +809,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeId> AddChildWithDeadlineAsync(JobNodeId parentId, AppUserId ownerId, string description, Instant neededFinish)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = bootstrappedAdminId!.Value, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrappedAdminId!.Value,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -821,12 +826,18 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	private async Task ArchiveAsync(JobNodeId nodeId, AppUserId adminId)
 	{
 		var node = await seedClient.Query.GetJobNodeAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = nodeId,
 		});
 
 		_ = await seedClient.Jobs.ArchiveAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = nodeId,
 			Version = node.Node.Version,
 		});
@@ -835,7 +846,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	private async Task SetAchievementAsync(JobNodeId leafId, AppUserId adminId, Achievement achievement)
 	{
 		var leafWork = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 
@@ -844,7 +858,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var version = leafWork.Version;
 		if (achievement != Achievement.InProgress) {
 			var inProgress = await seedClient.Work.SetAchievementAsync(new() {
-				Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = adminId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				JobNodeId = leafId,
 				NewAchievement = Achievement.InProgress,
 				Reason = "Work has started",
@@ -854,7 +871,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		}
 
 		_ = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			NewAchievement = achievement,
 			Reason = "Seeded for the achievement-glyph test",
@@ -864,13 +884,19 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	private async Task AttachLeafWorkAsync(JobNodeId leafId, AppUserId adminId) =>
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 
 	private async Task AddWorkingWindowAsync(AppUserId workerId, AppUserId adminId) =>
 		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Entry = new(
 				ScheduleExceptionEffect.AddWorkingTime,
@@ -881,7 +907,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	private async Task AddUserCostRateAsync(AppUserId workerId, AppUserId adminId, decimal amountPerHour) =>
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(amountPerHour), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
@@ -890,14 +919,20 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		AppUserId workerId, JobNodeId leafId, Instant startedAt, Instant finishedAt)
 	{
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = startedAt,
 		});
 
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 			FinishedAt = finishedAt,
@@ -906,7 +941,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	private async Task AddActiveSessionAsync(AppUserId workerId, JobNodeId leafId, Instant startedAt) =>
 		_ = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 			StartedAt = startedAt,
@@ -941,7 +979,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	private async Task AddPrerequisiteAsync(JobNodeId requiredJobId, JobNodeId dependentJobId, AppUserId adminId) =>
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredJobId,
 			DependentJobId = dependentJobId,
 		});
@@ -1042,7 +1083,4 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		return new(appUserId);
 	}
-
-
-
 }

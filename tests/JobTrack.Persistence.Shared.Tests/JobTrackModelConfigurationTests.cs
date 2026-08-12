@@ -241,9 +241,9 @@ public sealed class JobTrackModelConfigurationTests
 
 				entity.GetForeignKeys().Should().HaveCount(2, "leaf-work and worked-by-user FKs");
 				entity.GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(LeafWorkEntity))
-					.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+					  .DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
 				entity.GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(AppUserEntity))
-					.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+					  .DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
 
 				var leafWorkIdIndex = entity.GetIndexes().SingleOrDefault(i => i.GetDatabaseName() == "work_session_leaf_work_id_idx");
 				leafWorkIdIndex.Should().NotBeNull();

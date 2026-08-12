@@ -75,8 +75,8 @@ public sealed class InstallationCommandsTests
 		_ = await sut.BootstrapAdministratorAsync(request);
 
 		var operation = stopped.Should()
-			.ContainSingle(activity => activity.OperationName == "installation.bootstrap-administrator")
-			.Which;
+							   .ContainSingle(activity => activity.OperationName == "installation.bootstrap-administrator")
+							   .Which;
 		operation.Status.Should().Be(ActivityStatusCode.Ok);
 		operation.GetTagItem("jobtrack.correlation_id").Should().Be(request.CorrelationId.ToString("D"));
 		operation.GetTagItem("jobtrack.user_name").Should().BeNull();
@@ -103,7 +103,9 @@ public sealed class InstallationCommandsTests
 	{
 		var port = new FakeInstallationBootstrapPort();
 		var sut = CreateSut(port);
-		var request = CreateRequest() with { DefaultHourlyRate = new HourlyRate(25m) };
+		var request = CreateRequest() with {
+			DefaultHourlyRate = new HourlyRate(25m),
+		};
 
 		await sut.BootstrapAdministratorAsync(request);
 
@@ -128,7 +130,9 @@ public sealed class InstallationCommandsTests
 	{
 		var port = new FakeInstallationBootstrapPort();
 		var sut = CreateSut(port);
-		var request = CreateRequest() with { Password = "too-short" };
+		var request = CreateRequest() with {
+			Password = "too-short",
+		};
 
 		var act = () => sut.BootstrapAdministratorAsync(request);
 
@@ -142,7 +146,10 @@ public sealed class InstallationCommandsTests
 		var port = new FakeInstallationBootstrapPort();
 		var sut = CreateSut(port);
 		var username = new string('u', PasswordPolicy.MinimumLength);
-		var request = CreateRequest() with { UserName = username, Password = username };
+		var request = CreateRequest() with {
+			UserName = username,
+			Password = username,
+		};
 
 		var act = () => sut.BootstrapAdministratorAsync(request);
 

@@ -7,17 +7,10 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the external HTTP API's cost-report surface (plan §4.3 slice 5, ADR
@@ -56,7 +49,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -104,8 +100,8 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		var nodes = jsonDocument.RootElement.GetProperty("nodes");
 		nodes.EnumerateArray().Should().Contain(node => node.GetProperty("nodeId").GetInt64() == leafId.Value);
 		nodes.EnumerateArray()
-			.Single(node => node.GetProperty("nodeId").GetInt64() == leafId.Value)
-			.GetProperty("allocatedHours").GetDecimal().Should().Be(8m);
+			 .Single(node => node.GetProperty("nodeId").GetInt64() == leafId.Value)
+			 .GetProperty("allocatedHours").GetDecimal().Should().Be(8m);
 		jsonDocument.RootElement.GetProperty("tzdbVersion").GetString().Should().Be(DateTimeZoneProviders.Tzdb.VersionId);
 	}
 
@@ -126,7 +122,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	{
 		var (workerId, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.bearer-denied.worker");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = workerId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -151,7 +150,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		var (workerId, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.bearer.worker");
 		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.bearer.viewer", EmployeeRole.CostViewer);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
-			Context = new() { Actor = viewerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = viewerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = viewerId,
 			Label = "cli-test-token",
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
@@ -211,20 +213,29 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	private async Task<(AppUserId WorkerId, JobNodeId LeafId)> SeedWorkedLeafWithFinishedSessionAsync(
 		string workerUserName, bool addUserRate = true)
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, workerUserName, EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, workerUserName);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Fit cabinets",
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Entry = new(
 				ScheduleExceptionEffect.AddWorkingTime,
@@ -234,20 +245,29 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		});
 		if (addUserRate) {
 			_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-				Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				UserId = workerId,
 				Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 			});
 		}
 
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = workerId,
 			StartedAt = Instant.FromUtc(2026, 1, 1, 9, 0),
 		});
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 			FinishedAt = Instant.FromUtc(2026, 1, 1, 17, 0),
@@ -273,7 +293,4 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
 }

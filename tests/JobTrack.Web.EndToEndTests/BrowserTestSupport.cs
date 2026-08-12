@@ -18,8 +18,8 @@ internal static class BrowserTestSupport
 	public static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)
 	{
 		var criticalOrSerious = results.Violations
-			.Where(violation => violation.Impact is "critical" or "serious")
-			.ToArray();
+									   .Where(violation => violation.Impact is "critical" or "serious")
+									   .ToArray();
 
 		criticalOrSerious.Should().BeEmpty(
 			$"{pageName} should have no critical/serious accessibility violations, found: " +

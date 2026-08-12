@@ -49,18 +49,18 @@ public sealed class JobQueriesAdmissionArchitectureTests
 		var semanticModel = compilation.GetSemanticModel(jobQueriesTree);
 
 		var classDeclaration = jobQueriesTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
-			.Single(c => c.Identifier.ValueText == "JobQueries");
+											 .Single(c => c.Identifier.ValueText == "JobQueries");
 
 		var publicMembers = classDeclaration.Members.OfType<MethodDeclarationSyntax>()
-			.Where(method => method.Modifiers.Any(SyntaxKind.PublicKeyword))
-			.ToList();
+											.Where(method => method.Modifiers.Any(SyntaxKind.PublicKeyword))
+											.ToList();
 
 		publicMembers.Should().NotBeEmpty("the scan must actually find JobQueries's public interface members");
 
 		var violations = publicMembers
-			.Where(method => !DeclaresAdmission(compilation, semanticModel, method, []))
-			.Select(method => method.Identifier.ValueText)
-			.ToList();
+						 .Where(method => !DeclaresAdmission(compilation, semanticModel, method, []))
+						 .Select(method => method.Identifier.ValueText)
+						 .ToList();
 
 		violations.Should().BeEmpty(
 			"every public IJobQueries member must authenticate the actor before returning data (remediation plan " +
@@ -106,19 +106,19 @@ public sealed class JobQueriesAdmissionArchitectureTests
 	private static CSharpCompilation CreateApplicationCompilation(string applicationRoot)
 	{
 		var sourceTrees = Directory.EnumerateFiles(applicationRoot, "*.cs", SearchOption.AllDirectories)
-			.Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
-						   && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
-			.Select(path => CSharpSyntaxTree.ParseText(
-				File.ReadAllText(path), CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview), path))
-			.Prepend(CSharpSyntaxTree.ParseText(
-				"""
-				global using System;
-				global using System.Collections.Generic;
-				global using System.Linq;
-				global using System.Threading;
-				global using System.Threading.Tasks;
-				""",
-				CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview)));
+								   .Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
+												  && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
+								   .Select(path => CSharpSyntaxTree.ParseText(
+									   File.ReadAllText(path), CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview), path))
+								   .Prepend(CSharpSyntaxTree.ParseText(
+									   """
+									   global using System;
+									   global using System.Collections.Generic;
+									   global using System.Linq;
+									   global using System.Threading;
+									   global using System.Threading.Tasks;
+									   """,
+									   CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview)));
 
 		return CSharpCompilation.Create(
 			"JobQueriesAdmissionAnalysis",
@@ -134,8 +134,8 @@ public sealed class JobQueriesAdmissionArchitectureTests
 		var copiedDependencies = Directory.EnumerateFiles(AppContext.BaseDirectory, "*.dll");
 
 		return trustedPlatformAssemblies
-			.Concat(copiedDependencies)
-			.Distinct(StringComparer.Ordinal)
-			.Select(path => MetadataReference.CreateFromFile(path));
+			   .Concat(copiedDependencies)
+			   .Distinct(StringComparer.Ordinal)
+			   .Select(path => MetadataReference.CreateFromFile(path));
 	}
 }

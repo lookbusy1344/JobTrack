@@ -83,13 +83,13 @@ public static class ServiceCollectionExtensions
 			options.Password.RequireNonAlphanumeric = false;
 			options.Password.RequiredUniqueChars = 1;
 		})
-			.AddUserStore<JobTrackUserStore>()
-			.AddClaimsPrincipalFactory<JobTrackUserClaimsPrincipalFactory>()
-			// ADR 0037: registers AuthenticatorTokenProvider<TUser> (RFC 6238 TOTP verification) under
-			// TokenOptions.DefaultAuthenticatorProvider, the name SignInManager.TwoFactorAuthenticator-
-			// SignInAsync looks up by default -- no hand-rolled TOTP code, the framework's own
-			// verification is used as-is. AddDefaultTokenProviders() is unavailable here: it lives in
-			// the full Microsoft.AspNetCore.Identity package, which ADR 0022 deliberately avoids.
-			.AddTokenProvider<AuthenticatorTokenProvider<JobTrackIdentityUser>>(TokenOptions.DefaultAuthenticatorProvider);
+					   .AddUserStore<JobTrackUserStore>()
+					   .AddClaimsPrincipalFactory<JobTrackUserClaimsPrincipalFactory>()
+					   // ADR 0037: registers AuthenticatorTokenProvider<TUser> (RFC 6238 TOTP verification) under
+					   // TokenOptions.DefaultAuthenticatorProvider, the name SignInManager.TwoFactorAuthenticator-
+					   // SignInAsync looks up by default -- no hand-rolled TOTP code, the framework's own
+					   // verification is used as-is. AddDefaultTokenProviders() is unavailable here: it lives in
+					   // the full Microsoft.AspNetCore.Identity package, which ADR 0022 deliberately avoids.
+					   .AddTokenProvider<AuthenticatorTokenProvider<JobTrackIdentityUser>>(TokenOptions.DefaultAuthenticatorProvider);
 	}
 }

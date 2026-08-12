@@ -105,7 +105,11 @@ internal static class JobTrackModelConfiguration
 	{
 		_ = modelBuilder.Entity<IdentityUserRoleEntity>(builder => {
 			_ = builder.ToTable("identity_user_role");
-			_ = builder.HasKey(e => new { e.IdentityUserId, e.IdentityRoleId });
+			_ = builder.HasKey(e => new
+			{
+				e.IdentityUserId,
+				e.IdentityRoleId,
+			});
 
 			_ = builder.Property(e => e.IdentityUserId).HasColumnName("identity_user_id");
 			_ = builder.Property(e => e.IdentityRoleId).HasColumnName("identity_role_id");
@@ -150,7 +154,11 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
 
 			_ = builder.HasIndex(e => e.ParentId, "job_node_parent_id_idx");
-			_ = builder.HasIndex(e => new { e.OwnerUserId, e.ArchivedAt }).HasDatabaseName("job_node_owner_user_id_archived_at_idx");
+			_ = builder.HasIndex(e => new
+			{
+				e.OwnerUserId,
+				e.ArchivedAt,
+			}).HasDatabaseName("job_node_owner_user_id_archived_at_idx");
 			_ = builder.HasIndex(e => e.ParentId, "job_node_single_root_idx").IsUnique().HasFilter("parent_id IS NULL");
 
 			_ = builder.HasOne<JobNodeEntity>().WithMany().HasForeignKey(e => e.ParentId).OnDelete(DeleteBehavior.Restrict);
@@ -166,7 +174,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasKey(e => e.JobNodeId);
 
 			_ = builder.Property(e => e.JobNodeId).HasColumnName("job_node_id").HasConversion(IdValueConverters.JobNodeId)
-				.ValueGeneratedNever();
+					   .ValueGeneratedNever();
 			_ = builder.Property(e => e.Achievement).HasColumnName("achievement_id").HasConversion<short>();
 			_ = builder.Property(e => e.PartialCriteria).HasColumnName("partial_criteria");
 			_ = builder.Property(e => e.FullCriteria).HasColumnName("full_criteria");
@@ -174,7 +182,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
 
 			_ = builder.HasOne<JobNodeEntity>().WithOne().HasForeignKey<LeafWorkEntity>(e => e.JobNodeId)
-				.OnDelete(DeleteBehavior.Restrict);
+					   .OnDelete(DeleteBehavior.Restrict);
 		});
 	}
 
@@ -186,17 +194,25 @@ internal static class JobTrackModelConfiguration
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.WorkSessionId).ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.LeafWorkId).HasColumnName("leaf_work_id").HasConversion(IdValueConverters.JobNodeId)
-				.IsRequired();
+					   .IsRequired();
 			_ = builder.Property(e => e.WorkedByUserId).HasColumnName("worked_by_user_id").HasConversion(IdValueConverters.AppUserId)
-				.IsRequired();
+					   .IsRequired();
 			_ = builder.Property(e => e.StartedAt).HasColumnName("started_at").IsRequired();
 			_ = builder.Property(e => e.FinishedAt).HasColumnName("finished_at");
 			_ = builder.Property(e => e.ChangedAt).HasColumnName("changed_at").IsRequired();
 			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
 
 			_ = builder.HasIndex(e => e.LeafWorkId, "work_session_leaf_work_id_idx");
-			_ = builder.HasIndex(e => new { e.WorkedByUserId, e.StartedAt }).HasDatabaseName("work_session_user_started_at_idx");
-			_ = builder.HasIndex(e => new { e.WorkedByUserId, e.FinishedAt }).HasDatabaseName("work_session_user_finished_at_idx");
+			_ = builder.HasIndex(e => new
+			{
+				e.WorkedByUserId,
+				e.StartedAt,
+			}).HasDatabaseName("work_session_user_started_at_idx");
+			_ = builder.HasIndex(e => new
+			{
+				e.WorkedByUserId,
+				e.FinishedAt,
+			}).HasDatabaseName("work_session_user_finished_at_idx");
 
 			_ = builder.HasOne<LeafWorkEntity>().WithMany().HasForeignKey(e => e.LeafWorkId).OnDelete(DeleteBehavior.Restrict);
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.WorkedByUserId).OnDelete(DeleteBehavior.Restrict);
@@ -207,7 +223,11 @@ internal static class JobTrackModelConfiguration
 	{
 		_ = modelBuilder.Entity<JobPrerequisiteEntity>(builder => {
 			_ = builder.ToTable("job_prerequisite");
-			_ = builder.HasKey(e => new { e.FromId, e.ToId });
+			_ = builder.HasKey(e => new
+			{
+				e.FromId,
+				e.ToId,
+			});
 
 			_ = builder.Property(e => e.FromId).HasColumnName("from_id").HasConversion(IdValueConverters.JobNodeId);
 			_ = builder.Property(e => e.ToId).HasColumnName("to_id").HasConversion(IdValueConverters.JobNodeId);
@@ -226,7 +246,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasKey(e => e.Id);
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.ScheduleVersionId)
-				.ValueGeneratedOnAdd();
+					   .ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.UserId).HasColumnName("user_id").HasConversion(IdValueConverters.AppUserId).IsRequired();
 			_ = builder.Property(e => e.EffectiveStart).HasColumnName("effective_start").IsRequired();
 			_ = builder.Property(e => e.EffectiveEnd).HasColumnName("effective_end");
@@ -248,7 +268,7 @@ internal static class JobTrackModelConfiguration
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.ScheduleVersionId).HasColumnName("schedule_version_id")
-				.HasConversion(IdValueConverters.ScheduleVersionId).IsRequired();
+					   .HasConversion(IdValueConverters.ScheduleVersionId).IsRequired();
 			_ = builder.Property(e => e.DayOfWeek).HasColumnName("day_of_week").HasConversion<short>();
 			_ = builder.Property(e => e.StartTime).HasColumnName("start_time").IsRequired();
 			_ = builder.Property(e => e.EndTime).HasColumnName("end_time").IsRequired();
@@ -257,7 +277,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasIndex(e => e.ScheduleVersionId, "user_schedule_interval_schedule_version_id_idx");
 
 			_ = builder.HasOne<ScheduleVersionEntity>().WithMany().HasForeignKey(e => e.ScheduleVersionId)
-				.OnDelete(DeleteBehavior.Cascade);
+					   .OnDelete(DeleteBehavior.Cascade);
 		});
 	}
 
@@ -268,7 +288,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasKey(e => e.Id);
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.ScheduleExceptionId)
-				.ValueGeneratedOnAdd();
+					   .ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.UserId).HasColumnName("user_id").HasConversion(IdValueConverters.AppUserId).IsRequired();
 			_ = builder.Property(e => e.StartedAt).HasColumnName("started_at").IsRequired();
 			_ = builder.Property(e => e.FinishedAt).HasColumnName("finished_at").IsRequired();
@@ -279,7 +299,11 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.ChangedAt).HasColumnName("changed_at").IsRequired();
 			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
 
-			_ = builder.HasIndex(e => new { e.UserId, e.StartedAt }).HasDatabaseName("user_schedule_exception_user_id_started_at_idx");
+			_ = builder.HasIndex(e => new
+			{
+				e.UserId,
+				e.StartedAt,
+			}).HasDatabaseName("user_schedule_exception_user_id_started_at_idx");
 
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.CreatedBy).OnDelete(DeleteBehavior.Restrict);
@@ -293,7 +317,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasKey(e => e.Id);
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.UserCostRateId)
-				.ValueGeneratedOnAdd();
+					   .ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.UserId).HasColumnName("user_id").HasConversion(IdValueConverters.AppUserId).IsRequired();
 			_ = builder.Property(e => e.EffectiveStart).HasColumnName("effective_start").IsRequired();
 			_ = builder.Property(e => e.EffectiveEnd).HasColumnName("effective_end");
@@ -314,7 +338,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasKey(e => e.Id);
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.NodeRateOverrideId)
-				.ValueGeneratedOnAdd();
+					   .ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.NodeId).HasColumnName("node_id").HasConversion(IdValueConverters.JobNodeId).IsRequired();
 			_ = builder.Property(e => e.UserId).HasColumnName("user_id").HasConversion(IdValueConverters.AppUserId).IsRequired();
 			_ = builder.Property(e => e.EffectiveStart).HasColumnName("effective_start").IsRequired();
@@ -323,7 +347,11 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.ChangedAt).HasColumnName("changed_at").IsRequired();
 			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
 
-			_ = builder.HasIndex(e => new { e.NodeId, e.UserId }).HasDatabaseName("node_rate_override_node_id_user_id_idx");
+			_ = builder.HasIndex(e => new
+			{
+				e.NodeId,
+				e.UserId,
+			}).HasDatabaseName("node_rate_override_node_id_user_id_idx");
 
 			_ = builder.HasOne<JobNodeEntity>().WithMany().HasForeignKey(e => e.NodeId).OnDelete(DeleteBehavior.Restrict);
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
@@ -347,9 +375,17 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.BeforeData).HasColumnName("before_data");
 			_ = builder.Property(e => e.AfterData).HasColumnName("after_data");
 
-			_ = builder.HasIndex(e => new { e.EntityType, e.EntityId }).HasDatabaseName("audit_event_entity_type_entity_id_idx");
+			_ = builder.HasIndex(e => new
+			{
+				e.EntityType,
+				e.EntityId,
+			}).HasDatabaseName("audit_event_entity_type_entity_id_idx");
 			_ = builder.HasIndex(e => e.CorrelationId).HasDatabaseName("audit_event_correlation_id_idx");
-			_ = builder.HasIndex(e => new { e.ActorUserId, e.OccurredAt }).HasDatabaseName("audit_event_actor_user_id_occurred_at_idx");
+			_ = builder.HasIndex(e => new
+			{
+				e.ActorUserId,
+				e.OccurredAt,
+			}).HasDatabaseName("audit_event_actor_user_id_occurred_at_idx");
 
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.ActorUserId).OnDelete(DeleteBehavior.Restrict);
 		});
@@ -362,7 +398,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasKey(e => e.Id);
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.PersonalAccessTokenId)
-				.ValueGeneratedOnAdd();
+					   .ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.AppUserId).HasColumnName("app_user_id").HasConversion(IdValueConverters.AppUserId).IsRequired();
 			_ = builder.Property(e => e.TokenHash).HasColumnName("token_hash").IsRequired();
 			_ = builder.Property(e => e.Label).HasColumnName("label").IsRequired();
@@ -395,7 +431,11 @@ internal static class JobTrackModelConfiguration
 	{
 		_ = modelBuilder.Entity<AppUserDepartmentEntity>(builder => {
 			_ = builder.ToTable("app_user_department");
-			_ = builder.HasKey(e => new { e.AppUserId, e.DepartmentId });
+			_ = builder.HasKey(e => new
+			{
+				e.AppUserId,
+				e.DepartmentId,
+			});
 
 			_ = builder.Property(e => e.AppUserId).HasColumnName("app_user_id").HasConversion(IdValueConverters.AppUserId);
 			_ = builder.Property(e => e.DepartmentId).HasColumnName("department_id").HasConversion(IdValueConverters.DepartmentId);
@@ -413,13 +453,13 @@ internal static class JobTrackModelConfiguration
 			_ = builder.HasKey(e => e.Id);
 
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.RequestHoldingAreaId)
-				.ValueGeneratedOnAdd();
+					   .ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.JobNodeId).HasColumnName("job_node_id").HasConversion(IdValueConverters.JobNodeId).IsRequired();
 			_ = builder.Property(e => e.DepartmentId).HasColumnName("department_id").HasConversion(IdValueConverters.NullableDepartmentId);
 			_ = builder.Property(e => e.Name).HasColumnName("name").IsRequired();
 			_ = builder.Property(e => e.DefaultPriority).HasColumnName("default_priority_id").HasConversion<short>();
 			_ = builder.Property(e => e.DefaultOwnerUserId).HasColumnName("default_owner_user_id")
-				.HasConversion(IdValueConverters.NullableAppUserId);
+					   .HasConversion(IdValueConverters.NullableAppUserId);
 			_ = builder.Property(e => e.IsActive).HasColumnName("is_active").IsRequired();
 			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
 
@@ -437,22 +477,22 @@ internal static class JobTrackModelConfiguration
 
 			_ = builder.Property(e => e.JobNodeId).HasColumnName("job_node_id").HasConversion(IdValueConverters.JobNodeId);
 			_ = builder.Property(e => e.RequesterUserId).HasColumnName("requester_user_id").HasConversion(IdValueConverters.AppUserId)
-				.IsRequired();
+					   .IsRequired();
 			_ = builder.Property(e => e.HoldingAreaId).HasColumnName("holding_area_id")
-				.HasConversion(IdValueConverters.RequestHoldingAreaId).IsRequired();
+					   .HasConversion(IdValueConverters.RequestHoldingAreaId).IsRequired();
 			_ = builder.Property(e => e.RequesterReference).HasColumnName("requester_reference");
 			_ = builder.Property(e => e.SubmittedAt).HasColumnName("submitted_at").IsRequired();
 			_ = builder.Property(e => e.ClosedToRequesterAt).HasColumnName("closed_to_requester_at");
 			_ = builder.Property(e => e.AcknowledgedAt).HasColumnName("acknowledged_at");
 			_ = builder.Property(e => e.AcknowledgedByUserId).HasColumnName("acknowledged_by_user_id")
-				.HasConversion(IdValueConverters.NullableAppUserId);
+					   .HasConversion(IdValueConverters.NullableAppUserId);
 			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
 
 			_ = builder.HasOne<JobNodeEntity>().WithOne().HasForeignKey<JobRequestEntity>(e => e.JobNodeId)
-				.OnDelete(DeleteBehavior.Restrict);
+					   .OnDelete(DeleteBehavior.Restrict);
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.RequesterUserId).OnDelete(DeleteBehavior.Restrict);
 			_ = builder.HasOne<RequestHoldingAreaEntity>().WithMany().HasForeignKey(e => e.HoldingAreaId)
-				.OnDelete(DeleteBehavior.Restrict);
+					   .OnDelete(DeleteBehavior.Restrict);
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.AcknowledgedByUserId).OnDelete(DeleteBehavior.Restrict);
 		});
 	}
@@ -466,7 +506,7 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.Id).HasColumnName("id").HasConversion(IdValueConverters.JobRequestNoteId).ValueGeneratedOnAdd();
 			_ = builder.Property(e => e.JobNodeId).HasColumnName("job_node_id").HasConversion(IdValueConverters.JobNodeId).IsRequired();
 			_ = builder.Property(e => e.AuthorUserId).HasColumnName("author_user_id").HasConversion(IdValueConverters.AppUserId)
-				.IsRequired();
+					   .IsRequired();
 			_ = builder.Property(e => e.Content).HasColumnName("content").IsRequired();
 			_ = builder.Property(e => e.IsVisibleToRequester).HasColumnName("is_visible_to_requester").IsRequired();
 			_ = builder.Property(e => e.CreatedAt).HasColumnName("created_at").IsRequired();

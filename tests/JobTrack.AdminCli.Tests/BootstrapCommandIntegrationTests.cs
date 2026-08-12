@@ -50,7 +50,10 @@ public sealed class BootstrapCommandIntegrationTests
 
 			exitCode.Should().Be(0);
 			var accountState = await client.Query.GetAccountStateAsync(new() {
-				Context = new() { Actor = new(1), CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = new(1),
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = new(1),
 			});
 			accountState.UserName.Should().Be("ada.lovelace");
@@ -85,7 +88,10 @@ public sealed class BootstrapCommandIntegrationTests
 
 			exitCode.Should().Be(0);
 			var accountState = await client.Query.GetAccountStateAsync(new() {
-				Context = new() { Actor = new(1), CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = new(1),
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = new(1),
 			});
 			accountState.UserName.Should().Be("ada.lovelace");
@@ -132,7 +138,10 @@ public sealed class BootstrapCommandIntegrationTests
 
 			exitCode.Should().Be(0);
 			var accountState = await client.Query.GetAccountStateAsync(new() {
-				Context = new() { Actor = new(1), CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = new(1),
+					CorrelationId = Guid.NewGuid(),
+				},
 				TargetUserId = new(1),
 			});
 			accountState.UserName.Should().Be("ada.lovelace");

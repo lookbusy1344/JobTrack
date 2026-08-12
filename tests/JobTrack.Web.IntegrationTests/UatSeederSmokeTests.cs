@@ -55,20 +55,38 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 
 		var summary = await UatSeeder.SeedAsync(client, connection, bootstrap.AdministratorId);
 
-		var context = new CommandContext { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() };
-		var unassignedRequest = await client.Requests.GetDetailAsync(new() { Context = context, NodeId = summary.UnassignedRequestNodeId });
+		var context = new CommandContext {
+			Actor = bootstrap.AdministratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		var unassignedRequest = await client.Requests.GetDetailAsync(new() {
+			Context = context,
+			NodeId = summary.UnassignedRequestNodeId,
+		});
 		unassignedRequest.AcknowledgedAt.Should().BeNull();
 
-		var assignedRequest = await client.Query.GetJobNodeAsync(new() { Context = context, NodeId = summary.AssignedRequestNodeId });
+		var assignedRequest = await client.Query.GetJobNodeAsync(new() {
+			Context = context,
+			NodeId = summary.AssignedRequestNodeId,
+		});
 		assignedRequest.Node.OwnerUserId.Should().Be(summary.WorkerId);
 
-		var poolLeaf = await client.Query.GetJobNodeAsync(new() { Context = context, NodeId = summary.PoolLeafNodeId });
+		var poolLeaf = await client.Query.GetJobNodeAsync(new() {
+			Context = context,
+			NodeId = summary.PoolLeafNodeId,
+		});
 		poolLeaf.Node.OwnerUserId.Should().BeNull();
 
-		var readiness = await client.Query.GetReadinessAsync(new() { Context = context, NodeId = summary.BlockedLeafNodeId });
+		var readiness = await client.Query.GetReadinessAsync(new() {
+			Context = context,
+			NodeId = summary.BlockedLeafNodeId,
+		});
 		readiness.IsReady.Should().BeFalse();
 
-		var workerContext = new CommandContext { Actor = summary.WorkerId, CorrelationId = Guid.NewGuid() };
+		var workerContext = new CommandContext {
+			Actor = summary.WorkerId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var activeSessions = await client.Query.GetActiveSessionsAsync(new() {
 			Context = workerContext,
 			LeafWorkIds = [summary.ActiveSessionLeafNodeId],
@@ -96,7 +114,10 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 			Password = "Bootstrap-Horse-Battery-77!",
 			CorrelationId = Guid.NewGuid(),
 		});
-		var adminContext = new CommandContext { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() };
+		var adminContext = new CommandContext {
+			Actor = bootstrap.AdministratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var jobManager = await client.Employees.CreateEmployeeAsync(new() {
 			Context = adminContext,
 			DisplayName = "Demo Worker",
@@ -106,12 +127,16 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 			Role = EmployeeRole.JobManager,
 		});
 		_ = await client.Employees.AssignRoleAsync(new() {
-			Context = adminContext with { CorrelationId = Guid.NewGuid() },
+			Context = adminContext with {
+				CorrelationId = Guid.NewGuid(),
+			},
 			TargetUserId = jobManager.Id,
 			Role = EmployeeRole.Worker,
 		});
 		var requester = await client.Employees.CreateEmployeeAsync(new() {
-			Context = adminContext with { CorrelationId = Guid.NewGuid() },
+			Context = adminContext with {
+				CorrelationId = Guid.NewGuid(),
+			},
 			DisplayName = "Client Requester",
 			IanaTimeZone = "Europe/London",
 			UserName = "requester",
@@ -129,17 +154,27 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 		var summary = await UatSeeder.SeedRequesterDemoAsync(client, connection, jobManager.Id, requester.Id);
 
 		summary.RequestNodeIds.Should().HaveCount(ExpectedRequesterDemoRequestCount);
-		var requesterContext = new CommandContext { Actor = requester.Id, CorrelationId = Guid.NewGuid() };
+		var requesterContext = new CommandContext {
+			Actor = requester.Id,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var requests = await client.Requests.GetMyRequestsAsync(requesterContext);
 		requests.Should().HaveCount(ExpectedRequesterDemoRequestCount);
 		var statuses = new List<RequesterStatus>();
 		foreach (var nodeId in summary.RequestNodeIds) {
 			var detail = await client.Requests.GetDetailAsync(new() {
-				Context = requesterContext with { CorrelationId = Guid.NewGuid() },
+				Context = requesterContext with {
+					CorrelationId = Guid.NewGuid(),
+				},
 				NodeId = nodeId,
 			});
 			detail.RequesterUserId.Should().Be(requester.Id);
-			var node = await client.Query.GetJobNodeAsync(new() { Context = adminContext with { CorrelationId = Guid.NewGuid() }, NodeId = nodeId });
+			var node = await client.Query.GetJobNodeAsync(new() {
+				Context = adminContext with {
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = nodeId,
+			});
 			node.Node.OwnerUserId.Should().Be(jobManager.Id);
 			statuses.Add(detail.Status);
 		}

@@ -16,8 +16,8 @@ public sealed class ResponsiveTableColumnArchitectureTests
 	public void Every_application_table_uses_a_bootstrap_column_allocation()
 	{
 		var violations = RazorViews()
-			.SelectMany(static file => ResponsiveTableColumnGuard.FindTablesWithoutBootstrapColumns(file, File.ReadAllText(file)))
-			.ToArray();
+						 .SelectMany(static file => ResponsiveTableColumnGuard.FindTablesWithoutBootstrapColumns(file, File.ReadAllText(file)))
+						 .ToArray();
 
 		violations.Should().BeEmpty(
 			"responsive table widths belong in Bootstrap column classes:{0}{1}",
@@ -55,11 +55,11 @@ public sealed class ResponsiveTableColumnArchitectureTests
 
 	private static IEnumerable<string> RazorViews() =>
 		Directory.EnumerateFiles(Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web", "Pages"), "*.cshtml",
-				SearchOption.AllDirectories)
-			.Where(static file => {
-				var segments = file.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-				return !segments.Contains("bin") && !segments.Contains("obj") && !segments.Contains("lib");
-			});
+					 SearchOption.AllDirectories)
+				 .Where(static file => {
+					 var segments = file.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+					 return !segments.Contains("bin") && !segments.Contains("obj") && !segments.Contains("lib");
+				 });
 }
 
 internal static partial class ResponsiveTableColumnGuard

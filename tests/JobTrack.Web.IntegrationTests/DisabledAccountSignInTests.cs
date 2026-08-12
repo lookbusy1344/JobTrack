@@ -3,14 +3,10 @@ namespace JobTrack.Web.IntegrationTests;
 using System.Net;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
-using Database;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Threat-model row 3 (session theft): a disabled account must not be able to sign in at all
@@ -32,7 +28,10 @@ public sealed partial class DisabledAccountSignInTests : IAsyncLifetime, IDispos
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -138,7 +137,4 @@ public sealed partial class DisabledAccountSignInTests : IAsyncLifetime, IDispos
 		_ = insertIdentityUser.Parameters.AddWithValue("$isEnabled", isEnabled ? 1 : 0);
 		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 	}
-
-
-
 }

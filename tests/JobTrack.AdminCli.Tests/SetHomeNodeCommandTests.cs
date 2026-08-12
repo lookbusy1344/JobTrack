@@ -56,7 +56,10 @@ public sealed class SetHomeNodeCommandTests
 	public async Task Rejects_a_leaf_without_changing_the_home_node() =>
 		await RunWithDatabaseAsync("ada.leafhome", async (userManager, client, rootId) => {
 			var branchId = await AddBranchAsync(client, rootId);
-			var leafId = (await client.Query.GetJobChildrenAsync(new() { Context = Context(), ParentId = branchId })).Single().Id;
+			var leafId = (await client.Query.GetJobChildrenAsync(new() {
+				Context = Context(),
+				ParentId = branchId,
+			})).Single().Id;
 			var console = new FakeConsoleIO([], []);
 
 			var exitCode = await SetHomeNodeCommand.RunAsync(
@@ -94,7 +97,10 @@ public sealed class SetHomeNodeCommandTests
 			(await ReadHomeNodeAsync(client)).Should().BeNull();
 		});
 
-	private static CommandContext Context() => new() { Actor = new(1), CorrelationId = Guid.NewGuid() };
+	private static CommandContext Context() => new() {
+		Actor = new(1),
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	/// <summary>
 	///     Runs <paramref name="body" /> against a freshly deployed SQLite database bootstrapped with
@@ -157,7 +163,10 @@ public sealed class SetHomeNodeCommandTests
 	}
 
 	private static async Task<JobNodeId?> ReadHomeNodeAsync(IJobTrackClient client) =>
-		(await client.Query.GetEmployeeProfileAsync(new() { Context = Context(), TargetUserId = new(1) })).HomeNodeId;
+		(await client.Query.GetEmployeeProfileAsync(new() {
+			Context = Context(),
+			TargetUserId = new(1),
+		})).HomeNodeId;
 
 	private static async Task DeploySchemaAsync(string connectionString)
 	{

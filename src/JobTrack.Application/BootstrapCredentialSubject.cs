@@ -11,7 +11,5 @@ namespace JobTrack.Application;
 /// </summary>
 public sealed class BootstrapCredentialSubject
 {
-	internal BootstrapCredentialSubject()
-	{
-	}
+	internal BootstrapCredentialSubject() { }
 }

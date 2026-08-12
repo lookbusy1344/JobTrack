@@ -6,17 +6,10 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the external HTTP API's Browse subtree surface (plan §4.3, ADR 0039/0040):
@@ -55,7 +48,10 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -110,7 +106,7 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 		jsonDocument.RootElement.GetProperty("rootTotal").ValueKind.Should().NotBe(JsonValueKind.Null);
 		jsonDocument.RootElement.GetProperty("rootAllocatedHours").GetDecimal().Should().Be(8m);
 		var leafNode = jsonDocument.RootElement.GetProperty("nodes").EnumerateArray()
-			.Single(node => node.GetProperty("id").GetInt64() == leafId.Value);
+								   .Single(node => node.GetProperty("id").GetInt64() == leafId.Value);
 		leafNode.GetProperty("cost").ValueKind.Should().NotBe(JsonValueKind.Null);
 		leafNode.GetProperty("allocatedHours").GetDecimal().Should().Be(8m);
 	}
@@ -131,7 +127,7 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Returns_not_found_for_a_nonexistent_root()
 	{
-		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.missing-root.worker", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.missing-root.worker");
 		var authCookie = await client.SignInAsync("subtree.missing-root.worker");
 
 		var response = await client.GetAuthenticatedAsync("/api/jobs/999999/subtree?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
@@ -142,27 +138,39 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 
 	private async Task<(AppUserId WorkerId, JobNodeId BranchId, JobNodeId LeafId)> SeedBranchWithLeafAsync(string workerUserName)
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, workerUserName, EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, workerUserName);
 		var branch = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Kitchen renovation",
 			OwnerUserId = administratorId,
 			Priority = Priority.Medium,
 		});
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = branch.Id,
 			Description = "Fit cabinets",
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 		_ = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Entry = new(
 				ScheduleExceptionEffect.AddWorkingTime,
@@ -171,18 +179,27 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 			Reason = "Full working window for subtree API tests",
 		});
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leaf.Id,
 			WorkedByUserId = workerId,
 			StartedAt = Instant.FromUtc(2026, 1, 1, 9, 0),
 		});
 		_ = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 			FinishedAt = Instant.FromUtc(2026, 1, 1, 17, 0),
@@ -201,7 +218,4 @@ public sealed partial class JobSubtreeApiTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
 }

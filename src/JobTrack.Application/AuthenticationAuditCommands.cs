@@ -34,7 +34,10 @@ internal sealed class AuthenticationAuditCommands : IAuthenticationAuditCommands
 		return request.ActorUserId.HasValue
 			? JobTrackOperation.TraceAsync(
 				"authentication-audit.record",
-				new() { Actor = request.ActorUserId.Value, CorrelationId = request.CorrelationId },
+				new() {
+					Actor = request.ActorUserId.Value,
+					CorrelationId = request.CorrelationId,
+				},
 				null,
 				() => port.RecordAsync(request, cancellationToken))
 			: JobTrackOperation.TraceAsync(

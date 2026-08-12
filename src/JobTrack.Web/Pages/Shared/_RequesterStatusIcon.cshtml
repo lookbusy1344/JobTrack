@@ -2,14 +2,14 @@
 @model RequesterStatusIconModel
 @{
 	var glyph = Model.Status switch {
-		RequesterStatus.Submitted or RequesterStatus.Accepted or RequesterStatus.Waiting =>
-			("jt-icon-achievement-waiting", "waiting"),
-		RequesterStatus.InProgress => ("jt-icon-achievement-in-progress", "in-progress"),
-		RequesterStatus.Completed => ("jt-icon-achievement-success", "success"),
-		RequesterStatus.Cancelled => ("jt-icon-achievement-closed", "closed"),
-		RequesterStatus.None => default((string IconId, string Modifier)?),
-		_ => throw new ArgumentOutOfRangeException(nameof(Model.Status), Model.Status, null),
-	};
+		            RequesterStatus.Submitted or RequesterStatus.Accepted or RequesterStatus.Waiting =>
+			            ("jt-icon-achievement-waiting", "waiting"),
+		            RequesterStatus.InProgress => ("jt-icon-achievement-in-progress", "in-progress"),
+		            RequesterStatus.Completed => ("jt-icon-achievement-success", "success"),
+		            RequesterStatus.Cancelled => ("jt-icon-achievement-closed", "closed"),
+		            RequesterStatus.None => default((string IconId, string Modifier)?),
+		            _ => throw new ArgumentOutOfRangeException(nameof(Model.Status), Model.Status, null),
+	            };
 }
 @if (glyph is var (iconId, modifier)) {
 	var label = EnumDisplay.Label(Model.Status);

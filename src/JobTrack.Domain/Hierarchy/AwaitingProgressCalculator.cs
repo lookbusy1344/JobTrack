@@ -46,11 +46,11 @@ public static class AwaitingProgressCalculator
 		ArgumentNullException.ThrowIfNull(ownership);
 
 		var candidates = nodesById.Values
-			.Where(IsUnfinishedLeaf)
-			.Where(node => ownership.Matches(factsById[node.Id].OwnerUserId))
-			.Where(node => !subtreeRootId.HasValue || IsInSubtree(node.Id, subtreeRootId.Value, nodesById))
-			.Where(node => string.IsNullOrWhiteSpace(searchText)
-						   || factsById[node.Id].Description.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+								  .Where(IsUnfinishedLeaf)
+								  .Where(node => ownership.Matches(factsById[node.Id].OwnerUserId))
+								  .Where(node => !subtreeRootId.HasValue || IsInSubtree(node.Id, subtreeRootId.Value, nodesById))
+								  .Where(node => string.IsNullOrWhiteSpace(searchText)
+												 || factsById[node.Id].Description.Contains(searchText, StringComparison.OrdinalIgnoreCase));
 
 		return MapCandidates(candidates, nodesById, factsById, prerequisites);
 	}
@@ -80,27 +80,27 @@ public static class AwaitingProgressCalculator
 		IReadOnlyCollection<PrerequisiteEdge> prerequisites)
 	{
 		var entries = candidates
-			.Select(node => (Node: node, Facts: factsById[node.Id]))
-			.Where(candidate => candidate.Facts.ArchivedAt is null)
-			.Select(candidate => new AwaitingProgressEntry(
-				candidate.Node.Id,
-				candidate.Node.ParentId,
-				candidate.Facts.Description,
-				candidate.Facts.OwnerUserId,
-				candidate.Facts.Priority,
-				candidate.Node.LeafAchievement,
-				null,
-				null,
-				candidate.Facts.NeededStart,
-				candidate.Facts.NeededFinish,
-				ReadinessCalculator.IsReady(candidate.Node.Id, nodesById, prerequisites).IsReady));
+					  .Select(node => (Node: node, Facts: factsById[node.Id]))
+					  .Where(candidate => candidate.Facts.ArchivedAt is null)
+					  .Select(candidate => new AwaitingProgressEntry(
+						  candidate.Node.Id,
+						  candidate.Node.ParentId,
+						  candidate.Facts.Description,
+						  candidate.Facts.OwnerUserId,
+						  candidate.Facts.Priority,
+						  candidate.Node.LeafAchievement,
+						  null,
+						  null,
+						  candidate.Facts.NeededStart,
+						  candidate.Facts.NeededFinish,
+						  ReadinessCalculator.IsReady(candidate.Node.Id, nodesById, prerequisites).IsReady));
 
 		var ordered = entries
-			.OrderByDescending(entry => entry.IsReady)
-			.ThenByDescending(entry => entry.Priority)
-			.ThenBy(entry => Deadline(entry) is null)
-			.ThenBy(entry => Deadline(entry))
-			.ThenBy(entry => entry.Id.Value);
+					  .OrderByDescending(entry => entry.IsReady)
+					  .ThenByDescending(entry => entry.Priority)
+					  .ThenBy(entry => Deadline(entry) is null)
+					  .ThenBy(entry => Deadline(entry))
+					  .ThenBy(entry => entry.Id.Value);
 
 		return [.. ordered];
 	}

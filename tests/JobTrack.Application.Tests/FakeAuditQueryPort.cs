@@ -39,21 +39,23 @@ internal sealed class FakeAuditQueryPort : IAuditQueryPort
 		ObservedLimits = [.. ObservedLimits, limit];
 
 		var matches = _events.Where(record =>
-				(filter.ActorId is not AppUserId actorFilter || record.ActorId == actorFilter)
-				&& (filter.EntityType is null || record.EntityType == filter.EntityType)
-				&& (filter.EntityId is not long entityIdFilter || record.EntityId == entityIdFilter)
-				&& (filter.CorrelationId is not Guid correlationFilter || record.CorrelationId == correlationFilter)
-				&& (filter.From is not Instant from || record.OccurredAt >= from)
-				&& (filter.To is not Instant to || record.OccurredAt < to)
-				&& (before is null
-					|| record.OccurredAt < before.OccurredAt
-					|| (record.OccurredAt == before.OccurredAt && record.Id < before.Id)))
-			.OrderByDescending(record => record.OccurredAt)
-			.ThenByDescending(record => record.Id)
-			.Take(limit)
-			.ToArray();
+								 (filter.ActorId is not AppUserId actorFilter || record.ActorId == actorFilter)
+								 && (filter.EntityType is null || record.EntityType == filter.EntityType)
+								 && (filter.EntityId is not long entityIdFilter || record.EntityId == entityIdFilter)
+								 && (filter.CorrelationId is not Guid correlationFilter || record.CorrelationId == correlationFilter)
+								 && (filter.From is not Instant from || record.OccurredAt >= from)
+								 && (filter.To is not Instant to || record.OccurredAt < to)
+								 && (before is null
+									 || record.OccurredAt < before.OccurredAt
+									 || record.OccurredAt == before.OccurredAt && record.Id < before.Id))
+							 .OrderByDescending(record => record.OccurredAt)
+							 .ThenByDescending(record => record.Id)
+							 .Take(limit)
+							 .ToArray();
 
-		return Task.FromResult(new AuditSearchQueryResult { Events = EquatableArray.CopyOf(matches) });
+		return Task.FromResult(new AuditSearchQueryResult {
+			Events = EquatableArray.CopyOf(matches),
+		});
 	}
 
 	public void SeedRoles(AppUserId actorId, params EmployeeRole[] roles) => _roles[actorId] = [.. roles];

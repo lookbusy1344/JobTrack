@@ -262,20 +262,20 @@ public sealed class InlineDmlArchitectureTests
 		];
 
 		var actualCalls = persistenceDirectories
-			.SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
-			.Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
-						   && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
-			.SelectMany(path => FindRawSqlCalls(solutionRoot, path, methods))
-			.ToList();
+						  .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
+						  .Where(path => !path.Contains(Path.Combine("obj", ""), StringComparison.Ordinal)
+										 && !path.Contains(Path.Combine("bin", ""), StringComparison.Ordinal))
+						  .SelectMany(path => FindRawSqlCalls(solutionRoot, path, methods))
+						  .ToList();
 
 		var violations = actualCalls
-			.Where(call => !inventory.Any(allowed =>
-				allowed.Path == call.Path
-				&& allowed.ContainingMember == call.ContainingMember
-				&& allowed.Method == call.Method
-				&& call.Arguments.Contains(allowed.RequiredArgumentFragment, StringComparison.Ordinal)))
-			.Select(call => $"{call.Path}: {call.ContainingMember}.{call.Method}({call.Arguments})")
-			.ToList();
+						 .Where(call => !inventory.Any(allowed =>
+							 allowed.Path == call.Path
+							 && allowed.ContainingMember == call.ContainingMember
+							 && allowed.Method == call.Method
+							 && call.Arguments.Contains(allowed.RequiredArgumentFragment, StringComparison.Ordinal)))
+						 .Select(call => $"{call.Path}: {call.ContainingMember}.{call.Method}({call.Arguments})")
+						 .ToList();
 
 		violations.Should().BeEmpty(
 			$"EF-expressible reads/writes must use LINQ/EF, while raw SQL {kind}s are limited to exact reviewed " +
@@ -295,21 +295,21 @@ public sealed class InlineDmlArchitectureTests
 		var relativePath = Path.GetRelativePath(solutionRoot, path);
 
 		return root.DescendantNodes()
-			.OfType<InvocationExpressionSyntax>()
-			.Select(invocation => (
-				Invocation: invocation,
-				Method: invocation.Expression switch {
-					MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
-					IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-					_ => string.Empty,
-				}))
-			.Where(item => methods.Contains(item.Method))
-			.Select(item => (
-				Path: relativePath,
-				ContainingMember: item.Invocation.FirstAncestorOrSelf<MethodDeclarationSyntax>()?.Identifier.ValueText
-								  ?? string.Empty,
-				item.Method,
-				Arguments: item.Invocation.ArgumentList.ToString()));
+				   .OfType<InvocationExpressionSyntax>()
+				   .Select(invocation => (
+					   Invocation: invocation,
+					   Method: invocation.Expression switch {
+						   MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+						   IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+						   _ => string.Empty,
+					   }))
+				   .Where(item => methods.Contains(item.Method))
+				   .Select(item => (
+					   Path: relativePath,
+					   ContainingMember: item.Invocation.FirstAncestorOrSelf<MethodDeclarationSyntax>()?.Identifier.ValueText
+										 ?? string.Empty,
+					   item.Method,
+					   Arguments: item.Invocation.ArgumentList.ToString()));
 	}
 
 	private sealed record AllowedRawSqlCall(

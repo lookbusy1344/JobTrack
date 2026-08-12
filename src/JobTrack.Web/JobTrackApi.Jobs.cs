@@ -18,7 +18,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = null }, cancellationToken);
+			var result = await jobTrackClient.Query.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = null,
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -32,7 +35,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Query.GetJobNodeAsync(new() { Context = context, NodeId = new JobNodeId(nodeId) }, cancellationToken);
+			var result = await jobTrackClient.Query.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = new JobNodeId(nodeId),
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -161,7 +167,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Jobs.PickUpAsync(new() { Context = context, NodeId = new(nodeId) }, cancellationToken);
+			var result = await jobTrackClient.Jobs.PickUpAsync(new() {
+				Context = context,
+				NodeId = new(nodeId),
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -175,7 +184,10 @@ internal static partial class JobTrackApi
 		CancellationToken cancellationToken)
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
-			var result = await jobTrackClient.Query.GetReadinessAsync(new() { Context = context, NodeId = new(nodeId) }, cancellationToken);
+			var result = await jobTrackClient.Query.GetReadinessAsync(new() {
+				Context = context,
+				NodeId = new(nodeId),
+			}, cancellationToken);
 
 			return TypedResults.Ok(Map(result));
 		});
@@ -213,7 +225,11 @@ internal static partial class JobTrackApi
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			await jobTrackClient.Jobs.AddPrerequisiteAsync(
-				new() { Context = context, RequiredJobId = new(request.RequiredJobId), DependentJobId = new(nodeId) }, cancellationToken);
+				new() {
+					Context = context,
+					RequiredJobId = new(request.RequiredJobId),
+					DependentJobId = new(nodeId),
+				}, cancellationToken);
 
 			return TypedResults.NoContent();
 		});
@@ -229,7 +245,11 @@ internal static partial class JobTrackApi
 	{
 		return await ExecuteAsync(httpContext, userManager, async context => {
 			await jobTrackClient.Jobs.RemovePrerequisiteAsync(
-				new() { Context = context, RequiredJobId = new(requiredJobId), DependentJobId = new(nodeId) }, cancellationToken);
+				new() {
+					Context = context,
+					RequiredJobId = new(requiredJobId),
+					DependentJobId = new(nodeId),
+				}, cancellationToken);
 
 			return TypedResults.NoContent();
 		});
@@ -263,7 +283,10 @@ internal static partial class JobTrackApi
 	}
 
 	private static JobNodeDetailResponse Map(JobNodeDetailResult result) =>
-		new() { Node = Map(result.Node), Ancestors = [.. result.Ancestors.Select(Map)] };
+		new() {
+			Node = Map(result.Node),
+			Ancestors = [.. result.Ancestors.Select(Map)],
+		};
 
 	private static JobNodeResponse Map(JobNodeResult result) =>
 		new() {
@@ -287,7 +310,11 @@ internal static partial class JobTrackApi
 		};
 
 	private static JobNodeAncestorResponse Map(JobNodeAncestorResult result) =>
-		new() { Id = result.Id.Value, Description = result.Description, Kind = result.Kind };
+		new() {
+			Id = result.Id.Value,
+			Description = result.Description,
+			Kind = result.Kind,
+		};
 
 	private static JobNodeSummaryResponse Map(JobNodeSummaryResult result) =>
 		new() {
@@ -303,10 +330,16 @@ internal static partial class JobTrackApi
 		};
 
 	private static ReadinessResponse Map(ReadinessResult result) =>
-		new() { IsReady = result.IsReady, Blockers = [.. result.Blockers.Select(Map)] };
+		new() {
+			IsReady = result.IsReady,
+			Blockers = [.. result.Blockers.Select(Map)],
+		};
 
 	private static UnsatisfiedPrerequisiteResponse Map(UnsatisfiedPrerequisite result) =>
-		new() { RequiredJobId = result.RequiredJobId.Value, DeclaredOnJobId = result.DeclaredOnJobId.Value };
+		new() {
+			RequiredJobId = result.RequiredJobId.Value,
+			DeclaredOnJobId = result.DeclaredOnJobId.Value,
+		};
 
 	private static JobSubtreeResponse Map(JobSubtreeResult result) =>
 		new() {
@@ -340,7 +373,10 @@ internal static partial class JobTrackApi
 		};
 
 	private static PrerequisiteEdgeResponse Map(PrerequisiteEdge result) =>
-		new() { RequiredJobId = result.RequiredJobId.Value, DependentJobId = result.DependentJobId.Value };
+		new() {
+			RequiredJobId = result.RequiredJobId.Value,
+			DependentJobId = result.DependentJobId.Value,
+		};
 
 	internal sealed class JobNodeDetailResponse
 	{

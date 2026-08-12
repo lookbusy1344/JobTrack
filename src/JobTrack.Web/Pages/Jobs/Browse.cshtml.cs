@@ -381,7 +381,10 @@ public sealed class BrowseModel(
 			}
 
 			_ = await jobTrackClient.Work.StartWorkAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = Guid.NewGuid(),
+				},
 				JobNodeId = new(leafNodeId),
 				WorkedByUserId = actor.Value,
 				StartedAt = startedAtInstant,
@@ -435,7 +438,10 @@ public sealed class BrowseModel(
 			}
 
 			_ = await jobTrackClient.Work.StartWorkAsync(new() {
-				Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = actor.Value,
+					CorrelationId = Guid.NewGuid(),
+				},
 				JobNodeId = new(leafNodeId),
 				WorkedByUserId = new(targetUserId),
 				StartedAt = startedAtInstant,
@@ -467,7 +473,10 @@ public sealed class BrowseModel(
 			return Challenge();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
@@ -518,22 +527,34 @@ public sealed class BrowseModel(
 			return Challenge();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var jobNodeId = new JobNodeId(leafNodeId);
 
 			var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
-				new() { Context = context, JobNodeId = jobNodeId }, cancellationToken);
+				new() {
+					Context = context,
+					JobNodeId = jobNodeId,
+				}, cancellationToken);
 			var activeSessions = await jobTrackClient.Query.GetActiveSessionsAsync(
-				new() { Context = context, LeafWorkIds = [jobNodeId] }, cancellationToken);
+				new() {
+					Context = context,
+					LeafWorkIds = [jobNodeId],
+				}, cancellationToken);
 
 			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
 				Context = context,
 				JobNodeId = jobNodeId,
 				Version = leafWork.Version,
-				ExpectedActiveSessions =
-					[.. activeSessions.Select(session => new ExpectedActiveSession { Id = session.Id, Version = session.Version })],
+				ExpectedActiveSessions = [
+					.. activeSessions.Select(session => new ExpectedActiveSession {
+						Id = session.Id, Version = session.Version,
+					}),
+				],
 			}, cancellationToken);
 			SuccessMessage = result.FinishedSessions.Count switch {
 				0 => "Job marked complete.",
@@ -577,7 +598,13 @@ public sealed class BrowseModel(
 
 		try {
 			_ = await jobTrackClient.Jobs.PickUpAsync(
-				new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, NodeId = new(pickUpNodeId) },
+				new() {
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new(pickUpNodeId),
+				},
 				cancellationToken);
 			SuccessMessage = "Job node claimed.";
 		}
@@ -624,7 +651,13 @@ public sealed class BrowseModel(
 	{
 		try {
 			_ = await jobTrackClient.Employees.SetHomeNodeAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = nodeId }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = nodeId,
+				}, cancellationToken);
 			SuccessMessage = nodeId is null ? "Home node reset to root." : "Home node set.";
 		}
 		catch (InvariantViolationException) {
@@ -654,7 +687,10 @@ public sealed class BrowseModel(
 	{
 		CurrentActorId = actor;
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
-		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		// Owner filter is remembered across visits (the whole tree is browsable, so the default when
 		// nothing is remembered is "All owners"). UnassignedOnly still overrides it below when set.
@@ -706,7 +742,10 @@ public sealed class BrowseModel(
 
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = context, NodeId = NodeId.HasValue ? new JobNodeId(NodeId.Value) : null }, cancellationToken);
+				new() {
+					Context = context,
+					NodeId = NodeId.HasValue ? new JobNodeId(NodeId.Value) : null,
+				}, cancellationToken);
 
 			// The subtree/children listing is no longer owner-filterable from Browse itself (the owner
 			// filter moved into the dedicated Search flow above, since it was easily mistaken for
@@ -722,7 +761,10 @@ public sealed class BrowseModel(
 			}, cancellationToken);
 			CurrentNodeBranchAchievement = Subtree.RootAchievement;
 
-			Readiness = await jobTrackClient.Query.GetReadinessAsync(new() { Context = context, NodeId = CurrentNode.Node.Id }, cancellationToken);
+			Readiness = await jobTrackClient.Query.GetReadinessAsync(new() {
+				Context = context,
+				NodeId = CurrentNode.Node.Id,
+			}, cancellationToken);
 
 			await LoadPrerequisitesAndDependentsAsync(context, CurrentNode.Node.Id, cancellationToken);
 			await LoadAncestorBlockersAsync(context, CurrentNode, Readiness, cancellationToken);
@@ -742,7 +784,10 @@ public sealed class BrowseModel(
 	private async Task LoadRequestContextAsync(CommandContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
 		try {
-			RequestContext = await jobTrackClient.Requests.GetDetailAsync(new() { Context = context, NodeId = nodeId }, cancellationToken);
+			RequestContext = await jobTrackClient.Requests.GetDetailAsync(new() {
+				Context = context,
+				NodeId = nodeId,
+			}, cancellationToken);
 		}
 		catch (InvariantViolationException ex) when (ex.ConstraintId == "requester-job-required") {
 			RequestContext = null;
@@ -768,7 +813,10 @@ public sealed class BrowseModel(
 		}
 
 		try {
-			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [.. leafIds] },
+			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() {
+				Context = context,
+				LeafWorkIds = [.. leafIds],
+			},
 				cancellationToken);
 
 			ActiveSessionsByLeaf = ActiveSessionGrouping.Group(sessions);
@@ -780,7 +828,10 @@ public sealed class BrowseModel(
 		// Batched rendering hint for the "Start for..." disclosure and another worker's exact finish
 		// (ADR 0044 Stage 4/6) -- one round trip regardless of leaf count, never re-derived per row.
 		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
-			new() { Context = context, LeafWorkIds = [.. leafIds] }, cancellationToken);
+			new() {
+				Context = context,
+				LeafWorkIds = [.. leafIds],
+			}, cancellationToken);
 		CanManageByLeaf = capabilities.ToDictionary(c => c.LeafWorkId, c => c.CanManage);
 	}
 
@@ -823,7 +874,9 @@ public sealed class BrowseModel(
 	private async Task LoadEmployeeDirectoryAsync(CommandContext context, CancellationToken cancellationToken)
 	{
 		_employeeDirectory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-			new() { Context = context }, cancellationToken);
+			new() {
+				Context = context,
+			}, cancellationToken);
 
 		EmployeeDirectoryById = _employeeDirectory.ToDictionary(entry => entry.Id);
 		OwnerFilterOptions = EmployeeDirectoryDisplay.BuildOptions(_employeeDirectory, new SelectListItem("All owners", string.Empty));
@@ -837,7 +890,10 @@ public sealed class BrowseModel(
 		}
 
 		var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
-			new() { Context = context, JobNodeId = node.Id }, cancellationToken);
+			new() {
+				Context = context,
+				JobNodeId = node.Id,
+			}, cancellationToken);
 		CurrentNodeAchievement = leafWork.Achievement;
 	}
 
@@ -857,7 +913,11 @@ public sealed class BrowseModel(
 
 		try {
 			var sessions = await jobTrackClient.Query.GetLeafSessionsAsync(
-				new() { Context = context, LeafWorkId = leafId, WorkedByUserId = null }, cancellationToken);
+				new() {
+					Context = context,
+					LeafWorkId = leafId,
+					WorkedByUserId = null,
+				}, cancellationToken);
 
 			Panel = new() {
 				LeafNodeId = leafId.Value,
@@ -889,7 +949,11 @@ public sealed class BrowseModel(
 	{
 		try {
 			var details = await jobTrackClient.Costs.GetCostDetailsAsync(
-				new() { Context = context, NodeId = leafId, AsOf = Now }, cancellationToken);
+				new() {
+					Context = context,
+					NodeId = leafId,
+					AsOf = Now,
+				}, cancellationToken);
 			return SessionCostAggregator.AggregateBySession(details.Trace);
 		}
 		catch (AuthorizationDeniedException) {
@@ -903,7 +967,10 @@ public sealed class BrowseModel(
 	private async Task LoadHomeNodeAsync(CommandContext context, AppUserId actor, CancellationToken cancellationToken)
 	{
 		var profile = await jobTrackClient.Query.GetEmployeeProfileAsync(
-			new() { Context = context, TargetUserId = actor }, cancellationToken);
+			new() {
+				Context = context,
+				TargetUserId = actor,
+			}, cancellationToken);
 
 		HomeNodeId = profile.HomeNodeId;
 	}
@@ -916,7 +983,10 @@ public sealed class BrowseModel(
 
 	private async Task LoadPrerequisitesAndDependentsAsync(CommandContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
-		var edges = await jobTrackClient.Query.GetPrerequisitesAsync(new() { Context = context, NodeId = nodeId }, cancellationToken);
+		var edges = await jobTrackClient.Query.GetPrerequisitesAsync(new() {
+			Context = context,
+			NodeId = nodeId,
+		}, cancellationToken);
 
 		var requiresIds = edges.Where(e => e.DependentJobId == nodeId).Select(e => e.RequiredJobId).ToList();
 		var requiredByIds = edges.Where(e => e.RequiredJobId == nodeId).Select(e => e.DependentJobId).ToList();
@@ -925,7 +995,10 @@ public sealed class BrowseModel(
 			return;
 		}
 
-		var summaries = await jobTrackClient.Query.GetJobSummariesAsync(new() { Context = context, NodeIds = [.. distinctIds] }, cancellationToken);
+		var summaries = await jobTrackClient.Query.GetJobSummariesAsync(new() {
+			Context = context,
+			NodeIds = [.. distinctIds],
+		}, cancellationToken);
 		var summariesById = summaries.ToDictionary(s => s.Id);
 
 		Requires = [.. requiresIds.Select(id => summariesById.GetValueOrDefault(id)).OfType<JobNodeSummaryResult>()];
@@ -951,7 +1024,10 @@ public sealed class BrowseModel(
 		var ancestorDescriptionsById = currentNode.Ancestors.ToDictionary(a => a.Id, a => a.Description);
 
 		var requiredIds = ancestorBlockers.Select(b => b.RequiredJobId).Distinct().ToArray();
-		var summaries = await jobTrackClient.Query.GetJobSummariesAsync(new() { Context = context, NodeIds = [.. requiredIds] }, cancellationToken);
+		var summaries = await jobTrackClient.Query.GetJobSummariesAsync(new() {
+			Context = context,
+			NodeIds = [.. requiredIds],
+		}, cancellationToken);
 		var requiredDescriptionsById = summaries.ToDictionary(s => s.Id, s => s.Description);
 
 		AncestorBlockers = [

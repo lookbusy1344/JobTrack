@@ -34,16 +34,16 @@ public static class PostgreSqlExplainPlan
 	/// <summary>True if any node in the plan tree has the given Node Type (e.g. "Seq Scan", "Index Scan").</summary>
 	public static bool ContainsNodeType(JsonElement plan, string nodeType) =>
 		plan.GetProperty("Node Type").GetString() == nodeType ||
-		(plan.TryGetProperty("Plans", out var children) &&
-		 children.EnumerateArray().Any(child => ContainsNodeType(child, nodeType)));
+		plan.TryGetProperty("Plans", out var children) &&
+		children.EnumerateArray().Any(child => ContainsNodeType(child, nodeType));
 
 	/// <summary>True if any node in the plan tree is a sequential scan of the given relation.</summary>
 	public static bool ContainsSequentialScanOf(JsonElement plan, string relationName) =>
-		(plan.GetProperty("Node Type").GetString() == "Seq Scan" &&
-		 plan.TryGetProperty("Relation Name", out var relation) &&
-		 relation.GetString() == relationName) ||
-		(plan.TryGetProperty("Plans", out var children) &&
-		 children.EnumerateArray().Any(child => ContainsSequentialScanOf(child, relationName)));
+		plan.GetProperty("Node Type").GetString() == "Seq Scan" &&
+		plan.TryGetProperty("Relation Name", out var relation) &&
+		relation.GetString() == relationName ||
+		plan.TryGetProperty("Plans", out var children) &&
+		children.EnumerateArray().Any(child => ContainsSequentialScanOf(child, relationName));
 
 	/// <summary>
 	///     True if any node in the plan tree (an <c>Index Scan</c> or <c>Bitmap Index Scan</c>, both of
@@ -55,15 +55,15 @@ public static class PostgreSqlExplainPlan
 	///     actually served the query.
 	/// </summary>
 	public static bool ContainsIndexScanUsing(JsonElement plan, string indexName) =>
-		(plan.TryGetProperty("Index Name", out var index) && index.GetString() == indexName) ||
-		(plan.TryGetProperty("Plans", out var children) &&
-		 children.EnumerateArray().Any(child => ContainsIndexScanUsing(child, indexName)));
+		plan.TryGetProperty("Index Name", out var index) && index.GetString() == indexName ||
+		plan.TryGetProperty("Plans", out var children) &&
+		children.EnumerateArray().Any(child => ContainsIndexScanUsing(child, indexName));
 
 	/// <summary>True if any sort node in the plan spilled to disk rather than completing in memory.</summary>
 	public static bool ContainsDiskSort(JsonElement plan) =>
-		(plan.GetProperty("Node Type").GetString() == "Sort" &&
-		 plan.TryGetProperty("Sort Space Type", out var sortSpaceType) &&
-		 sortSpaceType.GetString() == "Disk") ||
-		(plan.TryGetProperty("Plans", out var children) &&
-		 children.EnumerateArray().Any(ContainsDiskSort));
+		plan.GetProperty("Node Type").GetString() == "Sort" &&
+		plan.TryGetProperty("Sort Space Type", out var sortSpaceType) &&
+		sortSpaceType.GetString() == "Disk" ||
+		plan.TryGetProperty("Plans", out var children) &&
+		children.EnumerateArray().Any(ContainsDiskSort);
 }

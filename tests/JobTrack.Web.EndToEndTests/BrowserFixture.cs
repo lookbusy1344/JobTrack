@@ -104,7 +104,9 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 			BrowserEngine.WebKit => playwright.Webkit,
 			_ => throw new ArgumentOutOfRangeException(nameof(Engine), Engine, "Unsupported browser engine."),
 		};
-		Browser = await browserType.LaunchAsync(new() { Headless = true });
+		Browser = await browserType.LaunchAsync(new() {
+			Headless = true,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -146,12 +148,21 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	}
 
 	public Task<IBrowserContext> NewContextAsync(int width, int height) =>
-		Browser.NewContextAsync(new() { ViewportSize = new() { Width = width, Height = height }, IgnoreHTTPSErrors = true });
+		Browser.NewContextAsync(new() {
+			ViewportSize = new() {
+				Width = width,
+				Height = height,
+			},
+			IgnoreHTTPSErrors = true,
+		});
 
 	public async Task<JobNodeId> SeedLeafAsync(string description, JobNodeId? parentId = null)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId ?? RootJobNodeId,
 			Description = description,
 			OwnerUserId = AdministratorId,
@@ -163,7 +174,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	public async Task<JobNodeId> SeedBranchAsync(string description, JobNodeId? parentId = null)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId ?? RootJobNodeId,
 			Description = description,
 			OwnerUserId = AdministratorId,
@@ -176,7 +190,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	public async Task<AppUserId> SeedRequesterAsync(string userName, string password)
 	{
 		var result = await seedClient.Employees.CreateEmployeeAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			DisplayName = userName,
 			IanaTimeZone = "Etc/UTC",
 			UserName = userName,
@@ -256,14 +273,20 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	/// <summary>Submits a request as <paramref name="requesterId" />, for requester-page browser tests (ADR 0033/0034).</summary>
 	public async Task<JobRequestResult> SubmitRequestAsync(AppUserId requesterId, RequestHoldingAreaId holdingAreaId, string description) =>
 		await seedClient.Requests.SubmitAsync(new() {
-			Context = new() { Actor = requesterId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = requesterId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			HoldingAreaId = holdingAreaId,
 			Description = description,
 		});
 
 	public async Task SeedPrerequisiteAsync(JobNodeId requiredJobId, JobNodeId dependentJobId) =>
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = requiredJobId,
 			DependentJobId = dependentJobId,
 		});
@@ -272,16 +295,25 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	{
 		var leafId = await SeedLeafAsync(leafDescription);
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = AdministratorId,
 		});
 		var finished = await seedClient.Work.FinishSessionAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			Version = started.Version,
 		});
@@ -304,9 +336,18 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	{
 		var leafId = await SeedTerminalLeafAsync(description, Achievement.Success);
 		var current = await seedClient.Query.GetJobNodeAsync(
-			new() { Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() }, NodeId = leafId });
+			new() {
+				Context = new() {
+					Actor = AdministratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = leafId,
+			});
 		_ = await seedClient.Jobs.ArchiveAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = leafId,
 			Version = current.Node.Version,
 		});
@@ -317,20 +358,35 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	{
 		var leafId = await SeedLeafAsync(description, parentId);
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 		var leafWork = await seedClient.Query.GetLeafWorkAsync(
-			new() { Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = leafId });
+			new() {
+				Context = new() {
+					Actor = AdministratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = leafId,
+			});
 		var inProgress = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			NewAchievement = Achievement.InProgress,
 			Reason = "Browser fixture setup",
 			Version = leafWork.Version,
 		});
 		_ = await seedClient.Work.SetAchievementAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 			NewAchievement = achievement,
 			Reason = "Browser fixture setup",
@@ -344,7 +400,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	{
 		var userName = $"bystander.worker.{Guid.NewGuid():N}";
 		var employee = await seedClient.Employees.CreateEmployeeAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			DisplayName = "Bystander Worker",
 			IanaTimeZone = "Etc/UTC",
 			UserName = userName,
@@ -363,14 +422,20 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 
 		var leafId = await SeedLeafAsync(leafDescription, parentId);
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leafId,
 		});
 		var workerDisplayNames = new List<string>(workerCount);
 		for (var index = 0; index < workerCount; ++index) {
 			var displayName = $"Active Worker {index + 1}";
 			var employee = await seedClient.Employees.CreateEmployeeAsync(new() {
-				Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+				Context = new() {
+					Actor = AdministratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
 				DisplayName = displayName,
 				IanaTimeZone = "Etc/UTC",
 				UserName = $"active.worker.{Guid.NewGuid():N}",
@@ -379,13 +444,19 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 			});
 			if (index == 0) {
 				_ = await seedClient.Work.StartWorkAsync(new() {
-					Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = AdministratorId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = leafId,
 					WorkedByUserId = employee.Id,
 				});
 			} else {
 				_ = await seedClient.Work.StartSessionAsync(new() {
-					Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = AdministratorId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					LeafWorkId = leafId,
 					WorkedByUserId = employee.Id,
 				});
@@ -407,7 +478,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	public async Task<ScheduleVersionId> SeedScheduleVersionAsync(LocalDate effectiveStart)
 	{
 		var result = await seedClient.Schedules.AddScheduleVersionAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = AdministratorId,
 			Schedule = new(
 				DateTimeZoneProviders.Tzdb["Europe/London"], effectiveStart,
@@ -420,7 +494,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	public async Task<ScheduleExceptionId> SeedScheduleExceptionAsync(Instant start, Instant end)
 	{
 		var result = await seedClient.Schedules.AddScheduleExceptionAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = AdministratorId,
 			Entry = new(ScheduleExceptionEffect.RemoveWorkingTime, new(start, end), null),
 			Reason = "Accessibility fixture",
@@ -436,7 +513,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	public async Task<UserCostRateId> SeedUserCostRateAsync(Instant effectiveStart)
 	{
 		var result = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = AdministratorId,
 			Rate = new(new(25m), effectiveStart, effectiveStart.Plus(Duration.FromDays(30))),
 		});
@@ -446,7 +526,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	public async Task<NodeRateOverrideId> SeedNodeRateOverrideAsync(Instant effectiveStart)
 	{
 		var result = await seedClient.Rates.AddNodeRateOverrideAsync(new() {
-			Context = new() { Actor = AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = AdministratorId,
 			Override = new(RootJobNodeId, new(40m), effectiveStart, null),
 		});
@@ -465,7 +548,9 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		var webAssemblyPath = typeof(Program).Assembly.Location;
 		var startInfo = new ProcessStartInfo {
 			FileName = "dotnet",
-			ArgumentList = { webAssemblyPath },
+			ArgumentList = {
+				webAssemblyPath,
+			},
 			UseShellExecute = false,
 			RedirectStandardOutput = true,
 			RedirectStandardError = true,
@@ -491,7 +576,10 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		startInfo.EnvironmentVariables["RateLimiting__LoginPermitLimit"] =
 			LoginRateLimitPermitLimitForTests.ToString(CultureInfo.InvariantCulture);
 
-		webProcess = new() { StartInfo = startInfo, EnableRaisingEvents = true };
+		webProcess = new() {
+			StartInfo = startInfo,
+			EnableRaisingEvents = true,
+		};
 		webProcess.OutputDataReceived += (_, args) => {
 			if (args.Data is not null) {
 				lock (processOutput) {
@@ -514,7 +602,9 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 
 	private async Task WaitForReadinessAsync()
 	{
-		using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+		using var handler = new HttpClientHandler {
+			ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+		};
 		using var probeClient = new HttpClient(handler);
 		var deadline = DateTime.UtcNow + ReadinessTimeout;
 

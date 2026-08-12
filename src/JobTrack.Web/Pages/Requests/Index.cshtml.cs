@@ -62,7 +62,10 @@ public sealed class IndexModel(
 		try {
 			var result = await jobTrackClient.Requests.SubmitAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					HoldingAreaId = new(Submit.HoldingAreaId),
 					Description = Submit.Description,
 				}, cancellationToken);
@@ -87,7 +90,10 @@ public sealed class IndexModel(
 		}
 
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 		EligibleHoldingAreas = await jobTrackClient.Requests.GetEligibleHoldingAreasAsync(context, cancellationToken);
 		MyRequests = await jobTrackClient.Requests.GetMyRequestsAsync(context, cancellationToken);
 
@@ -95,7 +101,10 @@ public sealed class IndexModel(
 		// placeholder option) so the requester only has to describe the problem. Left alone once the
 		// requester has picked something, which is also what keeps a redisplayed form's own value.
 		if (EligibleHoldingAreas.Count == 1 && Submit.HoldingAreaId == UnchosenHoldingAreaId) {
-			Submit = new() { Description = Submit.Description, HoldingAreaId = EligibleHoldingAreas[0].Id.Value };
+			Submit = new() {
+				Description = Submit.Description,
+				HoldingAreaId = EligibleHoldingAreas[0].Id.Value,
+			};
 		}
 	}
 

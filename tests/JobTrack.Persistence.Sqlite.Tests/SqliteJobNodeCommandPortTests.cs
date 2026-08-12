@@ -58,7 +58,10 @@ public sealed class SqliteJobNodeCommandPortTests()
 		var portA = CreateCommandPort(ConnectionString);
 		var portB = CreateCommandPort(ConnectionString);
 		var unassigned = await portA.AddChildAsync(new() {
-			Context = new() { Actor = jobManagerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = jobManagerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Unassigned pool leaf",
 			OwnerUserId = null,
@@ -82,7 +85,13 @@ public sealed class SqliteJobNodeCommandPortTests()
 	private static async Task<bool> TryPickUpAsync(IJobNodeCommandPort port, AppUserId actor, JobNodeId nodeId)
 	{
 		try {
-			_ = await port.PickUpAsync(new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = nodeId });
+			_ = await port.PickUpAsync(new() {
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = nodeId,
+			});
 			return true;
 		}
 		catch (InvariantViolationException) {

@@ -46,7 +46,11 @@ public static class PostgreSqlCliTool
 	private static async Task RunAsync(
 		string fileName, string connectionString, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
 	{
-		var startInfo = new ProcessStartInfo(fileName) { RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false };
+		var startInfo = new ProcessStartInfo(fileName) {
+			RedirectStandardError = true,
+			RedirectStandardOutput = true,
+			UseShellExecute = false,
+		};
 
 		foreach (var argument in arguments) {
 			startInfo.ArgumentList.Add(argument);

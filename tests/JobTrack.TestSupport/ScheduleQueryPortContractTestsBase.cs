@@ -1,7 +1,6 @@
 namespace JobTrack.TestSupport;
 
 using System.Data.Common;
-using System.Globalization;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -151,7 +150,10 @@ public abstract class ScheduleQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IScheduleQueryPort CreateQueryPort(string connectionString);
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private async Task<(AppUserId AdministratorId, AppUserId WorkerId)> SeedScheduleAsync()
 	{
@@ -193,12 +195,4 @@ public abstract class ScheduleQueryPortContractTestsBase : IAsyncLifetime
 
 		return (administratorId, workerId);
 	}
-
-
-
-
-
-
-
-
 }

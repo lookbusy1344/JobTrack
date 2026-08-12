@@ -7,12 +7,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Persistence.Sqlite;
 using TestSupport;
@@ -55,7 +51,10 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString, capturedLogEntries);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -113,7 +112,7 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_who_does_not_own_the_node_is_denied_on_save()
 	{
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.owner-manager", EmployeeRole.JobManager);
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.denied-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.denied-worker");
 		var moved = await AddChildAsync(rootId, managerId, "Owned by manager");
 		var destination = await AddChildAsync(rootId, managerId, "Destination");
 		var authCookie = await client.SignInAsync("move.denied-worker");
@@ -153,7 +152,10 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 		var required = await AddChildAsync(rootId, managerId, "Site survey");
 		var dependent = await AddChildAsync(rootId, managerId, "Excavate foundations");
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = required.Id,
 			DependentJobId = dependent.Id,
 		});
@@ -180,7 +182,10 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 
 		// A concurrent edit lands after the form was loaded, advancing the row's version.
 		_ = await seedClient.Jobs.EditAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = moved.Id,
 			Description = "Concurrently edited",
 			OwnerUserId = managerId,
@@ -200,7 +205,10 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 
 	private async Task<JobNodeResult> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description) =>
 		await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -268,9 +276,7 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	{
 		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
 
-		public void Dispose()
-		{
-		}
+		public void Dispose() { }
 
 		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
 		{
@@ -279,7 +285,7 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 			public bool IsEnabled(LogLevel logLevel) => true;
 
 			public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-				Func<TState, Exception?, string> formatter)
+									Func<TState, Exception?, string> formatter)
 			{
 				capturedLogEntries.Add(formatter(state, exception));
 				if (exception is not null) {

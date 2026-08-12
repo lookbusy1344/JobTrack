@@ -9,13 +9,21 @@ using Domain.Schedules;
 public sealed class DefaultValueTests
 {
 	public static TheoryData<Type, Enum> EnumDefaults => new() {
-		{ typeof(Achievement), Achievement.None },
-		{ typeof(EmployeeRole), EmployeeRole.None },
-		{ typeof(NodeKind), NodeKind.None },
-		{ typeof(Priority), Priority.Unspecified },
-		{ typeof(RequesterStatus), RequesterStatus.None },
-		{ typeof(ScheduleExceptionEffect), ScheduleExceptionEffect.None },
-		{ typeof(RateSource), RateSource.None },
+		{
+			typeof(Achievement), Achievement.None
+		}, {
+			typeof(EmployeeRole), EmployeeRole.None
+		}, {
+			typeof(NodeKind), NodeKind.None
+		}, {
+			typeof(Priority), Priority.Unspecified
+		}, {
+			typeof(RequesterStatus), RequesterStatus.None
+		}, {
+			typeof(ScheduleExceptionEffect), ScheduleExceptionEffect.None
+		}, {
+			typeof(RateSource), RateSource.None
+		},
 	};
 
 	[Theory]

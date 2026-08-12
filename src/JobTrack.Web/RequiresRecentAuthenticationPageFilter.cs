@@ -35,7 +35,10 @@ public sealed class RequiresRecentAuthenticationPageFilter : IAsyncPageFilter
 			var clock = httpContext.RequestServices.GetRequiredService<IClock>();
 
 			if (recent is null || clock.GetCurrentInstant() - recent.Value > RecentAuthenticationWindow) {
-				context.Result = new RedirectToPageResult("/Account/ConfirmAccess", new { returnUrl = httpContext.Request.Path.Value });
+				context.Result = new RedirectToPageResult("/Account/ConfirmAccess", new
+				{
+					returnUrl = httpContext.Request.Path.Value,
+				});
 				return;
 			}
 		}

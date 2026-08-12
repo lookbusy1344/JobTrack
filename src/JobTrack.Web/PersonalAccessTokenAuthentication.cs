@@ -26,7 +26,7 @@ internal static class PersonalAccessTokenAuthenticationDefaults
 		ArgumentNullException.ThrowIfNull(httpContext);
 
 		return httpContext.Request.Headers.Authorization.ToString()
-			.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase);
+						  .StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase);
 	}
 }
 
@@ -61,7 +61,9 @@ internal sealed class PersonalAccessTokenAuthenticationHandler(
 		}
 
 		var authenticated = await jobTrackClient.Tokens.TryAuthenticateAsync(
-			new() { Token = token }, Context.RequestAborted);
+			new() {
+				Token = token,
+			}, Context.RequestAborted);
 		if (authenticated is null) {
 			return AuthenticateResult.Fail(InvalidTokenFailureMessage);
 		}

@@ -22,9 +22,8 @@ public static class PasswordBlocklist
 	// ADR for why a fully offline, deterministic list was chosen over a live compromised-password
 	// lookup service.
 	private static readonly FrozenSet<string> CommonPasswords = new[] {
-		"passwordpassword", "password1234567", "letmeinletmein12", "iloveyouiloveyou", "qwertyuiopqwerty", "1234567890123456", "aaaaaaaaaaaaaaaa",
-		"trustno1trustno1", "welcometothejungle", "dragondragondragon", "supermansuperman", "changeitchangeit", "adminadminadmin",
-		"correcthorsebatterystaple", "thequickbrownfox", "mynameismynameis",
+		"passwordpassword", "password1234567", "letmeinletmein12", "iloveyouiloveyou", "qwertyuiopqwerty", "1234567890123456", "aaaaaaaaaaaaaaaa", "trustno1trustno1", "welcometothejungle", "dragondragondragon", "supermansuperman", "changeitchangeit", "adminadminadmin", "correcthorsebatterystaple", "thequickbrownfox",
+		"mynameismynameis",
 	}.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
 	/// <summary>

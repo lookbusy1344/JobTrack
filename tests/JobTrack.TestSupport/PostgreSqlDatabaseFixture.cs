@@ -40,7 +40,9 @@ public sealed class PostgreSqlDatabaseFixture : IDisposableTestDatabase
 			_ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
 		}
 
-		var builder = new NpgsqlConnectionStringBuilder(AdminConnectionString()) { Database = databaseName };
+		var builder = new NpgsqlConnectionStringBuilder(AdminConnectionString()) {
+			Database = databaseName,
+		};
 
 		ConnectionString = builder.ConnectionString;
 	}
@@ -57,6 +59,10 @@ public sealed class PostgreSqlDatabaseFixture : IDisposableTestDatabase
 
 	private static string AdminConnectionString() =>
 		Environment.GetEnvironmentVariable(AdminConnectionStringEnvironmentVariable)
-		?? new NpgsqlConnectionStringBuilder { Host = DefaultUnixSocketDirectory, Username = Environment.UserName, Database = "postgres" }
+		?? new NpgsqlConnectionStringBuilder {
+			Host = DefaultUnixSocketDirectory,
+			Username = Environment.UserName,
+			Database = "postgres",
+		}
 			.ConnectionString;
 }

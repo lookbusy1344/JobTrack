@@ -7,12 +7,8 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Persistence.Sqlite;
@@ -56,7 +52,10 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString, capturedLogEntries);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -116,7 +115,10 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 		var leafId = await AddChildAsync(rootId, workerId, "Fit cabinets");
 		const decimal DistinctiveRateAmount = 137.42m;
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			UserId = workerId,
 			Rate = new(new(DistinctiveRateAmount), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
@@ -136,8 +138,8 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 			entry.Contains("correlation_id=", StringComparison.Ordinal) && entry.Contains("duration_ms=", StringComparison.Ordinal) &&
 			entry.Contains("status_code=200", StringComparison.Ordinal));
 		capturedLogEntries.Should()
-			.NotContain(entry => entry.Contains(DistinctiveRateAmount.ToString("F2", CultureInfo.InvariantCulture), StringComparison.Ordinal),
-				"the rate value must never reach the telemetry log line, only the authorized HTTP response body");
+						  .NotContain(entry => entry.Contains(DistinctiveRateAmount.ToString("F2", CultureInfo.InvariantCulture), StringComparison.Ordinal),
+							  "the rate value must never reach the telemetry log line, only the authorized HTTP response body");
 	}
 
 	[Fact]
@@ -177,7 +179,10 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
@@ -220,9 +225,7 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 	{
 		public ILogger CreateLogger(string categoryName) => new CapturingLogger(capturedLogEntries);
 
-		public void Dispose()
-		{
-		}
+		public void Dispose() { }
 
 		private sealed class CapturingLogger(ConcurrentBag<string> capturedLogEntries) : ILogger
 		{
@@ -231,7 +234,7 @@ public sealed partial class ApiOperationalQualitiesTests : IAsyncLifetime, IDisp
 			public bool IsEnabled(LogLevel logLevel) => true;
 
 			public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-				Func<TState, Exception?, string> formatter)
+									Func<TState, Exception?, string> formatter)
 			{
 				capturedLogEntries.Add(formatter(state, exception));
 				if (exception is not null) {

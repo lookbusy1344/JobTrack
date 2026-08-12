@@ -102,7 +102,11 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		}
 
 		if (leafWork.Achievement == Achievement.Waiting) {
-			nodePort.SetLeafWork(leafWork with { Achievement = Achievement.InProgress, ChangedAt = NowToReturn, Version = leafWork.Version + 1 });
+			nodePort.SetLeafWork(leafWork with {
+				Achievement = Achievement.InProgress,
+				ChangedAt = NowToReturn,
+				Version = leafWork.Version + 1,
+			});
 		}
 
 		var session = new WorkSessionResult {
@@ -138,7 +142,11 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
 		}
 
-		var updated = existing with { FinishedAt = finishedAt, ChangedAt = NowToReturn, Version = existing.Version + 1 };
+		var updated = existing with {
+			FinishedAt = finishedAt,
+			ChangedAt = NowToReturn,
+			Version = existing.Version + 1,
+		};
 		_sessions[updated.Id] = updated;
 
 		return Task.FromResult(updated);
@@ -162,7 +170,11 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
 		}
 
-		var updated = existing with { FinishedAt = finishedAt, ChangedAt = NowToReturn, Version = existing.Version + 1 };
+		var updated = existing with {
+			FinishedAt = finishedAt,
+			ChangedAt = NowToReturn,
+			Version = existing.Version + 1,
+		};
 		_sessions[updated.Id] = updated;
 
 		var writeUpChanged = false;
@@ -174,7 +186,11 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 			(writeUpChanged, writtenUpNode) = ApplyWriteUpChange(existing.LeafWorkId, change);
 		}
 
-		return Task.FromResult(new FinishSessionAndUpdateWriteUpResult { Session = updated, WriteUpChanged = writeUpChanged, Node = writtenUpNode });
+		return Task.FromResult(new FinishSessionAndUpdateWriteUpResult {
+			Session = updated,
+			WriteUpChanged = writeUpChanged,
+			Node = writtenUpNode,
+		});
 	}
 
 	public Task<WorkSessionResult> CorrectSessionAsync(CorrectSessionRequest request, CancellationToken cancellationToken = default)
@@ -230,15 +246,15 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 		}
 
 		var actualActive = _sessions.Values
-			.Where(session => session.LeafWorkId == request.JobNodeId && session.FinishedAt is null)
-			.OrderBy(session => session.Id.Value)
-			.ToList();
+									.Where(session => session.LeafWorkId == request.JobNodeId && session.FinishedAt is null)
+									.OrderBy(session => session.Id.Value)
+									.ToList();
 		var expected = request.ExpectedActiveSessions
-			.OrderBy(expectedSession => expectedSession.Id.Value)
-			.ToList();
+							  .OrderBy(expectedSession => expectedSession.Id.Value)
+							  .ToList();
 		var matchesExpected = actualActive.Count == expected.Count
 							  && actualActive.Zip(expected)
-								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.Version == pair.Second.Version);
+											 .All(pair => pair.First.Id == pair.Second.Id && pair.First.Version == pair.Second.Version);
 		if (!matchesExpected) {
 			throw new ConcurrencyConflictException(
 				"The leaf's current active-session set no longer matches the confirmed set.");
@@ -265,12 +281,20 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 
 		var finished = new List<WorkSessionResult>();
 		foreach (var session in actualActive) {
-			var updated = session with { FinishedAt = finishedAt, ChangedAt = NowToReturn, Version = session.Version + 1 };
+			var updated = session with {
+				FinishedAt = finishedAt,
+				ChangedAt = NowToReturn,
+				Version = session.Version + 1,
+			};
 			_sessions[updated.Id] = updated;
 			finished.Add(updated);
 		}
 
-		var updatedLeafWork = leafWork with { Achievement = request.FinalAchievement, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
+		var updatedLeafWork = leafWork with {
+			Achievement = request.FinalAchievement,
+			ChangedAt = NowToReturn,
+			Version = leafWork.Version + 1,
+		};
 		nodePort.SetLeafWork(updatedLeafWork);
 
 		var writeUpChanged = false;
@@ -296,15 +320,15 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 			?? throw new EntityNotFoundException($"Job node {request.JobNodeId} has no LeafWork attached.");
 
 		var actualActive = _sessions.Values
-			.Where(session => session.LeafWorkId == request.JobNodeId && session.FinishedAt is null)
-			.OrderBy(session => session.Id.Value)
-			.ToList();
+									.Where(session => session.LeafWorkId == request.JobNodeId && session.FinishedAt is null)
+									.OrderBy(session => session.Id.Value)
+									.ToList();
 		var expected = request.ExpectedActiveSessions
-			.OrderBy(expectedSession => expectedSession.Id.Value)
-			.ToList();
+							  .OrderBy(expectedSession => expectedSession.Id.Value)
+							  .ToList();
 		var matchesExpected = actualActive.Count == expected.Count
 							  && actualActive.Zip(expected)
-								  .All(pair => pair.First.Id == pair.Second.Id && pair.First.Version == pair.Second.Version);
+											 .All(pair => pair.First.Id == pair.Second.Id && pair.First.Version == pair.Second.Version);
 		if (!matchesExpected) {
 			throw new ConcurrencyConflictException(
 				"The leaf's current active-session set no longer matches the confirmed set.");
@@ -333,7 +357,11 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 
 		var finished = new List<WorkSessionResult>();
 		foreach (var session in actualActive) {
-			var updated = session with { FinishedAt = finishedAt, ChangedAt = NowToReturn, Version = session.Version + 1 };
+			var updated = session with {
+				FinishedAt = finishedAt,
+				ChangedAt = NowToReturn,
+				Version = session.Version + 1,
+			};
 			_sessions[updated.Id] = updated;
 			finished.Add(updated);
 		}
@@ -404,7 +432,11 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 				"work-session-overlap", "This session would overlap another session for the same worker and leaf.");
 		}
 
-		var updatedLeafWork = leafWork with { Achievement = Achievement.InProgress, ChangedAt = NowToReturn, Version = leafWork.Version + 1 };
+		var updatedLeafWork = leafWork with {
+			Achievement = Achievement.InProgress,
+			ChangedAt = NowToReturn,
+			Version = leafWork.Version + 1,
+		};
 		nodePort.SetLeafWork(updatedLeafWork);
 
 		var session = new WorkSessionResult {
@@ -463,7 +495,10 @@ internal sealed class FakeWorkSessionCommandPort(FakeJobNodeCommandPort nodePort
 			return (false, node);
 		}
 
-		var updated = node with { WriteUp = change.WriteUp, Version = node.Version + 1 };
+		var updated = node with {
+			WriteUp = change.WriteUp,
+			Version = node.Version + 1,
+		};
 		nodePort.SeedNode(updated);
 
 		return (true, updated);

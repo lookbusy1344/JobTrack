@@ -4,14 +4,10 @@ using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
-using Database;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     §8.5 slice 1 (sign-in, forced password change, logout, access-denied handling) exercised over
@@ -35,7 +31,10 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -188,7 +187,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		postResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		postResponse.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
 		var tempDataCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(postResponse, "TempData")
-											   ?? throw new InvalidOperationException("No TempData cookie carrying the retry notice."));
+														   ?? throw new InvalidOperationException("No TempData cookie carrying the retry notice."));
 
 		using var followRequest = new HttpRequestMessage(HttpMethod.Get, postResponse.Headers.Location!.OriginalString);
 		followRequest.Headers.Add("Cookie", tempDataCookie);
@@ -273,7 +272,11 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		_ = await SeedUserAsync("revere", KnownPassword, false);
 		using var browserClient = factory.CreateClient(
-			new() { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new("https://localhost") });
+			new() {
+				AllowAutoRedirect = false,
+				HandleCookies = true,
+				BaseAddress = new("https://localhost"),
+			});
 		await PostLoginWithCookieClientAsync(browserClient, "revere", KnownPassword);
 
 		var response = await browserClient.GetAsync("/Jobs/AwaitingProgress");
@@ -306,14 +309,16 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		var getLogoutResponse = await client.SendAsync(getLogoutRequest);
 		var logoutBody = await getLogoutResponse.Content.ReadAsStringAsync();
 		var antiforgeryCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(getLogoutResponse, "Antiforgery") ??
-												  throw new InvalidOperationException("No antiforgery cookie in logout page response."));
+															  throw new InvalidOperationException("No antiforgery cookie in logout page response."));
 		var token = AntiforgeryTokenPattern().Match(logoutBody) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in logout page body.");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Logout");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["__RequestVerificationToken"] = token,
+		});
 
 		var response = await client.SendAsync(request);
 		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
@@ -346,7 +351,11 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		// silently withhold them on every request after the one that set them, which looks identical
 		// to "never authenticated" rather than the leak this test exists to catch.
 		using var browserClient = factory.CreateClient(
-			new() { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new("https://localhost") });
+			new() {
+				AllowAutoRedirect = false,
+				HandleCookies = true,
+				BaseAddress = new("https://localhost"),
+			});
 
 		await PostLoginWithCookieClientAsync(browserClient, "addie", KnownPassword);
 		_ = await browserClient.GetAsync($"/Jobs/AwaitingProgress?SearchText={DistinctiveSearchTerm}");
@@ -368,7 +377,9 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		await SeedUserAsync("devon", KnownPassword, false);
 		var baseAddress = new Uri("https://localhost");
 		using var cookieHandler = new TestCookieContainerHandler(factory.Server.CreateHandler());
-		using var browserClient = new HttpClient(cookieHandler) { BaseAddress = baseAddress };
+		using var browserClient = new HttpClient(cookieHandler) {
+			BaseAddress = baseAddress,
+		};
 
 		await PostLoginWithCookieClientAsync(browserClient, "casey", KnownPassword);
 		var rememberResponse = await browserClient.GetAsync($"/Jobs/AwaitingProgress?SearchText={DistinctiveSearchTerm}");
@@ -412,7 +423,9 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 			: throw new InvalidOperationException("No antiforgery token in logout page body.");
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Logout");
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["__RequestVerificationToken"] = token,
+		});
 
 		var response = await cookieClient.SendAsync(request);
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
@@ -512,7 +525,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	private static partial Regex FailureMessagePattern();
 
 	private async Task<AppUserId> SeedUserAsync(string userName, string password, bool requiresPasswordChange,
-		EmployeeRole role = EmployeeRole.Worker)
+												EmployeeRole role = EmployeeRole.Worker)
 	{
 		await using var connection = new SqliteConnection(database.ConnectionString);
 		await connection.OpenAsync();
@@ -560,7 +573,4 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 
 		return new(appUserId);
 	}
-
-
-
 }

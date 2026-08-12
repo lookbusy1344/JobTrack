@@ -76,7 +76,10 @@ public sealed class JobQueriesTests
 		return port;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static JobQueries CreateSut(FakeEmployeeQueryPort employeeQueryPort) =>
 		new(employeeQueryPort, new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(), new FakeJobNodeCommandPort(),
@@ -146,7 +149,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(CreateSeededPort());
 
 		var result = await sut.GetEmployeeProfileAsync(
-			new() { Context = ContextFor(WorkerId), TargetUserId = WorkerId });
+			new() {
+				Context = ContextFor(WorkerId),
+				TargetUserId = WorkerId,
+			});
 
 		result.DisplayName.Should().Be("Grace Hopper");
 	}
@@ -157,7 +163,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(CreateSeededPort());
 
 		var result = await sut.GetEmployeeProfileAsync(
-			new() { Context = ContextFor(AdministratorId), TargetUserId = WorkerId });
+			new() {
+				Context = ContextFor(AdministratorId),
+				TargetUserId = WorkerId,
+			});
 
 		result.DisplayName.Should().Be("Grace Hopper");
 	}
@@ -173,13 +182,16 @@ public sealed class JobQueriesTests
 		};
 		ActivitySource.AddActivityListener(listener);
 		var sut = CreateSut(CreateSeededPort());
-		var request = new GetEmployeeProfileRequest { Context = ContextFor(AdministratorId), TargetUserId = WorkerId };
+		var request = new GetEmployeeProfileRequest {
+			Context = ContextFor(AdministratorId),
+			TargetUserId = WorkerId,
+		};
 
 		_ = await sut.GetEmployeeProfileAsync(request);
 
 		var operation = stopped.Should()
-			.ContainSingle(activity => activity.OperationName == "query.get-employee-profile")
-			.Which;
+							   .ContainSingle(activity => activity.OperationName == "query.get-employee-profile")
+							   .Which;
 		operation.Status.Should().Be(ActivityStatusCode.Ok);
 		operation.GetTagItem("jobtrack.actor_id").Should().Be(AdministratorId.Value);
 		operation.GetTagItem("jobtrack.correlation_id").Should().Be(request.Context.CorrelationId.ToString("D"));
@@ -198,13 +210,15 @@ public sealed class JobQueriesTests
 		};
 		ActivitySource.AddActivityListener(listener);
 		var sut = CreateSut(CreateSeededPort());
-		var request = new GetEmployeeDirectoryRequest { Context = ContextFor(AdministratorId) };
+		var request = new GetEmployeeDirectoryRequest {
+			Context = ContextFor(AdministratorId),
+		};
 
 		_ = await sut.GetEmployeeDirectoryAsync(request);
 
 		var operation = stopped.Should()
-			.ContainSingle(activity => activity.OperationName == "query.get-employee-directory")
-			.Which;
+							   .ContainSingle(activity => activity.OperationName == "query.get-employee-directory")
+							   .Which;
 		operation.Status.Should().Be(ActivityStatusCode.Ok);
 		operation.GetTagItem("jobtrack.actor_id").Should().Be(AdministratorId.Value);
 		operation.GetTagItem("jobtrack.correlation_id").Should().Be(request.Context.CorrelationId.ToString("D"));
@@ -217,7 +231,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var act = () => sut.GetEmployeeProfileAsync(
-			new() { Context = ContextFor(WorkerId), TargetUserId = OtherWorkerId });
+			new() {
+				Context = ContextFor(WorkerId),
+				TargetUserId = OtherWorkerId,
+			});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		port.GetActorRolesCallCount.Should().Be(1);
@@ -230,7 +247,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(CreateSeededPort());
 
 		var result = await sut.GetAccountStateAsync(
-			new() { Context = ContextFor(WorkerId), TargetUserId = WorkerId });
+			new() {
+				Context = ContextFor(WorkerId),
+				TargetUserId = WorkerId,
+			});
 
 		result.UserName.Should().Be("grace");
 		result.Roles.Should().Equal(EmployeeRole.Worker);
@@ -243,7 +263,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var act = () => sut.GetAccountStateAsync(
-			new() { Context = ContextFor(WorkerId), TargetUserId = OtherWorkerId });
+			new() {
+				Context = ContextFor(WorkerId),
+				TargetUserId = OtherWorkerId,
+			});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 		port.GetActorRolesCallCount.Should().Be(1);
@@ -256,7 +279,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(CreateSeededPort());
 
 		var act = () => sut.GetEmployeeProfileAsync(
-			new() { Context = ContextFor(AdministratorId), TargetUserId = new(999) });
+			new() {
+				Context = ContextFor(AdministratorId),
+				TargetUserId = new(999),
+			});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -407,12 +433,18 @@ public sealed class JobQueriesTests
 	{
 		var port = CreateSeededPort();
 		port.SeedDirectory([
-			new() { Id = AdministratorId, DisplayName = "Ada Lovelace", UserName = "ada" },
-			new() { Id = WorkerId, DisplayName = "Grace Hopper", UserName = "grace" },
+			new() {
+				Id = AdministratorId, DisplayName = "Ada Lovelace", UserName = "ada",
+			},
+			new() {
+				Id = WorkerId, DisplayName = "Grace Hopper", UserName = "grace",
+			},
 		]);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetEmployeeDirectoryAsync(new() { Context = ContextFor(AdministratorId) });
+		var result = await sut.GetEmployeeDirectoryAsync(new() {
+			Context = ContextFor(AdministratorId),
+		});
 
 		result.Select(entry => entry.Id).Should().BeEquivalentTo([AdministratorId, WorkerId]);
 	}
@@ -432,12 +464,18 @@ public sealed class JobQueriesTests
 	{
 		var port = CreateSeededPort();
 		port.SeedAllEmployees([
-			new() { Id = AdministratorId, DisplayName = "Ada Lovelace", UserName = "ada" },
-			new() { Id = OtherWorkerId, DisplayName = "Alan Turing", UserName = "alan" },
+			new() {
+				Id = AdministratorId, DisplayName = "Ada Lovelace", UserName = "ada",
+			},
+			new() {
+				Id = OtherWorkerId, DisplayName = "Alan Turing", UserName = "alan",
+			},
 		]);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetAllEmployeesAsync(new() { Context = ContextFor(AdministratorId) });
+		var result = await sut.GetAllEmployeesAsync(new() {
+			Context = ContextFor(AdministratorId),
+		});
 
 		result.Select(entry => entry.Id).Should().BeEquivalentTo([AdministratorId, OtherWorkerId]);
 	}
@@ -485,7 +523,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetReadinessAsync(
-			new() { Context = ContextFor(actor), NodeId = leaf });
+			new() {
+				Context = ContextFor(actor),
+				NodeId = leaf,
+			});
 
 		result.IsReady.Should().BeTrue();
 		result.Blockers.Should().BeEmpty();
@@ -553,13 +594,23 @@ public sealed class JobQueriesTests
 			HasLeafWork = false,
 			Version = 1,
 		});
-		await port.AttachLeafWorkAsync(new() { Context = ContextFor(actor), JobNodeId = required });
+		await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(actor),
+			JobNodeId = required,
+		});
 		await port.AddPrerequisiteAsync(
-			new() { Context = ContextFor(actor), RequiredJobId = required, DependentJobId = leaf });
+			new() {
+				Context = ContextFor(actor),
+				RequiredJobId = required,
+				DependentJobId = leaf,
+			});
 		var sut = CreateSut(port);
 
 		var result = await sut.GetReadinessAsync(
-			new() { Context = ContextFor(actor), NodeId = leaf });
+			new() {
+				Context = ContextFor(actor),
+				NodeId = leaf,
+			});
 
 		result.IsReady.Should().BeFalse();
 		result.Blockers.Should().ContainSingle(blocker => blocker.RequiredJobId == required && blocker.DeclaredOnJobId == leaf);
@@ -581,13 +632,16 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(new FakeJobNodeCommandPort());
 
 		var act = () => sut.GetReadinessAsync(
-			new() { Context = ContextFor(new(10)), NodeId = new(999) });
+			new() {
+				Context = ContextFor(new(10)),
+				NodeId = new(999),
+			});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
 
 	private static FakeJobNodeCommandPort CreateSeededTree(AppUserId owner, AppUserId otherOwner, out JobNodeId rootId, out JobNodeId branchId,
-		out JobNodeId leafId)
+														   out JobNodeId leafId)
 	{
 		var port = new FakeJobNodeCommandPort();
 		port.SeedRoles(owner, EmployeeRole.Administrator);
@@ -715,7 +769,10 @@ public sealed class JobQueriesTests
 		var port = CreateSeededTree(owner, new(11), out var rootId, out _, out _);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetJobNodeAsync(new() { Context = ContextFor(owner), NodeId = null });
+		var result = await sut.GetJobNodeAsync(new() {
+			Context = ContextFor(owner),
+			NodeId = null,
+		});
 
 		result.Node.Id.Should().Be(rootId);
 		result.Ancestors.Should().BeEmpty();
@@ -728,7 +785,10 @@ public sealed class JobQueriesTests
 		var port = CreateSeededTree(owner, new(11), out var rootId, out var branchId, out var leafId);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetJobNodeAsync(new() { Context = ContextFor(owner), NodeId = leafId });
+		var result = await sut.GetJobNodeAsync(new() {
+			Context = ContextFor(owner),
+			NodeId = leafId,
+		});
 
 		result.Node.Id.Should().Be(leafId);
 		result.Ancestors.Select(a => a.Id).Should().ContainInOrder(rootId, branchId);
@@ -741,7 +801,10 @@ public sealed class JobQueriesTests
 		var port = CreateSeededTree(owner, new(11), out _, out _, out _);
 		var sut = CreateSut(port);
 
-		var act = () => sut.GetJobNodeAsync(new() { Context = ContextFor(owner), NodeId = new JobNodeId(999) });
+		var act = () => sut.GetJobNodeAsync(new() {
+			Context = ContextFor(owner),
+			NodeId = new JobNodeId(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -755,19 +818,34 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var activeChildren = await sut.GetJobChildrenAsync(
-			new() { Context = ContextFor(owner), ParentId = branchId });
+			new() {
+				Context = ContextFor(owner),
+				ParentId = branchId,
+			});
 		activeChildren.Select(c => c.Id).Should().ContainSingle().Which.Should().Be(leafId);
 
 		var ownedByOther = await sut.GetJobChildrenAsync(
-			new() { Context = ContextFor(owner), ParentId = branchId, Ownership = OwnershipFilter.OwnedBy(otherOwner) });
+			new() {
+				Context = ContextFor(owner),
+				ParentId = branchId,
+				Ownership = OwnershipFilter.OwnedBy(otherOwner),
+			});
 		ownedByOther.Select(c => c.Id).Should().ContainSingle().Which.Should().Be(leafId);
 
 		var archivedOnly = await sut.GetJobChildrenAsync(
-			new() { Context = ContextFor(owner), ParentId = branchId, ArchiveFilter = JobArchiveFilter.ArchivedOnly });
+			new() {
+				Context = ContextFor(owner),
+				ParentId = branchId,
+				ArchiveFilter = JobArchiveFilter.ArchivedOnly,
+			});
 		archivedOnly.Should().ContainSingle(c => c.Description == "Old plumbing job");
 
 		var all = await sut.GetJobChildrenAsync(
-			new() { Context = ContextFor(owner), ParentId = branchId, ArchiveFilter = JobArchiveFilter.All });
+			new() {
+				Context = ContextFor(owner),
+				ParentId = branchId,
+				ArchiveFilter = JobArchiveFilter.All,
+			});
 		all.Should().HaveCount(2);
 	}
 
@@ -779,7 +857,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetJobSummariesAsync(
-			new() { Context = ContextFor(owner), NodeIds = [branchId, leafId, new(999)] });
+			new() {
+				Context = ContextFor(owner),
+				NodeIds = [branchId, leafId, new(999)],
+			});
 
 		result.Select(r => r.Id).Should().BeEquivalentTo([branchId, leafId]);
 	}
@@ -797,7 +878,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSummariesAsync(
-			new() { Context = ContextFor(owner), NodeIds = [branchId, leafId] });
+			new() {
+				Context = ContextFor(owner),
+				NodeIds = [branchId, leafId],
+			});
 
 		result.Single(r => r.Id == branchId).Cost.Should().Be(new Money(90m));
 		result.Single(r => r.Id == leafId).Cost.Should().Be(new Money(45m));
@@ -820,7 +904,10 @@ public sealed class JobQueriesTests
 			EmployeePortMirroring(port), port, port, port, new FakeWorkSessionQueryPort(), new FakeLeafWorkQueryPort(),
 			new FakePrerequisiteQueryPort(), new FakeScheduleQueryPort(), new FakeRateQueryPort(), costQueries, clock);
 
-		_ = await sut.GetJobSummariesAsync(new() { Context = ContextFor(owner), NodeIds = [branchId] });
+		_ = await sut.GetJobSummariesAsync(new() {
+			Context = ContextFor(owner),
+			NodeIds = [branchId],
+		});
 
 		clock.ReadCount.Should().Be(1);
 		costQueries.LastBulkRequest.Should().NotBeNull();
@@ -860,7 +947,10 @@ public sealed class JobQueriesTests
 
 		var sut = CreateSut(port, costQueries);
 
-		var result = await sut.GetJobSummariesAsync(new() { Context = ContextFor(owner), NodeIds = [.. leafIds] });
+		var result = await sut.GetJobSummariesAsync(new() {
+			Context = ContextFor(owner),
+			NodeIds = [.. leafIds],
+		});
 
 		result.Should().HaveCount(leafCount);
 		result.Should().OnlyContain(summary => summary.Cost == new Money(10m));
@@ -903,7 +993,10 @@ public sealed class JobQueriesTests
 
 		var sut = CreateSut(port, costQueries);
 
-		var result = await sut.GetJobSummariesAsync(new() { Context = ContextFor(owner), NodeIds = [.. leafIds] });
+		var result = await sut.GetJobSummariesAsync(new() {
+			Context = ContextFor(owner),
+			NodeIds = [.. leafIds],
+		});
 
 		result.Should().HaveCount(overCap);
 		result.Should().OnlyContain(summary => summary.Cost == new Money(10m));
@@ -921,7 +1014,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.RootId.Should().Be(rootId);
 		result.RootTotal.Should().BeNull();
@@ -960,13 +1057,21 @@ public sealed class JobQueriesTests
 			Version = 1,
 		});
 		// Declared on the branch, so ADR 0043 decision 1's downward inheritance gates the leaf too.
-		await port.AddPrerequisiteAsync(new() { Context = ContextFor(owner), RequiredJobId = blockerId, DependentJobId = branchId });
+		await port.AddPrerequisiteAsync(new() {
+			Context = ContextFor(owner),
+			RequiredJobId = blockerId,
+			DependentJobId = branchId,
+		});
 		var costQueries = new FakeCostQueries();
 		costQueries.DenyActor(owner);
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.Nodes.Single(n => n.Id == branchId).IsReady.Should().BeFalse("the prerequisite is declared on it");
 		result.Nodes.Single(n => n.Id == leafId).IsReady.Should().BeFalse("a prerequisite on an ancestor gates the whole subtree");
@@ -1000,7 +1105,11 @@ public sealed class JobQueriesTests
 		costQueries.DenyActor(owner);
 		var sut = CreateSut(port, costQueries);
 
-		var result = await sut.GetJobSubtreeAsync(new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+		var result = await sut.GetJobSubtreeAsync(new() {
+			Context = ContextFor(owner),
+			RootId = rootId,
+			AsOf = port.NowToReturn,
+		});
 
 		var leaf = result.Nodes.Single(n => n.Id == leafId);
 		leaf.Priority.Should().Be(Priority.Urgent);
@@ -1020,7 +1129,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.Nodes.Select(n => n.Id).Should().BeEquivalentTo([rootId, branchId, leafId]);
 		result.RootTotal.Should().BeNull();
@@ -1048,7 +1161,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.Nodes.Select(n => n.Id).Should().ContainInOrder(rootId, branchId, leafId, siblingId);
 		result.Nodes.Select(n => n.SubtreeLft).Should().BeInAscendingOrder();
@@ -1064,9 +1181,17 @@ public sealed class JobQueriesTests
 		costQueries.SeedHierarchyTotals(rootId, new() {
 			NodeId = rootId,
 			ExactCosts = EquatableDictionaryFactory.CopyOf(
-				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
+				new Dictionary<JobNodeId, Money> {
+					[rootId] = new(90m),
+					[branchId] = new(90m),
+					[leafId] = new(90m),
+				}),
 			DisplayedCosts = EquatableDictionaryFactory.CopyOf(
-				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
+				new Dictionary<JobNodeId, Money> {
+					[rootId] = new(90m),
+					[branchId] = new(90m),
+					[leafId] = new(90m),
+				}),
 			AllocatedDurations = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration> {
 				[rootId] = allocatedDuration,
 				[branchId] = allocatedDuration,
@@ -1077,7 +1202,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.RootTotal.Should().Be(new Money(90m));
 		result.RootAllocatedDuration.Should().Be(allocatedDuration);
@@ -1109,9 +1238,17 @@ public sealed class JobQueriesTests
 		costQueries.SeedHierarchyTotals(rootId, new() {
 			NodeId = rootId,
 			ExactCosts = EquatableDictionaryFactory.CopyOf(
-				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
+				new Dictionary<JobNodeId, Money> {
+					[rootId] = new(90m),
+					[branchId] = new(90m),
+					[leafId] = new(90m),
+				}),
 			DisplayedCosts = EquatableDictionaryFactory.CopyOf(
-				new Dictionary<JobNodeId, Money> { [rootId] = new(90m), [branchId] = new(90m), [leafId] = new(90m) }),
+				new Dictionary<JobNodeId, Money> {
+					[rootId] = new(90m),
+					[branchId] = new(90m),
+					[leafId] = new(90m),
+				}),
 			AllocatedDurations = EquatableDictionaryFactory.CopyOf(
 				new Dictionary<JobNodeId, AllocatedDuration> {
 					[rootId] = AllocatedDuration.Zero,
@@ -1123,7 +1260,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.Nodes.Single(n => n.Id == leafId).Cost.Should().BeNull("the leaf is owned by another worker");
 		result.RootTotal.Should().Be(new Money(90m), "a roll-up is an aggregate and exposes no individual rate");
@@ -1154,16 +1295,26 @@ public sealed class JobQueriesTests
 		var costQueries = new FakeCostQueries();
 		costQueries.SeedHierarchyTotals(rootId, new() {
 			NodeId = rootId,
-			ExactCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [rootId] = new(0m) }),
-			DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> { [rootId] = new(0m) }),
+			ExactCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> {
+				[rootId] = new(0m),
+			}),
+			DisplayedCosts = EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money> {
+				[rootId] = new(0m),
+			}),
 			AllocatedDurations = EquatableDictionaryFactory.CopyOf(
-				new Dictionary<JobNodeId, AllocatedDuration> { [rootId] = AllocatedDuration.Zero }),
+				new Dictionary<JobNodeId, AllocatedDuration> {
+					[rootId] = AllocatedDuration.Zero,
+				}),
 			TzdbVersion = "2025b",
 		});
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.Nodes.Should().HaveCountGreaterThan(30);
 		costQueries.GetHierarchyTotalsCallCount.Should().Be(1);
@@ -1181,7 +1332,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port, costQueries);
 
 		var result = await sut.GetJobSubtreeAsync(
-			new() { Context = ContextFor(owner), RootId = rootId, AsOf = port.NowToReturn });
+			new() {
+				Context = ContextFor(owner),
+				RootId = rootId,
+				AsOf = port.NowToReturn,
+			});
 
 		result.RootAchievement.Should().Be(BranchAchievement.Success);
 		result.Nodes.Single(node => node.Id == branchId).BranchAchievement.Should().Be(BranchAchievement.Success);
@@ -1207,7 +1362,10 @@ public sealed class JobQueriesTests
 		// The archived sibling leaf is deliberately left without leaf work.
 		var sut = CreateSut(port);
 
-		var result = await sut.GetBranchAchievementAsync(new() { Context = ContextFor(owner), NodeId = branchId });
+		var result = await sut.GetBranchAchievementAsync(new() {
+			Context = ContextFor(owner),
+			NodeId = branchId,
+		});
 
 		result.Should().Be(BranchAchievement.Unfinished);
 	}
@@ -1222,7 +1380,10 @@ public sealed class JobQueriesTests
 		await SucceedLeafAsync(port, owner, archivedLeafId);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetBranchAchievementAsync(new() { Context = ContextFor(owner), NodeId = branchId });
+		var result = await sut.GetBranchAchievementAsync(new() {
+			Context = ContextFor(owner),
+			NodeId = branchId,
+		});
 
 		result.Should().Be(BranchAchievement.Success);
 	}
@@ -1232,7 +1393,10 @@ public sealed class JobQueriesTests
 	{
 		var sut = CreateSut(new FakeJobNodeCommandPort());
 
-		var act = () => sut.GetBranchAchievementAsync(new() { Context = ContextFor(new(10)), NodeId = new(999) });
+		var act = () => sut.GetBranchAchievementAsync(new() {
+			Context = ContextFor(new(10)),
+			NodeId = new(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -1251,7 +1415,10 @@ public sealed class JobQueriesTests
 	{
 		var achievementPort = new FakeAchievementCommandPort(port);
 
-		var leafWork = await port.AttachLeafWorkAsync(new() { Context = ContextFor(actor), JobNodeId = leafId });
+		var leafWork = await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(actor),
+			JobNodeId = leafId,
+		});
 		var inProgress = await achievementPort.SetAchievementAsync(new() {
 			Context = ContextFor(actor),
 			JobNodeId = leafId,
@@ -1275,7 +1442,10 @@ public sealed class JobQueriesTests
 		var port = CreateSeededTree(owner, new(11), out _, out _, out var leafId);
 		var sut = CreateSut(port);
 
-		var result = await sut.SearchJobNodesAsync(new() { Context = ContextFor(owner), SearchText = "CABINETS" });
+		var result = await sut.SearchJobNodesAsync(new() {
+			Context = ContextFor(owner),
+			SearchText = "CABINETS",
+		});
 
 		result.Select(r => r.Id).Should().ContainSingle().Which.Should().Be(leafId);
 	}
@@ -1287,7 +1457,10 @@ public sealed class JobQueriesTests
 		var port = CreateSeededTree(owner, new(11), out _, out _, out _);
 		var sut = CreateSut(port);
 
-		var act = () => sut.SearchJobNodesAsync(new() { Context = ContextFor(owner), SearchText = "   " });
+		var act = () => sut.SearchJobNodesAsync(new() {
+			Context = ContextFor(owner),
+			SearchText = "   ",
+		});
 
 		await act.Should().ThrowAsync<ArgumentException>();
 	}
@@ -1297,10 +1470,15 @@ public sealed class JobQueriesTests
 	{
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, new(11), out _, out _, out var leafId);
-		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
+		await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(owner),
+			JobNodeId = leafId,
+		});
 		var sut = CreateSut(port);
 
-		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
+		var result = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+		});
 
 		result.Select(e => e.Id).Should().ContainSingle().Which.Should().Be(leafId);
 	}
@@ -1311,13 +1489,22 @@ public sealed class JobQueriesTests
 		var owner = new AppUserId(10);
 		var otherOwner = new AppUserId(11);
 		var port = CreateSeededTree(owner, otherOwner, out _, out _, out var leafId);
-		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
+		await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(owner),
+			JobNodeId = leafId,
+		});
 		var sut = CreateSut(port);
 
 		var ownedByOther = await sut.GetAwaitingProgressAsync(
-			new() { Context = ContextFor(owner), Ownership = OwnershipFilter.OwnedBy(otherOwner) });
+			new() {
+				Context = ContextFor(owner),
+				Ownership = OwnershipFilter.OwnedBy(otherOwner),
+			});
 		var ownedByOwner = await sut.GetAwaitingProgressAsync(
-			new() { Context = ContextFor(owner), Ownership = OwnershipFilter.OwnedBy(owner) });
+			new() {
+				Context = ContextFor(owner),
+				Ownership = OwnershipFilter.OwnedBy(owner),
+			});
 
 		ownedByOther.Select(e => e.Id).Should().ContainSingle().Which.Should().Be(leafId);
 		ownedByOwner.Should().BeEmpty();
@@ -1328,7 +1515,10 @@ public sealed class JobQueriesTests
 	{
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, owner, out var rootId, out var branchId, out var leafId);
-		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
+		await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(owner),
+			JobNodeId = leafId,
+		});
 		var otherBranchId = new JobNodeId(10);
 		var otherLeafId = new JobNodeId(11);
 		port.SeedNode(new() {
@@ -1357,11 +1547,17 @@ public sealed class JobQueriesTests
 			HasLeafWork = false,
 			Version = 1,
 		});
-		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = otherLeafId });
+		await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(owner),
+			JobNodeId = otherLeafId,
+		});
 		var sut = CreateSut(port);
 
 		var result = await sut.GetAwaitingProgressAsync(
-			new() { Context = ContextFor(owner), SubtreeRootId = branchId });
+			new() {
+				Context = ContextFor(owner),
+				SubtreeRootId = branchId,
+			});
 
 		result.Select(e => e.Id).Should().ContainSingle().Which.Should().Be(leafId);
 	}
@@ -1371,11 +1567,20 @@ public sealed class JobQueriesTests
 	{
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, owner, out _, out _, out var leafId);
-		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
+		await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(owner),
+			JobNodeId = leafId,
+		});
 		var sut = CreateSut(port);
 
-		var matching = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), SearchText = "cabinets" });
-		var nonMatching = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), SearchText = "fence" });
+		var matching = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+			SearchText = "cabinets",
+		});
+		var nonMatching = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+			SearchText = "fence",
+		});
 
 		matching.Select(e => e.Id).Should().ContainSingle().Which.Should().Be(leafId);
 		nonMatching.Should().BeEmpty();
@@ -1423,10 +1628,24 @@ public sealed class JobQueriesTests
 
 		var sut = CreateSut(port);
 
-		var firstPage = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Offset = 0, Limit = 2 });
-		var secondPage = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Offset = 2, Limit = 2 });
-		var thirdPage = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Offset = 4, Limit = 2 });
-		var unpaged = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
+		var firstPage = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+			Offset = 0,
+			Limit = 2,
+		});
+		var secondPage = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+			Offset = 2,
+			Limit = 2,
+		});
+		var thirdPage = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+			Offset = 4,
+			Limit = 2,
+		});
+		var unpaged = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+		});
 
 		firstPage.Should().HaveCount(2);
 		secondPage.Should().HaveCount(2);
@@ -1443,7 +1662,9 @@ public sealed class JobQueriesTests
 		var port = CreateAwaitingProgressPort(owner, AwaitingProgressPaging.DefaultPageSize + 1);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
+		var result = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+		});
 
 		result.Should().HaveCount(AwaitingProgressPaging.DefaultPageSize);
 	}
@@ -1455,7 +1676,10 @@ public sealed class JobQueriesTests
 		var port = CreateAwaitingProgressPort(owner, AwaitingProgressPaging.MaxPageSize + 1);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner), Limit = AwaitingProgressPaging.MaxPageSize + 1 });
+		var result = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+			Limit = AwaitingProgressPaging.MaxPageSize + 1,
+		});
 
 		result.Should().HaveCount(AwaitingProgressPaging.MaxPageSize);
 	}
@@ -1465,7 +1689,10 @@ public sealed class JobQueriesTests
 	{
 		var sut = CreateSut(new FakeJobNodeCommandPort());
 
-		var act = () => sut.GetAwaitingProgressAsync(new() { Context = ContextFor(new(10)), Offset = -1 });
+		var act = () => sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(new(10)),
+			Offset = -1,
+		});
 
 		await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
 	}
@@ -1475,7 +1702,10 @@ public sealed class JobQueriesTests
 	{
 		var sut = CreateSut(new FakeJobNodeCommandPort());
 
-		var act = () => sut.GetAwaitingProgressAsync(new() { Context = ContextFor(new(10)), Limit = 0 });
+		var act = () => sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(new(10)),
+			Limit = 0,
+		});
 
 		await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
 	}
@@ -1485,13 +1715,18 @@ public sealed class JobQueriesTests
 	{
 		var owner = new AppUserId(10);
 		var port = CreateSeededTree(owner, new(11), out _, out _, out var leafId);
-		await port.AttachLeafWorkAsync(new() { Context = ContextFor(owner), JobNodeId = leafId });
+		await port.AttachLeafWorkAsync(new() {
+			Context = ContextFor(owner),
+			JobNodeId = leafId,
+		});
 		var costQueries = new FakeCostQueries();
 		var allocatedDuration = AllocatedDuration.FromShare(new(Duration.FromMinutes(90).BclCompatibleTicks, 1));
 		costQueries.SeedBulkCost(leafId, new(90m), allocatedDuration);
 		var sut = CreateSut(port, costQueries);
 
-		var result = await sut.GetAwaitingProgressAsync(new() { Context = ContextFor(owner) });
+		var result = await sut.GetAwaitingProgressAsync(new() {
+			Context = ContextFor(owner),
+		});
 
 		result.Should().ContainSingle();
 		result[0].Id.Should().Be(leafId);
@@ -1508,7 +1743,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var act = () => sut.GetAwaitingProgressAsync(
-			new() { Context = ContextFor(owner), SubtreeRootId = new JobNodeId(999) });
+			new() {
+				Context = ContextFor(owner),
+				SubtreeRootId = new JobNodeId(999),
+			});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -1541,7 +1779,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetLeafSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkId = leaf, WorkedByUserId = worker });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkId = leaf,
+				WorkedByUserId = worker,
+			});
 
 		result.Should().ContainSingle(s => s.Id == new WorkSessionId(1));
 	}
@@ -1569,7 +1811,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetLeafSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkId = leaf, WorkedByUserId = otherWorker });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkId = leaf,
+				WorkedByUserId = otherWorker,
+			});
 
 		result.Should().ContainSingle(s => s.Id == new WorkSessionId(7));
 	}
@@ -1585,7 +1831,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var act = () => sut.GetLeafSessionsAsync(
-			new() { Context = ContextFor(requester), LeafWorkId = leaf });
+			new() {
+				Context = ContextFor(requester),
+				LeafWorkId = leaf,
+			});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -1618,7 +1867,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetLeafSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkId = leaf });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkId = leaf,
+			});
 
 		result.Should().HaveCount(2);
 		// Most-recent-first ordering must hold across the union, not just within one worker's bucket.
@@ -1644,7 +1896,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetLeafSessionsAsync(
-			new() { Context = ContextFor(manager), LeafWorkId = leaf, WorkedByUserId = worker });
+			new() {
+				Context = ContextFor(manager),
+				LeafWorkId = leaf,
+				WorkedByUserId = worker,
+			});
 
 		result.Should().ContainSingle(s => s.Id == new WorkSessionId(1));
 	}
@@ -1658,7 +1914,11 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var act = () => sut.GetLeafSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkId = new(999), WorkedByUserId = worker });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkId = new(999),
+				WorkedByUserId = worker,
+			});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -1691,7 +1951,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetActiveSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [leaf],
+			});
 
 		result.Should().ContainSingle(s => s.Id == new WorkSessionId(1));
 	}
@@ -1715,7 +1978,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetActiveSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [leaf],
+			});
 
 		result.Should().BeEmpty();
 	}
@@ -1729,7 +1995,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var act = () => sut.GetActiveSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [],
+			});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -1761,7 +2030,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetActiveSessionsAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [leaf],
+			});
 
 		result.Should().ContainSingle(s => s.Id == new WorkSessionId(1));
 	}
@@ -1791,7 +2063,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetActiveSessionsAsync(
-			new() { Context = ContextFor(administrator), LeafWorkIds = [leaf] });
+			new() {
+				Context = ContextFor(administrator),
+				LeafWorkIds = [leaf],
+			});
 
 		result.Should().ContainSingle(s => s.Id == new WorkSessionId(1));
 	}
@@ -1816,9 +2091,16 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetSessionManageCapabilitiesAsync(
-			new() { Context = ContextFor(administrator), LeafWorkIds = [leaf] });
+			new() {
+				Context = ContextFor(administrator),
+				LeafWorkIds = [leaf],
+			});
 
-		result.Should().ContainSingle().Which.Should().BeEquivalentTo(new { LeafWorkId = leaf, CanManage = true });
+		result.Should().ContainSingle().Which.Should().BeEquivalentTo(new
+		{
+			LeafWorkId = leaf,
+			CanManage = true,
+		});
 	}
 
 	[Fact]
@@ -1832,7 +2114,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetSessionManageCapabilitiesAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [leaf],
+			});
 
 		result.Should().ContainSingle().Which.CanManage.Should().BeTrue();
 	}
@@ -1847,7 +2132,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetSessionManageCapabilitiesAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [leaf] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [leaf],
+			});
 
 		result.Should().ContainSingle().Which.CanManage.Should().BeFalse();
 	}
@@ -1864,7 +2152,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetSessionManageCapabilitiesAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [controlledLeaf, uncontrolledLeaf] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [controlledLeaf, uncontrolledLeaf],
+			});
 
 		result.Should().HaveCount(2);
 		result.Single(r => r.LeafWorkId == controlledLeaf).CanManage.Should().BeTrue();
@@ -1880,7 +2171,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(port);
 
 		var result = await sut.GetSessionManageCapabilitiesAsync(
-			new() { Context = ContextFor(worker), LeafWorkIds = [] });
+			new() {
+				Context = ContextFor(worker),
+				LeafWorkIds = [],
+			});
 
 		result.Should().BeEmpty();
 	}
@@ -1891,7 +2185,10 @@ public sealed class JobQueriesTests
 		var sut = CreateSut(new FakeWorkSessionQueryPort());
 
 		var act = () => sut.GetSessionManageCapabilitiesAsync(
-			new() { Context = ContextFor(new(21)), LeafWorkIds = [] });
+			new() {
+				Context = ContextFor(new(21)),
+				LeafWorkIds = [],
+			});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -1920,7 +2217,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateSut(port);
 
-		var result = await sut.GetLeafWorkAsync(new() { Context = ContextFor(actor), JobNodeId = leaf });
+		var result = await sut.GetLeafWorkAsync(new() {
+			Context = ContextFor(actor),
+			JobNodeId = leaf,
+		});
 
 		result.Achievement.Should().Be(Achievement.InProgress);
 	}
@@ -1931,7 +2231,10 @@ public sealed class JobQueriesTests
 		var actor = new AppUserId(20);
 		var sut = CreateSut(new FakeLeafWorkQueryPort());
 
-		var act = () => sut.GetLeafWorkAsync(new() { Context = ContextFor(actor), JobNodeId = new(999) });
+		var act = () => sut.GetLeafWorkAsync(new() {
+			Context = ContextFor(actor),
+			JobNodeId = new(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -1956,8 +2259,14 @@ public sealed class JobQueriesTests
 		port.SeedEdge(new(required, dependent));
 		var sut = CreateSut(port);
 
-		var requiredSide = await sut.GetPrerequisitesAsync(new() { Context = ContextFor(actor), NodeId = required });
-		var dependentSide = await sut.GetPrerequisitesAsync(new() { Context = ContextFor(actor), NodeId = dependent });
+		var requiredSide = await sut.GetPrerequisitesAsync(new() {
+			Context = ContextFor(actor),
+			NodeId = required,
+		});
+		var dependentSide = await sut.GetPrerequisitesAsync(new() {
+			Context = ContextFor(actor),
+			NodeId = dependent,
+		});
 
 		requiredSide.Should().ContainSingle(e => e.RequiredJobId == required && e.DependentJobId == dependent);
 		dependentSide.Should().ContainSingle(e => e.RequiredJobId == required && e.DependentJobId == dependent);
@@ -1969,7 +2278,10 @@ public sealed class JobQueriesTests
 		var actor = new AppUserId(20);
 		var sut = CreateSut(new FakePrerequisiteQueryPort());
 
-		var act = () => sut.GetPrerequisitesAsync(new() { Context = ContextFor(actor), NodeId = new(999) });
+		var act = () => sut.GetPrerequisitesAsync(new() {
+			Context = ContextFor(actor),
+			NodeId = new(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -2001,7 +2313,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateSut(port);
 
-		var result = await sut.GetScheduleAsync(new() { Context = ContextFor(worker), UserId = worker });
+		var result = await sut.GetScheduleAsync(new() {
+			Context = ContextFor(worker),
+			UserId = worker,
+		});
 
 		result.Versions.Should().ContainSingle();
 		result.Exceptions.Should().BeEmpty();
@@ -2017,7 +2332,10 @@ public sealed class JobQueriesTests
 		port.SeedEmployee(otherWorker);
 		var sut = CreateSut(port);
 
-		var act = () => sut.GetScheduleAsync(new() { Context = ContextFor(worker), UserId = otherWorker });
+		var act = () => sut.GetScheduleAsync(new() {
+			Context = ContextFor(worker),
+			UserId = otherWorker,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -2032,7 +2350,10 @@ public sealed class JobQueriesTests
 		port.SeedEmployee(worker);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetScheduleAsync(new() { Context = ContextFor(administrator), UserId = worker });
+		var result = await sut.GetScheduleAsync(new() {
+			Context = ContextFor(administrator),
+			UserId = worker,
+		});
 
 		result.Versions.Should().BeEmpty();
 	}
@@ -2045,7 +2366,10 @@ public sealed class JobQueriesTests
 		port.SeedRoles(administrator, EmployeeRole.Administrator);
 		var sut = CreateSut(port);
 
-		var act = () => sut.GetScheduleAsync(new() { Context = ContextFor(administrator), UserId = new(999) });
+		var act = () => sut.GetScheduleAsync(new() {
+			Context = ContextFor(administrator),
+			UserId = new(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -2076,7 +2400,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateSut(port);
 
-		var result = await sut.GetRatesAsync(new() { Context = ContextFor(administrator), UserId = worker });
+		var result = await sut.GetRatesAsync(new() {
+			Context = ContextFor(administrator),
+			UserId = worker,
+		});
 
 		result.UserCostRates.Should().ContainSingle();
 		result.NodeRateOverrides.Should().BeEmpty();
@@ -2092,7 +2419,10 @@ public sealed class JobQueriesTests
 		port.SeedEmployee(worker);
 		var sut = CreateSut(port);
 
-		var result = await sut.GetRatesAsync(new() { Context = ContextFor(costViewer), UserId = worker });
+		var result = await sut.GetRatesAsync(new() {
+			Context = ContextFor(costViewer),
+			UserId = worker,
+		});
 
 		result.UserCostRates.Should().BeEmpty();
 	}
@@ -2107,7 +2437,10 @@ public sealed class JobQueriesTests
 		port.SeedEmployee(worker);
 		var sut = CreateSut(port);
 
-		var act = () => sut.GetRatesAsync(new() { Context = ContextFor(rateManager), UserId = worker });
+		var act = () => sut.GetRatesAsync(new() {
+			Context = ContextFor(rateManager),
+			UserId = worker,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -2121,7 +2454,10 @@ public sealed class JobQueriesTests
 		port.SeedEmployee(worker);
 		var sut = CreateSut(port);
 
-		var act = () => sut.GetRatesAsync(new() { Context = ContextFor(worker), UserId = worker });
+		var act = () => sut.GetRatesAsync(new() {
+			Context = ContextFor(worker),
+			UserId = worker,
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -2134,7 +2470,10 @@ public sealed class JobQueriesTests
 		port.SeedRoles(administrator, EmployeeRole.Administrator);
 		var sut = CreateSut(port);
 
-		var act = () => sut.GetRatesAsync(new() { Context = ContextFor(administrator), UserId = new(999) });
+		var act = () => sut.GetRatesAsync(new() {
+			Context = ContextFor(administrator),
+			UserId = new(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -2186,7 +2525,12 @@ public sealed class JobQueriesTests
 		// AttachLeafWorkAsync's structural-fact tracking), not from the seeded JobNodeResult field
 		// above -- SetLeafWork keeps that internal fact in sync with the leaf being tested.
 		nodePort.SetLeafWork(
-			new() { JobNodeId = LeafIdForWorkPage, Achievement = Achievement.Waiting, ChangedAt = nodePort.NowToReturn, Version = 1 });
+			new() {
+				JobNodeId = LeafIdForWorkPage,
+				Achievement = Achievement.Waiting,
+				ChangedAt = nodePort.NowToReturn,
+				Version = 1,
+			});
 
 		var sessionPort = new FakeWorkSessionQueryPort();
 		sessionPort.SeedRoles(AdministratorId, EmployeeRole.Administrator);
@@ -2236,7 +2580,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.HasLeafWork.Should().BeTrue();
 		result.Achievement.Should().Be(Achievement.InProgress);
@@ -2256,7 +2603,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.ActorControlsNode.Should().BeTrue();
 		result.CanComplete.Should().BeTrue();
@@ -2277,7 +2627,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(AdministratorId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(AdministratorId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.CanReopenWithoutStarting.Should().BeTrue();
 	}
@@ -2303,7 +2656,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(OtherWorkerId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(OtherWorkerId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.ActorControlsNode.Should().BeFalse();
 		result.ActorParticipatedPreviously.Should().BeTrue();
@@ -2325,7 +2681,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(OtherWorkerId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(OtherWorkerId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.CanReopenAndStartForSelf.Should().BeFalse();
 		result.CanReopenAndStartForOthers.Should().BeFalse();
@@ -2346,7 +2705,10 @@ public sealed class JobQueriesTests
 		prerequisitePort.SeedEdge(new(LeafIdForWorkPage, dependentId));
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.DirectDependentCount.Should().Be(1);
 		prerequisitePort.CountDirectDependentsCallCount.Should().Be(1);
@@ -2369,7 +2731,10 @@ public sealed class JobQueriesTests
 		prerequisitePort.SeedActiveDependentWork(LeafIdForWorkPage);
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.HasActiveDependentWork.Should().BeTrue();
 	}
@@ -2390,7 +2755,10 @@ public sealed class JobQueriesTests
 		prerequisitePort.SeedActiveDependentWork(LeafIdForWorkPage);
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = LeafIdForWorkPage });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = LeafIdForWorkPage,
+		});
 
 		result.HasActiveDependentWork.Should().BeFalse("only Success can be reopened into a readiness regression");
 		prerequisitePort.HasActiveDependentWorkCallCount.Should().Be(0, "the extra round trip is spent only where the warning could fire");
@@ -2416,7 +2784,10 @@ public sealed class JobQueriesTests
 		});
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var result = await sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = bareLeafId });
+		var result = await sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = bareLeafId,
+		});
 
 		result.HasLeafWork.Should().BeFalse();
 		result.Achievement.Should().BeNull();
@@ -2430,7 +2801,10 @@ public sealed class JobQueriesTests
 		var (nodePort, sessionPort, leafWorkPort, prerequisitePort) = CreateLeafWorkPageFakes();
 		var sut = CreateLeafWorkPageSut(nodePort, sessionPort, leafWorkPort, prerequisitePort);
 
-		var act = () => sut.GetLeafWorkPageAsync(new() { Context = ContextFor(WorkerId), JobNodeId = new(999) });
+		var act = () => sut.GetLeafWorkPageAsync(new() {
+			Context = ContextFor(WorkerId),
+			JobNodeId = new(999),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}
@@ -2462,11 +2836,24 @@ public sealed class JobQueriesTests
 
 	private static Task InvokeJobDataBrowseCallAsync(string caseName, JobQueries sut, CommandContext context) =>
 		caseName switch {
-			"GetJobNodeAsync" => sut.GetJobNodeAsync(new() { Context = context, NodeId = null }),
-			"GetAwaitingProgressAsync" => sut.GetAwaitingProgressAsync(new() { Context = context }),
-			"GetLeafWorkAsync" => sut.GetLeafWorkAsync(new() { Context = context, JobNodeId = new(1) }),
-			"GetPrerequisitesAsync" => sut.GetPrerequisitesAsync(new() { Context = context, NodeId = new(1) }),
-			"GetEmployeeDirectoryAsync" => sut.GetEmployeeDirectoryAsync(new() { Context = context }),
+			"GetJobNodeAsync" => sut.GetJobNodeAsync(new() {
+				Context = context,
+				NodeId = null,
+			}),
+			"GetAwaitingProgressAsync" => sut.GetAwaitingProgressAsync(new() {
+				Context = context,
+			}),
+			"GetLeafWorkAsync" => sut.GetLeafWorkAsync(new() {
+				Context = context,
+				JobNodeId = new(1),
+			}),
+			"GetPrerequisitesAsync" => sut.GetPrerequisitesAsync(new() {
+				Context = context,
+				NodeId = new(1),
+			}),
+			"GetEmployeeDirectoryAsync" => sut.GetEmployeeDirectoryAsync(new() {
+				Context = context,
+			}),
 			_ => throw new ArgumentOutOfRangeException(nameof(caseName), caseName, "Unknown job-data browse case."),
 		};
 
@@ -2532,7 +2919,9 @@ public sealed class JobQueriesTests
 		employeeQueryPort.SeedRoles(actor, [EmployeeRole.JobManager]);
 		var sut = CreateSut(employeeQueryPort);
 
-		var act = () => sut.GetAllEmployeesAsync(new() { Context = ContextFor(actor) });
+		var act = () => sut.GetAllEmployeesAsync(new() {
+			Context = ContextFor(actor),
+		});
 
 		await act.Should().ThrowAsync<AuthorizationDeniedException>();
 	}
@@ -2543,7 +2932,9 @@ public sealed class JobQueriesTests
 		var actor = new AppUserId(9005);
 		var sut = CreateSut(new FakeEmployeeQueryPort());
 
-		var act = () => sut.GetAllEmployeesAsync(new() { Context = ContextFor(actor) });
+		var act = () => sut.GetAllEmployeesAsync(new() {
+			Context = ContextFor(actor),
+		});
 
 		await act.Should().ThrowAsync<EntityNotFoundException>();
 	}

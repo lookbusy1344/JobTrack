@@ -14,5 +14,5 @@ internal sealed class SqlitePrerequisiteOperations(string connectionString)
 	public async Task<bool> HasActiveDependentWorkAsync(
 		DbContext context, JobNodeId requiredJobId, CancellationToken cancellationToken) =>
 		await PrerequisiteReadinessSerialization.HasActiveDependentWorkAsync(context, requiredJobId, cancellationToken)
-			.ConfigureAwait(false);
+												.ConfigureAwait(false);
 }

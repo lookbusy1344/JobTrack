@@ -44,9 +44,7 @@ internal sealed partial class CostQueries : ICostQueries, IRequesterDurationQuer
 	private readonly ICostQueryPort _port;
 
 	/// <summary>Creates a <see cref="CostQueries" /> over the given port with no growth-signal logging.</summary>
-	public CostQueries(ICostQueryPort port) : this(port, null)
-	{
-	}
+	public CostQueries(ICostQueryPort port) : this(port, null) { }
 
 	/// <summary>
 	///     Creates a <see cref="CostQueries" /> over the given port with a growth-signal logger (Stage 5b,
@@ -324,7 +322,9 @@ internal sealed partial class CostQueries : ICostQueries, IRequesterDurationQuer
 		JobNodeId nodeId, EquatableDictionary<JobNodeId, HierarchyNode> nodesById, Dictionary<JobNodeId, Money> exactCosts)
 	{
 		var rootExact = exactCosts.GetValueOrDefault(nodeId, new(0m));
-		var displayed = new Dictionary<JobNodeId, Money> { [nodeId] = rootExact.RoundToPennies() };
+		var displayed = new Dictionary<JobNodeId, Money> {
+			[nodeId] = rootExact.RoundToPennies(),
+		};
 
 		var pending = new Queue<JobNodeId>();
 		pending.Enqueue(nodeId);
@@ -336,8 +336,8 @@ internal sealed partial class CostQueries : ICostQueries, IRequesterDurationQuer
 			}
 
 			var children = node.ChildIds
-				.Select(childId => (ChildId: childId, ExactAmount: exactCosts.GetValueOrDefault(childId, new(0m))))
-				.ToList();
+							   .Select(childId => (ChildId: childId, ExactAmount: exactCosts.GetValueOrDefault(childId, new(0m))))
+							   .ToList();
 			var reconciled = HierarchyDisplayReconciler.Reconcile(exactCosts.GetValueOrDefault(id, new(0m)), children);
 
 			foreach (var child in reconciled) {
@@ -421,8 +421,8 @@ internal sealed partial class CostQueries : ICostQueries, IRequesterDurationQuer
 
 				var dbStopwatch = Stopwatch.StartNew();
 				var inputs = await _port.GetBulkCostInputsAsync(
-						request.Context.Actor, request.NodeIds, request.AsOf, MaxHierarchyNodeCount, cancellationToken)
-					.ConfigureAwait(false);
+											request.Context.Actor, request.NodeIds, request.AsOf, MaxHierarchyNodeCount, cancellationToken)
+										.ConfigureAwait(false);
 				dbStopwatch.Stop();
 				var engineStopwatch = Stopwatch.StartNew();
 
@@ -430,11 +430,11 @@ internal sealed partial class CostQueries : ICostQueries, IRequesterDurationQuer
 				// node or one of its ancestors -- walked from the one already-materialized snapshot, so
 				// this adds no further round trips no matter how many candidates the page holds.
 				var authorizedNodeIds = request.NodeIds
-					.Where(nodeId => inputs.NodesById.ContainsKey(nodeId)
-									 && CostAccessPolicy.CanView(
-										 inputs.ActorRoles,
-										 OwnsNodeOrAncestor(nodeId, request.Context.Actor, inputs.NodesById, inputs.OwnerUserIdsById)))
-					.ToArray();
+											   .Where(nodeId => inputs.NodesById.ContainsKey(nodeId)
+																&& CostAccessPolicy.CanView(
+																	inputs.ActorRoles,
+																	OwnsNodeOrAncestor(nodeId, request.Context.Actor, inputs.NodesById, inputs.OwnerUserIdsById)))
+											   .ToArray();
 
 				// Every worker's leaf costs accumulate into one combined map first, so the hierarchy is
 				// walked once for the whole page rather than once per (worker, candidate) pair. Summing

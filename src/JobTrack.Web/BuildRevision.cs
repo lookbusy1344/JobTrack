@@ -32,7 +32,7 @@ internal static class BuildRevision
 	private static string? Read()
 	{
 		var informationalVersion = typeof(BuildRevision).Assembly
-			.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+														.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 		if (informationalVersion is null) {
 			return null;
 		}

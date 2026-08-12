@@ -30,21 +30,24 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		JobNodeEntity node;
 		if (nodeId is JobNodeId id) {
 			node = await context.Set<JobNodeEntity>().AsNoTracking().FirstOrDefaultAsync(n => n.Id == id, cancellationToken)
-					   .ConfigureAwait(false)
+								.ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException($"Job node {id} does not exist.");
 		} else {
 			// A tree with no root is a miss like any other id that does not resolve -- a system whose
 			// tree has not been bootstrapped yet, not a broken one -- so it reaches callers as the same
 			// exception rather than as the sequence-empty fault SingleAsync would raise.
 			node = await context.Set<JobNodeEntity>().AsNoTracking()
-					   .SingleOrDefaultAsync(n => n.ParentId == null, cancellationToken).ConfigureAwait(false)
+								.SingleOrDefaultAsync(n => n.ParentId == null, cancellationToken).ConfigureAwait(false)
 				   ?? throw new EntityNotFoundException("The job tree has no root node.");
 		}
 
 		var ancestors = await LoadAncestorsAsync(context, node, cancellationToken).ConfigureAwait(false);
 		var nodeResult = await JobNodeStructuralProjection.ToResultAsync(context, node, cancellationToken).ConfigureAwait(false);
 
-		return new() { Node = nodeResult, Ancestors = [.. ancestors] };
+		return new() {
+			Node = nodeResult,
+			Ancestors = [.. ancestors],
+		};
 	}
 
 	public async Task<EquatableArray<JobNodeSummaryResult>> GetChildrenAsync(
@@ -54,7 +57,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		await using var context = provider.CreateContext();
 
 		var parentExists = await context.Set<JobNodeEntity>().AsNoTracking().AnyAsync(n => n.Id == parentId, cancellationToken)
-			.ConfigureAwait(false);
+										.ConfigureAwait(false);
 		if (!parentExists) {
 			throw new EntityNotFoundException($"Job node {parentId} does not exist.");
 		}
@@ -113,7 +116,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 			IsolationLevel.RepeatableRead, cancellationToken).ConfigureAwait(false);
 
 		var rootExists = await context.Set<JobNodeEntity>().AsNoTracking().AnyAsync(n => n.Id == rootId, cancellationToken)
-			.ConfigureAwait(false);
+									  .ConfigureAwait(false);
 		if (!rootExists) {
 			throw new EntityNotFoundException($"Job node {rootId} does not exist.");
 		}
@@ -125,11 +128,11 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		// Every node receives exactly one cached result even when several displayed ancestor branches
 		// depend on it; the display depth cap must not make a deep unfinished leaf look completed.
 		var achievementRows = await JobNodeHierarchyQueries
-			.GetSubtreeAchievementsAsync(context, rootId.Value, cancellationToken).ConfigureAwait(false);
+									.GetSubtreeAchievementsAsync(context, rootId.Value, cancellationToken).ConfigureAwait(false);
 		var childIdsByParent = achievementRows
-			.Where(row => row.ParentId is not null)
-			.GroupBy(row => row.ParentId!.Value)
-			.ToDictionary(group => group.Key, group => group.Select(row => new JobNodeId(row.Id)).ToArray());
+							   .Where(row => row.ParentId is not null)
+							   .GroupBy(row => row.ParentId!.Value)
+							   .ToDictionary(group => group.Key, group => group.Select(row => new JobNodeId(row.Id)).ToArray());
 		var hierarchy = achievementRows.ToDictionary(
 			row => new JobNodeId(row.Id),
 			row => new HierarchyNode(
@@ -148,9 +151,14 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 			return succeededByNodeId[row.Id] ? BranchAchievement.Success : BranchAchievement.Unfinished;
 		}
 
-		var enrichedRows = rows.Select(row => row with { BranchAchievement = BranchAchievementFor(row) }).ToArray();
+		var enrichedRows = rows.Select(row => row with {
+			BranchAchievement = BranchAchievementFor(row),
+		}).ToArray();
 		var rootAchievement = enrichedRows.Single(row => row.Id == rootId).BranchAchievement;
-		return new() { Rows = EquatableArray.CopyOf(enrichedRows), RootAchievement = rootAchievement };
+		return new() {
+			Rows = EquatableArray.CopyOf(enrichedRows),
+			RootAchievement = rootAchievement,
+		};
 	}
 
 	public async Task<BranchAchievement> GetSubtreeAchievementAsync(JobNodeId rootId, CancellationToken cancellationToken = default)
@@ -158,8 +166,8 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		await using var context = provider.CreateContext();
 
 		var rootExists = await context.Set<JobNodeEntity>().AsNoTracking()
-			.AnyAsync(node => node.Id == rootId, cancellationToken)
-			.ConfigureAwait(false);
+									  .AnyAsync(node => node.Id == rootId, cancellationToken)
+									  .ConfigureAwait(false);
 		if (!rootExists) {
 			throw new EntityNotFoundException($"Job node {rootId} does not exist.");
 		}
@@ -205,15 +213,15 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		ancestorIds.Reverse();
 
 		var ancestorEntities = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Where(n => ancestorIds.Contains(n.Id))
-			.Select(n => new
-			{
-				n.Id,
-				n.Description,
-				n.ParentId,
-				HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
-			})
-			.ToDictionaryAsync(n => n.Id, cancellationToken).ConfigureAwait(false);
+											.Where(n => ancestorIds.Contains(n.Id))
+											.Select(n => new
+											{
+												n.Id,
+												n.Description,
+												n.ParentId,
+												HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
+											})
+											.ToDictionaryAsync(n => n.Id, cancellationToken).ConfigureAwait(false);
 
 		ancestors.AddRange(ancestorIds.Select(id => {
 			var entity = ancestorEntities[id];
@@ -259,7 +267,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 			// No separate leaf_work existence probe: achievement_id is NOT NULL and job_node_id is the
 			// primary key, so a non-null projected Achievement already means "this node holds LeafWork".
 			Achievement = context.Set<LeafWorkEntity>()
-				.Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
+								 .Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
 		});
 
 		var ordered = shaped.OrderBy(n => n.Id).Skip(offset);
@@ -289,33 +297,33 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		var expandedById = bounded.ToDictionary(r => new JobNodeId(r.Id), r => r.WasExpanded);
 
 		var shaped = await context.Set<JobNodeEntity>().AsNoTracking()
-			.Where(n => idList.Contains(n.Id))
-			.Select(n => new
-			{
-				n.Id,
-				n.ParentId,
-				n.Description,
-				n.OwnerUserId,
-				n.Priority,
-				n.NeededStart,
-				n.NeededFinish,
-				n.ArchivedAt,
-				HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
-				// Derived from Achievement below, not probed separately -- see LoadSummariesAsync.
-				Achievement = context.Set<LeafWorkEntity>()
-					.Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
-				HasSessionHistory = context.Set<WorkSessionEntity>().Any(session => session.LeafWorkId == n.Id),
-				HasUnacknowledgedRequest = context.Set<JobRequestEntity>()
-					.Any(request => request.JobNodeId == n.Id && request.AcknowledgedAt == null),
-			})
-			.ToListAsync(cancellationToken).ConfigureAwait(false);
+								  .Where(n => idList.Contains(n.Id))
+								  .Select(n => new
+								  {
+									  n.Id,
+									  n.ParentId,
+									  n.Description,
+									  n.OwnerUserId,
+									  n.Priority,
+									  n.NeededStart,
+									  n.NeededFinish,
+									  n.ArchivedAt,
+									  HasChildren = context.Set<JobNodeEntity>().Any(c => c.ParentId == n.Id),
+									  // Derived from Achievement below, not probed separately -- see LoadSummariesAsync.
+									  Achievement = context.Set<LeafWorkEntity>()
+														   .Where(lw => lw.JobNodeId == n.Id).Select(lw => (Achievement?)lw.Achievement).FirstOrDefault(),
+									  HasSessionHistory = context.Set<WorkSessionEntity>().Any(session => session.LeafWorkId == n.Id),
+									  HasUnacknowledgedRequest = context.Set<JobRequestEntity>()
+																		.Any(request => request.JobNodeId == n.Id && request.AcknowledgedAt == null),
+								  })
+								  .ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		var matchesById = shaped.ToDictionary(r => r.Id, r => MatchesFilter(r.OwnerUserId, r.ArchivedAt, ownership, archiveFilter));
 
 		var childrenByParent = shaped
-			.Where(r => r.ParentId is JobNodeId parentId && idList.Contains(parentId))
-			.GroupBy(r => r.ParentId!.Value)
-			.ToDictionary(g => g.Key, g => g.Select(r => r.Id).ToList());
+							   .Where(r => r.ParentId is JobNodeId parentId && idList.Contains(parentId))
+							   .GroupBy(r => r.ParentId!.Value)
+							   .ToDictionary(g => g.Key, g => g.Select(r => r.Id).ToList());
 
 		var keepById = new Dictionary<JobNodeId, bool>();
 		foreach (var row in shaped.OrderByDescending(r => depthById[r.Id])) {
@@ -326,28 +334,28 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		}
 
 		return shaped
-			.Where(r => keepById[r.Id])
-			.OrderBy(r => r.Id.Value)
-			.Select(r => new JobNodeSubtreeRow {
-				Id = r.Id,
-				ParentId = r.ParentId,
-				Kind = JobNodeStructuralResults.DeriveKind(r.ParentId, r.HasChildren),
-				Depth = depthById[r.Id],
-				Description = r.Description,
-				OwnerUserId = r.OwnerUserId,
-				Priority = r.Priority,
-				NeededStart = r.NeededStart,
-				NeededFinish = r.NeededFinish,
-				ArchivedAt = r.ArchivedAt,
-				HasChildren = r.HasChildren,
-				HasLeafWork = r.Achievement is not null,
-				Achievement = r.Achievement,
-				HasSessionHistory = r.HasSessionHistory,
-				HasUnacknowledgedRequest = r.HasUnacknowledgedRequest,
-				HasUnexpandedChildren = r.HasChildren && !expandedById[r.Id],
-				MatchesFilter = matchesById[r.Id],
-			})
-			.ToList();
+			   .Where(r => keepById[r.Id])
+			   .OrderBy(r => r.Id.Value)
+			   .Select(r => new JobNodeSubtreeRow {
+				   Id = r.Id,
+				   ParentId = r.ParentId,
+				   Kind = JobNodeStructuralResults.DeriveKind(r.ParentId, r.HasChildren),
+				   Depth = depthById[r.Id],
+				   Description = r.Description,
+				   OwnerUserId = r.OwnerUserId,
+				   Priority = r.Priority,
+				   NeededStart = r.NeededStart,
+				   NeededFinish = r.NeededFinish,
+				   ArchivedAt = r.ArchivedAt,
+				   HasChildren = r.HasChildren,
+				   HasLeafWork = r.Achievement is not null,
+				   Achievement = r.Achievement,
+				   HasSessionHistory = r.HasSessionHistory,
+				   HasUnacknowledgedRequest = r.HasUnacknowledgedRequest,
+				   HasUnexpandedChildren = r.HasChildren && !expandedById[r.Id],
+				   MatchesFilter = matchesById[r.Id],
+			   })
+			   .ToList();
 	}
 
 	private static bool MatchesFilter(AppUserId? ownerUserId, Instant? archivedAt, OwnershipFilter ownership, JobArchiveFilter archiveFilter)

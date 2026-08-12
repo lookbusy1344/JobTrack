@@ -56,9 +56,7 @@ internal sealed class SqliteJobTrackDbContext : DbContext
 		new(guid => guid.ToString(), text => Guid.Parse(text));
 
 	public SqliteJobTrackDbContext(DbContextOptions<SqliteJobTrackDbContext> options)
-		: base(options)
-	{
-	}
+		: base(options) { }
 
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{

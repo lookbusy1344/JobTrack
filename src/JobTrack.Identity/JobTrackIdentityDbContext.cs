@@ -15,9 +15,7 @@ public abstract class JobTrackIdentityDbContext : DbContext
 		new(id => id.Value, value => new(value));
 
 	protected JobTrackIdentityDbContext(DbContextOptions options)
-		: base(options)
-	{
-	}
+		: base(options) { }
 
 	public DbSet<JobTrackIdentityUser> Users => Set<JobTrackIdentityUser>();
 
@@ -57,7 +55,11 @@ public abstract class JobTrackIdentityDbContext : DbContext
 
 		_ = modelBuilder.Entity<JobTrackIdentityUserRole>(builder => {
 			_ = builder.ToTable("identity_user_role");
-			_ = builder.HasKey(e => new { e.IdentityUserId, e.IdentityRoleId });
+			_ = builder.HasKey(e => new
+			{
+				e.IdentityUserId,
+				e.IdentityRoleId,
+			});
 
 			_ = builder.Property(e => e.IdentityUserId).HasColumnName("identity_user_id");
 			_ = builder.Property(e => e.IdentityRoleId).HasColumnName("identity_role_id");

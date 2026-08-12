@@ -22,8 +22,8 @@ public static class ReadinessCalculator
 		IReadOnlyCollection<PrerequisiteEdge> prerequisites)
 	{
 		var edgesByDependent = prerequisites
-			.GroupBy(edge => edge.DependentJobId)
-			.ToDictionary(group => group.Key, group => group.ToList());
+							   .GroupBy(edge => edge.DependentJobId)
+							   .ToDictionary(group => group.Key, group => group.ToList());
 		var achievedCache = new Dictionary<JobNodeId, bool>();
 		var blockers = new List<UnsatisfiedPrerequisite>();
 

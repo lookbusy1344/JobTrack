@@ -14,9 +14,7 @@ internal class PostgreSqlReadOperations(NpgsqlDataSource dataSource, IReadOnlyLi
 {
 	/// <summary>Creates the seam over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlReadOperations(NpgsqlDataSource dataSource)
-		: this(dataSource, [])
-	{
-	}
+		: this(dataSource, []) { }
 
 	public DbContext CreateContext()
 	{

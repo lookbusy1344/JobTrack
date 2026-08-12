@@ -59,7 +59,10 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 			PasswordHash = "test-hash",
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
-		var administratorContext = new CommandContext { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() };
+		var administratorContext = new CommandContext {
+			Actor = bootstrap.AdministratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		var jobNodePort = new SqliteJobNodeCommandPort(database.ConnectionString, SystemClock.Instance);
 		var schedulePort = new ScheduleCommandPort(new SqliteWriteOperations(database.ConnectionString), SystemClock.Instance);
@@ -105,10 +108,16 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 					OwnerUserId = workerId,
 					Priority = Priority.Medium,
 				});
-				_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = administratorContext, JobNodeId = leaf.Id });
+				_ = await jobNodePort.AttachLeafWorkAsync(new() {
+					Context = administratorContext,
+					JobNodeId = leaf.Id,
+				});
 
 				var session = await sessionPort.StartSessionAsync(new() {
-					Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = workerId,
+						CorrelationId = Guid.NewGuid(),
+					},
 					LeafWorkId = leaf.Id,
 					WorkedByUserId = workerId,
 				});
@@ -125,11 +134,15 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 
 		var costQueries = new CostQueries(new SqliteCostQueryPort(database.ConnectionString, SystemClock.Instance));
 		var stopwatch = Stopwatch.StartNew();
-		var result = await costQueries.GetHierarchyTotalsAsync(new() { Context = administratorContext, NodeId = new(oneBranchId), AsOf = asOf });
+		var result = await costQueries.GetHierarchyTotalsAsync(new() {
+			Context = administratorContext,
+			NodeId = new(oneBranchId),
+			AsOf = asOf,
+		});
 		stopwatch.Stop();
 
 		stopwatch.Elapsed.Should()
-			.BeLessThan(NoBlockingBound, "no SQLite latency budget applies (§6.4), but the operation must not block indefinitely");
+				 .BeLessThan(NoBlockingBound, "no SQLite latency budget applies (§6.4), but the operation must not block indefinitely");
 		result.ExactCosts.Should().NotBeEmpty();
 		result.ExactCosts[new(oneBranchId)].Amount.Should().BePositive();
 	}

@@ -7,17 +7,13 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
 using Identity;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the requester self-service page (ADR 0033, plan §8 <c>/Requests</c>):
@@ -86,7 +82,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		rootId = bootstrapResult.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -175,7 +174,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.list-blocked", EmployeeRole.Requester);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Blocked list request");
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var blocker = await seedClient.Jobs.AddChildAsync(new() {
 			Context = context,
 			ParentId = rootId,
@@ -183,8 +185,15 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			OwnerUserId = administratorId,
 			Priority = Priority.Medium,
 		});
-		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = blocker.Id });
-		await seedClient.Jobs.AddPrerequisiteAsync(new() { Context = context, DependentJobId = submitted.JobNodeId, RequiredJobId = blocker.Id });
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = blocker.Id,
+		});
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = context,
+			DependentJobId = submitted.JobNodeId,
+			RequiredJobId = blocker.Id,
+		});
 		var authCookie = await client.SignInAsync("rita.list-blocked");
 
 		var response = await GetPageAsync(authCookie);
@@ -204,8 +213,14 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var requesterId = await SeedEmployeeAsync("rita.list-status", EmployeeRole.Requester);
 		var workerId = await SeedEmployeeAsync("wanda.list-status", EmployeeRole.Worker);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Repair the print room printer");
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
-		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = submitted.JobNodeId });
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = submitted.JobNodeId,
+		});
 		var decomposition = await seedClient.Jobs.DecomposeWorkedLeafAsync(new() {
 			Context = context,
 			LeafNodeId = submitted.JobNodeId,
@@ -213,11 +228,16 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			BranchDescription = "Repair the print room printer",
 			ExistingWorkDescription = "Diagnose paper feed",
 			NewChildren = [
-				new() { Description = "Replace feed roller", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					Description = "Replace feed roller", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 		var replacementId = decomposition.NewChildIds.Single();
-		var replacementWork = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = replacementId });
+		var replacementWork = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = replacementId,
+		});
 		_ = await seedClient.Work.SetAchievementAsync(new() {
 			Context = context,
 			JobNodeId = replacementId,
@@ -409,8 +429,14 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.leafstatus", EmployeeRole.Requester, "Rita Leafstatus");
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Worked anchor leaf");
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
-		var leafWork = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = submitted.JobNodeId });
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		var leafWork = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = submitted.JobNodeId,
+		});
 		_ = await seedClient.Work.SetAchievementAsync(new() {
 			Context = context,
 			JobNodeId = submitted.JobNodeId,
@@ -439,7 +465,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.blocked", EmployeeRole.Requester, "Rita Blocked");
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Blocked by a prerequisite");
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var blocker = await seedClient.Jobs.AddChildAsync(new() {
 			Context = context,
 			ParentId = rootId,
@@ -447,8 +476,15 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			OwnerUserId = administratorId,
 			Priority = Priority.Medium,
 		});
-		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = blocker.Id });
-		await seedClient.Jobs.AddPrerequisiteAsync(new() { Context = context, DependentJobId = submitted.JobNodeId, RequiredJobId = blocker.Id });
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = blocker.Id,
+		});
+		await seedClient.Jobs.AddPrerequisiteAsync(new() {
+			Context = context,
+			DependentJobId = submitted.JobNodeId,
+			RequiredJobId = blocker.Id,
+		});
 		var authCookie = await client.SignInAsync("rita.blocked");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
@@ -468,8 +504,14 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var requesterId = await SeedEmployeeAsync("rita.decomposed", EmployeeRole.Requester);
 		var workerId = await SeedEmployeeAsync("wanda.decomposed", EmployeeRole.Worker);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Repair the print room printer");
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
-		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = submitted.JobNodeId });
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = submitted.JobNodeId,
+		});
 		var decomposition = await seedClient.Jobs.DecomposeWorkedLeafAsync(new() {
 			Context = context,
 			LeafNodeId = submitted.JobNodeId,
@@ -477,11 +519,16 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			BranchDescription = "Repair the print room printer",
 			ExistingWorkDescription = "Diagnose paper feed",
 			NewChildren = [
-				new() { Description = "Replace feed roller", OwnerUserId = workerId, Priority = Priority.Medium },
+				new() {
+					Description = "Replace feed roller", OwnerUserId = workerId, Priority = Priority.Medium,
+				},
 			],
 		});
 		var replacementId = decomposition.NewChildIds.Single();
-		var replacementWork = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = replacementId });
+		var replacementWork = await seedClient.Jobs.AttachLeafWorkAsync(new() {
+			Context = context,
+			JobNodeId = replacementId,
+		});
 		_ = await seedClient.Work.SetAchievementAsync(new() {
 			Context = context,
 			JobNodeId = replacementId,
@@ -519,7 +566,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		body.Should().MatchRegex(@"Diagnose paper feed \(ID \d+\)");
 		body.Should().Contain("href=\"#jt-icon-achievement-in-progress\"");
 		MyRegex().IsMatch(body)
-			.Should().BeTrue("the public status icon should immediately follow the leaf name, as it does in Browse");
+				 .Should().BeTrue("the public status icon should immediately follow the leaf name, as it does in Browse");
 		body.Should().Contain(">5.0 hrs<");
 		body.Should().Contain(">2.0 hrs<");
 		body.Should().Contain(">3.0 hrs<");
@@ -575,7 +622,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var requesterId = await SeedEmployeeAsync("rita.note-visibility", EmployeeRole.Requester);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
 		var jobManagerId = await SeedEmployeeAsync("priya.note-visibility", EmployeeRole.JobManager);
-		var context = new CommandContext { Actor = jobManagerId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = jobManagerId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		_ = await seedClient.Requests.AddNoteAsync(new() {
 			Context = context,
 			NodeId = submitted.JobNodeId,
@@ -583,7 +633,9 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			VisibleToRequester = true,
 		});
 		_ = await seedClient.Requests.AddNoteAsync(new() {
-			Context = context with { CorrelationId = Guid.NewGuid() },
+			Context = context with {
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = submitted.JobNodeId,
 			Content = "Internal triage note",
 			VisibleToRequester = false,
@@ -693,7 +745,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
 		var workerId = await SeedEmployeeAsync("will.return-target", EmployeeRole.Worker);
 		_ = await seedClient.Jobs.PickUpAsync(new() {
-			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = workerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			NodeId = submitted.JobNodeId,
 		});
 		var staffCookie = await client.SignInAsync("will.return-target");
@@ -744,7 +799,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 
 	private async Task<JobRequestResult> SubmitAsync(AppUserId requesterId, RequestHoldingAreaId holdingAreaId, string description) =>
 		await seedClient.Requests.SubmitAsync(new() {
-			Context = new() { Actor = requesterId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = requesterId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			HoldingAreaId = holdingAreaId,
 			Description = description,
 		});
@@ -753,12 +811,18 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		AppUserId workerId, JobNodeId leafId, Instant startedAt, Instant finishedAt)
 	{
 		var started = await seedClient.Work.StartSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			LeafWorkId = leafId,
 			WorkedByUserId = workerId,
 		});
 		_ = await seedClient.Work.CorrectSessionAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			SessionId = started.Id,
 			StartedAt = startedAt,
 			FinishedAt = finishedAt,
@@ -831,8 +895,6 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
 	private async Task<HttpResponseMessage> GetPageAsync(string authCookie)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/Requests");
@@ -952,5 +1014,4 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex(
 		"""<span class="jt-preserve-whitespace">Replace feed roller \(ID \d+\)</span>&#x2060;\s*<span class="jt-achievement-icon jt-achievement-icon--in-progress">""")]
 	private static partial Regex MyRegex();
-
 }

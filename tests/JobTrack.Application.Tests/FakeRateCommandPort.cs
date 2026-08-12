@@ -120,7 +120,11 @@ internal sealed class FakeRateCommandPort : IRateCommandPort
 				"user-cost-rate-overlap", "This cost rate's effective range overlaps another for this employee.");
 		}
 
-		var result = existing with { Rate = request.Rate, ChangedAt = NowToReturn, Version = existing.Version + 1 };
+		var result = existing with {
+			Rate = request.Rate,
+			ChangedAt = NowToReturn,
+			Version = existing.Version + 1,
+		};
 		_userCostRates[index] = result;
 
 		return Task.FromResult(result);
@@ -161,7 +165,11 @@ internal sealed class FakeRateCommandPort : IRateCommandPort
 				"node-rate-override-overlap", "This override's effective range overlaps another for this node and employee.");
 		}
 
-		var result = existing with { Override = request.Override, ChangedAt = NowToReturn, Version = existing.Version + 1 };
+		var result = existing with {
+			Override = request.Override,
+			ChangedAt = NowToReturn,
+			Version = existing.Version + 1,
+		};
 		_nodeOverrides[index] = result;
 
 		return Task.FromResult(result);

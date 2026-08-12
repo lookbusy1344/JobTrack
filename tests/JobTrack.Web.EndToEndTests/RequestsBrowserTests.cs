@@ -130,10 +130,18 @@ public abstract class RequestsBrowserTestsBase
 		await SignInAsync(page, userName, RequesterPassword);
 		await page.GotoAsync($"{fixture.BaseAddress}/Requests");
 
-		(await page.GetByRole(AriaRole.Columnheader, new() { Name = "Status", Exact = true }).IsVisibleAsync()).Should().BeTrue();
-		(await page.Locator("tbody .jt-achievement-icon-label").GetByText("Submitted", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
-		(await page.GetByRole(AriaRole.Columnheader, new() { Name = "Submitted", Exact = true }).IsVisibleAsync()).Should()
-			.Be(expectSubmitted, "the timestamp is secondary context, while request identity and status remain at every width");
+		(await page.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Status",
+			Exact = true,
+		}).IsVisibleAsync()).Should().BeTrue();
+		(await page.Locator("tbody .jt-achievement-icon-label").GetByText("Submitted", new() {
+			Exact = true,
+		}).IsVisibleAsync()).Should().BeTrue();
+		(await page.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Submitted",
+			Exact = true,
+		}).IsVisibleAsync()).Should()
+								.Be(expectSubmitted, "the timestamp is secondary context, while request identity and status remain at every width");
 	}
 
 	[Fact]
@@ -161,7 +169,9 @@ public abstract class RequestsBrowserTestsBase
 		handBox.Should().NotBeNull();
 		(handBox!.X + handBox.Width).Should().BeLessThanOrEqualTo(titleBox!.X,
 			"the same leading stop-hand convention as Browse places blocked state before the title");
-		(await title.Locator("..").GetByText("Blocked by a prerequisite.", new() { Exact = true }).CountAsync()).Should().Be(1);
+		(await title.Locator("..").GetByText("Blocked by a prerequisite.", new() {
+			Exact = true,
+		}).CountAsync()).Should().Be(1);
 	}
 
 	/// <summary>
@@ -229,14 +239,10 @@ public abstract class RequestsBrowserTestsBase
 
 public sealed class SqliteRequestsBrowserTests : RequestsBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
 {
-	public SqliteRequestsBrowserTests(SqliteBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public SqliteRequestsBrowserTests(SqliteBrowserFixture fixture) : base(fixture) { }
 }
 
 public sealed class PostgreSqlRequestsBrowserTests : RequestsBrowserTestsBase, IClassFixture<PostgreSqlBrowserFixture>
 {
-	public PostgreSqlRequestsBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture)
-	{
-	}
+	public PostgreSqlRequestsBrowserTests(PostgreSqlBrowserFixture fixture) : base(fixture) { }
 }

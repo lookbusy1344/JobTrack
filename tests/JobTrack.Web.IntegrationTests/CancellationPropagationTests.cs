@@ -2,18 +2,13 @@ namespace JobTrack.Web.IntegrationTests;
 
 using System.Reflection;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
-using Identity;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Persistence.Sqlite;
 using TestSupport;
@@ -61,7 +56,10 @@ public sealed partial class CancellationPropagationTests : IAsyncLifetime, IDisp
 		rootId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString, hook);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -129,14 +127,20 @@ public sealed partial class CancellationPropagationTests : IAsyncLifetime, IDisp
 	private async Task<JobNodeId> AddChildAsync(JobNodeId parentId, AppUserId ownerId, string description)
 	{
 		var result = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = parentId,
 			Description = description,
 			OwnerUserId = ownerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = result.Id,
 		});
 
@@ -251,8 +255,8 @@ public sealed partial class CancellationPropagationTests : IAsyncLifetime, IDisp
 					var token = (CancellationToken)args[tokenIndex]!;
 					var resultType = targetMethod.ReturnType.GetGenericArguments()[0];
 					var method = typeof(CancellationObservingProxy<TInterface>)
-						.GetMethod(nameof(AwaitCancellationAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
-						.MakeGenericMethod(resultType);
+								 .GetMethod(nameof(AwaitCancellationAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
+								 .MakeGenericMethod(resultType);
 					return method.Invoke(this, [token]);
 				}
 			}

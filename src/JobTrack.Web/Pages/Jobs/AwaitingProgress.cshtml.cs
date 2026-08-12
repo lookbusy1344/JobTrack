@@ -281,7 +281,10 @@ public sealed class AwaitingProgressModel(
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = new(jobNodeId),
 					WorkedByUserId = actor.Value,
 					StartedAt = startedAtInstant,
@@ -317,21 +320,33 @@ public sealed class AwaitingProgressModel(
 			return Challenge();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var leafNodeId = new JobNodeId(jobNodeId);
 			var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
-				new() { Context = context, JobNodeId = leafNodeId }, cancellationToken);
+				new() {
+					Context = context,
+					JobNodeId = leafNodeId,
+				}, cancellationToken);
 			var activeSessions = await jobTrackClient.Query.GetActiveSessionsAsync(
-				new() { Context = context, LeafWorkIds = [leafNodeId] }, cancellationToken);
+				new() {
+					Context = context,
+					LeafWorkIds = [leafNodeId],
+				}, cancellationToken);
 
 			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
 				Context = context,
 				JobNodeId = leafNodeId,
 				Version = leafWork.Version,
-				ExpectedActiveSessions =
-					[.. activeSessions.Select(session => new ExpectedActiveSession { Id = session.Id, Version = session.Version })],
+				ExpectedActiveSessions = [
+					.. activeSessions.Select(session => new ExpectedActiveSession {
+						Id = session.Id, Version = session.Version,
+					}),
+				],
 			}, cancellationToken);
 			SuccessMessage = result.FinishedSessions.Count switch {
 				0 => "Job marked complete.",
@@ -387,7 +402,10 @@ public sealed class AwaitingProgressModel(
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
-					Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() },
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
 					JobNodeId = new(jobNodeId),
 					WorkedByUserId = new(targetUserId),
 					StartedAt = startedAtInstant,
@@ -456,12 +474,17 @@ public sealed class AwaitingProgressModel(
 	{
 		CurrentActorId = actor;
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor, cancellationToken);
-		var context = new CommandContext { Actor = actor, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		RecallFilters();
 
 		var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-			new() { Context = context }, cancellationToken);
+			new() {
+				Context = context,
+			}, cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Everyone", string.Empty));
 		ActiveWorkerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Everyone", string.Empty));
@@ -472,7 +495,10 @@ public sealed class AwaitingProgressModel(
 		// node -- the header nav link, a hand-typed address -- scopes to it rather than to the entire
 		// tree.
 		var profile = await jobTrackClient.Query.GetEmployeeProfileAsync(
-			new() { Context = context, TargetUserId = actor }, cancellationToken);
+			new() {
+				Context = context,
+				TargetUserId = actor,
+			}, cancellationToken);
 		HomeNodeId = profile.HomeNodeId?.Value;
 		SubtreeRootId ??= HomeNodeId;
 
@@ -485,7 +511,10 @@ public sealed class AwaitingProgressModel(
 
 		try {
 			SubtreeRoot = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = context, NodeId = requestedNodeId }, cancellationToken);
+				new() {
+					Context = context,
+					NodeId = requestedNodeId,
+				}, cancellationToken);
 			SubtreeRootId = SubtreeRoot.Node.Id.Value;
 
 			var ownership = (UnassignedOnly, OwnerUserId) switch {
@@ -532,7 +561,10 @@ public sealed class AwaitingProgressModel(
 		}
 
 		try {
-			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() { Context = context, LeafWorkIds = [.. leafIds] },
+			var sessions = await jobTrackClient.Query.GetActiveSessionsAsync(new() {
+				Context = context,
+				LeafWorkIds = [.. leafIds],
+			},
 				cancellationToken);
 
 			ActiveSessionsByLeaf = ActiveSessionGrouping.Group(sessions);
@@ -542,7 +574,10 @@ public sealed class AwaitingProgressModel(
 		}
 
 		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
-			new() { Context = context, LeafWorkIds = [.. leafIds] }, cancellationToken);
+			new() {
+				Context = context,
+				LeafWorkIds = [.. leafIds],
+			}, cancellationToken);
 		CanManageByLeaf = capabilities.ToDictionary(c => c.LeafWorkId, c => c.CanManage);
 	}
 }

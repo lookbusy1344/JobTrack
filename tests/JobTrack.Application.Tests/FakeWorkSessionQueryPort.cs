@@ -40,11 +40,14 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 		}
 
 		var ordered = matching
-			.OrderByDescending(s => s.StartedAt).ThenByDescending(s => s.Id.Value)
-			.Skip(offset);
+					  .OrderByDescending(s => s.StartedAt).ThenByDescending(s => s.Id.Value)
+					  .Skip(offset);
 		var sessions = limit.HasValue ? ordered.Take(limit.Value) : ordered;
 
-		return Task.FromResult(new WorkSessionQueryResult { ActorRoles = actorRoles, Sessions = [.. sessions] });
+		return Task.FromResult(new WorkSessionQueryResult {
+			ActorRoles = actorRoles,
+			Sessions = [.. sessions],
+		});
 	}
 
 	public Task<WorkSessionQueryResult> GetActiveSessionsAsync(
@@ -56,12 +59,15 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 
 		var leafWorkIdSet = leafWorkIds.ToHashSet();
 		var sessions = _sessions
-			.Where(kvp => leafWorkIdSet.Contains(kvp.Key.LeafWorkId))
-			.SelectMany(kvp => kvp.Value)
-			.Where(s => s.FinishedAt is null)
-			.ToArray();
+					   .Where(kvp => leafWorkIdSet.Contains(kvp.Key.LeafWorkId))
+					   .SelectMany(kvp => kvp.Value)
+					   .Where(s => s.FinishedAt is null)
+					   .ToArray();
 
-		return Task.FromResult(new WorkSessionQueryResult { ActorRoles = actorRoles, Sessions = [.. sessions] });
+		return Task.FromResult(new WorkSessionQueryResult {
+			ActorRoles = actorRoles,
+			Sessions = [.. sessions],
+		});
 	}
 
 	public Task<WorkSessionManageCapabilityQueryResult> GetManageCapabilitiesAsync(
@@ -73,7 +79,10 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 
 		var controlled = leafWorkIds.Where(id => _controlled.Contains((actorId, id))).ToArray();
 
-		return Task.FromResult(new WorkSessionManageCapabilityQueryResult { ActorRoles = actorRoles, ControlledLeafWorkIds = [.. controlled] });
+		return Task.FromResult(new WorkSessionManageCapabilityQueryResult {
+			ActorRoles = actorRoles,
+			ControlledLeafWorkIds = [.. controlled],
+		});
 	}
 
 	public Task<ConcurrentWorkQueryResult> GetConcurrentSessionsAsync(
@@ -82,19 +91,19 @@ internal sealed class FakeWorkSessionQueryPort : IWorkSessionQueryPort
 	{
 		var all = _sessions.SelectMany(entry => entry.Value).ToList();
 		var subject = all.Where(session => session.LeafWorkId == nodeId)
-			.OrderByDescending(session => session.StartedAt)
-			.Take(maxSubjectSessionCount)
-			.Select(session => ToConcurrentSession(session, asOf))
-			.ToList();
+						 .OrderByDescending(session => session.StartedAt)
+						 .Take(maxSubjectSessionCount)
+						 .Select(session => ToConcurrentSession(session, asOf))
+						 .ToList();
 		var subjectWorkers = subject.Select(session => session.WorkedByUserId).ToHashSet();
 
 		var concurrent = all.Where(session => session.LeafWorkId != nodeId && subjectWorkers.Contains(session.WorkedByUserId))
-			.Select(session => ToConcurrentSession(session, asOf))
-			.Where(candidate => subject.Any(s => s.WorkedByUserId == candidate.WorkedByUserId
-												 && IntervalAlgebra.Overlaps(s.Interval, candidate.Interval)))
-			.OrderByDescending(session => session.Interval.Start)
-			.Take(maxConcurrentSessionCount)
-			.ToList();
+							.Select(session => ToConcurrentSession(session, asOf))
+							.Where(candidate => subject.Any(s => s.WorkedByUserId == candidate.WorkedByUserId
+																 && IntervalAlgebra.Overlaps(s.Interval, candidate.Interval)))
+							.OrderByDescending(session => session.Interval.Start)
+							.Take(maxConcurrentSessionCount)
+							.ToList();
 
 		return Task.FromResult(new ConcurrentWorkQueryResult {
 			SubjectSessions = [.. subject],

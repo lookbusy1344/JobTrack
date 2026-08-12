@@ -38,7 +38,7 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
 		var target = await context.Set<AppUserEntity>().AsNoTracking()
-						 .FirstOrDefaultAsync(u => u.Id == targetUserId, cancellationToken).ConfigureAwait(false)
+								  .FirstOrDefaultAsync(u => u.Id == targetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {targetUserId} does not exist.");
 
 		return new() {
@@ -60,18 +60,27 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 		await using var context = provider.CreateContext();
 
 		var rows = await (
-			from iu in context.Set<IdentityUserEntity>().AsNoTracking()
-			join ur in context.Set<IdentityUserRoleEntity>().AsNoTracking() on iu.Id equals ur.IdentityUserId
-			join au in context.Set<AppUserEntity>().AsNoTracking() on iu.AppUserId equals au.Id
-			where iu.IsEnabled
-				  && WorkflowRoleIds.Contains(ur.IdentityRoleId)
-				  && !context.Set<IdentityUserRoleEntity>().Any(requesterRole => requesterRole.IdentityUserId == iu.Id
-																				 && requesterRole.IdentityRoleId == (short)EmployeeRole.Requester)
-			select new { au.Id, au.DisplayName, iu.UserName }
-		).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+				from iu in context.Set<IdentityUserEntity>().AsNoTracking()
+				join ur in context.Set<IdentityUserRoleEntity>().AsNoTracking() on iu.Id equals ur.IdentityUserId
+				join au in context.Set<AppUserEntity>().AsNoTracking() on iu.AppUserId equals au.Id
+				where iu.IsEnabled
+					  && WorkflowRoleIds.Contains(ur.IdentityRoleId)
+					  && !context.Set<IdentityUserRoleEntity>().Any(requesterRole => requesterRole.IdentityUserId == iu.Id
+																					 && requesterRole.IdentityRoleId == (short)EmployeeRole.Requester)
+				select new
+				{
+					au.Id,
+					au.DisplayName,
+					iu.UserName,
+				}
+			).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return EquatableArray.CopyOf(
-			rows.Select(row => new EmployeeDirectoryEntry { Id = row.Id, DisplayName = row.DisplayName, UserName = row.UserName })
+			rows.Select(row => new EmployeeDirectoryEntry {
+				Id = row.Id,
+				DisplayName = row.DisplayName,
+				UserName = row.UserName,
+			})
 				.OrderBy(entry => entry.DisplayName, StringComparer.Ordinal));
 	}
 
@@ -81,13 +90,22 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 		await using var context = provider.CreateContext();
 
 		var rows = await (
-			from iu in context.Set<IdentityUserEntity>().AsNoTracking()
-			join au in context.Set<AppUserEntity>().AsNoTracking() on iu.AppUserId equals au.Id
-			select new { au.Id, au.DisplayName, iu.UserName }
-		).ToListAsync(cancellationToken).ConfigureAwait(false);
+				from iu in context.Set<IdentityUserEntity>().AsNoTracking()
+				join au in context.Set<AppUserEntity>().AsNoTracking() on iu.AppUserId equals au.Id
+				select new
+				{
+					au.Id,
+					au.DisplayName,
+					iu.UserName,
+				}
+			).ToListAsync(cancellationToken).ConfigureAwait(false);
 
 		return EquatableArray.CopyOf(
-			rows.Select(row => new EmployeeDirectoryEntry { Id = row.Id, DisplayName = row.DisplayName, UserName = row.UserName })
+			rows.Select(row => new EmployeeDirectoryEntry {
+				Id = row.Id,
+				DisplayName = row.DisplayName,
+				UserName = row.UserName,
+			})
 				.OrderBy(entry => entry.DisplayName, StringComparer.Ordinal));
 	}
 
@@ -100,7 +118,7 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
 		var target = await context.Set<IdentityUserEntity>().AsNoTracking()
-						 .FirstOrDefaultAsync(iu => iu.AppUserId == targetUserId, cancellationToken).ConfigureAwait(false)
+								  .FirstOrDefaultAsync(iu => iu.AppUserId == targetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {targetUserId} does not exist.");
 
 		var targetRoles = await GetRolesForIdentityUserAsync(context, target.Id, cancellationToken).ConfigureAwait(false);
@@ -122,7 +140,7 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 		DbContext context, AppUserId actorId, CancellationToken cancellationToken)
 	{
 		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
 								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
 
@@ -133,9 +151,9 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 		DbContext context, long identityUserId, CancellationToken cancellationToken)
 	{
 		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == identityUserId)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
+								 .Where(ur => ur.IdentityUserId == identityUserId)
+								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
+								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
 
 		return [.. roles];
 	}

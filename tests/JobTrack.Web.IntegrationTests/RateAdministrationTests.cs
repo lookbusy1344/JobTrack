@@ -6,17 +6,11 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for employee rate administration (plan §8.5 slice 7, spec §9): adding a user
@@ -52,7 +46,10 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		rootJobNodeId = bootstrap.RootJobNodeId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -70,7 +67,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task An_administrator_can_add_a_user_cost_rate_and_a_node_rate_override()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.worker");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.admin", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("rates.admin", KnownPassword);
 
@@ -95,7 +92,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_rate_manager_can_add_a_rate_but_cannot_view_existing_rates()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.target");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.manager", EmployeeRole.RateManager);
 		var authCookie = await SignInAsync("rates.manager", KnownPassword);
 
@@ -114,7 +111,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_worker_cannot_open_rate_administration()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.self", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.self");
 		var authCookie = await SignInAsync("rates.self", KnownPassword);
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Admin/Rates?userId={workerId.Value}");
@@ -128,7 +125,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_cost_viewer_can_view_rates_but_cannot_see_write_controls()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.viewed", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.viewed");
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
@@ -154,7 +151,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task An_administrator_can_correct_a_user_cost_rate()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-target");
 		var added = await seedClient.Rates.AddUserCostRateAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
@@ -174,7 +171,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task An_administrator_can_correct_a_node_rate_override()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-override-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-override-target");
 		var added = await seedClient.Rates.AddNodeRateOverrideAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
@@ -202,7 +199,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	public async Task The_correct_user_cost_rate_form_prefills_in_the_actors_zone_and_rejects_a_malformed_resubmission()
 	{
 		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-zoned-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-zoned-target");
 		var stored = CivilTimeResolver.ToInstant(new(2026, 1, 1, 9, 0, 0), newYork);
 		var added = await seedClient.Rates.AddUserCostRateAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
@@ -224,7 +221,10 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		body.Should().Contain("Enter a valid date and time.");
 
 		var snapshot = await seedClient.Query.GetRatesAsync(
-			new() { Context = await CreateContextForAsync("admin.rate-tests"), UserId = workerId }, CancellationToken.None);
+			new() {
+				Context = await CreateContextForAsync("admin.rate-tests"),
+				UserId = workerId,
+			}, CancellationToken.None);
 		snapshot.UserCostRates.Single().Rate.EffectiveStart.Should().Be(stored);
 	}
 
@@ -232,7 +232,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_malformed_EffectiveStart_on_add_user_cost_rate_is_rejected_without_adding_the_rate()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.malformed-effective", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.malformed-effective");
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.malformed-admin", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("rates.malformed-admin", KnownPassword);
 
@@ -255,7 +255,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	public async Task EffectiveStart_is_resolved_in_the_acting_administrators_own_zone_not_the_server_process_zone()
 	{
 		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.zoned-effective", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.zoned-effective");
 		var administratorId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.zoned-admin", EmployeeRole.Administrator, "America/New_York");
 		var authCookie = await SignInAsync("rates.zoned-admin", KnownPassword);
 
@@ -264,7 +264,13 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
 		var snapshot = await seedClient.Query.GetRatesAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, UserId = workerId }, CancellationToken.None);
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				UserId = workerId,
+			}, CancellationToken.None);
 
 		snapshot.UserCostRates.Single().Rate.EffectiveStart.Should().Be(CivilTimeResolver.ToInstant(new(2026, 6, 15, 9, 0, 0), newYork));
 	}
@@ -380,7 +386,10 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		var appUserId = (long?)await command.ExecuteScalarAsync()
 						?? throw new InvalidOperationException($"User '{userName}' was not found.");
 
-		return new() { Actor = new(appUserId), CorrelationId = Guid.NewGuid() };
+		return new() {
+			Actor = new(appUserId),
+			CorrelationId = Guid.NewGuid(),
+		};
 	}
 
 
@@ -411,13 +420,6 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-
-
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
-
-
-
-
-
 }

@@ -40,7 +40,7 @@ internal static class ImportHomeNodeAssignment
 		// An imported node always has a parent, so "childless" is exactly "leaf" here -- the Root case
 		// JobNodeStructuralResults.DeriveKind also handles cannot arise inside an imported subtree.
 		if (!await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(child => child.ParentId == homeNodeId, cancellationToken).ConfigureAwait(false)) {
+						  .AnyAsync(child => child.ParentId == homeNodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"home-node-must-not-be-leaf", $"Job node {homeNodeId} is a leaf and cannot be set as a home node.");
 		}
@@ -57,7 +57,7 @@ internal static class ImportHomeNodeAssignment
 			}
 
 			var user = await context.Set<AppUserEntity>()
-						   .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)
+									.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken).ConfigureAwait(false)
 					   ?? throw new EntityNotFoundException($"Employee {userId} does not exist.");
 			users.Add(user);
 		}
@@ -69,8 +69,12 @@ internal static class ImportHomeNodeAssignment
 
 			AuditEventWriter.Add(
 				context, actorId, now, Operation, "app_user", userId.Value, correlationId, null,
-				new Dictionary<string, string?> { ["home_node_id"] = previousHomeNodeId?.Value.ToString(CultureInfo.InvariantCulture) },
-				new Dictionary<string, string?> { ["home_node_id"] = homeNodeId.Value.ToString(CultureInfo.InvariantCulture) });
+				new Dictionary<string, string?> {
+					["home_node_id"] = previousHomeNodeId?.Value.ToString(CultureInfo.InvariantCulture),
+				},
+				new Dictionary<string, string?> {
+					["home_node_id"] = homeNodeId.Value.ToString(CultureInfo.InvariantCulture),
+				});
 		}
 	}
 }

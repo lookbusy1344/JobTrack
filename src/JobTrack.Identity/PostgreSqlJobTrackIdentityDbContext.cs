@@ -16,9 +16,7 @@ using Microsoft.EntityFrameworkCore;
 public sealed class PostgreSqlJobTrackIdentityDbContext : JobTrackIdentityDbContext, IDataProtectionKeyContext
 {
 	public PostgreSqlJobTrackIdentityDbContext(DbContextOptions<PostgreSqlJobTrackIdentityDbContext> options)
-		: base(options)
-	{
-	}
+		: base(options) { }
 
 	public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

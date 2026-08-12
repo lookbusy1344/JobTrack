@@ -63,7 +63,9 @@ public static class PerformanceScaleGenerator
 	public static async Task<NpgsqlConnection> OpenConnectionForSeedingAsync(string connectionString)
 	{
 		var seedingConnectionString =
-			new NpgsqlConnectionStringBuilder(connectionString) { CommandTimeout = SeedCommandTimeoutSeconds }.ConnectionString;
+			new NpgsqlConnectionStringBuilder(connectionString) {
+				CommandTimeout = SeedCommandTimeoutSeconds,
+			}.ConnectionString;
 		var connection = new NpgsqlConnection(seedingConnectionString);
 		await connection.OpenAsync();
 		return connection;
@@ -201,7 +203,9 @@ public static class PerformanceScaleGenerator
 		// Levels 1-5 are branches; each level's branching factor is chosen
 		// so level 6 (the bulk of the tree) lands close to 180,000 leaves.
 		int[] branchingFactors = [10, 5, 6, 7, 7];
-		var previousLevelIds = new[] { rootId };
+		var previousLevelIds = new[] {
+			rootId,
+		};
 
 		foreach (var branchingFactor in branchingFactors) {
 			previousLevelIds = await InsertLevelAsync(connection, previousLevelIds, branchingFactor, ownerUserId);
@@ -465,7 +469,7 @@ public static class PerformanceScaleGenerator
 	///     one representative user's id.
 	/// </summary>
 	public static async Task<long> SeedManyUsersAsync(NpgsqlConnection connection, DateTimeOffset timelineStart, int userCount = 2_000,
-		int ratesPerUser = 10)
+													  int ratesPerUser = 10)
 	{
 		await using var usersCommand = connection.CreateCommand();
 		usersCommand.CommandText = """
@@ -788,7 +792,7 @@ public static class PerformanceScaleGenerator
 	///     least one rate-boundary split inside every worker's sessions (plan §4).
 	/// </summary>
 	private static async Task InsertRateTimelineAsync(NpgsqlConnection connection, long[] workerIds, DateTimeOffset windowStart,
-		DateTimeOffset windowEnd)
+													  DateTimeOffset windowEnd)
 	{
 		var span = windowEnd - windowStart;
 		var edge1 = windowStart + TimeSpan.FromTicks(span.Ticks / 3);
@@ -811,7 +815,7 @@ public static class PerformanceScaleGenerator
 		command.Parameters.AddWithValue("edge2", edge2);
 		command.Parameters.AddWithValue("rate1", OverlapDefaultHourlyRate);
 		command.Parameters.AddWithValue("rate2", OverlapDefaultHourlyRate + OverlapRateEdgeStep);
-		command.Parameters.AddWithValue("rate3", OverlapDefaultHourlyRate + (OverlapRateEdgeStep * 2));
+		command.Parameters.AddWithValue("rate3", OverlapDefaultHourlyRate + OverlapRateEdgeStep * 2);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 

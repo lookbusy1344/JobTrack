@@ -15,5 +15,5 @@ internal sealed class PostgreSqlPrerequisiteOperations(NpgsqlDataSource dataSour
 	public async Task<bool> HasActiveDependentWorkAsync(
 		DbContext context, JobNodeId requiredJobId, CancellationToken cancellationToken) =>
 		await PrerequisiteReadinessSerialization.HasActiveDependentWorkAsync(context, requiredJobId, cancellationToken)
-			.ConfigureAwait(false);
+												.ConfigureAwait(false);
 }

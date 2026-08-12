@@ -59,7 +59,10 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 		await DeploySchemaAsync();
 		var sut = CreatePort(database.ConnectionString);
 
-		await sut.RecordAsync(new() { Kind = AuthenticationAuditEventKind.LoginFailed, CorrelationId = Guid.NewGuid() });
+		await sut.RecordAsync(new() {
+			Kind = AuthenticationAuditEventKind.LoginFailed,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		var row = await SingleAuditRowAsync();
 		row.ActorUserId.Should().BeNull();
@@ -80,7 +83,10 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 		var (collidingActorId, _) = await SeedAppUserAsync(LegacySystemActorDisplayName);
 		var sut = CreatePort(database.ConnectionString);
 
-		await sut.RecordAsync(new() { Kind = AuthenticationAuditEventKind.LoginFailed, CorrelationId = Guid.NewGuid() });
+		await sut.RecordAsync(new() {
+			Kind = AuthenticationAuditEventKind.LoginFailed,
+			CorrelationId = Guid.NewGuid(),
+		});
 
 		var row = await SingleAuditRowAsync();
 		row.ActorUserId.Should().NotBe(collidingActorId.Value);

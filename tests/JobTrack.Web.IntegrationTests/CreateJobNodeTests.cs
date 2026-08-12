@@ -6,17 +6,10 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Database;
 using Domain.Schedules;
-using Identity;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using NodaTime;
 using Persistence.Sqlite;
 using TestSupport;
-using Program = Program;
 
 /// <summary>
 ///     Direct-HTTP tests for the job-node create workflow (plan §8.5 slice 3).
@@ -54,7 +47,10 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 		administratorId = bootstrapResult.AdministratorId;
 
 		factory = new(database.ConnectionString);
-		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+		client = factory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
 	}
 
 	public async Task DisposeAsync()
@@ -132,7 +128,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_who_does_not_own_the_parent_is_denied_on_save()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.denied-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.denied-worker");
 		var authCookie = await client.SignInAsync("create.denied-worker");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
@@ -145,9 +141,12 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_who_owns_the_parent_can_create_a_child_under_it()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.owning-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.owning-worker");
 		var branchResult = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Worker-owned branch",
 			OwnerUserId = workerId,
@@ -197,14 +196,20 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	{
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.worked-parent-manager", EmployeeRole.JobManager);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootId,
 			Description = "Worked parent",
 			OwnerUserId = managerId,
 			Priority = Priority.Medium,
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
-			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = managerId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = leaf.Id,
 		});
 		var authCookie = await client.SignInAsync("create.worked-parent-manager");
@@ -277,7 +282,10 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task Beginning_work_on_a_child_of_a_blocked_parent_shows_an_error_and_creates_nothing()
 	{
 		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.begin-work-blocked", EmployeeRole.JobManager);
-		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = administratorId,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var required = await seedClient.Jobs.AddChildAsync(new() {
 			Context = context,
 			ParentId = rootId,
@@ -293,7 +301,10 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 			Priority = Priority.Medium,
 		});
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			RequiredJobId = required.Id,
 			DependentJobId = anchor.Id,
 		});
@@ -307,7 +318,13 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("prerequisites are not satisfied");
 
 		var children = await seedClient.Query.GetJobChildrenAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, ParentId = anchor.Id },
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				ParentId = anchor.Id,
+			},
 			CancellationToken.None);
 		children.Should().BeEmpty();
 	}
@@ -331,7 +348,13 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 	private async Task<LeafWorkPageResult> GetLeafWorkPageAsync(JobNodeId nodeId) =>
 		await seedClient.Query.GetLeafWorkPageAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, JobNodeId = nodeId },
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				JobNodeId = nodeId,
+			},
 			CancellationToken.None);
 
 	/// <summary>
@@ -403,12 +426,24 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	private async Task<JobNodeResult> FindChildNodeAsync(JobNodeId parentId, string description)
 	{
 		var children = await seedClient.Query.GetJobChildrenAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, ParentId = parentId },
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				ParentId = parentId,
+			},
 			CancellationToken.None);
 		var summary = children.Single(child => child.Description == description);
 
 		var detail = await seedClient.Query.GetJobNodeAsync(
-			new() { Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() }, NodeId = summary.Id },
+			new() {
+				Context = new() {
+					Actor = administratorId,
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = summary.Id,
+			},
 			CancellationToken.None);
 
 		return detail.Node;
@@ -464,9 +499,4 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"Input.BeginWorkForUserId\">(?<options>.*?)</select>", RegexOptions.Singleline)]
 	private static partial Regex BeginWorkSelectPattern();
-
-
-
-
-
 }

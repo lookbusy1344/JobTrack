@@ -20,8 +20,8 @@ public sealed class MutableConstantTableArchitectureTests
 	public void Repository_sources_have_no_mutable_static_readonly_constant_table()
 	{
 		var violations = SourceFiles()
-			.SelectMany(static file => MutableConstantTableGuard.FindViolations(file, File.ReadAllText(file)))
-			.ToArray();
+						 .SelectMany(static file => MutableConstantTableGuard.FindViolations(file, File.ReadAllText(file)))
+						 .ToArray();
 
 		violations.Should().BeEmpty(
 			"a mutable static readonly array or collection leaves a constant table's elements writable -- use " +
@@ -74,7 +74,7 @@ public sealed class MutableConstantTableArchitectureTests
 		foreach (var top in (string[])["src", "tests", "samples"]) {
 			var directory = Path.Combine(solutionRoot, top);
 			foreach (var file in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
-						 .Where(static file => !IsGeneratedOutput(file))) {
+										  .Where(static file => !IsGeneratedOutput(file))) {
 				yield return file;
 			}
 		}
@@ -108,11 +108,11 @@ internal static class MutableConstantTableGuard
 	{
 		var root = CSharpSyntaxTree.ParseText(source).GetRoot();
 		return root.DescendantNodes()
-			.OfType<FieldDeclarationSyntax>()
-			.Where(IsStaticReadonly)
-			.Where(IsMutableTableType)
-			.Where(field => !IsReviewedPrivateBackingStore(fileName, field))
-			.Select(field => Describe(fileName, field.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+				   .OfType<FieldDeclarationSyntax>()
+				   .Where(IsStaticReadonly)
+				   .Where(IsMutableTableType)
+				   .Where(field => !IsReviewedPrivateBackingStore(fileName, field))
+				   .Select(field => Describe(fileName, field.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
 	}
 
 	private static bool IsStaticReadonly(FieldDeclarationSyntax field) =>
@@ -125,9 +125,9 @@ internal static class MutableConstantTableGuard
 		}
 
 		var genericType = field.Declaration.Type
-			.DescendantNodesAndSelf()
-			.OfType<GenericNameSyntax>()
-			.LastOrDefault();
+							   .DescendantNodesAndSelf()
+							   .OfType<GenericNameSyntax>()
+							   .LastOrDefault();
 		return genericType is not null && MutableCollectionTypeNames.Contains(genericType.Identifier.ValueText);
 	}
 

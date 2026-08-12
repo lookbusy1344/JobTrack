@@ -119,7 +119,9 @@ public sealed class SqliteHierarchyAchievementReadinessQueriesSchemaTests()
 
 	protected override async Task<IReadOnlyList<UnsatisfiedPrerequisite>> UnsatisfiedPrerequisitesAsync(DbConnection connection, long nodeId)
 	{
-		var declaringNodeIds = new List<long> { nodeId };
+		var declaringNodeIds = new List<long> {
+			nodeId,
+		};
 		declaringNodeIds.AddRange(await AncestorsAsync(connection, nodeId));
 
 		var results = new List<UnsatisfiedPrerequisite>();

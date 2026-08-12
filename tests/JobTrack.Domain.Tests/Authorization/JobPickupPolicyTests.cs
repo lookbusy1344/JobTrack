@@ -19,7 +19,7 @@ public sealed class JobPickupPolicyTests
 	public void Nobody_may_pick_up_an_already_owned_node()
 	{
 		JobPickupPolicy.CanPickUp([EmployeeRole.Worker, EmployeeRole.JobManager, EmployeeRole.Administrator], false)
-			.Should().BeFalse();
+					   .Should().BeFalse();
 	}
 
 	[Theory]

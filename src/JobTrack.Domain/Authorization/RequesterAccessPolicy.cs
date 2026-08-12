@@ -37,10 +37,10 @@ public static class RequesterAccessPolicy
 		ArgumentNullException.ThrowIfNull(facts);
 
 		return facts.ActorIsRequestOwner
-			   || (facts.IsDepartmentVisibilityEnabled && actorRoles.Contains(EmployeeRole.Requester) && facts.ActorSharesRequestDepartment)
+			   || facts.IsDepartmentVisibilityEnabled && actorRoles.Contains(EmployeeRole.Requester) && facts.ActorSharesRequestDepartment
 			   || actorRoles.Contains(EmployeeRole.Administrator)
 			   || actorRoles.Contains(EmployeeRole.JobManager)
-			   || (actorRoles.Contains(EmployeeRole.Worker) && facts.ActorControlsAnchorNode);
+			   || actorRoles.Contains(EmployeeRole.Worker) && facts.ActorControlsAnchorNode;
 	}
 
 	/// <summary>

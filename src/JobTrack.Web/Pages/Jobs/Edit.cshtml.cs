@@ -104,7 +104,10 @@ public sealed class EditModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 		var request = new EditJobNodeRequest {
 			Context = context,
 			NodeId = new(NodeId),
@@ -121,7 +124,10 @@ public sealed class EditModel(
 
 		try {
 			_ = await jobTrackClient.Jobs.EditAsync(request, cancellationToken);
-			return RedirectToPage("/Jobs/Browse", new { nodeId = NodeId });
+			return RedirectToPage("/Jobs/Browse", new
+			{
+				nodeId = NodeId,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -149,7 +155,13 @@ public sealed class EditModel(
 	{
 		try {
 			CurrentNode = await jobTrackClient.Query.GetJobNodeAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, NodeId = new JobNodeId(NodeId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					NodeId = new JobNodeId(NodeId),
+				}, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
@@ -159,7 +171,12 @@ public sealed class EditModel(
 	private async Task LoadOwnerOptionsAsync(AppUserId actor, CancellationToken cancellationToken)
 	{
 		var directory = await jobTrackClient.Query.GetEmployeeDirectoryAsync(
-			new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } },
+			new() {
+				Context = new() {
+					Actor = actor,
+					CorrelationId = Guid.NewGuid(),
+				},
+			},
 			cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Unassigned", string.Empty));

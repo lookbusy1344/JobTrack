@@ -71,7 +71,10 @@ public sealed class CorrectExceptionModel(
 			return Page();
 		}
 
-		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
 
 		try {
 			var entry = new ScheduleExceptionEntry(
@@ -88,7 +91,10 @@ public sealed class CorrectExceptionModel(
 				Entry = entry,
 			}, cancellationToken);
 
-			return RedirectToPage("/Rota/Index", new { userId = UserId });
+			return RedirectToPage("/Rota/Index", new
+			{
+				userId = UserId,
+			});
 		}
 		catch (AuthorizationDeniedException) {
 			return Forbid();
@@ -115,7 +121,13 @@ public sealed class CorrectExceptionModel(
 	{
 		try {
 			var snapshot = await jobTrackClient.Query.GetScheduleAsync(
-				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() }, UserId = new(UserId) }, cancellationToken);
+				new() {
+					Context = new() {
+						Actor = actor,
+						CorrelationId = Guid.NewGuid(),
+					},
+					UserId = new(UserId),
+				}, cancellationToken);
 
 			Exception = snapshot.Exceptions.FirstOrDefault(e => e.Id == new ScheduleExceptionId(ExceptionId));
 			if (Exception is null) {

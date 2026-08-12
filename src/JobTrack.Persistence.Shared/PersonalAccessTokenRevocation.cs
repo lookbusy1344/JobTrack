@@ -20,7 +20,7 @@ internal static class PersonalAccessTokenRevocation
 		ArgumentNullException.ThrowIfNull(context);
 
 		return context.Set<PersonalAccessTokenEntity>()
-			.Where(token => token.AppUserId == userId && token.RevokedAt == null)
-			.ExecuteUpdateAsync(setters => setters.SetProperty(token => token.RevokedAt, now), cancellationToken);
+					  .Where(token => token.AppUserId == userId && token.RevokedAt == null)
+					  .ExecuteUpdateAsync(setters => setters.SetProperty(token => token.RevokedAt, now), cancellationToken);
 	}
 }

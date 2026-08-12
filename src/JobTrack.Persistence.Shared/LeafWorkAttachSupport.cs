@@ -31,7 +31,7 @@ internal static class LeafWorkAttachSupport
 		}
 
 		if (await context.Set<JobNodeEntity>().AsNoTracking()
-				.AnyAsync(c => c.ParentId == node.Id, cancellationToken).ConfigureAwait(false)) {
+						 .AnyAsync(c => c.ParentId == node.Id, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
 				"job-node-has-children-cannot-attach-leaf-work", "A node with children cannot hold LeafWork.");
 		}

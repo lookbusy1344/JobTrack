@@ -20,7 +20,9 @@ public sealed class TrustedProxyProductionSecuritySmokeTests : IClassFixture<Tru
 	[Fact]
 	public async Task Https_responses_include_the_hsts_header()
 	{
-		using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+		using var handler = new HttpClientHandler {
+			ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+		};
 		using var client = new HttpClient(handler);
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"{fixture.HttpsBaseAddress}/Account/Login");
 		// HstsMiddleware's default ExcludedHosts skips "localhost"/"127.0.0.1"/"::1" -- a deliberate
@@ -38,7 +40,9 @@ public sealed class TrustedProxyProductionSecuritySmokeTests : IClassFixture<Tru
 	[Fact]
 	public async Task A_forwarded_proto_from_a_trusted_proxy_is_honored_and_skips_https_redirection()
 	{
-		using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+		using var handler = new HttpClientHandler {
+			AllowAutoRedirect = false,
+		};
 		using var client = new HttpClient(handler);
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"{fixture.HttpBaseAddress}/Account/Login");
 		request.Headers.Add("X-Forwarded-Proto", "https");
@@ -53,7 +57,9 @@ public sealed class TrustedProxyProductionSecuritySmokeTests : IClassFixture<Tru
 	[Fact]
 	public async Task An_oversized_chunked_request_body_without_a_content_length_header_is_rejected()
 	{
-		using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+		using var handler = new HttpClientHandler {
+			ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+		};
 		using var client = new HttpClient(handler);
 		using var request = new HttpRequestMessage(HttpMethod.Post, $"{fixture.HttpsBaseAddress}/Account/Login");
 		request.Headers.TransferEncodingChunked = true;
@@ -81,8 +87,12 @@ public sealed class TrustedProxyProductionSecuritySmokeTests : IClassFixture<Tru
 		// content trickles one byte per second (1 byte/s, far under Kestrel's configured 240
 		// bytes/s MinRequestBodyDataRate) so a write fails as soon as the server actually closes the
 		// connection, and the elapsed time genuinely reflects when that happened.
-		using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
-		using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(90) };
+		using var handler = new HttpClientHandler {
+			ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+		};
+		using var client = new HttpClient(handler) {
+			Timeout = TimeSpan.FromSeconds(90),
+		};
 		using var request = new HttpRequestMessage(HttpMethod.Post, $"{fixture.HttpsBaseAddress}/Account/Login");
 		request.Headers.TransferEncodingChunked = true;
 		request.Content = new SlowTricklingFormContent(TimeSpan.FromSeconds(75));
@@ -105,7 +115,7 @@ public sealed class TrustedProxyProductionSecuritySmokeTests : IClassFixture<Tru
 	private sealed class OversizedFormContent : HttpContent
 	{
 		// One byte over Program.cs's 64KB MaxRequestBodyBytes.
-		private const int OversizedByteCount = (64 * 1024) + 1;
+		private const int OversizedByteCount = 64 * 1024 + 1;
 
 		public OversizedFormContent() => Headers.ContentType = new("application/x-www-form-urlencoded");
 
@@ -177,7 +187,9 @@ public sealed class UntrustedProxyProductionSecuritySmokeTests : IClassFixture<U
 	[Fact]
 	public async Task A_forwarded_proto_from_an_untrusted_proxy_is_ignored_and_https_redirection_still_applies()
 	{
-		using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+		using var handler = new HttpClientHandler {
+			AllowAutoRedirect = false,
+		};
 		using var client = new HttpClient(handler);
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"{fixture.HttpBaseAddress}/Account/Login");
 		request.Headers.Add("X-Forwarded-Proto", "https");
