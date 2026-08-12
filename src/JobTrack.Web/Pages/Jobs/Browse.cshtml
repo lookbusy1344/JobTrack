@@ -207,7 +207,8 @@
 						                                        ViewerZone = Model.ViewerZone,
 						                                        Now = Model.Now,
 						                                        Compact = false,
-						                                        Closed = toolbarActions.IsStartClosed,
+						                                        Archived = Model.CurrentNode.Node.ArchivedAt is not null,
+						                                        Achievement = Model.CurrentNodeAchievement,
 						                                        Paused = toolbarActions.IsPaused,
 					                                        })"/>
 				</dd>
@@ -486,10 +487,6 @@
 						<td class="col-8 col-md-4 col-lg-3">
 							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
 							   asp-route-nodeId="@child.Id.Value">@JobNodeDisplay.Title(child, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
-							<partial name="_AchievementIcon"
-							         model="@(new AchievementIconModel {
-								                Achievement = child.Achievement, ShowLabel = false,
-							                })"/>
 							@if (child.HasChildren) {
 								<span class="jt-muted"> · has children</span>
 							}
@@ -520,7 +517,8 @@
 								                DescribeWorker = id => Model.DescribeOwner(id),
 								                ViewerZone = Model.ViewerZone,
 								                Now = Model.Now,
-								                Closed = childActions?.IsStartClosed ?? false,
+								                Archived = child.ArchivedAt is not null,
+								                Achievement = child.Achievement,
 								                Paused = childActions?.IsPaused ?? false,
 							                })"/>
 						</td>
@@ -553,20 +551,7 @@
 				<tr>
 					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
 					   archived row is flagged in place beside its name. *@
-					<th scope="col" class="col-9 col-md-5 col-lg-5 col-xxl-3">Description</th>
-					@* "Pri": the cells below hold an abbreviated priority label, so the word "Priority"
-					   is wider than anything in its own column and holds the column open for nothing.
-					   The full name still rides along visually hidden, so it is never announced as
-					   a bare fragment. *@
-					@* d-none d-xxl-table-cell, not the d-lg-table-cell every other secondary column gets:
-					   a node's priority is one tap away on its own page, and below xxl the twelfth it
-					   occupies is worth more to Description, which takes it (col-lg-4) until xxl hands it
-					   back (col-xxl-3). *@
-					@* The wrap inside the second tag puts a newline and tabs into the rendered attribute
-					   list — invisible on the page, but it splits what BrowseWorkSessionTests' markup
-					   assertions can read, so they check the heading in two contiguous pieces. *@
-					<th scope="col" class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell"><span aria-hidden="true">Pri</span><span
-							class="visually-hidden">Priority</span></th>
+					<th scope="col" class="col-9 col-md-7 col-lg-5">Description</th>
 					@* col-lg-1 at every breakpoint it appears: the cell holds "d MMM" (or "HH:mm" when the
 					   deadline is today), so a twelfth is already more than its content needs and the
 					   heading word itself is what actually sets the floor. Description takes the rest.
@@ -580,23 +565,14 @@
 					@* A wrap before </th> puts a newline and tabs inside the heading, which
 					   BrowseWorkSessionTests' single-string assertion cannot read. *@
 					@* @formatter:off *@
-					<th scope="col" class="jt-col-active col-1 col-md-2 col-lg-2" aria-label="Active"><span class="d-none d-md-inline">Active</span></th>
+					<th scope="col" class="jt-col-active col-1 col-md-1 col-lg-2" aria-label="Active"><span class="d-none d-lg-inline">Active</span></th>
 					@* @formatter:on *@
-					<th scope="col" class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
-					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
-					   the width of the bar it labels, so with it visible the column can never narrow to
-					   the bar's own size however small the bar gets. Assistive tech still gets the name.
-					   d-none/d-xxl-table-cell: the bar itself is low-value background context (site.css),
-					   so it only earns space back once the viewport is wide enough to spare it. *@
-					<th scope="col" class="jt-col-span col-xxl-1 d-none d-xxl-table-cell">
-						<span class="visually-hidden">Position</span>
-					</th>
+					<th scope="col" class="jt-col-cost col-md-2 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
 					<th scope="col" class="col-2 text-end">Actions</th>
 				</tr>
 				</thead>
 				<tbody>
 				@foreach (var node in Model.SubtreeDescendants) {
-					var (leftPct, widthPct) = Model.SubtreeSpanPercent(node);
 					var nodeActions = node.HasChildren
 						? null
 						: Model.WorkRowActionsFor(node.Id, "Start", "leafNodeId", node.Achievement, node.ArchivedAt is not null);
@@ -606,18 +582,15 @@
 						DescribeWorker = id => Model.DescribeOwner(id),
 						ViewerZone = Model.ViewerZone,
 						Now = Model.Now,
-						Closed = node.Kind switch {
-							         NodeKind.Root or NodeKind.Branch => node.BranchAchievement is BranchAchievement.Success,
-							         NodeKind.Leaf => nodeActions?.IsStartClosed ?? false,
-							         NodeKind.None => throw new InvalidOperationException("A displayed subtree node must have a structural kind."),
-							         _ => throw new ArgumentOutOfRangeException(nameof(node.Kind), node.Kind, null),
-						         },
+						Archived = node.ArchivedAt is not null,
+						Achievement = node.Achievement,
+						BranchAchievement = node.BranchAchievement,
 						Paused = nodeActions?.IsPaused ?? false,
 						UnacknowledgedRequest = node.Kind is NodeKind.Leaf && node.HasUnacknowledgedRequest,
 						Unstarted = node.Kind is NodeKind.Leaf && !node.HasSessionHistory,
 					};
 					<tr>
-						<td class="jt-tree-cell col-9 col-md-5 col-lg-5 col-xxl-3" data-jt-depth="@node.Depth">
+						<td class="jt-tree-cell col-9 col-md-7 col-lg-5" data-jt-depth="@node.Depth">
 							<span class="jt-tree-guide" aria-hidden="true">
 								@for (var railLevel = 1; railLevel < node.Depth; ++railLevel) {
 									<span class="jt-tree-rail"></span>
@@ -642,24 +615,8 @@
 								</svg>
 								<span class="jt-tree-text">
 									<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
-									<a class="jt-tree-name-link jt-preserve-whitespace" asp-page="/Jobs/Browse"
-									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>&#x2060;
-									@* Trails the name rather than leading it: unlike the blocked palm, an achievement
-									   is present on most leaves in a healthy tree, so it belongs where the eye lands
-									   after reading the row, not competing with the kind glyph for the leading slot.
-									   The zero-width word joiner above keeps the marker attached to the title's final
-									   word at every column width without adding visible spacing. *@
-									@if (node.BranchAchievement is BranchAchievement.Success) {
-										<partial name="_BranchAchievementIcon"
-										         model="@(new BranchAchievementIconModel {
-											                Achievement = BranchAchievement.Success, ShowLabel = false,
-										                })"/>
-									} else {
-										<partial name="_AchievementIcon"
-										         model="@(new AchievementIconModel {
-											                Achievement = node.Achievement, ShowLabel = false,
-										                })"/>
-									}
+									<a class="jt-tree-name-link jt-preserve-whitespace jt-description-link" asp-page="/Jobs/Browse"
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
 									@if (node.HasUnexpandedChildren) {
 										@* The name already links here; this only says the container holds more
 										   than is drawn, so it is a marker, not a second link to the same page. *@
@@ -677,42 +634,24 @@
 								</span>
 							</span>
 						</td>
-						<td class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell">
-							<partial name="_PriorityLabel" model="@(new PriorityLabelModel {
-								                                      Priority = node.Priority,
-							                                      })"/>
-						</td>
 						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
 							@if (needed is Instant neededInstant) {
 								<span
 									class="@(InstantDisplay.IsPast(neededInstant, Model.Now) && BrowseModel.SubtreeNodeIsOpen(node) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
 							}
 						</td>
-						<td class="jt-col-active col-1 col-md-2 col-lg-2">
-							<span class="d-md-none">
+						<td class="jt-col-active col-1 col-md-1 col-lg-2">
+							<span class="d-lg-none">
 								<partial name="_ActiveStatusIcon" model="activeSummary"/>
 							</span>
-							<span class="d-none d-md-inline">
+							<span class="d-none d-lg-inline">
 								<partial name="_ActiveSincePill" model="activeSummary"/>
 							</span>
 						</td>
-						<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">
+						<td class="jt-col-cost col-md-2 col-lg-2 text-end d-none d-md-table-cell">
 							@if (node.Cost is Money cost && node.AllocatedDuration is not null) {
 								@CostDisplay.FormatCell(cost, node.AllocatedDuration)
 							}
-						</td>
-						<td class="jt-col-span col-xxl-1 d-none d-xxl-table-cell">
-							@* Geometry as SVG presentation attributes, not a `style` attribute: the CSP is
-							   `style-src 'self'` with no `'unsafe-inline'`, so an inline style is dropped
-							   and the bar silently collapses to nothing. The viewBox is 100 wide, so the
-							   percentages map straight onto user units. *@
-							<span class="jt-tree-span-track" aria-hidden="true">
-								<svg class="jt-tree-span" viewBox="0 0 100 6" preserveAspectRatio="none" focusable="false">
-									<rect class="jt-tree-span-fill" y="0" height="6"
-									      x="@leftPct.ToString("0.##", CultureInfo.InvariantCulture)"
-									      width="@widthPct.ToString("0.##", CultureInfo.InvariantCulture)"/>
-								</svg>
-							</span>
 						</td>
 						<td class="col-2">
 							@if (nodeActions is not null) {

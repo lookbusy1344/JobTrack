@@ -6,6 +6,13 @@
 
     var STORAGE_KEY = "jobtrack.history.v1";
     var HISTORY_CAP = 20;
+    var DESCRIPTION_TRUNCATE_LENGTH = 30;
+
+    function truncateDescription(description) {
+        return description.length > DESCRIPTION_TRUNCATE_LENGTH
+            ? description.slice(0, DESCRIPTION_TRUNCATE_LENGTH)
+            : description;
+    }
 
     var missingNodeContainer = document.querySelector("[data-jt-missing-node-id]");
     if (missingNodeContainer) {
@@ -83,7 +90,7 @@
             var link = document.createElement("a");
             link.href = "/Jobs/Browse?nodeId=" + encodeURIComponent(entry.id);
             link.className = "jt-preserve-whitespace";
-            link.textContent = entry.description + " (ID " + entry.id + ")";
+            link.textContent = truncateDescription(entry.description) + " (ID " + entry.id + ")";
             listItem.appendChild(link);
             listElement.appendChild(listItem);
         });

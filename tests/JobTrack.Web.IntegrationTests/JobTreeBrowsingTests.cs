@@ -136,13 +136,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 	[Fact]
 	/// <summary>
-	/// The page's CSP is `style-src 'self'` with no `'unsafe-inline'`, so a `style` attribute is
-	/// dropped by the browser and whatever it positioned silently renders at zero size — which is
-	/// exactly what happened to the subtree span bar. Geometry that varies per row is therefore
-	/// carried by SVG presentation attributes, which the CSP does not police, and no page under
-	/// this host may reintroduce an inline style.
+	/// The legacy subtree-position indicator consumed a widest-only column without helping the job
+	/// workflow. It is absent at every width, and the page still carries no CSP-invalid inline style.
 	/// </summary>
-	public async Task The_subtree_span_bar_carries_its_geometry_without_an_inline_style_attribute()
+	public async Task The_subtree_omits_the_legacy_position_indicator()
 	{
 		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.span-bar");
 		var rootId = bootstrappedRootId!.Value;
@@ -155,7 +152,8 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().NotContain("style=\"", "the Content-Security-Policy drops inline styles");
-		body.Should().Contain("jt-tree-span-fill");
+		body.Should().NotContain("jt-tree-span");
+		body.Should().NotContain(">Position</span>");
 	}
 
 	[Fact]
@@ -189,14 +187,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	/// <summary>
-	/// A job's achievement reads as a glyph per row, drawn from one family of signs, so scanning a
-	/// subtree for what is done/underway/closed costs no reading. Cancelled and Unsuccessful share
-	/// one "closed unfinished" glyph, with the specific word carried by the accessible label. A leaf
-	/// with no leaf work attached carries no glyph at all — that is the absence of a state, not a
-	/// sixth one.
-	/// </summary>
-	public async Task Subtree_rows_show_each_leafs_achievement_as_a_glyph()
+	public async Task Subtree_rows_show_each_leafs_status_only_in_the_active_column()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.achievement");
 		var rootId = bootstrappedRootId!.Value;
@@ -204,30 +195,36 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var inProgressLeafId = await AddChildAsync(rootId, workerId, "In progress leaf");
 		var successLeafId = await AddChildAsync(rootId, workerId, "Success leaf");
 		var cancelledLeafId = await AddChildAsync(rootId, workerId, "Cancelled leaf");
+		var unsuccessfulLeafId = await AddChildAsync(rootId, workerId, "Unsuccessful leaf");
 		_ = await AddChildAsync(rootId, workerId, "No work attached leaf");
 
-		await AttachLeafWorkAsync(waitingLeafId, adminId);
 		await SetAchievementAsync(inProgressLeafId, adminId, Achievement.InProgress);
 		await SetAchievementAsync(successLeafId, adminId, Achievement.Success);
 		await SetAchievementAsync(cancelledLeafId, adminId, Achievement.Cancelled);
+		await SetAchievementAsync(unsuccessfulLeafId, adminId, Achievement.Unsuccessful);
+		await SetAchievementAsync(waitingLeafId, adminId, Achievement.Success);
+		await ReopenAsync(waitingLeafId, adminId);
 
 		var authCookie = await client.SignInAsync("browse.achievement");
 		var response = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		body.Should().Contain("#jt-icon-achievement-waiting");
-		body.Should().Contain("#jt-icon-achievement-in-progress");
-		body.Should().Contain("#jt-icon-achievement-success");
-		body.Should().Contain("#jt-icon-achievement-closed");
-
-		// Colour never carries the state alone: each glyph is aria-hidden and named in text.
-		body.Should().Contain("Cancelled");
-		body.Should().Contain("In Progress");
+		foreach (var leafId in new[] { waitingLeafId, inProgressLeafId, successLeafId, cancelledLeafId, unsuccessfulLeafId }) {
+			ExtractSubtreeRow(body, leafId).Should().NotContain("jt-achievement-icon");
+		}
+		ExtractSubtreeRow(body, waitingLeafId).Should()
+			.Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
+		ExtractSubtreeRow(body, successLeafId).Should()
+			.Contain("status-pill-success status-pill--compact\" title=\"Success\">Succ</span>");
+		ExtractSubtreeRow(body, cancelledLeafId).Should()
+			.Contain("status-pill-cancelled status-pill--compact\" title=\"Cancelled\">Cancel</span>");
+		ExtractSubtreeRow(body, unsuccessfulLeafId).Should()
+			.Contain("status-pill-unsuccessful status-pill--compact\" title=\"Unsuccessful\">Unsucc</span>");
 	}
 
 	[Fact]
-	public async Task A_completed_branch_row_shows_the_same_green_tick_as_a_completed_leaf()
+	public async Task A_completed_branch_row_shows_the_same_success_pill_as_a_completed_leaf()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.branch-completion");
 		var rootId = bootstrappedRootId!.Value;
@@ -244,17 +241,38 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		var completedBranchRow = ExtractSubtreeRow(body, completedBranchId);
-		completedBranchRow.Should().Contain("#jt-icon-achievement-success");
-		completedBranchRow.Should().Contain("status-pill-closed status-pill--icon");
-		completedBranchRow.Should().Contain("status-pill-closed status-pill--compact\">Closed</span>");
-		ExtractSubtreeRow(body, completedLeafId).Should().Contain("#jt-icon-achievement-success");
+		completedBranchRow.Should().NotContain("jt-achievement-icon");
+		completedBranchRow.Should().Contain("status-pill-success status-pill--icon\" title=\"Success\"");
+		completedBranchRow.Should().Contain("status-pill-success status-pill--compact\" title=\"Success\">Succ</span>");
+		ExtractSubtreeRow(body, completedLeafId).Should().NotContain("jt-achievement-icon");
 		var unfinishedBranchRow = ExtractSubtreeRow(body, unfinishedBranchId);
 		unfinishedBranchRow.Should().NotContain("jt-achievement-icon");
-		unfinishedBranchRow.Should().NotContain("status-pill-closed");
+		unfinishedBranchRow.Should().NotContain("status-pill-success");
+	}
+
+	private async Task ReopenAsync(JobNodeId leafId, AppUserId adminId)
+	{
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
+			JobNodeId = leafId,
+		});
+		_ = await seedClient.Work.SetAchievementAsync(new() {
+			Context = new() {
+				Actor = adminId,
+				CorrelationId = Guid.NewGuid(),
+			},
+			JobNodeId = leafId,
+			NewAchievement = Achievement.Waiting,
+			Reason = "Reopened for testing",
+			Version = leafWork.Version,
+		});
 	}
 
 	[Fact]
-	public async Task Subtree_leaf_rows_distinguish_unstarted_and_unacknowledged_open_work()
+	public async Task Subtree_leaf_rows_distinguish_unstarted_waiting_and_unacknowledged_open_work()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.inactive-pills");
 		var rootId = bootstrappedRootId!.Value;
@@ -273,8 +291,10 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		(body.Split("status-pill status-pill-inactive status-pill--compact\">Unstarted</span>").Length - 1).Should()
-																										   .Be(2, "both workless and Waiting leaves have never had a session");
+		(body.Split("status-pill status-pill-inactive status-pill--compact\" title=\"Unstarted\">Unstrt</span>").Length - 1).Should()
+																			   .Be(1, "only a leaf without a work record is Unstarted");
+		ExtractSubtreeRow(body, waitingId).Should()
+			.Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
 		(body.Split("status-pill status-pill-unack status-pill--compact\">Unack</span>").Length - 1).Should()
 																									.Be(1, "an unacknowledged request is the more specific open state");
 		body.Should().Contain("status-pill-unack", "the request state has its own blue-tinted pill rather than the neutral Unstarted treatment");
@@ -363,7 +383,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task Browsing_a_node_shows_its_full_priority_name_in_the_detail_fields_but_abbreviated_in_the_subtree_table()
+	public async Task Browsing_a_node_keeps_priority_in_its_detail_fields_but_omits_it_from_the_subtree_table()
 	{
 		var (_, workerId) = await BootstrapAndSeedWorkerAsync("browse.priority-form");
 		var rootId = bootstrappedRootId!.Value;
@@ -376,7 +396,7 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain(">Medium</span>", "the detail fields have room to spell the priority out in full");
-		body.Should().Contain(">Med<", "the subtree table column stays abbreviated");
+		body.Should().NotContain(">Med<", "the low-value Priority column no longer returns at the widest breakpoint");
 	}
 
 	[Fact]

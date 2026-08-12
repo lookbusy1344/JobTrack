@@ -144,10 +144,10 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	[Fact]
 	/// <summary>
 	/// The active-session pill has its own column rather than sharing the actions cell, where it
-	/// pushed the start/finish buttons out of vertical alignment with every other row. Priority (and
-	/// Deadline, which replaced Owner) is a separate, tablet-and-up column beside it.
+	/// pushed the start/finish buttons out of vertical alignment with every other row. Deadline is a
+	/// separate desktop column beside it; low-value Priority and Position columns remain omitted.
 	/// </summary>
-	public async Task The_active_session_pill_has_its_own_column_alongside_priority()
+	public async Task The_active_session_pill_has_its_own_responsive_column()
 	{
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.activecolumn");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Screed floor");
@@ -158,18 +158,17 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		// Active survives at phone width as one Bootstrap column with an icon-only pill, then expands to
-		// two columns and restores its heading/pill detail from md upward.
+		// Active stays icon-only through md, where its one-column share gives Description seven columns;
+		// the labelled two-column presentation returns at lg.
+		body.Should().Contain("<th scope=\"col\" class=\"col-9 col-md-7 col-lg-5\">Description</th>");
 		body.Should().Contain(
-			"<th scope=\"col\" class=\"jt-col-active col-1 col-md-2 col-lg-2\" aria-label=\"Active\"><span class=\"d-none d-md-inline\">Active</span></th>");
-		body.Should().Contain("<span class=\"d-md-none\">");
+			"<th scope=\"col\" class=\"jt-col-active col-1 col-md-1 col-lg-2\" aria-label=\"Active\"><span class=\"d-none d-lg-inline\">Active</span></th>");
+		body.Should().Contain("<span class=\"d-lg-none\">");
+		body.Should().Contain("class=\"jt-tree-name-link jt-preserve-whitespace jt-description-link\"");
 		body.Should().Contain("status-pill-active status-pill--icon");
-		body.Should().Contain("<th scope=\"col\" class=\"jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell\">Cost</th>");
-		// The priority heading is abbreviated to "Pri" visually, with the full name for assistive tech,
-		// and is held back to xxl (d-none d-xxl-table-cell) so Description keeps its twelfth below that.
-		body.Should().Contain(
-			"<th scope=\"col\" class=\"jt-col-secondary col-xxl-1 d-none d-xxl-table-cell\"><span aria-hidden=\"true\">Pri</span>");
-		body.Should().Contain("visually-hidden\">Priority</span></th>");
+		body.Should().Contain("<th scope=\"col\" class=\"jt-col-cost col-md-2 col-lg-2 text-end d-none d-md-table-cell\">Cost</th>");
+		body.Should().NotContain("visually-hidden\">Priority</span></th>");
+		body.Should().NotContain("visually-hidden\">Position</span>");
 		// "Due", aria-labelled "Deadline": the same abbreviation AwaitingProgress uses for this field.
 		body.Should().Contain("aria-label=\"Deadline\">Due</th>");
 		body.Should().NotContain(">Owner</th>");
@@ -932,7 +931,7 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task A_terminal_leaf_marks_its_closure_with_a_pill_without_rendering_start_controls()
+	public async Task A_terminal_leaf_names_its_outcome_in_the_active_pill_without_rendering_start_controls()
 	{
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse.closed-terminal");
 		var leaf = await AddWorkedLeafAsync(rootId, workerId, "Completed leaf");
@@ -944,12 +943,12 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		var workResponse = await GetAsync($"/Jobs/Work?leafNodeId={leaf.Id.Value}", authCookie);
 		var workBody = await workResponse.Content.ReadAsStringAsync();
 
-		foreach (var body in new[] {
-					 browseBody, workBody,
-				 }) {
-			// The Active state is a concise "Closed" pill, never the verbose closure sentence -- and
-			// never in the Actions cell, which is buttons only.
-			body.Should().Contain("status-pill-closed");
+		browseBody.Should().Contain("status-pill-success");
+		browseBody.Should().Contain("title=\"Success\">Succ</span>");
+
+		foreach (var body in new[] { browseBody, workBody }) {
+			// Browse's Active state preserves the leaf's actual terminal outcome. Both pages avoid a
+			// verbose closure sentence and keep state out of the Actions cell.
 			body.Should().NotContain("Reopen it before starting another session");
 			body.Should().NotContain(">Start session</button>");
 			body.Should().NotContain("Start for…");

@@ -341,20 +341,6 @@ public sealed class BrowseModel(
 			CompleteHandler = "Complete",
 		};
 
-	/// <summary>
-	///     <paramref name="node" />'s nested-set span (ADR 0039 decision 3) as a left offset and width
-	///     percentage of the whole subtree's span, for the interval bar column — rebased so the root's
-	///     own span always renders as the full-width track.
-	/// </summary>
-	public (decimal LeftPercent, decimal WidthPercent) SubtreeSpanPercent(JobSubtreeNodeResult node)
-	{
-		var root = Subtree!.Nodes.Single(n => n.Id == Subtree.RootId);
-		var totalSpan = (decimal)Math.Max(root.SubtreeRgt - root.SubtreeLft, 1);
-		var left = (node.SubtreeLft - root.SubtreeLft) * 100m / totalSpan;
-		var width = Math.Max((node.SubtreeRgt - node.SubtreeLft) * 100m / totalSpan, 2m);
-		return (left, width);
-	}
-
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
 		var actor = await ResolveActorAsync();

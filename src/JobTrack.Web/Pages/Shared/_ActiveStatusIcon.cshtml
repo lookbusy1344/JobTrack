@@ -1,15 +1,21 @@
 @model ActiveSessionSummaryModel
 @{
-	(string Modifier, string IconId, string Label)? status =
-		(Model.Count, Model.Closed, Model.Paused, Model.UnacknowledgedRequest, Model.Unstarted) switch {
-			(> 0, _, _, _, _) => (
+	(string Modifier, string IconId, string Label)? status = Model.Count switch {
+			> 0 => (
 				Modifier: "status-pill-active", IconId: "jt-icon-active", Label: Model.Count == 1 ? "Active" : $"{Model.Count} active"),
-			(0, true, _, _, _) => (Modifier: "status-pill-closed", IconId: "jt-icon-achievement-closed", Label: "Closed"),
-			(0, false, true, _, _) => (Modifier: "status-pill-paused", IconId: "jt-icon-finish", Label: "Paused"),
-			(0, false, false, true, _) => (Modifier: "status-pill-unack", IconId: "jt-icon-achievement-waiting", Label: "Unack"),
-			(0, false, false, false, true) => (Modifier: "status-pill-inactive", IconId: "jt-icon-achievement-waiting", Label: "Unstarted"),
-			(0, false, false, false, false) => null,
-			(< 0, _, _, _, _) => throw new InvalidOperationException("An active-session count cannot be negative."),
+			0 => Model.IdleStatus switch {
+				ActiveIdleStatus.Closed => ("status-pill-closed", "jt-icon-achievement-closed", "Closed"),
+				ActiveIdleStatus.Paused => ("status-pill-paused", "jt-icon-finish", "Paused"),
+				ActiveIdleStatus.Unacknowledged => ("status-pill-unack", "jt-icon-achievement-waiting", "Unack"),
+				ActiveIdleStatus.Unstarted => ("status-pill-inactive", "jt-icon-achievement-waiting", "Unstarted"),
+				ActiveIdleStatus.Waiting => ("status-pill-waiting", "jt-icon-achievement-waiting", "Waiting"),
+				ActiveIdleStatus.Success => ("status-pill-success", "jt-icon-achievement-success", "Success"),
+				ActiveIdleStatus.Cancelled => ("status-pill-cancelled", "jt-icon-achievement-closed", "Cancelled"),
+				ActiveIdleStatus.Unsuccessful => ("status-pill-unsuccessful", "jt-icon-achievement-closed", "Unsuccessful"),
+				null => null,
+				_ => throw new ArgumentOutOfRangeException(nameof(Model.IdleStatus), Model.IdleStatus, null),
+			},
+			< 0 => throw new InvalidOperationException("An active-session count cannot be negative."),
 		};
 }
 @if (status.HasValue) {

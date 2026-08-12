@@ -42,13 +42,14 @@ public sealed class ActiveSessionSummaryModel
 	/// </summary>
 	public bool Compact { get; init; } = true;
 
-	/// <summary>
-	///     Whether the row represents settled work: a leaf that can accept no new session
-	///     (<see cref="WorkRowActionsModel.IsStartClosed" />), or a branch whose cached subtree
-	///     achievement is <see cref="Abstractions.BranchAchievement.Success" />. Surfaced in the Active
-	///     column as a plain "Closed" pill only when no session is currently active.
-	/// </summary>
-	public bool Closed { get; init; }
+	/// <summary>Whether the node is archived, independently of its achievement.</summary>
+	public bool Archived { get; init; }
+
+	/// <summary>The leaf's recorded achievement, used to preserve its specific terminal outcome.</summary>
+	public Achievement? Achievement { get; init; }
+
+	/// <summary>The root or branch's recursively computed achievement.</summary>
+	public BranchAchievement? BranchAchievement { get; init; }
 
 	/// <summary>
 	///     Whether the leaf is paused — <see cref="Abstractions.Achievement.InProgress" /> with nobody
@@ -92,6 +93,65 @@ public sealed class ActiveSessionSummaryModel
 
 	/// <summary>How many active workers <see cref="PreviewEntries" /> omits — never lost from <see cref="Count" />, only from the preview.</summary>
 	public int HiddenCount => Math.Max(0, Count - PreviewEntries.Count);
+
+	/// <summary>The non-active state shown when no worker currently has an open session.</summary>
+	internal ActiveIdleStatus? IdleStatus
+	{
+		get
+		{
+			if (BranchAchievement is Abstractions.BranchAchievement branchAchievement) {
+				return branchAchievement switch {
+					Abstractions.BranchAchievement.Success => ActiveIdleStatus.Success,
+					Abstractions.BranchAchievement.Unfinished => null,
+					_ => throw new ArgumentOutOfRangeException(nameof(BranchAchievement), BranchAchievement, null),
+				};
+			}
+
+			if (Achievement is Abstractions.Achievement achievement) {
+				var terminalStatus = achievement switch {
+					Abstractions.Achievement.Success => ActiveIdleStatus.Success,
+					Abstractions.Achievement.Cancelled => ActiveIdleStatus.Cancelled,
+					Abstractions.Achievement.Unsuccessful => ActiveIdleStatus.Unsuccessful,
+					Abstractions.Achievement.None or Abstractions.Achievement.Waiting or Abstractions.Achievement.InProgress =>
+						(ActiveIdleStatus?)null,
+					_ => throw new ArgumentOutOfRangeException(nameof(Achievement), Achievement, null),
+				};
+				if (terminalStatus.HasValue) {
+					return terminalStatus.Value;
+				}
+			}
+
+			if (Archived) {
+				return ActiveIdleStatus.Closed;
+			}
+
+			if (Paused) {
+				return ActiveIdleStatus.Paused;
+			}
+
+			if (UnacknowledgedRequest) {
+				return ActiveIdleStatus.Unacknowledged;
+			}
+
+			if (Achievement is Abstractions.Achievement.Waiting) {
+				return ActiveIdleStatus.Waiting;
+			}
+
+			return Unstarted ? ActiveIdleStatus.Unstarted : null;
+		}
+	}
+}
+
+internal enum ActiveIdleStatus
+{
+	Closed,
+	Paused,
+	Unacknowledged,
+	Unstarted,
+	Waiting,
+	Success,
+	Cancelled,
+	Unsuccessful,
 }
 
 /// <summary>One worker in <see cref="ActiveSessionSummaryModel.PreviewEntries" />.</summary>

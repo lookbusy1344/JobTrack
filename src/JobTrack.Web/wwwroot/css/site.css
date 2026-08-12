@@ -114,7 +114,7 @@
     --jt-line-strong: #d6cabb;
 
     /* Structural slate — a second, cool accent leg reserved for hierarchy scaffolding: node-kind
-       chips now, and (Phase B) the multi-level tree's trunk/branch rails and nested-set span bars.
+       chips and the multi-level tree's trunk/branch rails.
        Keeps the warm burnt-orange reserved for cost and action, so structure never competes with it.
        Text-bearing weights (-600) are AA-verified on their chip backgrounds; lighter slates are
        non-text rails/fills only. */
@@ -142,6 +142,8 @@
     --jt-green-100: #e2f3ea;
     --jt-blue-700: #24579f;
     --jt-blue-100: #e5efff;
+    --jt-purple-700: #67418f;
+    --jt-purple-100: #f0e8f8;
     --jt-amber-700: #8a5606;
     --jt-amber-100: #fbeed3;
     --jt-red-700: #b3261e;
@@ -240,18 +242,16 @@ html {
 /* Desktop density — from xxl (1400px) up only; tablet and standard desktop (768–1399) keep the
    plain 16px scale exercised in the end-to-end viewport matrix, phones the 14px base above.
 
-   Density here is *whitespace only* — gaps, padding, radii, line-height. This block deliberately
-   does NOT touch the root font-size or any font-size token: a wider viewport must never render
-   text smaller than a narrower one. It used to drop `html` to 14px, which shrank every rem-based
-   size on the page at once (the visible symptom: type snapped smaller exactly as Browse's
-   xxl-only Position column appeared between Cost and Actions).
+   Density here is *box whitespace only* — gaps, padding, and radii. This block deliberately does
+   not touch font size, line height, or any typography token: a wider viewport must never render
+   text smaller or tighter than a narrower one. It used to drop `html` to 14px, and later retained
+   a 1.5 body line-height; both made type snap tighter at the xxl boundary.
 
    Because the root stays at 16px, every length below is the old 14px-root value rescaled by
    14/16 — the tightened spacing is preserved at its previous computed pixel size. */
 @media (min-width: 1400px) {
-    :root {
-        --bs-body-line-height: 1.5;
-        --jt-space-3: 0.65rem;
+	:root {
+		--jt-space-3: 0.65rem;
         --jt-space-4: 0.875rem;
         --jt-space-5: 1.2rem;
         --jt-space-6: 1.75rem;
@@ -1146,6 +1146,35 @@ fieldset legend {
     border-color: rgb(23 115 74 / 25%);
 }
 
+/* Terminal leaf outcomes and computed branch achievement remain distinct in dense Active columns.
+   The shape and accessible title carry the name; colour makes unlike outcomes scannable without
+   collapsing them back into the former generic Closed treatment. */
+.status-pill-success {
+    background-color: var(--jt-green-100);
+    color: var(--jt-green-700);
+    border-color: rgb(23 115 74 / 25%);
+}
+
+.status-pill-cancelled {
+    background-color: var(--jt-blue-100);
+    color: var(--jt-blue-700);
+    border-color: rgb(36 87 159 / 25%);
+}
+
+.status-pill-unsuccessful {
+    background-color: var(--jt-red-100);
+    color: var(--jt-red-700);
+    border-color: rgb(179 38 30 / 25%);
+}
+
+/* Waiting is a recorded, open outcome rather than the absence represented by Unstarted. Purple
+   keeps it visually distinct from every other Active-column state. */
+.status-pill-waiting {
+    background-color: var(--jt-purple-100);
+    color: var(--jt-purple-700);
+    border-color: rgb(103 65 143 / 30%);
+}
+
 /* Paused is In Progress with nobody clocked on — open work at rest. It borrows the amber ink of
    .status-pill-active (this is the same "someone is working this job" thread of state) but sits on
    the neutral ground rather than the amber one, so "started, nobody on it" never reads as "running
@@ -1617,16 +1646,16 @@ fieldset legend {
    here — see CLAUDE.md. This section only records the policy those utilities implement and carries
    the handful of *visual* adjustments that ride along with it.
 
-   `d-none d-lg-table-cell` (`.jt-col-secondary` cells): below lg these tables drop the columns that
-   are one tap away on the row's own page — owner, priority, kind/archived, span, deadline. The
-   Browse subtree table cuts its priority column one tier earlier still (`d-none d-xxl-table-cell`),
-   since below the widest viewports its twelfth reads better as description.
+   `d-none d-lg-table-cell` (`.jt-col-secondary` cells): below lg these tables drop columns that
+   are one tap away on the row's own page — owner, kind/archived, and deadline. The Browse subtree
+   and Awaiting Progress attention tables omit Priority and the legacy Position indicator entirely;
+   neither returns at xxl to take width back from Description.
 
    `d-none d-md-table-cell` (`.jt-col-cost`, `.jt-session-started` cells): cost is
    the one secondary column worth keeping at tablet width — it is what most people scanning the
    table are actually looking for — as is the active-session column, since which jobs are being
    worked on right now is a live fact that changes under the reader rather than something they can
-   be sent to another page for. Cost goes at phone width; Browse's Active column instead contracts to
+   be sent to another page for. Cost goes at phone width; Browse's Active column instead contracts through md to
    one Bootstrap column and the shared icon-only pill, leaving Description nine columns and Actions
    two without introducing horizontal scroll. `.jt-session-started` is the same cut on the leaf's
    own Sessions table (_LeafWorkSessions) — Worked by, Status (relabelled from Finished below lg,
@@ -1690,47 +1719,6 @@ fieldset legend {
 .jt-tree-more {
     margin-left: var(--jt-space-1);
     color: var(--jt-faint);
-}
-
-/* The span bar's column. `min-width` on the track alone could not hold this down: the table is
-   auto-layout, so every column with no stated width gets a share of whatever is left over, and a
-   block-level track with no intrinsic width takes that share happily. Stating a width here is what
-   caps it -- the bar is a rough position-in-tree cue, and three characters' worth of it says as
-   much as a wide one does. */
-.jt-col-span {
-    width: 3rem;
-}
-
-/* Nested-set span bar (ADR 0039 decision 3): purely structural/decorative -- the row's own text
-   (kind chip, depth label, ordering) already conveys the same containment fact accessibly, so this
-   is `aria-hidden` and carries no contrast requirement of its own (plan §6). */
-.jt-tree-span-track {
-    position: relative;
-    display: block;
-    height: 0.375rem;
-    /* A quarter of its original 4rem: the bar shows roughly where a node sits in the tree's ordering,
-       which is a background fact, not something a reader acts on — it does not deserve the width it
-       was taking from the columns that are. Narrowing this alone was not enough; the "Position"
-       heading was the real floor on the column's width and is now visually hidden. */
-    min-width: 1rem;
-    background-color: var(--jt-slate-50);
-    border-radius: 999px;
-    overflow: hidden;
-}
-
-/* The bar is an <svg> whose viewBox is 100 units wide, so the row's percentages are written
-   straight onto the rect as `x`/`width` attributes. Presentation attributes, not a `style`
-   attribute: `style-src 'self'` drops inline styles, which is what silently collapsed the
-   previous version of this bar to zero width. The track keeps the pill shape and clips the rect,
-   so the rect itself needs no radius (which non-uniform scaling would distort anyway). */
-.jt-tree-span {
-    display: block;
-    width: 100%;
-    height: 100%;
-}
-
-.jt-tree-span-fill {
-    fill: var(--jt-slate-300);
 }
 
 /* ---- Breadcrumb (Jobs/Browse lineage trail) ----------------------------------------------- */
@@ -1906,17 +1894,23 @@ nav[aria-label="breadcrumb"] li + li::before {
     font-size: var(--jt-font-size-sm);
 }
 
+/* One Description link at every breakpoint. Its rem-based body-size token follows the existing
+   14px/16px root progression, while avoiding responsive element swaps or xxl density changes. */
+.jt-description-link {
+    font-size: var(--bs-body-font-size);
+    line-height: var(--bs-body-line-height);
+}
+
 /* These headings never wrap. A one-word label ("Deadline", "Archived") broken across two lines makes
    the header row taller than the data it labels and reads as two labels rather than one, and where
    the word is wider than its column the wrap buys nothing anyway — the column is no narrower for it.
    Safe here, and only here, precisely because every column in this set is already hidden below md or
    lg: it can never be the hard floor that pushes a narrow viewport into horizontal overflow, which
    is why the default above stays "headings wrap". A label still too wide for its share at the widths
-   it does appear at is abbreviated in the markup instead — Browse's "Pri"/"Due", each carrying the
-   full name for assistive tech — not left to wrap. */
+   it does appear at is abbreviated in the markup instead — Browse's "Due" carries the full name
+   for assistive tech — not left to wrap. */
 .table th.jt-col-secondary,
-.table th.jt-col-active,
-.table th.jt-col-span {
+.table th.jt-col-active {
     white-space: nowrap;
 }
 

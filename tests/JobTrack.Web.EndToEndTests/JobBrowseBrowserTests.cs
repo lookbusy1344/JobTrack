@@ -56,7 +56,6 @@ public abstract class JobBrowseBrowserTestsBase
 	// the edge pixel itself belongs to the border, and sub-pixel bounding-box rounding can land the
 	// sample one device pixel outside the element altogether.
 	private const double PopoverEdgeSampleInset = 4.0;
-	private const double MaximumInlineStatusGapPixels = 8.0;
 
 	private const float MaximumColumnAlignmentDifferencePixels = 1.0f;
 
@@ -69,15 +68,14 @@ public abstract class JobBrowseBrowserTestsBase
 	private const double NarrowDescriptionMaximumShare = 0.73;
 
 	/// <summary>
-	///     Description yields one column to Cost at the tablet breakpoint. Cost renders
-	///     "£1,234.56 / 12h 30m", whose four break opportunities made it the column auto table layout
-	///     squeezed first, collapsing it toward a character per line while Description kept its room;
-	///     it holds three columns here instead. Description still owns by far the largest share, and
-	///     the narrow and wide bands below are unchanged.
+	///     At the tablet breakpoint Active is a one-column icon and Cost keeps the same two-column
+	///     allocation it has at wider breakpoints, so Description receives both released columns.
 	/// </summary>
-	private const double MediumDescriptionMinimumShare = 4.5 / 12.0;
+	// Auto table layout honours min-content before the nominal col-md-7 share; this brackets the
+	// measured rendered result while the direct tablet-versus-laptop assertion below proves the gain.
+	private const double MediumDescriptionMinimumShare = 0.52;
 
-	private const double MediumDescriptionMaximumShare = 5.0 / 12.0;
+	private const double MediumDescriptionMaximumShare = 0.59;
 
 	/// <summary>
 	///     From the laptop breakpoint up to xxl, Description takes the two twelfths Priority and
@@ -90,32 +88,20 @@ public abstract class JobBrowseBrowserTestsBase
 	private const double LargeDescriptionMaximumShare = 5.0 / 12.0;
 
 	/// <summary>
-	///     Description returns to its "at least 3 of 12" floor once xxl brings Priority back beside the
-	///     span bar. Active also holds the column Description gave up at lg (col-lg-1 -> col-lg-2, plan
-	///     follow-up), so two or more simultaneous workers' names have more than a twelfth of the row to
-	///     preview in instead of wrapping to a ladder of one-word lines.
+	///     Cost holds two columns from the tablet breakpoint upward. The test checks the rendered cell
+	///     as well as the heading's share so the compact allocation cannot collapse its content toward
+	///     one character per line.
 	/// </summary>
-	private const double WideDescriptionMinimumShare = 2.5 / 12.0;
+	private const double TabletCostMinimumShare = 1.5 / 12.0;
 
-	private const double WideDescriptionMaximumShare = 3.0 / 12.0;
-
-	/// <summary>
-	///     Cost holds three columns at the tablet breakpoint and two once the laptop width returns the
-	///     secondary columns. It renders "£1,234.56 / 12h 30m", whose four break opportunities made it
-	///     the column auto table layout squeezed first — an earlier flat two-column allocation measured
-	///     correctly here while the body text still wrapped toward a character per line, which is why
-	///     the test now checks the rendered cell as well as the heading's share.
-	/// </summary>
-	private const double TabletCostMinimumShare = 2.5 / 12.0;
-
-	private const double TabletCostMaximumShare = 3.0 / 12.0;
+	private const double TabletCostMaximumShare = 2.0 / 12.0;
 	private const double LaptopCostMinimumShare = 1.5 / 12.0;
 
 	private const double LaptopCostMaximumShare = 2.0 / 12.0;
 
-	// The floor that holds across the whole wide band (1280 and 1440): at 1280 Description has the
-	// twelfth Priority gives up, at 1440 it is back at its three-of-twelve floor.
-	private const double MinimumWideDescriptionShare = WideDescriptionMinimumShare;
+	// xl and xxl intentionally share one allocation: the legacy Position and low-value Priority
+	// columns never return to take width back from Description.
+	private const double MinimumWideDescriptionShare = LargeDescriptionMinimumShare;
 
 	// The smallest count that has more than one worker to preview -- the plural-pill regression case.
 	private const int TwoActiveWorkerCount = 2;
@@ -164,7 +150,7 @@ public abstract class JobBrowseBrowserTestsBase
 		}, {
 			DesktopWidth, DesktopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare
 		}, {
-			WideDesktopWidth, WideDesktopHeight, 7, WideDescriptionMinimumShare, WideDescriptionMaximumShare
+			WideDesktopWidth, WideDesktopHeight, 5, LargeDescriptionMinimumShare, LargeDescriptionMaximumShare
 		},
 	};
 
@@ -551,7 +537,7 @@ public abstract class JobBrowseBrowserTestsBase
 		var phoneRow = phone.Locator("tbody tr", new() {
 			HasTextString = "Fit cabinets",
 		}).First;
-		(await phoneRow.Locator(".jt-tree-name-link").First.IsVisibleAsync()).Should().BeTrue("the name is the point of the row");
+		(await phoneRow.Locator(".jt-tree-name-link:visible").IsVisibleAsync()).Should().BeTrue("the name is the point of the row");
 		(await phoneRow.Locator(".jt-tree-icon").First.IsVisibleAsync()).Should().BeTrue("the kind glyph replaces the dropped Kind column");
 		(await phoneRow.GetByRole(AriaRole.Link, new() {
 			Name = "Sessions",
@@ -562,7 +548,7 @@ public abstract class JobBrowseBrowserTestsBase
 			HasTextString = "Start",
 		}).First.IsVisibleAsync()).Should()
 									  .BeFalse("Start is one tap away via Sessions/Browse and would crowd a phone-width row");
-		(await phoneRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeFalse("owner/priority/cost/span are secondary on a phone");
+		(await phoneRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeFalse("deadline is secondary on a phone");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
@@ -572,9 +558,7 @@ public abstract class JobBrowseBrowserTestsBase
 		var desktopRow = desktop.Locator("tbody tr", new() {
 			HasTextString = "Fit cabinets",
 		}).First;
-		// .Last, not .First: the first .jt-col-secondary in the row is Priority, which this table alone
-		// holds back to xxl so Description can have its twelfth. Deadline is the one that returns at lg.
-		(await desktopRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeTrue("the columns come back when there is room for them");
+		(await desktopRow.Locator(".jt-col-secondary").Last.IsVisibleAsync()).Should().BeTrue("Deadline comes back when there is room for it");
 		(await desktopRow.Locator("button", new() {
 			HasTextString = "Start",
 		}).First.IsVisibleAsync()).Should()
@@ -685,7 +669,7 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
-	public async Task The_active_column_reflows_to_an_icon_only_pill_at_phone_width_while_session_actions_remain_available()
+	public async Task The_active_column_reflows_to_an_icon_through_tablet_and_description_steps_down_at_laptop_width()
 	{
 		var branchId = await fixture.SeedBranchAsync("Responsive active worker branch");
 		_ = await fixture.SeedActiveSessionsAsync("Responsive active worker leaf", RequiredSimultaneousWorkerCount, branchId);
@@ -709,6 +693,40 @@ public abstract class JobBrowseBrowserTestsBase
 			Name = "Sessions",
 			Exact = true,
 		}).IsVisibleAsync()).Should().BeTrue();
+		var phoneDescriptionFontSize = await FontSizeAsync(phoneRow.Locator(".jt-description-link"));
+
+		await using var tabletContext = await fixture.NewContextAsync(TabletWidth, TabletHeight);
+		var tablet = await tabletContext.NewPageAsync();
+		await BrowserTestSupport.SignInAdministratorAsync(tablet, fixture.BaseAddress);
+		await tablet.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+		var tabletRow = tablet.Locator("tbody tr", new() {
+			HasTextString = "Responsive active worker leaf",
+		}).First;
+		(await tabletRow.Locator(".status-pill-active.status-pill--icon").IsVisibleAsync()).Should().BeTrue();
+		(await tabletRow.Locator(".status-pill-active.status-pill--compact").IsVisibleAsync()).Should().BeFalse();
+		var tabletDescriptionFontSize = await FontSizeAsync(tabletRow.Locator(".jt-description-link"));
+		var tabletTable = tablet.Locator(".jt-browse-children-table");
+		var tabletDescriptionShare = await ColumnWidthAsync(tabletTable.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Description",
+			Exact = true,
+		})) / await ColumnWidthAsync(tabletTable);
+
+		await using var laptopContext = await fixture.NewContextAsync(LaptopWidth, LaptopHeight);
+		var laptop = await laptopContext.NewPageAsync();
+		await BrowserTestSupport.SignInAdministratorAsync(laptop, fixture.BaseAddress);
+		await laptop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+		var laptopRow = laptop.Locator("tbody tr", new() {
+			HasTextString = "Responsive active worker leaf",
+		}).First;
+		var laptopDescriptionFontSize = await FontSizeAsync(laptopRow.Locator(".jt-description-link"));
+		(await laptopRow.Locator(".status-pill-active.status-pill--compact").IsVisibleAsync()).Should().BeTrue();
+		var laptopTable = laptop.Locator(".jt-browse-children-table");
+		var laptopDescriptionShare = await ColumnWidthAsync(laptopTable.GetByRole(AriaRole.Columnheader, new() {
+			Name = "Description",
+			Exact = true,
+		})) / await ColumnWidthAsync(laptopTable);
+		tabletDescriptionShare.Should().BeGreaterThan(laptopDescriptionShare,
+			"collapsing Active to its minimum one-column icon must release rendered width to Description");
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
@@ -718,6 +736,25 @@ public abstract class JobBrowseBrowserTestsBase
 		var desktopRow = desktop.Locator("tbody tr", new() {
 			HasTextString = "Responsive active worker leaf",
 		}).First;
+		var desktopDescription = desktopRow.Locator(".jt-description-link");
+		var desktopDescriptionFontSize = await FontSizeAsync(desktopDescription);
+		var desktopDescriptionLineHeight = await LineHeightAsync(desktopDescription);
+		desktopDescriptionFontSize.Should().Be(laptopDescriptionFontSize);
+		laptopDescriptionFontSize.Should().Be(tabletDescriptionFontSize);
+		tabletDescriptionFontSize.Should().BeGreaterThan(phoneDescriptionFontSize);
+
+		await using var wideContext = await fixture.NewContextAsync(WideDesktopWidth, WideDesktopHeight);
+		var wide = await wideContext.NewPageAsync();
+		await BrowserTestSupport.SignInAdministratorAsync(wide, fixture.BaseAddress);
+		await wide.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+		var wideRow = wide.Locator("tbody tr", new() {
+			HasTextString = "Responsive active worker leaf",
+		}).First;
+		var wideDescription = wideRow.Locator(".jt-description-link");
+		var wideDescriptionFontSize = await FontSizeAsync(wideDescription);
+		var wideDescriptionLineHeight = await LineHeightAsync(wideDescription);
+		wideDescriptionFontSize.Should().Be(desktopDescriptionFontSize, "xxl must retain xl's Description font size");
+		wideDescriptionLineHeight.Should().Be(desktopDescriptionLineHeight, "xxl must retain xl's Description line height");
 		(await desktopRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
 		// The table-cell pill is compact -- glyph and bare count only, per _ActiveSincePill's Compact
 		// branch -- with the full wording carried in its title tooltip rather than rendered text.
@@ -778,15 +815,11 @@ public abstract class JobBrowseBrowserTestsBase
 			Exact = true,
 		}));
 		(descriptionWidth / tableWidth).Should().BeGreaterThanOrEqualTo(MinimumWideDescriptionShare,
-			$"the node title must keep at least three of twelve columns at {width}x{height}");
+			$"the node title must keep the same five-column allocation at {width}x{height}");
 	}
 
 	[Fact]
-	/// <summary>
-	/// A wrapped title whose final line is shorter than its first must not reserve the first line's
-	/// width before rendering its achievement icon.
-	/// </summary>
-	public async Task A_childs_achievement_icon_immediately_follows_its_rendered_title()
+	public async Task A_childs_status_appears_in_the_active_column_not_after_its_title()
 	{
 		const string Description = "Integration test for the legacy MIS write-back adapter under representative load X";
 		var (leafId, _) = await fixture.SeedActiveSessionsAsync(Description, 1);
@@ -797,30 +830,11 @@ public abstract class JobBrowseBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={fixture.RootJobNodeId.Value}");
 
-		var rowText = page.Locator($".jt-tree-name-link[href='/Jobs/Browse?nodeId={leafId.Value}']").Locator("..");
-		var measurements = await rowText.EvaluateAsync<double[]>(
-			"""
-			(element) => {
-				const link = element.querySelector(".jt-tree-name-link");
-				const icon = element.querySelector(".jt-achievement-icon");
-				const range = document.createRange();
-				range.selectNodeContents(link.firstChild);
-				const textRects = Array.from(range.getClientRects());
-				const finalTextRect = textRects.at(-1);
-				const iconRect = icon.getBoundingClientRect();
-				return [
-					iconRect.left - finalTextRect.right,
-					Math.min(iconRect.bottom, finalTextRect.bottom) - Math.max(iconRect.top, finalTextRect.top),
-					textRects.length,
-				];
-			}
-			""");
+		var title = page.Locator($".jt-tree-name-link[href='/Jobs/Browse?nodeId={leafId.Value}']");
+		var row = title.Locator("xpath=ancestor::tr");
 
-		measurements[2].Should().BeGreaterThan(1, "the regression case must exercise a naturally wrapped title");
-		measurements[0].Should().BeInRange(0, MaximumInlineStatusGapPixels,
-			"the status icon should sit immediately after the title's final rendered glyph");
-		measurements[1].Should().BeGreaterThan(0,
-			"the status icon should overlap the title's final rendered line vertically");
+		(await row.Locator(".jt-achievement-icon").CountAsync()).Should().Be(0);
+		await Assertions.Expect(row.Locator(".jt-col-active .status-pill").Last).ToBeVisibleAsync();
 	}
 
 	[Fact]
@@ -1211,6 +1225,12 @@ public abstract class JobBrowseBrowserTestsBase
 		box.Should().NotBeNull();
 		return box!.Width;
 	}
+
+	private static async Task<double> FontSizeAsync(ILocator element) =>
+		await element.EvaluateAsync<double>("node => Number.parseFloat(getComputedStyle(node).fontSize)");
+
+	private static async Task<double> LineHeightAsync(ILocator element) =>
+		await element.EvaluateAsync<double>("node => Number.parseFloat(getComputedStyle(node).lineHeight)");
 
 
 

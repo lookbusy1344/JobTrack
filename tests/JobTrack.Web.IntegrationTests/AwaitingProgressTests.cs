@@ -96,6 +96,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain("Install cabinets");
+		body.Should().Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
 		body.Should().NotContain("Painting");
 	}
 
@@ -188,7 +189,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task Starting_work_from_a_dashboard_row_advances_the_leaf_to_in_progress()
+	public async Task Starting_work_from_a_dashboard_row_shows_the_leaf_as_active()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.startwork");
 		var rootId = bootstrappedRootId!.Value;
@@ -203,7 +204,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Session started");
 		body.Should().Contain("Fresh leaf via dashboard");
-		body.Should().Contain("In Progress");
+		body.Should().Contain("status-pill-active", "the Active column is the row's sole status presentation");
 	}
 
 	[Fact]
@@ -863,10 +864,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	[Fact]
 	/// <summary>
 	/// The active-session pill has its own column, so the dashboard and Browse's subtree read the same
-	/// way rather than each putting the pill somewhere different. Priority sits beside Deadline in its
-	/// own column too -- the two attention-ordering facts (spec: priority, then deadline) read together.
+	/// way rather than each putting the pill somewhere different. Priority and the legacy Position
+	/// indicator remain omitted so Description retains the same allocation at xl and xxl.
 	/// </summary>
-	public async Task The_active_session_pill_and_priority_each_have_their_own_column()
+	public async Task The_active_session_pill_has_its_own_responsive_column()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.activecolumn");
 		var rootId = bootstrappedRootId!.Value;
@@ -878,18 +879,20 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await client.FollowRedirectAsync(startResponse, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		body.Should().Contain("<th class=\"col-9 col-md-4 col-lg-5 col-xxl-3\" aria-label=\"Description\">Desc</th>");
+		body.Should().Contain("<th class=\"col-9 col-md-6 col-lg-5\" aria-label=\"Description\">Desc</th>");
 		body.Should().Contain(
-			"<th class=\"jt-col-active col-1 col-md-2 col-lg-2\" aria-label=\"Active\"><span class=\"d-none d-md-inline\">Active</span></th>");
-		body.Should().Contain("<span class=\"d-md-none\">");
-		body.Should().Contain("<span class=\"d-none d-md-inline\">");
+			"<th class=\"jt-col-active col-1 col-md-1 col-lg-2\" aria-label=\"Active\"><span class=\"d-none d-lg-inline\">Active</span></th>");
+		body.Should().Contain("<span class=\"d-lg-none\">");
+		body.Should().Contain("<span class=\"d-none d-lg-inline\">");
+		body.Should().Contain("class=\"jt-preserve-whitespace jt-description-link\"");
 		body.Should().Contain("status-pill status-pill-active status-pill--icon\" title=\"Active\"");
+		body.Should().Contain("<th class=\"jt-col-cost col-md-2 col-lg-2 text-end d-none d-md-table-cell\">Cost</th>");
 		body.Should().Contain("<th class=\"col-2 col-md-3 col-lg-2 text-end\">Actions</th>");
 		// No achievement column: at one twelfth it was narrower than its own heading at every width, so
 		// the state rides after the row's name instead, exactly as it does on Browse's subtree tables.
 		body.Should().NotContain("jt-col-achievement");
 		body.Should().NotContain(">Ach</th>");
-		body.Should().Contain("aria-label=\"Priority\">Pri</th>");
+		body.Should().NotContain("aria-label=\"Priority\">Pri</th>");
 		body.Should().Contain("aria-label=\"Deadline\">Due</th>");
 		body.Should().Contain("Active since");
 	}
@@ -962,11 +965,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	/// <summary>
-	/// The achievement rides after the row's name, as it does on Browse's subtree tables, and a leaf
-	/// with no achievement recorded draws nothing at all rather than a word standing in for absence.
-	/// </summary>
-	public async Task An_achievement_follows_the_row_name_and_none_draws_nothing()
+	public async Task Status_appears_only_in_the_active_column()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.achievementinline");
 		var rootId = bootstrappedRootId!.Value;
@@ -978,12 +977,10 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
-		var startedIndex = body.IndexOf("Started leaf", StringComparison.Ordinal);
-		var iconIndex = body.IndexOf("jt-achievement-icon--in-progress", StringComparison.Ordinal);
-		startedIndex.Should().BeGreaterThan(0);
-		iconIndex.Should().BeGreaterThan(startedIndex);
+		body.Should().Contain("Started leaf");
+		body.Should().Contain("status-pill-paused status-pill--compact\">Paused</span>");
+		body.Should().NotContain("jt-achievement-icon");
 		body.Should().Contain("Untouched leaf");
-		body.Should().NotContain(">None</span>");
 	}
 
 	[Fact]

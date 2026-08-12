@@ -21,22 +21,18 @@ public abstract class AwaitingProgressBrowserTestsBase
 	/// <summary>
 	///     Achievement renders an icon, not text, so at one twelfth the column was narrower than the
 	///     word heading it at every width. It is gone: the state trails the row's name, as it does on
-	///     Browse's subtree tables. At the tablet breakpoint Description keeps four columns while the
-	///     dashboard's larger action set takes three; Cost keeps the room it gained when Achievement
-	///     dropped from two columns to one.
+	///     Browse's subtree tables. At the tablet breakpoint the collapsed Active column gives its
+	///     released column to Description, while the dashboard's larger action set retains three.
 	/// </summary>
-	private const double DescriptionMinimumShare = 3.5 / 12.0;
+	private const double DescriptionMinimumShare = 5.5 / 12.0;
 
-	private const double DescriptionMaximumShare = 4.5 / 12.0;
+	private const double DescriptionMaximumShare = 6.5 / 12.0;
 
 	/// <summary>
-	///     Column allowance mirrors Browse's own child-nodes table: Description holds col-lg-5 at the
-	///     desktop width and steps down to its "at least 3 of 12" floor (col-xxl-3) once xxl brings
-	///     Priority back beside Deadline. Checked as a floor across the wide viewport matrix (1280 and
-	///     1440), same as Browse's <c>MinimumWideDescriptionShare</c>, since the two widths land on
-	///     different shares.
+	///     Column allowance mirrors Browse's own child-nodes table: Description holds col-lg-5 at both
+	///     xl and xxl because no widest-only secondary column returns to take its space.
 	/// </summary>
-	private const double LargeDescriptionMinimumShare = 3.0 / 12.0;
+	private const double LargeDescriptionMinimumShare = 4.5 / 12.0;
 
 	/// <summary>
 	///     Two or more simultaneous workers' preview names need more than a twelfth of the row to avoid
@@ -85,7 +81,8 @@ public abstract class AwaitingProgressBrowserTestsBase
 											Exact = true,
 										})
 										.CountAsync();
-		achievementHeadings.Should().Be(0, "the achievement is drawn beside the row's name, not in a column of its own");
+		achievementHeadings.Should().Be(0, "the Active column is the row's sole status presentation");
+		(await table.Locator("tbody .jt-achievement-icon").CountAsync()).Should().Be(0);
 		var description = table.GetByRole(AriaRole.Columnheader, new() {
 			Name = "Description",
 			Exact = true,
@@ -93,7 +90,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 		var tableWidth = await WidthAsync(table);
 		var descriptionWidth = await WidthAsync(description);
 		(descriptionWidth / tableWidth).Should().BeInRange(DescriptionMinimumShare, DescriptionMaximumShare,
-			"Description should own four Bootstrap columns at the tablet breakpoint while Actions accommodates the full row toolbar");
+			"Description should own six Bootstrap columns when Active collapses at the tablet breakpoint");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
@@ -157,7 +154,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 	}
 
 	[Fact]
-	public async Task The_active_column_reflows_to_an_icon_only_pill_at_phone_width()
+	public async Task The_active_column_reflows_to_an_icon_only_pill_through_tablet_width()
 	{
 		var branchId = await fixture.SeedBranchAsync("Awaiting responsive active worker branch");
 		_ = await fixture.SeedActiveSessionsAsync("Awaiting responsive active worker leaf", TwoActiveWorkerCount, branchId);
@@ -180,6 +177,17 @@ public abstract class AwaitingProgressBrowserTestsBase
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
 		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "the additional phone column must not introduce horizontal overflow");
+
+		await using var tabletContext = await fixture.NewContextAsync(TabletWidth, TabletHeight);
+		var tablet = await tabletContext.NewPageAsync();
+		await BrowserTestSupport.SignInAdministratorAsync(tablet, fixture.BaseAddress);
+		await tablet.GotoAsync($"{fixture.BaseAddress}/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}");
+		var tabletRow = tablet.Locator("tbody tr", new() {
+			HasTextString = "Awaiting responsive active worker leaf",
+		}).First;
+		(await tabletRow.Locator(".status-pill-active.status-pill--icon").IsVisibleAsync()).Should().BeTrue();
+		(await tabletRow.Locator(".status-pill-active.status-pill--compact").IsVisibleAsync()).Should().BeFalse();
+		(await tabletRow.Locator("a.small").IsVisibleAsync()).Should().BeTrue();
 	}
 
 	/// <summary>
