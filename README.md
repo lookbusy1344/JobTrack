@@ -13,14 +13,14 @@ This is a recreation of my original project running on SQL Server and .NET 4.8, 
 The app has 2 unusual features:
 
 - work is organised into **branches and leaves**, with a single root node; the tree can be arbitrarily deep, and any node can be moved to a new parent without losing its history or breaking its cost calculations. Actual work is done in leaves, which can be paused and resumed, and worked on by several people concurrently.
-- **cost is computed live**, according to work schedules (with overrides), and concurrent work is split fairly across all participants. Job cost is never stored, and can be recomputed at any time for any node in the tree, even if the tree has been restructured since the work was done.
+- **cost is computed live**, according to work schedules (with overrides), and concurrent work is split fairly across all participants. See [details here](docs/costing-engine.md). Job cost is never stored, and can be recomputed at any time for any node in the tree, even if the tree has been restructured since the work was done.
 
 Additionally, all jobs can have prerequisites, and the system will automatically prevent work from being started on a node until all its prerequisites are complete. As with other features, this applies to both branches and leaves. Since branches don't have work themselves, a branch is considered complete when all its leaves are complete.
 
 Two database backends are supported:
 
 - **PostgreSQL** is the production backend, and is used in the live Google Cloud Run deployment. Supports multi-instance concurrent writes from multiple web hosts.
-- **SQLite** is a fully conforming second provider, intended for embedded and demo use. Writes will be serialized.
+- **SQLite** is a fully conforming second provider, intended for embedded and demo use. Write are always serial in SQLite by design, and we use WAL to ensure writes don’t block concurrent reads.
 
 ## Overview
 
