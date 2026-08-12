@@ -831,8 +831,13 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var reloaded = await client.FollowRedirectAsync(startResponse, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
-		body.Should().Contain("<th class=\"col-10 col-md-5 col-lg-5 col-xxl-3\" aria-label=\"Description\">Desc</th>");
-		body.Should().Contain("<th class=\"jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell\">Active</th>");
+		body.Should().Contain("<th class=\"col-9 col-md-4 col-lg-5 col-xxl-3\" aria-label=\"Description\">Desc</th>");
+		body.Should().Contain(
+			"<th class=\"jt-col-active col-1 col-md-2 col-lg-2\" aria-label=\"Active\"><span class=\"d-none d-md-inline\">Active</span></th>");
+		body.Should().Contain("<span class=\"d-md-none\">");
+		body.Should().Contain("<span class=\"d-none d-md-inline\">");
+		body.Should().Contain("status-pill status-pill-active status-pill--icon\" title=\"Active\"");
+		body.Should().Contain("<th class=\"col-2 col-md-3 col-lg-2 text-end\">Actions</th>");
 		// No achievement column: at one twelfth it was narrower than its own heading at every width, so
 		// the state rides after the row's name instead, exactly as it does on Browse's subtree tables.
 		body.Should().NotContain("jt-col-achievement");
@@ -932,6 +937,43 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		iconIndex.Should().BeGreaterThan(startedIndex);
 		body.Should().Contain("Untouched leaf");
 		body.Should().NotContain(">None</span>");
+	}
+
+	[Fact]
+	public async Task A_worker_can_complete_an_open_job_with_one_click_from_the_dashboard()
+	{
+		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.completer");
+		var rootId = bootstrappedRootId!.Value;
+		var leaf = await AddLeafWithWorkAsync(rootId, workerId, "Complete from dashboard", adminId);
+		var authCookie = await client.SignInAsync("awaiting.completer");
+
+		var (startCookie, startToken) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
+		var startResponse = await PostStartWorkAsync(authCookie, startCookie, startToken, leaf.JobNodeId);
+		_ = await client.FollowRedirectAsync(startResponse, authCookie);
+
+		var (completeCookie, completeToken) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
+		var dashboard = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
+		var dashboardBody = await dashboard.Content.ReadAsStringAsync();
+		dashboardBody.Should().Contain("Complete this job? Every open session on it will be closed.");
+
+		var response = await PostCompleteAsync(authCookie, completeCookie, completeToken, leaf.JobNodeId);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
+		var reloadedBody = await reloaded.Content.ReadAsStringAsync();
+		reloadedBody.Should().Contain("Job marked complete. Its one open session was closed.");
+
+		var leafWork = await seedClient.Query.GetLeafWorkAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			JobNodeId = leaf.JobNodeId,
+		});
+		leafWork.Achievement.Should().Be(Achievement.Success);
+
+		var activeSessions = await seedClient.Query.GetActiveSessionsAsync(new() {
+			Context = new() { Actor = adminId, CorrelationId = Guid.NewGuid() },
+			LeafWorkIds = [leaf.JobNodeId],
+		});
+		activeSessions.Should().BeEmpty();
 	}
 
 	[Fact]
@@ -1390,6 +1432,19 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		}
 
 		request.Content = new FormUrlEncodedContent(fields);
+
+		return await client.SendAsync(request);
+	}
+
+	private async Task<HttpResponseMessage> PostCompleteAsync(
+		string authCookie, string antiforgeryCookie, string token, JobNodeId jobNodeId)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Jobs/AwaitingProgress?handler=Complete");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["jobNodeId"] = jobNodeId.Value.ToString(CultureInfo.InvariantCulture),
+			["__RequestVerificationToken"] = token,
+		});
 
 		return await client.SendAsync(request);
 	}

@@ -84,8 +84,8 @@ public sealed class WorkRowActionsModel
 	public string? ReturnUrl { get; init; }
 
 	/// <summary>
-	///     The Razor Pages handler the one-click "Complete" form posts to — <c>Complete</c> on Browse,
-	///     omitted (no button rendered) on the awaiting-progress dashboard, which has no such handler.
+	///     The Razor Pages handler the one-click "Complete" form posts to — <c>Complete</c> on Browse
+	///     and the awaiting-progress dashboard; omitted on hosts that do not support inline completion.
 	/// </summary>
 	public string? CompleteHandler { get; init; }
 

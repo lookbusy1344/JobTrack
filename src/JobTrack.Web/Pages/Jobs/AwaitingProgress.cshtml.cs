@@ -29,7 +29,8 @@ public sealed class AwaitingProgressModel(
 	UserManager<JobTrackIdentityUser> userManager,
 	IViewerTimeZoneResolver viewerTimeZoneResolver,
 	IClock clock,
-	IDataProtectionProvider dataProtectionProvider) : PageModel
+	IDataProtectionProvider dataProtectionProvider,
+	ILogger<AwaitingProgressModel> logger) : PageModel
 {
 	// Fresh-eyes review §2.8: this dashboard is not paginated by an external API contract, so a
 	// dashboard-appropriate fixed page size is enough -- no caller-supplied override.
@@ -241,6 +242,7 @@ public sealed class AwaitingProgressModel(
 		PageStateFields = RowStateFields,
 		StartForWorkerOptions = StartForWorkerOptions,
 		ReturnUrl = AwaitingProgressReturnUrl,
+		CompleteHandler = "Complete",
 	};
 
 	/// <summary>
@@ -297,6 +299,61 @@ public sealed class AwaitingProgressModel(
 		}
 		catch (PrerequisiteBlockedException) {
 			ErrorMessage = "This leaf's prerequisites are not satisfied.";
+		}
+
+		return RedirectToPage(CurrentRouteValues());
+	}
+
+	/// <summary>
+	///     One-click "Complete": closes every currently active session on <paramref name="jobNodeId" />
+	///     and marks it <see cref="Achievement.Success" /> through the same atomic composite as Browse.
+	///     The version and active-session set are read immediately before the command because this
+	///     compact row action offers no intervening review screen.
+	/// </summary>
+	public async Task<IActionResult> OnPostCompleteAsync(long jobNodeId, CancellationToken cancellationToken)
+	{
+		var actor = await userManager.GetAppUserIdAsync(User);
+		if (actor is null) {
+			return Challenge();
+		}
+
+		var context = new CommandContext { Actor = actor.Value, CorrelationId = Guid.NewGuid() };
+
+		try {
+			var leafNodeId = new JobNodeId(jobNodeId);
+			var leafWork = await jobTrackClient.Query.GetLeafWorkAsync(
+				new() { Context = context, JobNodeId = leafNodeId }, cancellationToken);
+			var activeSessions = await jobTrackClient.Query.GetActiveSessionsAsync(
+				new() { Context = context, LeafWorkIds = [leafNodeId] }, cancellationToken);
+
+			var result = await jobTrackClient.Work.CompleteLeafAsync(new() {
+				Context = context,
+				JobNodeId = leafNodeId,
+				Version = leafWork.Version,
+				ExpectedActiveSessions =
+					[.. activeSessions.Select(session => new ExpectedActiveSession { Id = session.Id, Version = session.Version })],
+			}, cancellationToken);
+			SuccessMessage = result.FinishedSessions.Count switch {
+				0 => "Job marked complete.",
+				1 => "Job marked complete. Its one open session was closed.",
+				var count => $"Job marked complete. Its {count} open sessions were closed.",
+			};
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "This leaf has no work attached.";
+		}
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(AwaitingProgressModel), ex);
+			ErrorMessage = "Someone else changed this leaf, or one of its active sessions, since the page was loaded.";
+		}
+		catch (InvariantViolationException ex) {
+			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
+		}
+		catch (PrerequisiteBlockedException) {
+			ErrorMessage = "This job is blocked: a prerequisite it depends on is not complete, so it cannot be closed yet.";
 		}
 
 		return RedirectToPage(CurrentRouteValues());

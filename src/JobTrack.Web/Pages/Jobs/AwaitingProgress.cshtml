@@ -96,25 +96,42 @@
 				@* No achievement column: at one twelfth it was narrower than the word heading it, so the
 				   state trails the row's name instead, exactly as it does on Browse's subtree tables.
 				   Its share goes to the description, the only column that can always use more.
-				   Column allowance mirrors Browse's own child-nodes table (Description/Pri/Due/Active/
-				   Cost/Actions) so the same row reads at the same width on either page. *@
-				<th class="col-10 col-md-5 col-lg-5 col-xxl-3" aria-label="Description">Desc</th>
+				   Phone allowance mirrors Browse's subtree table (Description/Active/Actions). From md,
+				   Awaiting Progress gives Actions one more column for its full dashboard toolbar; from lg
+				   onward the wider viewport restores Browse's Description/Active/Cost/Actions shares. *@
+				<th class="col-9 col-md-4 col-lg-5 col-xxl-3" aria-label="Description">Desc</th>
 				<th class="jt-col-secondary col-xxl-1 d-none d-xxl-table-cell" aria-label="Priority">Pri</th>
 				<th class="jt-col-secondary col-lg-1 d-none d-lg-table-cell" aria-label="Deadline">Due</th>
 				@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
 				   workers' names (the preview list below the count pill) need more than a twelfth of the
 				   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
 				   the column, staying at its "at least 3 of 12" floor rather than the 5 it held before. *@
-				<th class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">Active</th>
+				@* Active follows Browse's subtree table at phone width: one narrow icon column, expanding
+				   to the full labelled pill from md. The heading keeps its accessible name while hiding the
+				   word that would otherwise set a much wider min-content floor. *@
+				@* @formatter:off *@
+				<th class="jt-col-active col-1 col-md-2 col-lg-2" aria-label="Active"><span class="d-none d-md-inline">Active</span></th>
+				@* @formatter:on *@
 				<th class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
-				<th class="col-2 text-end">Actions</th>
+				@* The extra md column holds the dashboard's full row-action set without squeezing Description;
+				   at lg the wider viewport lets Actions return to the usual two-column share. *@
+				<th class="col-2 col-md-3 col-lg-2 text-end">Actions</th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var entry in Model.Entries) {
 				var entryActions = Model.WorkRowActionsFor(entry.Id, entry.Achievement);
+				var activeSummary = new ActiveSessionSummaryModel {
+					ActiveSessions = entryActions.ActiveSessions,
+					ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+					DescribeWorker = id => Model.DescribeOwner(id),
+					ViewerZone = Model.ViewerZone,
+					Now = Model.Now,
+					Closed = entryActions.IsStartClosed,
+					Paused = entryActions.IsPaused,
+				};
 				<tr>
-					<td class="col-10 col-md-5 col-lg-5 col-xxl-3">
+					<td class="col-9 col-md-4 col-lg-5 col-xxl-3">
 						@if (!entry.IsReady) {
 							<span class="status-pill status-pill--icon status-pill-blocked"><svg class="status-pill-glyph" viewBox="0 0 16 16"
 							                                                                     aria-hidden="true" focusable="false"><use
@@ -137,22 +154,18 @@
 								class="@(InstantDisplay.IsPast(neededInstant, Model.Now) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
 						}
 					</td>
-					<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">
-						<partial name="_ActiveSincePill"
-						         model="@(new ActiveSessionSummaryModel {
-							                ActiveSessions = entryActions.ActiveSessions,
-							                ViewerId = Model.CurrentActorId ?? new AppUserId(0),
-							                DescribeWorker = id => Model.DescribeOwner(id),
-							                ViewerZone = Model.ViewerZone,
-							                Now = Model.Now,
-							                Closed = entryActions.IsStartClosed,
-							                Paused = entryActions.IsPaused,
-						                })"/>
+					<td class="jt-col-active col-1 col-md-2 col-lg-2">
+						<span class="d-md-none">
+							<partial name="_ActiveStatusIcon" model="activeSummary"/>
+						</span>
+						<span class="d-none d-md-inline">
+							<partial name="_ActiveSincePill" model="activeSummary"/>
+						</span>
 					</td>
 					<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">@(entry.Cost.HasValue && entry.AllocatedDuration is not null
 							? CostDisplay.FormatCell(entry.Cost.Value, entry.AllocatedDuration)
 							: null)</td>
-					<td class="col-2">
+					<td class="col-2 col-md-3 col-lg-2">
 						<partial name="_WorkRowActions" model="entryActions"/>
 					</td>
 				</tr>

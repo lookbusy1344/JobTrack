@@ -77,16 +77,16 @@ through `IJobTrackClient` — the dependency rules are asserted by the tests in
 ## Code size
 
 Lines of code as counted by [`tokei`](https://github.com/XAMPPRocky/tokei) (blank lines and comments
-excluded), as of 11 August 2026:
+excluded), as of 12 August 2026:
 
 | Area | Files | Lines of code |
 | --- | ---: | ---: |
-| Product — `src/` | 721 | 36,888 |
-| Tests — `tests/` | 426 | 71,291 |
+| Product — `src/` | 722 | 36,613 |
+| Tests — `tests/` | 432 | 66,852 |
 | Database schema — `database/` | 41 | 2,210 |
 | Sample API client — `samples/` | 19 | 1,079 |
 
-The 70k lines of test code is a consequence of *Test Driven Development*, with over 3,000 tests in the full suite. It takes up to 10 minutes to run, even on a fast Mac.
+The 66k lines of test code are a consequence of *Test Driven Development*, with over 4,000 tests in the full suite. It takes up to 10 minutes to run, even on a fast Mac.
 
 A short test script, aiming to complete in about 20 seconds, is used for pre-commit checks [`scripts/fast-test.sh`](scripts/fast-test.sh)
 
@@ -97,7 +97,7 @@ A short test script, aiming to complete in about 20 seconds, is used for pre-com
 [0026](docs/decisions/0026-m6-library-gate-acceptance.md),
 [0027](docs/decisions/0027-m8-web-gate-acceptance.md),
 [0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md)). The codebase was built
-test-first throughout (about two and a half lines of test for every line of product code), passes its full
+test-first throughout (about 1.8 lines of test for every line of product code), passes its full
 solution and performance suites, and has been through three internal security audits, each fully
 remediated. Performance is enforced: measured budgets on a 200,000-node
 production-shape database run as regression ceilings on every performance-suite run.

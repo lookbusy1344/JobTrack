@@ -9,6 +9,8 @@ using Microsoft.Playwright;
 /// </summary>
 public abstract class AwaitingProgressBrowserTestsBase
 {
+	private const int SmallPhoneWidth = 375;
+	private const int SmallPhoneHeight = 667;
 	private const int TabletWidth = 768;
 	private const int TabletHeight = 1024;
 	private const int DesktopWidth = 1280;
@@ -19,12 +21,13 @@ public abstract class AwaitingProgressBrowserTestsBase
 	/// <summary>
 	///     Achievement renders an icon, not text, so at one twelfth the column was narrower than the
 	///     word heading it at every width. It is gone: the state trails the row's name, as it does on
-	///     Browse's subtree tables, and its share funds the description — the column that can always
-	///     use more. Cost keeps the room it gained when Achievement dropped from two columns to one.
+	///     Browse's subtree tables. At the tablet breakpoint Description keeps four columns while the
+	///     dashboard's larger action set takes three; Cost keeps the room it gained when Achievement
+	///     dropped from two columns to one.
 	/// </summary>
-	private const double DescriptionMinimumShare = 4.5 / 12.0;
+	private const double DescriptionMinimumShare = 3.5 / 12.0;
 
-	private const double DescriptionMaximumShare = 5.5 / 12.0;
+	private const double DescriptionMaximumShare = 4.5 / 12.0;
 
 	/// <summary>
 	///     Column allowance mirrors Browse's own child-nodes table: Description holds col-lg-5 at the
@@ -78,7 +81,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 		var tableWidth = await WidthAsync(table);
 		var descriptionWidth = await WidthAsync(description);
 		(descriptionWidth / tableWidth).Should().BeInRange(DescriptionMinimumShare, DescriptionMaximumShare,
-			"Description should own five Bootstrap columns at the tablet breakpoint");
+			"Description should own four Bootstrap columns at the tablet breakpoint while Actions accommodates the full row toolbar");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
 		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
@@ -115,7 +118,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 
 		var table = page.Locator("table.table");
 		var row = table.Locator("tbody tr", new() { HasTextString = TwoActiveWorkerRowTitle }).First;
-		var activePill = row.Locator(".jt-col-active .status-pill-active");
+		var activePill = row.Locator(".jt-col-active .status-pill-active.status-pill--compact");
 		(await activePill.GetAttributeAsync("title")).Should().Be($"{TwoActiveWorkerCount} active");
 		(await VisibleTextOfAsync(activePill)).Should().Be(TwoActiveWorkerCount.ToString(CultureInfo.InvariantCulture));
 
@@ -131,6 +134,30 @@ public abstract class AwaitingProgressBrowserTestsBase
 			$"Description must keep at least three of twelve columns at {width}x{height}");
 		(activeWidth / tableWidth).Should().BeGreaterThanOrEqualTo(LargeActiveMinimumShare,
 			$"Active must keep at least its widened column share at {width}x{height}");
+	}
+
+	[Fact]
+	public async Task The_active_column_reflows_to_an_icon_only_pill_at_phone_width()
+	{
+		var branchId = await fixture.SeedBranchAsync("Awaiting responsive active worker branch");
+		_ = await fixture.SeedActiveSessionsAsync("Awaiting responsive active worker leaf", TwoActiveWorkerCount, branchId);
+
+		await using var context = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
+		var page = await context.NewPageAsync();
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}");
+
+		var row = page.Locator("tbody tr", new() { HasTextString = "Awaiting responsive active worker leaf" }).First;
+		var activeCell = row.Locator(".jt-col-active");
+		var activeIcon = activeCell.Locator(".status-pill-active.status-pill--icon");
+		(await activeCell.IsVisibleAsync()).Should().BeTrue();
+		(await activeIcon.IsVisibleAsync()).Should().BeTrue();
+		(await activeIcon.GetAttributeAsync("title")).Should().Be($"{TwoActiveWorkerCount} active");
+		(await VisibleTextOfAsync(activeIcon)).Should().BeEmpty("the one-column phone status carries only its accessible icon");
+
+		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
+		var clientWidth = await page.EvaluateAsync<int>("document.documentElement.clientWidth");
+		scrollWidth.Should().BeLessThanOrEqualTo(clientWidth, "the additional phone column must not introduce horizontal overflow");
 	}
 
 	/// <summary>
