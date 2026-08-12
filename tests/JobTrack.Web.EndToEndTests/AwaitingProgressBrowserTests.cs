@@ -66,7 +66,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(TabletWidth, TabletHeight);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/AwaitingProgress");
 
 		var table = page.Locator("table.table");
@@ -106,7 +106,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -149,14 +149,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 		return box!.Width;
 	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class SqliteAwaitingProgressBrowserTests : AwaitingProgressBrowserTestsBase, IClassFixture<SqliteBrowserFixture>

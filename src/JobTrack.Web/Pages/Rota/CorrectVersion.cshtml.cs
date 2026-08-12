@@ -20,7 +20,9 @@ using NodaTime.TimeZones;
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.ScheduleAdministration)]
 public sealed class CorrectVersionModel(
-	IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager, ILogger<CorrectVersionModel> logger) : PageModel
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	ILogger<CorrectVersionModel> logger) : PageModel
 {
 	private const int MaxWeeklyIntervalSlots = 10;
 
@@ -36,7 +38,7 @@ public sealed class CorrectVersionModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -61,7 +63,7 @@ public sealed class CorrectVersionModel(
 
 	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -142,12 +144,6 @@ public sealed class CorrectVersionModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That employee does not exist.";
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	private static DateOnly ToDateOnly(LocalDate date) => new(date.Year, date.Month, date.Day);

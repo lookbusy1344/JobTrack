@@ -222,7 +222,7 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<(AppUserId AuditorId, AppUserId CostViewerAuditorId, AppUserId WorkerId)> SeedEventsAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -241,15 +241,15 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		// administrator now always also holds EmployeeRole.Administrator (bootstrap grants it),
 		// which alone satisfies CostAccessPolicy.CanView and would defeat this fixture's
 		// "auditor without cost visibility" scenario.
-		var auditorId = await SeedEmployeeAsync("Rosalind Franklin", "rosalind.franklin.audit", EmployeeRole.Auditor);
+		var auditorId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Rosalind Franklin", "rosalind.franklin.audit", EmployeeRole.Auditor);
 
-		var costViewerAuditorId = await SeedEmployeeAsync("Katherine Jones", "katherine.jones.audit", EmployeeRole.Auditor);
-		await using (var connection = await OpenExistingConnectionAsync()) {
-			await AssignRoleAsync(connection, costViewerAuditorId, EmployeeRole.CostViewer);
+		var costViewerAuditorId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Katherine Jones", "katherine.jones.audit", EmployeeRole.Auditor);
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
+			await DatabaseContractTestSupport.AssignRoleAsync(connection, costViewerAuditorId, EmployeeRole.CostViewer);
 		}
 
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper.audit", EmployeeRole.Worker);
-		var actorId = await SeedEmployeeAsync("Margaret Hamilton", "margaret.hamilton.audit", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper.audit", EmployeeRole.Worker);
+		var actorId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Margaret Hamilton", "margaret.hamilton.audit", EmployeeRole.Worker);
 
 		await InsertAuditEventAsync(
 			actorId, At(9), "create-job-node", "job_node", 42, Guid.NewGuid(),
@@ -275,7 +275,7 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		Func<int, long> entityIdAt,
 		Func<int, (Instant OccurredAt, string EntityType, long EntityId)>? interleaveWith = null)
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -290,8 +290,8 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		var auditorId = await SeedEmployeeAsync("Rosalind Franklin", "rosalind.franklin.audit", EmployeeRole.Auditor);
-		var actorId = await SeedEmployeeAsync("Margaret Hamilton", "margaret.hamilton.audit", EmployeeRole.Worker);
+		var auditorId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Rosalind Franklin", "rosalind.franklin.audit", EmployeeRole.Auditor);
+		var actorId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Margaret Hamilton", "margaret.hamilton.audit", EmployeeRole.Worker);
 
 		var entityIds = new List<long>(count);
 		for (var index = 0; index < count; ++index) {
@@ -312,7 +312,7 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 	private async Task InsertAuditEventAsync(
 		AppUserId actorId, Instant occurredAt, string operation, string entityType, long entityId, Guid correlationId, string afterDataJson)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 
 		if (Provider == SchemaProvider.PostgreSql) {
@@ -322,8 +322,8 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 								  VALUES
 								  	(@occurredAt, @actorUserId, @operation, @entityType, @entityId, @correlationId, NULL, NULL, @afterData::jsonb);
 								  """;
-			AddParameter(command, "@occurredAt", occurredAt.ToDateTimeOffset());
-			AddParameter(command, "@correlationId", correlationId);
+			command.AddParameter("@occurredAt", occurredAt.ToDateTimeOffset());
+			command.AddParameter("@correlationId", correlationId);
 		} else {
 			command.CommandText = """
 								  INSERT INTO audit_event
@@ -331,80 +331,23 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 								  VALUES
 								  	(@occurredAt, @actorUserId, @operation, @entityType, @entityId, @correlationId, NULL, NULL, @afterData);
 								  """;
-			AddParameter(command, "@occurredAt", occurredAt.ToUnixTimeTicks());
-			AddParameter(command, "@correlationId", correlationId.ToString());
+			command.AddParameter("@occurredAt", occurredAt.ToUnixTimeTicks());
+			command.AddParameter("@correlationId", correlationId.ToString());
 		}
 
-		AddParameter(command, "@actorUserId", actorId.Value);
-		AddParameter(command, "@operation", operation);
-		AddParameter(command, "@entityType", entityType);
-		AddParameter(command, "@entityId", entityId);
-		AddParameter(command, "@afterData", afterDataJson);
+		command.AddParameter("@actorUserId", actorId.Value);
+		command.AddParameter("@operation", operation);
+		command.AddParameter("@entityType", entityType);
+		command.AddParameter("@entityId", entityId);
+		command.AddParameter("@afterData", afterDataJson);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
-	{
-		await using var connection = await OpenExistingConnectionAsync();
 
-		await using var appUserCommand = connection.CreateCommand();
-		appUserCommand.CommandText = """
-									 INSERT INTO app_user (display_name, iana_time_zone)
-									 VALUES (@displayName, 'Europe/London')
-									 RETURNING id;
-									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
-		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
-		await using var identityUserCommand = connection.CreateCommand();
-		identityUserCommand.CommandText = """
-										  INSERT INTO identity_user
-										  	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										  	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										  VALUES
-										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-										  	 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
-		_ = await identityUserCommand.ExecuteNonQueryAsync();
 
-		await AssignRoleAsync(connection, appUserId, role);
 
-		return appUserId;
-	}
 
-	private static async Task AssignRoleAsync(DbConnection connection, AppUserId appUserId, EmployeeRole role)
-	{
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
 }

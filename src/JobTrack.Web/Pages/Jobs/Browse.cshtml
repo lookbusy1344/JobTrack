@@ -199,7 +199,7 @@
 						                                        Compact = false,
 						                                        Closed = toolbarActions.IsStartClosed,
 						                                        Paused = toolbarActions.IsPaused,
-						                                        })"/>
+					                                        })"/>
 				</dd>
 			</div>
 		}
@@ -271,6 +271,7 @@
 					</button>
 				</form>
 			}
+
 			<a class="btn btn-outline-danger"
 			   asp-page="/Jobs/Delete"
 			   asp-route-nodeId="@Model.CurrentNode.Node.Id.Value"
@@ -556,7 +557,11 @@
 					   workers' names (the preview list below the count pill) need more than a twelfth of the
 					   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
 					   the column, staying at its "at least 3 of 12" floor rather than the 4 it held before. *@
+					@* A wrap before </th> puts a newline and tabs inside the heading, which
+					   BrowseWorkSessionTests' single-string assertion cannot read. *@
+					@* @formatter:off *@
 					<th scope="col" class="jt-col-active col-1 col-md-2 col-lg-2" aria-label="Active"><span class="d-none d-md-inline">Active</span></th>
+					@* @formatter:on *@
 					<th scope="col" class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
 					@* The heading is visually hidden, not removed: the word "Position" is nearly five times
 					   the width of the bar it labels, so with it visible the column can never narrow to

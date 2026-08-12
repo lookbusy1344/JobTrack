@@ -40,7 +40,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrapResult = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -72,11 +72,11 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_job_manager_can_save_a_new_child_under_the_root()
 	{
-		var managerId = await SeedEmployeeAsync("create.manager", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.manager");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.manager", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.manager");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
-		var beforeSave = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var beforeSave = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		(await beforeSave.Content.ReadAsStringAsync()).Should().NotContain("Pour foundation");
 
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, rootId, "Pour foundation", managerId);
@@ -84,17 +84,17 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		saveResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Browse");
 
-		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var afterSave = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		(await afterSave.Content.ReadAsStringAsync()).Should().Contain("Pour foundation");
 	}
 
 	[Fact]
 	public async Task The_create_page_has_no_branch_or_leaf_selector()
 	{
-		_ = await SeedEmployeeAsync("create.no-kind", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.no-kind");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.no-kind", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.no-kind");
 
-		var response = await GetAsync($"/Jobs/Create?parentId={rootId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Create?parentId={rootId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().Contain("Create child");
@@ -115,14 +115,14 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task A_description_containing_script_markup_is_rendered_html_encoded_not_as_live_markup()
 	{
 		const string InjectedDescription = "<script>alert('xss')</script>";
-		var managerId = await SeedEmployeeAsync("create.xss-manager", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.xss-manager");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.xss-manager", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.xss-manager");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, rootId, InjectedDescription, managerId);
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
-		var browseResponse = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var browseResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		var browseBody = await browseResponse.Content.ReadAsStringAsync();
 
 		browseBody.Should().NotContain(InjectedDescription);
@@ -132,8 +132,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_who_does_not_own_the_parent_is_denied_on_save()
 	{
-		var workerId = await SeedEmployeeAsync("create.denied-worker", EmployeeRole.Worker);
-		var authCookie = await SignInAsync("create.denied-worker");
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.denied-worker", EmployeeRole.Worker);
+		var authCookie = await client.SignInAsync("create.denied-worker");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, rootId, "Unauthorized child", workerId);
@@ -145,7 +145,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_who_owns_the_parent_can_create_a_child_under_it()
 	{
-		var workerId = await SeedEmployeeAsync("create.owning-worker", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.owning-worker", EmployeeRole.Worker);
 		var branchResult = await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
 			ParentId = rootId,
@@ -153,7 +153,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 			OwnerUserId = workerId,
 			Priority = Priority.Medium,
 		});
-		var authCookie = await SignInAsync("create.owning-worker");
+		var authCookie = await client.SignInAsync("create.owning-worker");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, branchResult.Id);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, branchResult.Id, "Owned child", workerId);
@@ -165,14 +165,14 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_job_manager_can_create_an_unassigned_child_from_a_blank_owner_field()
 	{
-		var managerId = await SeedEmployeeAsync("create.unassigned-manager", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.unassigned-manager");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.unassigned-manager", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.unassigned-manager");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, rootId, "Pool child from web", null);
 
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var browseResponse = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}&unassignedOnly=true", authCookie);
+		var browseResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}&unassignedOnly=true", authCookie);
 		var browseBody = await browseResponse.Content.ReadAsStringAsync();
 		browseBody.Should().Contain("Pool child from web");
 	}
@@ -180,8 +180,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Creating_under_a_nonexistent_parent_shows_an_error()
 	{
-		var managerId = await SeedEmployeeAsync("create.missing-parent", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.missing-parent");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.missing-parent", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.missing-parent");
 		var missingParentId = new JobNodeId(rootId.Value + 999);
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, missingParentId);
@@ -195,7 +195,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Creating_under_a_parent_that_already_has_leaf_work_shows_an_error()
 	{
-		var managerId = await SeedEmployeeAsync("create.worked-parent-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.worked-parent-manager", EmployeeRole.JobManager);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
 			ParentId = rootId,
@@ -207,7 +207,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = managerId, CorrelationId = Guid.NewGuid() },
 			JobNodeId = leaf.Id,
 		});
-		var authCookie = await SignInAsync("create.worked-parent-manager");
+		var authCookie = await client.SignInAsync("create.worked-parent-manager");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, leaf.Id);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, leaf.Id, "Invalid child", managerId);
@@ -220,10 +220,10 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_create_page_offers_a_begin_work_selector_defaulting_to_none()
 	{
-		_ = await SeedEmployeeAsync("create.begin-work-form", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.begin-work-form");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.begin-work-form", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.begin-work-form");
 
-		var response = await GetAsync($"/Jobs/Create?parentId={rootId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Create?parentId={rootId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().Contain("Begin work for");
@@ -236,8 +236,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Choosing_a_worker_in_begin_work_for_creates_the_child_already_in_progress_with_an_open_session()
 	{
-		var managerId = await SeedEmployeeAsync("create.begin-work-manager", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.begin-work-manager");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.begin-work-manager", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.begin-work-manager");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(
@@ -255,8 +255,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Leaving_begin_work_for_at_none_creates_a_child_with_no_leaf_work()
 	{
-		var managerId = await SeedEmployeeAsync("create.begin-work-none", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.begin-work-none");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.begin-work-none", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.begin-work-none");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, rootId, "Nobody started this", managerId);
@@ -276,7 +276,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Beginning_work_on_a_child_of_a_blocked_parent_shows_an_error_and_creates_nothing()
 	{
-		var managerId = await SeedEmployeeAsync("create.begin-work-blocked", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.begin-work-blocked", EmployeeRole.JobManager);
 		var context = new CommandContext { Actor = administratorId, CorrelationId = Guid.NewGuid() };
 		var required = await seedClient.Jobs.AddChildAsync(new() {
 			Context = context,
@@ -297,7 +297,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 			RequiredJobId = required.Id,
 			DependentJobId = anchor.Id,
 		});
-		var authCookie = await SignInAsync("create.begin-work-blocked");
+		var authCookie = await client.SignInAsync("create.begin-work-blocked");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, anchor.Id);
 		var saveResponse = await PostAsync(
@@ -315,9 +315,9 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Beginning_work_for_an_ineligible_employee_shows_an_error_and_creates_nothing()
 	{
-		var managerId = await SeedEmployeeAsync("create.begin-work-ineligible-manager", EmployeeRole.JobManager);
-		var requesterId = await SeedEmployeeAsync("create.begin-work-requester", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("create.begin-work-ineligible-manager");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.begin-work-ineligible-manager", EmployeeRole.JobManager);
+		var requesterId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.begin-work-requester", EmployeeRole.Requester);
+		var authCookie = await client.SignInAsync("create.begin-work-ineligible-manager");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(
@@ -325,7 +325,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("no longer eligible");
-		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var afterSave = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		(await afterSave.Content.ReadAsStringAsync()).Should().NotContain("Ineligible worker child");
 	}
 
@@ -341,8 +341,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_malformed_NeededStart_is_rejected_without_creating_the_child()
 	{
-		var managerId = await SeedEmployeeAsync("create.malformed-needed", EmployeeRole.JobManager);
-		var authCookie = await SignInAsync("create.malformed-needed");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.malformed-needed", EmployeeRole.JobManager);
+		var authCookie = await client.SignInAsync("create.malformed-needed");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(
@@ -350,7 +350,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		(await saveResponse.Content.ReadAsStringAsync()).Should().Contain("Enter a valid date and time.");
-		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var afterSave = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		(await afterSave.Content.ReadAsStringAsync()).Should().NotContain("Malformed needed-start child");
 	}
 
@@ -365,8 +365,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task NeededStart_is_resolved_in_the_viewing_employees_own_zone_not_the_server_process_zone()
 	{
 		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
-		var managerId = await SeedEmployeeAsync("create.viewer-zone", EmployeeRole.JobManager, "America/New_York");
-		var authCookie = await SignInAsync("create.viewer-zone");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.viewer-zone", EmployeeRole.JobManager, "America/New_York");
+		var authCookie = await client.SignInAsync("create.viewer-zone");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(
@@ -387,8 +387,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task A_NeededStart_landing_in_a_spring_forward_gap_shifts_forward_by_the_gap_length()
 	{
 		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
-		var managerId = await SeedEmployeeAsync("create.dst-gap", EmployeeRole.JobManager, "America/New_York");
-		var authCookie = await SignInAsync("create.dst-gap");
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "create.dst-gap", EmployeeRole.JobManager, "America/New_York");
+		var authCookie = await client.SignInAsync("create.dst-gap");
 
 		var (antiforgeryCookie, token) = await GetCreateFormAsync(authCookie, rootId);
 		var saveResponse = await PostAsync(
@@ -444,61 +444,20 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in Create page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in Create page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
 
-		return await client.SendAsync(request);
-	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
@@ -506,77 +465,8 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"Input.BeginWorkForUserId\">(?<options>.*?)</select>", RegexOptions.Singleline)]
 	private static partial Regex BeginWorkSelectPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, $ianaTimeZone); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		_ = insertAppUser.Parameters.AddWithValue("$ianaTimeZone", ianaTimeZone);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
-
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

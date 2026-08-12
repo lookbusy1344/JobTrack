@@ -118,7 +118,7 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 
 	private async Task DeploySchemaAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 		var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -126,7 +126,7 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 
 	private async Task<(AppUserId ActorId, long IdentityUserId)> SeedAppUserAsync(string displayName)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var appUserCommand = connection.CreateCommand();
 		appUserCommand.CommandText = """
@@ -134,7 +134,7 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 									 VALUES (@displayName, 'Europe/London')
 									 RETURNING id;
 									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
+		appUserCommand.AddParameter("@displayName", displayName);
 		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
 		await using var identityUserCommand = connection.CreateCommand();
@@ -147,14 +147,14 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 										     @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0)
 										  RETURNING id;
 										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", "seeded.user");
-		AddParameter(identityUserCommand, "@normalizedUserName", "SEEDED.USER");
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
+		identityUserCommand.AddParameter("@appUserId", appUserId.Value);
+		identityUserCommand.AddParameter("@userName", "seeded.user");
+		identityUserCommand.AddParameter("@normalizedUserName", "SEEDED.USER");
+		identityUserCommand.AddParameter("@securityStamp", Guid.NewGuid().ToString("N"));
+		identityUserCommand.AddParameter("@concurrencyStamp", Guid.NewGuid().ToString("N"));
+		identityUserCommand.AddParameter("@requiresPasswordChange", false);
+		identityUserCommand.AddParameter("@isEnabled", true);
+		identityUserCommand.AddParameter("@lockoutEnabled", true);
 		var identityUserId = Convert.ToInt64(await identityUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
 		return (appUserId, identityUserId);
@@ -162,7 +162,7 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 
 	private async Task<long> CountAppUsersAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT COUNT(*) FROM app_user;";
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
@@ -176,7 +176,7 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 
 	private async Task<IReadOnlyList<AuditRow>> AllAuditRowsAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT actor_user_id, entity_type, entity_id, after_data FROM audit_event ORDER BY id;";
 
@@ -193,21 +193,9 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 		return rows;
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 
 	private sealed record AuditRow(long? ActorUserId, string EntityType, long EntityId, string? AfterData);
 }

@@ -941,7 +941,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	{
 		JobNodeEntity? existingWorkChild = null;
 		if (oldLeafWork is not null) {
-			existingWorkChild = new JobNodeEntity {
+			existingWorkChild = new() {
 				Id = default,
 				ParentId = branch.ParentId,
 				Description = request.ExistingWorkDescription!,

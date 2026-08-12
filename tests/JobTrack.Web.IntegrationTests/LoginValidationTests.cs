@@ -27,7 +27,7 @@ public sealed partial class LoginValidationTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 	}
 
 	public async Task DisposeAsync() => await database.DisposeAsync();
@@ -77,20 +77,7 @@ public sealed partial class LoginValidationTests : IAsyncLifetime, IDisposable
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
 	private sealed class LoginValidationWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
 	{

@@ -228,18 +228,6 @@ public sealed class BrowseModel(
 			: CurrentNodeAchievement is not (Achievement.Success or Achievement.Cancelled or Achievement.Unsuccessful);
 
 	/// <summary>
-	///     Whether one child-table node is still open. Branches use their recursive two-state roll-up;
-	///     leaves use the terminal states from the separate leaf achievement vocabulary.
-	/// </summary>
-	public static bool SubtreeNodeIsOpen(JobSubtreeNodeResult node)
-	{
-		ArgumentNullException.ThrowIfNull(node);
-		return node.BranchAchievement is BranchAchievement branchAchievement
-			? branchAchievement is BranchAchievement.Unfinished
-			: node.Achievement is not (Achievement.Success or Achievement.Cancelled or Achievement.Unsuccessful);
-	}
-
-	/// <summary>
 	///     The current leaf's Sessions panel (shared with <see cref="WorkModel" /> via
 	///     <c>_LeafWorkSessions</c>) — <see langword="null" /> for a branch/root, where the subtree table
 	///     renders instead (a node never has both children and leaf work, so the two are mutually
@@ -317,6 +305,18 @@ public sealed class BrowseModel(
 		searchText = SearchText,
 		showArchived = ShowArchived,
 	});
+
+	/// <summary>
+	///     Whether one child-table node is still open. Branches use their recursive two-state roll-up;
+	///     leaves use the terminal states from the separate leaf achievement vocabulary.
+	/// </summary>
+	public static bool SubtreeNodeIsOpen(JobSubtreeNodeResult node)
+	{
+		ArgumentNullException.ThrowIfNull(node);
+		return node.BranchAchievement is BranchAchievement branchAchievement
+			? branchAchievement is BranchAchievement.Unfinished
+			: node.Achievement is not (Achievement.Success or Achievement.Cancelled or Achievement.Unsuccessful);
+	}
 
 	/// <summary>
 	///     Builds a <see cref="WorkRowActionsModel" /> for <paramref name="leafId" />, sourcing its active-session collection and manage capability
@@ -532,7 +532,8 @@ public sealed class BrowseModel(
 				Context = context,
 				JobNodeId = jobNodeId,
 				Version = leafWork.Version,
-				ExpectedActiveSessions = [.. activeSessions.Select(session => new ExpectedActiveSession { Id = session.Id, Version = session.Version })],
+				ExpectedActiveSessions =
+					[.. activeSessions.Select(session => new ExpectedActiveSession { Id = session.Id, Version = session.Version })],
 			}, cancellationToken);
 			SuccessMessage = result.FinishedSessions.Count switch {
 				0 => "Job marked complete.",

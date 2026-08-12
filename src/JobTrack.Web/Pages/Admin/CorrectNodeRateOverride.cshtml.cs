@@ -32,7 +32,7 @@ public sealed class CorrectNodeRateOverrideModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -54,7 +54,7 @@ public sealed class CorrectNodeRateOverrideModel(
 
 	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -123,12 +123,6 @@ public sealed class CorrectNodeRateOverrideModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That employee does not exist.";
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class CorrectInput

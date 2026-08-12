@@ -257,7 +257,7 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<SeededTree> SeedScenarioAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -312,13 +312,7 @@ public abstract class ReadinessQueryPortContractTestsBase : IAsyncLifetime
 		return new(administratorId, bootstrap.RootJobNodeId, branch.Id, leafA.Id, leafB.Id, requiredLeaf.Id);
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
+
 
 	private sealed record SeededTree(
 		AppUserId AdministratorId,

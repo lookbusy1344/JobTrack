@@ -37,7 +37,7 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 		await SeedUserAsync("edith", KnownPassword);
 
 		factory = new(database.ConnectionString, capturedLogEntries);
@@ -93,7 +93,7 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 	{
 		var response = await client.GetAsync("/Account/Login");
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in login page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
@@ -101,11 +101,6 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 
 		return (antiforgeryCookie.Split(';')[0], token);
 	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
@@ -150,20 +145,7 @@ public sealed partial class SensitiveLoggingTests : IAsyncLifetime, IDisposable
 		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
 	private sealed class TestWebApplicationFactory(string identityConnectionString, ConcurrentBag<string> capturedLogEntries)
 		: WebApplicationFactory<Program>

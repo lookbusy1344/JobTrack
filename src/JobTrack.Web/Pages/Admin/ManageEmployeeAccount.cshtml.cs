@@ -64,7 +64,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -108,7 +108,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -146,7 +146,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -186,7 +186,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -231,7 +231,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -273,7 +273,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -298,7 +298,7 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 	private async Task LoadTargetUserOptionsAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return;
 		}
@@ -308,12 +308,6 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 			cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		TargetUserOptions = EmployeeDirectoryDisplay.BuildOptions(directory);
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class CreateEmployeeInput

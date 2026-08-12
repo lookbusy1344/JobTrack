@@ -122,56 +122,28 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates", AddUserCostRateAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RateWrite)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("AddUserCostRate")
-			.WithSummary("Add an effective-dated user cost rate for one employee.")
-			.Produces<UserCostRateResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.RateWrite, "AddUserCostRate", "Add an effective-dated user cost rate for one employee.")
+			.Produces<UserCostRateResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides", AddNodeRateOverrideAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RateWrite)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("AddNodeRateOverride")
-			.WithSummary("Add an effective-dated node rate override for one employee.")
-			.Produces<NodeRateOverrideResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.RateWrite, "AddNodeRateOverride", "Add an effective-dated node rate override for one employee.")
+			.Produces<NodeRateOverrideResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates/{rateId:long}/correct", CorrectUserCostRateAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RateWrite)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("CorrectUserCostRate")
-			.WithSummary("Correct a historical user cost rate's effective range and amount, with an audited reason.")
-			.Produces<UserCostRateResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.RateWrite,
+				"CorrectUserCostRate",
+				"Correct a historical user cost rate's effective range and amount, with an audited reason.")
+			.Produces<UserCostRateResponse>();
 
 		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides/{overrideId:long}/correct", CorrectNodeRateOverrideAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RateWrite)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("CorrectNodeRateOverride")
-			.WithSummary("Correct a historical node rate override's effective range and amount, with an audited reason.")
-			.Produces<NodeRateOverrideResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.RateWrite,
+				"CorrectNodeRateOverride",
+				"Correct a historical node rate override's effective range and amount, with an audited reason.")
+			.Produces<NodeRateOverrideResponse>();
 
 		_ = api.MapGet("/jobs/root", GetRootJobNodeAsync)
 			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
@@ -235,58 +207,32 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions", StartSessionAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("StartSession")
-			.WithSummary(
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow,
+				"StartSession",
 				"Start a new work session on a leaf. Calling this again for an already-active worker/leaf pair is how a UI \"resume\" action is expressed.")
-			.Produces<WorkSessionResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.Produces<WorkSessionResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/finish", FinishSessionAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("FinishSession")
-			.WithSummary("Finish the active session. \"Pause\" and \"stop\" are UI descriptions of this same operation.")
-			.Produces<WorkSessionResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow,
+				"FinishSession",
+				"Finish the active session. \"Pause\" and \"stop\" are UI descriptions of this same operation.")
+			.Produces<WorkSessionResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/finish-and-update-write-up", FinishSessionAndUpdateWriteUpAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("FinishSessionAndUpdateWriteUp")
-			.WithSummary(
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow,
+				"FinishSessionAndUpdateWriteUp",
 				"Atomic composite (remediation plan §2.1): finish the active session and, optionally, apply a write-up change to its leaf's node, in one commit. The plain finish endpoint above remains for a caller with no write-up to change.")
-			.Produces<FinishSessionAndUpdateWriteUpResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.Produces<FinishSessionAndUpdateWriteUpResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/correct", CorrectSessionAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("CorrectSession")
-			.WithSummary("Correct a historical session's start and/or finish instants, with an audited reason.")
-			.Produces<WorkSessionResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow,
+				"CorrectSession",
+				"Correct a historical session's start and/or finish instants, with an audited reason.")
+			.Produces<WorkSessionResponse>();
 
 		_ = api.MapGet("/jobs/{nodeId:long}/prerequisites", GetPrerequisitesAsync)
 			.RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
@@ -298,17 +244,11 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/jobs/{nodeId:long}/prerequisites", AddPrerequisiteAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("AddPrerequisite")
-			.WithSummary("Add a prerequisite edge: the given job must reach Success before this node is ready.")
-			.Produces(StatusCodes.Status204NoContent)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow,
+				"AddPrerequisite",
+				"Add a prerequisite edge: the given job must reach Success before this node is ready.")
+			.Produces(StatusCodes.Status204NoContent);
 
 		_ = api.MapDelete("/jobs/{nodeId:long}/prerequisites/{requiredJobId:long}", RemovePrerequisiteAsync)
 			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
@@ -329,45 +269,23 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPut("/jobs/{nodeId:long}/achievement", SetAchievementAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("SetAchievement")
-			.WithSummary("Transition a leaf's achievement state, with an audited reason.")
-			.Produces<LeafWorkResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow, "SetAchievement", "Transition a leaf's achievement state, with an audited reason.")
+			.Produces<LeafWorkResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/complete", CompleteLeafAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("CompleteLeaf")
-			.WithSummary(
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow,
+				"CompleteLeaf",
 				"Atomically finish the exact confirmed active-session set and record an achievement -- Success by default, or Cancelled/Unsuccessful (ADR 0045/0047). Composite of finish-session(s) and set-achievement.")
-			.Produces<CompleteLeafResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.Produces<CompleteLeafResponse>();
 
 		_ = api.MapPost("/jobs/{nodeId:long}/reopen-and-start-session", ReopenAndStartWorkAsync)
-			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("ReopenAndStartWork")
-			.WithSummary(
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.JobWorkflow,
+				"ReopenAndStartWork",
 				"Atomically reopen a terminal leaf to Waiting, auto-advance to InProgress (ADR 0038), and start the target worker's session (ADR 0045).")
-			.Produces<ReopenAndStartWorkResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.Produces<ReopenAndStartWorkResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapGet("/jobs/{nodeId:long}/cost", GetCostDetailsAsync)
 			.RequireAuthorization(JobTrackPolicyNames.RateRead)
@@ -413,56 +331,32 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status404NotFound);
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/versions", AddScheduleVersionAsync)
-			.RequireAuthorization(JobTrackPolicyNames.ScheduleAdministration)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("AddScheduleVersion")
-			.WithSummary("Add an effective-dated schedule version for one employee.")
-			.Produces<ScheduleVersionResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.ScheduleAdministration,
+				"AddScheduleVersion",
+				"Add an effective-dated schedule version for one employee.")
+			.Produces<ScheduleVersionResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/exceptions", AddScheduleExceptionAsync)
-			.RequireAuthorization(JobTrackPolicyNames.ScheduleAdministration)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("AddScheduleException")
-			.WithSummary("Add a dated schedule exception for one employee.")
-			.Produces<ScheduleExceptionResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.ScheduleAdministration,
+				"AddScheduleException",
+				"Add a dated schedule exception for one employee.")
+			.Produces<ScheduleExceptionResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/versions/{versionId:long}/correct", CorrectScheduleVersionAsync)
-			.RequireAuthorization(JobTrackPolicyNames.ScheduleAdministration)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("CorrectScheduleVersion")
-			.WithSummary("Correct a historical schedule version's effective range, zone, and weekly intervals, with an audited reason.")
-			.Produces<ScheduleVersionResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.ScheduleAdministration,
+				"CorrectScheduleVersion",
+				"Correct a historical schedule version's effective range, zone, and weekly intervals, with an audited reason.")
+			.Produces<ScheduleVersionResponse>();
 
 		_ = api.MapPost("/employees/{userId:long}/schedule/exceptions/{exceptionId:long}/correct", CorrectScheduleExceptionAsync)
-			.RequireAuthorization(JobTrackPolicyNames.ScheduleAdministration)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("CorrectScheduleException")
-			.WithSummary("Correct a historical schedule exception's effect, interval, and rate override, with an audited reason.")
-			.Produces<ScheduleExceptionResponse>()
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.ScheduleAdministration,
+				"CorrectScheduleException",
+				"Correct a historical schedule exception's effect, interval, and rate override, with an audited reason.")
+			.Produces<ScheduleExceptionResponse>();
 
 		_ = api.MapGet("/request-holding-areas", GetEligibleHoldingAreasAsync)
 			.RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
@@ -504,17 +398,11 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status409Conflict);
 
 		_ = api.MapPost("/requests/{jobNodeId:long}/comments", AddRequestNoteAsync)
-			.RequireAuthorization(JobTrackPolicyNames.RequestDetailAccess)
-			.AddEndpointFilter<AntiforgeryValidationFilter>()
-			.WithName("AddRequestNote")
-			.WithSummary("Add a requester-visible note or clarification, posted by staff or by the request's own requester (ADR 0034).")
-			.Produces<RequestNoteResponse>(StatusCodes.Status201Created)
-			.ProducesProblem(StatusCodes.Status400BadRequest)
-			.ProducesProblem(StatusCodes.Status401Unauthorized)
-			.ProducesProblem(StatusCodes.Status403Forbidden)
-			.ProducesProblem(StatusCodes.Status404NotFound)
-			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.WithStandardWriteContract(
+				JobTrackPolicyNames.RequestDetailAccess,
+				"AddRequestNote",
+				"Add a requester-visible note or clarification, posted by staff or by the request's own requester (ADR 0034).")
+			.Produces<RequestNoteResponse>(StatusCodes.Status201Created);
 
 		_ = api.MapPost("/requests/{jobNodeId:long}/acknowledge", AcknowledgeRequestAsync)
 			.RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
@@ -552,6 +440,20 @@ internal static partial class JobTrackApi
 
 		return context.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json");
 	}
+
+	private static RouteHandlerBuilder WithStandardWriteContract(
+		this RouteHandlerBuilder endpoint, string policy, string name, string summary) =>
+		endpoint
+			.RequireAuthorization(policy)
+			.AddEndpointFilter<AntiforgeryValidationFilter>()
+			.WithName(name)
+			.WithSummary(summary)
+			.ProducesProblem(StatusCodes.Status400BadRequest)
+			.ProducesProblem(StatusCodes.Status401Unauthorized)
+			.ProducesProblem(StatusCodes.Status403Forbidden)
+			.ProducesProblem(StatusCodes.Status404NotFound)
+			.ProducesProblem(StatusCodes.Status409Conflict)
+			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
 	private static bool IsApiRequest(HttpRequest request) =>
 		request.Path.StartsWithSegments(ApiPathPrefix, StringComparison.OrdinalIgnoreCase);

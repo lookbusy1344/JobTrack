@@ -19,7 +19,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 /// </summary>
 [Authorize(Policy = JobTrackPolicyNames.JobWorkflow)]
 public sealed partial class DeleteModel(
-	IJobTrackClient jobTrackClient, UserManager<JobTrackIdentityUser> userManager, ILogger<DeleteModel> logger) : PageModel
+	IJobTrackClient jobTrackClient,
+	UserManager<JobTrackIdentityUser> userManager,
+	ILogger<DeleteModel> logger) : PageModel
 {
 	[BindProperty(SupportsGet = true)] public long NodeId { get; init; }
 
@@ -33,7 +35,7 @@ public sealed partial class DeleteModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -56,7 +58,7 @@ public sealed partial class DeleteModel(
 
 	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -128,12 +130,6 @@ public sealed partial class DeleteModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class DeleteInput

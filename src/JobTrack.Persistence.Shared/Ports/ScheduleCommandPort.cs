@@ -303,7 +303,7 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 	private static async Task AuthorizeOrThrowAsync(
 		DbContext context, AppUserId actorId, AppUserId targetUserId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 
 		if (!ScheduleAccessPolicy.CanManage(actorRoles, actorId == targetUserId)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not manage schedule data for {targetUserId}.");
@@ -329,22 +329,6 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 				"schedule-exception-already-exists",
 				"This schedule exception already exists for this employee.");
 		}
-	}
-
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		DbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
-	{
-		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
-								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
-
-		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
-
-		return [.. roles];
 	}
 
 	private static async Task<ScheduleVersionEntity> LoadTrackedVersionAsync(

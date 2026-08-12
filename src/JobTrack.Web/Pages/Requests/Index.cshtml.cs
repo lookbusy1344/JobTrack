@@ -54,7 +54,7 @@ public sealed class IndexModel(
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -81,7 +81,7 @@ public sealed class IndexModel(
 
 	private async Task LoadAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return;
 		}
@@ -97,12 +97,6 @@ public sealed class IndexModel(
 		if (EligibleHoldingAreas.Count == 1 && Submit.HoldingAreaId == UnchosenHoldingAreaId) {
 			Submit = new() { Description = Submit.Description, HoldingAreaId = EligibleHoldingAreas[0].Id.Value };
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class SubmitRequestInput

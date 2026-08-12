@@ -183,7 +183,7 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 
 	private async Task EnsureSchemaDeployedAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 		var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -210,7 +210,7 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 	{
 		await EnsureSchemaDeployedAsync();
 
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var appUserCommand = connection.CreateCommand();
 		appUserCommand.CommandText = """
@@ -218,7 +218,7 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 									 VALUES (@displayName, 'Europe/London')
 									 RETURNING id;
 									 """;
-		AddParameter(appUserCommand, "@displayName", userName);
+		appUserCommand.AddParameter("@displayName", userName);
 		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
 		await using var identityUserCommand = connection.CreateCommand();
@@ -230,14 +230,14 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
 										  	 @concurrencyStamp, false, @isEnabled, @lockoutEnabled, @lockoutEnd, 0);
 										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@isEnabled", isEnabled);
-		AddParameter(identityUserCommand, "@lockoutEnabled", lockoutEnd is not null);
-		AddParameter(identityUserCommand, "@lockoutEnd", lockoutEnd.HasValue ? FormatInstantForRawSql(lockoutEnd.Value) : DBNull.Value);
+		identityUserCommand.AddParameter("@appUserId", appUserId.Value);
+		identityUserCommand.AddParameter("@userName", userName);
+		identityUserCommand.AddParameter("@normalizedUserName", userName.ToUpperInvariant());
+		identityUserCommand.AddParameter("@securityStamp", Guid.NewGuid().ToString("N"));
+		identityUserCommand.AddParameter("@concurrencyStamp", Guid.NewGuid().ToString("N"));
+		identityUserCommand.AddParameter("@isEnabled", isEnabled);
+		identityUserCommand.AddParameter("@lockoutEnabled", lockoutEnd is not null);
+		identityUserCommand.AddParameter("@lockoutEnd", lockoutEnd.HasValue ? FormatInstantForRawSql(lockoutEnd.Value) : DBNull.Value);
 		_ = await identityUserCommand.ExecuteNonQueryAsync();
 
 		await using var roleCommand = connection.CreateCommand();
@@ -245,26 +245,14 @@ public abstract class PersonalAccessTokenPortContractTestsBase : IAsyncLifetime
 								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
 								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
 								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)EmployeeRole.Worker);
+		roleCommand.AddParameter("@appUserId", appUserId.Value);
+		roleCommand.AddParameter("@roleId", (short)EmployeeRole.Worker);
 		_ = await roleCommand.ExecuteNonQueryAsync();
 
 		return appUserId;
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 }

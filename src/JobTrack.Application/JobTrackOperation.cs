@@ -7,83 +7,59 @@ internal static class JobTrackOperation
 {
 	private static readonly ActivitySource Source = new(JobTrackDiagnostics.ActivitySourceName);
 
-	public static async Task<T> TraceAsync<T>(
+	public static Task<T> TraceAsync<T>(
 		string operation,
 		CommandContext context,
 		Func<Activity, Activity>? enrich,
-		Func<Task<T>> action)
-	{
-		using var activity = Start(operation, context, enrich);
-		try {
-			var result = await action().ConfigureAwait(false);
-			_ = activity?.SetStatus(ActivityStatusCode.Ok);
-			return result;
-		}
-		catch (Exception exception) {
-			_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-			throw;
-		}
-	}
+		Func<Task<T>> action) =>
+		TraceCoreAsync(Start(operation, context, enrich), action);
 
-	public static async Task<T> TraceAsync<T>(
+	public static Task<T> TraceAsync<T>(
 		string operation,
 		Guid correlationId,
 		Func<Activity, Activity>? enrich,
-		Func<Task<T>> action)
-	{
-		using var activity = Start(operation, null, correlationId, enrich);
-		try {
-			var result = await action().ConfigureAwait(false);
-			_ = activity?.SetStatus(ActivityStatusCode.Ok);
-			return result;
-		}
-		catch (Exception exception) {
-			_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-			throw;
-		}
-	}
+		Func<Task<T>> action) =>
+		TraceCoreAsync(Start(operation, null, correlationId, enrich), action);
 
-	public static async Task<T> TraceAsync<T>(string operation, Func<Task<T>> action)
-	{
-		using var activity = Start(operation, null, null);
-		try {
-			var result = await action().ConfigureAwait(false);
-			_ = activity?.SetStatus(ActivityStatusCode.Ok);
-			return result;
-		}
-		catch (Exception exception) {
-			_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-			throw;
-		}
-	}
+	public static Task<T> TraceAsync<T>(string operation, Func<Task<T>> action) =>
+		TraceCoreAsync(Start(operation, null, null), action);
 
-	public static async Task TraceAsync(
+	public static Task TraceAsync(
 		string operation,
 		CommandContext context,
 		Func<Activity, Activity>? enrich,
-		Func<Task> action)
+		Func<Task> action) =>
+		TraceCoreAsync(Start(operation, context, enrich), action);
+
+	public static Task TraceAsync(string operation, Func<Task> action) =>
+		TraceCoreAsync(Start(operation, null, null), action);
+
+	private static async Task<T> TraceCoreAsync<T>(Activity? activity, Func<Task<T>> action)
 	{
-		using var activity = Start(operation, context, enrich);
-		try {
-			await action().ConfigureAwait(false);
-			_ = activity?.SetStatus(ActivityStatusCode.Ok);
-		}
-		catch (Exception exception) {
-			_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-			throw;
+		using (activity) {
+			try {
+				var result = await action().ConfigureAwait(false);
+				_ = activity?.SetStatus(ActivityStatusCode.Ok);
+				return result;
+			}
+			catch (Exception exception) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw;
+			}
 		}
 	}
 
-	public static async Task TraceAsync(string operation, Func<Task> action)
+	private static async Task TraceCoreAsync(Activity? activity, Func<Task> action)
 	{
-		using var activity = Start(operation, null, null);
-		try {
-			await action().ConfigureAwait(false);
-			_ = activity?.SetStatus(ActivityStatusCode.Ok);
-		}
-		catch (Exception exception) {
-			_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-			throw;
+		using (activity) {
+			try {
+				await action().ConfigureAwait(false);
+				_ = activity?.SetStatus(ActivityStatusCode.Ok);
+			}
+			catch (Exception exception) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw;
+			}
 		}
 	}
 

@@ -32,7 +32,7 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString, true);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, BaseAddress = new("https://localhost"), HandleCookies = false });
@@ -122,8 +122,8 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_authenticated_navigation_after_sign_in_carries_no_store_cache_control()
 	{
-		await SeedEmployeeAsync("cache.worker", EmployeeRole.Worker);
-		var authCookie = await SignInAsync("cache.worker");
+		await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cache.worker", EmployeeRole.Worker);
+		var authCookie = await client.SignInAsync("cache.worker");
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
 		request.Headers.Add("Cookie", authCookie);
@@ -186,97 +186,21 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("request-too-large");
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
-
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
-
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
-
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
-
-		return ExtractCookiePair(authCookie);
-	}
 
 	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
 	{
 		var response = await client.GetAsync("/Account/Login");
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in login page response.");
 		var token = AntiforgeryTokenValue(body) ?? throw new InvalidOperationException("No antiforgery token in login page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private static string? AntiforgeryTokenValue(string body)
@@ -297,13 +221,6 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 		var end = body.IndexOf('"', start);
 		return end < 0 ? null : body[start..end];
 	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	private sealed class TestWebApplicationFactory(string identityConnectionString, bool requireSecureCookies)
 		: WebApplicationFactory<Program>

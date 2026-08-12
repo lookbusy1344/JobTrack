@@ -39,7 +39,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrapResult = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -71,9 +71,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_job_manager_can_save_decomposing_a_worked_leaf()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.manager", EmployeeRole.JobManager);
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Build deck");
-		var authCookie = await SignInAsync("decompose.manager");
+		var authCookie = await client.SignInAsync("decompose.manager");
 
 		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, leaf.Id);
 		var saveResponse = await PostAsync(
@@ -83,7 +83,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		saveResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Browse");
 
-		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={leaf.Id.Value}", authCookie);
+		var afterSave = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={leaf.Id.Value}", authCookie);
 		var afterBody = await afterSave.Content.ReadAsStringAsync();
 		afterBody.Should().Contain("Deck project");
 		afterBody.Should().Contain("Existing framing work");
@@ -93,11 +93,11 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_decompose_page_offers_save_and_cancel_actions()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.actions", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.actions", EmployeeRole.JobManager);
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Deck to split");
-		var authCookie = await SignInAsync("decompose.actions");
+		var authCookie = await client.SignInAsync("decompose.actions");
 
-		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -110,9 +110,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_job_manager_can_create_an_unassigned_new_child_while_decomposing()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.unassigned-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.unassigned-manager", EmployeeRole.JobManager);
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Split pool work");
-		var authCookie = await SignInAsync("decompose.unassigned-manager");
+		var authCookie = await client.SignInAsync("decompose.unassigned-manager");
 
 		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, leaf.Id);
 		var saveResponse = await PostAsync(
@@ -120,7 +120,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 			"Pool branch", "Existing pool work", "Unassigned decomposed child");
 
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var browseResponse = await GetAsync($"/Jobs/Browse?nodeId={leaf.Id.Value}&unassignedOnly=true", authCookie);
+		var browseResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={leaf.Id.Value}&unassignedOnly=true", authCookie);
 		var browseBody = await browseResponse.Content.ReadAsStringAsync();
 		browseBody.Should().Contain("Unassigned decomposed child");
 	}
@@ -128,10 +128,10 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_who_does_not_own_the_leaf_is_denied_on_save()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.owner-manager", EmployeeRole.JobManager);
-		var workerId = await SeedEmployeeAsync("decompose.denied-worker", EmployeeRole.Worker);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.owner-manager", EmployeeRole.JobManager);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.denied-worker", EmployeeRole.Worker);
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Owned by manager");
-		var authCookie = await SignInAsync("decompose.denied-worker");
+		var authCookie = await client.SignInAsync("decompose.denied-worker");
 
 		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, leaf.Id);
 		var saveResponse = await PostAsync(
@@ -150,11 +150,11 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_decompose_page_offers_a_form_for_a_bare_leaf()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.bare-form-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.bare-form-manager", EmployeeRole.JobManager);
 		var bareLeaf = await AddBareLeafAsync(managerId, "Bare leaf, no work attached");
-		var authCookie = await SignInAsync("decompose.bare-form-manager");
+		var authCookie = await client.SignInAsync("decompose.bare-form-manager");
 
-		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={bareLeaf.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Decompose?leafNodeId={bareLeaf.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -167,9 +167,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Decomposing_a_bare_leaf_creates_the_listed_children()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.bare-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.bare-manager", EmployeeRole.JobManager);
 		var bareLeaf = await AddBareLeafAsync(managerId, "Bare leaf, no work attached");
-		var authCookie = await SignInAsync("decompose.bare-manager");
+		var authCookie = await client.SignInAsync("decompose.bare-manager");
 
 		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, bareLeaf.Id);
 		var saveResponse = await PostAsync(
@@ -184,7 +184,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 		current.Node.HasChildren.Should().BeTrue();
 		current.Node.HasLeafWork.Should().BeFalse();
 
-		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={bareLeaf.Id.Value}", authCookie);
+		var afterSave = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={bareLeaf.Id.Value}", authCookie);
 		var afterBody = await afterSave.Content.ReadAsStringAsync();
 		afterBody.Should().Contain("Named child of the bare leaf");
 	}
@@ -192,9 +192,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Decomposing_a_bare_leaf_with_no_named_children_shows_a_validation_error()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.bare-empty-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.bare-empty-manager", EmployeeRole.JobManager);
 		var bareLeaf = await AddBareLeafAsync(managerId, "Bare leaf, no work attached");
-		var authCookie = await SignInAsync("decompose.bare-empty-manager");
+		var authCookie = await client.SignInAsync("decompose.bare-empty-manager");
 
 		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, bareLeaf.Id);
 		var saveResponse = await PostAsync(
@@ -213,7 +213,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_decompose_page_refuses_a_node_with_children()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.branch-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.branch-manager", EmployeeRole.JobManager);
 		var branch = await AddBareLeafAsync(managerId, "Already a branch");
 		_ = await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
@@ -222,9 +222,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 			OwnerUserId = managerId,
 			Priority = Priority.Medium,
 		});
-		var authCookie = await SignInAsync("decompose.branch-manager");
+		var authCookie = await client.SignInAsync("decompose.branch-manager");
 
-		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={branch.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Decompose?leafNodeId={branch.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().Contain("Only a leaf can be decomposed.");
@@ -240,7 +240,7 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_decompose_page_says_a_new_child_inherits_the_work_and_names_the_running_session()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.explains-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.explains-manager", EmployeeRole.JobManager);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
 			ParentId = rootId,
@@ -249,9 +249,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 			Priority = Priority.Medium,
 			BeginWork = new() { WorkedByUserId = managerId },
 		});
-		var authCookie = await SignInAsync("decompose.explains-manager");
+		var authCookie = await client.SignInAsync("decompose.explains-manager");
 
-		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().Contain("What moves onto the new child");
@@ -268,11 +268,11 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Every_new_child_slot_defaults_its_owner_to_the_decomposed_nodes_owner()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.default-owner-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.default-owner-manager", EmployeeRole.JobManager);
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Owned work to split");
-		var authCookie = await SignInAsync("decompose.default-owner-manager");
+		var authCookie = await client.SignInAsync("decompose.default-owner-manager");
 
-		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		var selectedOwner = $"<option selected=\"selected\" value=\"{managerId.Value.ToString(CultureInfo.InvariantCulture)}\">";
@@ -282,11 +282,11 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_unassigned_nodes_new_child_slots_stay_unassigned()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.pool-owner-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.pool-owner-manager", EmployeeRole.JobManager);
 		var leaf = await AddWorkedLeafAsync(rootId, null, "Pool work to split");
-		var authCookie = await SignInAsync("decompose.pool-owner-manager");
+		var authCookie = await client.SignInAsync("decompose.pool-owner-manager");
 
-		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Decompose?leafNodeId={leaf.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		// Nothing is pre-selected, so each owner select falls back to its first option — "Unassigned".
@@ -319,9 +319,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_stale_version_on_save_is_reported_as_a_conflict()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.conflict-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.conflict-manager", EmployeeRole.JobManager);
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Contested leaf");
-		var authCookie = await SignInAsync("decompose.conflict-manager");
+		var authCookie = await client.SignInAsync("decompose.conflict-manager");
 
 		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, leaf.Id);
 
@@ -352,9 +352,9 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_malformed_new_child_NeededStart_is_rejected_without_decomposing()
 	{
-		var managerId = await SeedEmployeeAsync("decompose.malformed-needed", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "decompose.malformed-needed", EmployeeRole.JobManager);
 		var leaf = await AddWorkedLeafAsync(rootId, managerId, "Leaf with malformed child needed-start");
-		var authCookie = await SignInAsync("decompose.malformed-needed");
+		var authCookie = await client.SignInAsync("decompose.malformed-needed");
 
 		var (antiforgeryCookie, token) = await GetDecomposeFormAsync(authCookie, leaf.Id);
 		var saveResponse = await PostAsync(
@@ -425,135 +425,26 @@ public sealed partial class DecomposeJobNodeTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in Decompose page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in Decompose page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
 
-		return await client.SendAsync(request);
-	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
-
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

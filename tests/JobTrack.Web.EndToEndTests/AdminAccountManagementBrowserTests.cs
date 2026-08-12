@@ -45,7 +45,7 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Admin/ManageEmployeeAccount");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -61,7 +61,7 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Admin/ManageEmployeeAccount");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -77,7 +77,7 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Admin/ManageEmployeeAccount");
 
 		await page.EvaluateAsync("document.body.focus()");
@@ -107,10 +107,10 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Admin/ManageEmployeeAccount");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Admin/ManageEmployeeAccount");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Admin/ManageEmployeeAccount");
 	}
 
 	[Fact]
@@ -119,22 +119,13 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Admin/AssignRole");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Admin/AssignRole");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Admin/AssignRole");
 	}
 
-	private static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)
-	{
-		var criticalOrSerious = results.Violations
-			.Where(violation => violation.Impact is "critical" or "serious")
-			.ToArray();
 
-		criticalOrSerious.Should().BeEmpty(
-			$"{pageName} should have no critical/serious accessibility violations, found: " +
-			string.Join("; ", criticalOrSerious.Select(v => $"{v.Id} ({v.Impact}): {v.Help}")));
-	}
 
 	private static async Task TabToAsync(IPage page, string targetElementId, int maxTabs)
 	{
@@ -149,14 +140,7 @@ public abstract class AdminAccountManagementBrowserTestsBase
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class SqliteAdminAccountManagementBrowserTests : AdminAccountManagementBrowserTestsBase, IClassFixture<SqliteBrowserFixture>

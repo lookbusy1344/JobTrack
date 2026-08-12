@@ -43,7 +43,7 @@ public sealed class CorrectSessionModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -73,7 +73,7 @@ public sealed class CorrectSessionModel(
 
 	private async Task<IActionResult> SaveAsync(bool clearFinish, CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -152,12 +152,6 @@ public sealed class CorrectSessionModel(
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class CorrectInput

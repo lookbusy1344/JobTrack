@@ -79,7 +79,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 	{
 		var seeded = await SeedCredentialStateAsync();
 		var before = await ReadStateAsync(seeded.AppUserId);
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			await AuditFailureInjection.InstallAsync(connection, Provider);
 		}
 
@@ -117,7 +117,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 	private async Task<SeededCredentialState> SeedCredentialStateAsync()
 	{
 		await DeploySchemaAsync();
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var appUserCommand = connection.CreateCommand();
 		appUserCommand.CommandText = """
@@ -137,10 +137,10 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 									     @concurrencyStamp, true, true, true, 0)
 									  RETURNING id;
 									  """;
-		AddParameter(identityCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityCommand, "@passwordHash", PasswordHasher.HashPassword(CredentialSubject, CurrentPassword));
-		AddParameter(identityCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
+		identityCommand.AddParameter("@appUserId", appUserId.Value);
+		identityCommand.AddParameter("@passwordHash", PasswordHasher.HashPassword(CredentialSubject, CurrentPassword));
+		identityCommand.AddParameter("@securityStamp", Guid.NewGuid().ToString("N"));
+		identityCommand.AddParameter("@concurrencyStamp", Guid.NewGuid().ToString("N"));
 		var identityUserId = Convert.ToInt64(await identityCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
 		await using var tokenCommand = connection.CreateCommand();
@@ -150,9 +150,9 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 								   VALUES
 								     (@appUserId, 'synthetic-token-hash', 'test token', @createdAt, @expiresAt);
 								   """;
-		AddParameter(tokenCommand, "@appUserId", appUserId.Value);
-		AddParameter(tokenCommand, "@createdAt", FormatInstantForRawSql(OperationInstant - Duration.FromDays(1)));
-		AddParameter(tokenCommand, "@expiresAt", FormatInstantForRawSql(OperationInstant + Duration.FromDays(1)));
+		tokenCommand.AddParameter("@appUserId", appUserId.Value);
+		tokenCommand.AddParameter("@createdAt", FormatInstantForRawSql(OperationInstant - Duration.FromDays(1)));
+		tokenCommand.AddParameter("@expiresAt", FormatInstantForRawSql(OperationInstant + Duration.FromDays(1)));
 		_ = await tokenCommand.ExecuteNonQueryAsync();
 
 		return new(appUserId, identityUserId);
@@ -160,7 +160,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 
 	private async Task<CredentialState> ReadStateAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  SELECT iu.password_hash,
@@ -175,7 +175,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 							  JOIN personal_access_token pat ON pat.app_user_id = iu.app_user_id
 							  WHERE iu.app_user_id = @appUserId;
 							  """;
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 		await using var reader = await command.ExecuteReaderAsync();
 		(await reader.ReadAsync()).Should().BeTrue();
 
@@ -190,28 +190,16 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 
 	private async Task DeploySchemaAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 		var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 
 	private sealed record SeededCredentialState(AppUserId AppUserId, long IdentityUserId);
 

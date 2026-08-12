@@ -54,7 +54,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 
@@ -87,9 +87,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			JobNodeId = doneLeaf.JobNodeId,
 		});
 		await SetAchievementAsync(doneLeaf.JobNodeId, Achievement.Success, adminId, inProgress.Version);
-		var authCookie = await SignInAsync("awaiting.basic");
+		var authCookie = await client.SignInAsync("awaiting.basic");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -108,9 +108,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.row-id");
 		var rootId = bootstrappedRootId!.Value;
 		var leaf = await AddLeafWithWorkAsync(rootId, workerId, "Install cabinets", adminId);
-		var authCookie = await SignInAsync("awaiting.row-id");
+		var authCookie = await client.SignInAsync("awaiting.row-id");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -123,9 +123,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.noleafwork");
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddChildAsync(rootId, workerId, "Fresh leaf awaiting assignment", adminId);
-		var authCookie = await SignInAsync("awaiting.noleafwork");
+		var authCookie = await client.SignInAsync("awaiting.noleafwork");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -144,16 +144,16 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			_ = await AddChildAsync(rootId, workerId, $"Leaf {index}", adminId);
 		}
 
-		var authCookie = await SignInAsync("awaiting.paging");
+		var authCookie = await client.SignInAsync("awaiting.paging");
 
-		var firstResponse = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var firstResponse = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var firstBody = await firstResponse.Content.ReadAsStringAsync();
 
 		firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		firstBody.Should().Contain("Next page");
 		firstBody.Should().Contain($"Offset={AwaitingProgressModel.PageSize}");
 
-		var secondResponse = await GetAsync($"/Jobs/AwaitingProgress?offset={AwaitingProgressModel.PageSize}", authCookie);
+		var secondResponse = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?offset={AwaitingProgressModel.PageSize}", authCookie);
 		var secondBody = await secondResponse.Content.ReadAsStringAsync();
 
 		secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -172,9 +172,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			RequiredJobId = required.JobNodeId,
 			DependentJobId = dependent.JobNodeId,
 		});
-		var authCookie = await SignInAsync("awaiting.blocked");
+		var authCookie = await client.SignInAsync("awaiting.blocked");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -188,13 +188,13 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.startwork");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Fresh leaf via dashboard", adminId);
-		var authCookie = await SignInAsync("awaiting.startwork");
+		var authCookie = await client.SignInAsync("awaiting.startwork");
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var response = await PostStartWorkAsync(authCookie, formCookie, token, leafId);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Session started");
 		body.Should().Contain("Fresh leaf via dashboard");
@@ -208,9 +208,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Worker job", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, adminId, "Admin job", adminId);
-		var authCookie = await SignInAsync("awaiting.owner");
+		var authCookie = await client.SignInAsync("awaiting.owner");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?ownerUserId={workerId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?ownerUserId={workerId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -225,9 +225,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Fit oak cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Paint the fence", adminId);
-		var authCookie = await SignInAsync("awaiting.search");
+		var authCookie = await client.SignInAsync("awaiting.search");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress?searchText=oak", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress?searchText=oak", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -242,14 +242,14 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Worker job", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, adminId, "Admin job", adminId);
-		var authCookie = await SignInAsync("awaiting.filtermem");
+		var authCookie = await client.SignInAsync("awaiting.filtermem");
 
 		// Explicitly filter to the worker; capture the session that now remembers the choice.
 		using var chooseRequest = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/AwaitingProgress?ownerUserId={workerId.Value}");
 		chooseRequest.Headers.Add("Cookie", authCookie);
 		var chooseResponse = await client.SendAsync(chooseRequest);
-		var sessionCookie = ExtractCookiePair(
-			FindSetCookie(chooseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
+		var sessionCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(chooseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
 
 		// Return with no owner param: the remembered worker filter still applies.
 		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/AwaitingProgress");
@@ -269,9 +269,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Worker job", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, adminId, "Admin job", adminId);
-		var authCookie = await SignInAsync("awaiting.default-all");
+		var authCookie = await client.SignInAsync("awaiting.default-all");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -292,9 +292,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			DependentJobId = dependent,
 		});
 		_ = await AddLeafAtPriorityAsync(rootId, workerId, "Low but ready", adminId, Priority.Low);
-		var authCookie = await SignInAsync("awaiting.blockedorder");
+		var authCookie = await client.SignInAsync("awaiting.blockedorder");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -314,9 +314,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			RequiredJobId = required.JobNodeId,
 			DependentJobId = dependent.JobNodeId,
 		});
-		var authCookie = await SignInAsync("awaiting.excludeblocked");
+		var authCookie = await client.SignInAsync("awaiting.excludeblocked");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress?excludeBlocked=true", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress?excludeBlocked=true", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -336,7 +336,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			RequiredJobId = required.JobNodeId,
 			DependentJobId = dependent.JobNodeId,
 		});
-		var authCookie = await SignInAsync("awaiting.blockedmem");
+		var authCookie = await client.SignInAsync("awaiting.blockedmem");
 
 		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?excludeBlocked=true");
 		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
@@ -357,9 +357,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var paused = await AddLeafWithWorkAsync(rootId, workerId, "Started then paused", adminId);
 		await SetAchievementAsync(paused.JobNodeId, Achievement.InProgress, adminId, paused.Version);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Not started yet", adminId);
-		var authCookie = await SignInAsync("awaiting.inprogress");
+		var authCookie = await client.SignInAsync("awaiting.inprogress");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress?inProgressOnly=true", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress?inProgressOnly=true", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -380,9 +380,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		await SetAchievementAsync(workerLeaf.JobNodeId, Achievement.InProgress, adminId, workerLeaf.Version);
 		var adminLeaf = await AddLeafWithWorkAsync(rootId, adminId, "Admin started this", adminId);
 		await SetAchievementAsync(adminLeaf.JobNodeId, Achievement.InProgress, adminId, adminLeaf.Version);
-		var authCookie = await SignInAsync("awaiting.inprogressowner");
+		var authCookie = await client.SignInAsync("awaiting.inprogressowner");
 
-		var response = await GetAsync(
+		var response = await client.GetAuthenticatedAsync(
 			$"/Jobs/AwaitingProgress?inProgressOnly=true&ownerUserId={workerId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
@@ -399,7 +399,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var started = await AddLeafWithWorkAsync(rootId, workerId, "Started then paused", adminId);
 		await SetAchievementAsync(started.JobNodeId, Achievement.InProgress, adminId, started.Version);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Not started yet", adminId);
-		var authCookie = await SignInAsync("awaiting.inprogressmem");
+		var authCookie = await client.SignInAsync("awaiting.inprogressmem");
 
 		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?inProgressOnly=true");
 		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
@@ -428,9 +428,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var now = SystemClock.Instance.GetCurrentInstant();
 		await AddFinishedSessionAsync(
 			workerId, paused.JobNodeId, now - Duration.FromHours(HoursBeforeFinish), now - Duration.FromHours(HoursBeforeNowFinished));
-		var authCookie = await SignInAsync("awaiting.activeworker");
+		var authCookie = await client.SignInAsync("awaiting.activeworker");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -459,9 +459,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			JobNodeId = adminLeaf.JobNodeId,
 			WorkedByUserId = adminId,
 		});
-		var authCookie = await SignInAsync("awaiting.activeworkerother");
+		var authCookie = await client.SignInAsync("awaiting.activeworkerother");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -481,7 +481,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			WorkedByUserId = workerId,
 		});
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Nobody is on this", adminId);
-		var authCookie = await SignInAsync("awaiting.activeworkermem");
+		var authCookie = await client.SignInAsync("awaiting.activeworkermem");
 
 		var sessionCookie = await ChooseFiltersAsync(authCookie, $"/Jobs/AwaitingProgress?activeWorkerUserId={workerId.Value}");
 		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
@@ -497,7 +497,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Fit oak cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Paint the fence", adminId);
-		var authCookie = await SignInAsync("awaiting.searchmem");
+		var authCookie = await client.SignInAsync("awaiting.searchmem");
 
 		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?searchText=oak");
 		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
@@ -520,7 +520,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Priority = Priority.Medium,
 		});
 		await AttachLeafWorkAsync(unassigned.Id, adminId);
-		var authCookie = await SignInAsync("awaiting.poolmem");
+		var authCookie = await client.SignInAsync("awaiting.poolmem");
 
 		var sessionCookie = await ChooseFiltersAsync(authCookie, "/Jobs/AwaitingProgress?unassignedOnly=true");
 		var body = await ReturnWithRememberedFiltersAsync(authCookie, sessionCookie);
@@ -547,7 +547,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			NodeId = branchId,
 		});
-		var authCookie = await SignInAsync("awaiting.subtreemem");
+		var authCookie = await client.SignInAsync("awaiting.subtreemem");
 
 		// Paired with a filter that *is* remembered, so the recalled cookie is genuinely replayed on the
 		// bare visit and the scope's absence from it is what puts the list back on the home node.
@@ -575,7 +575,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			NodeId = branchId,
 		});
-		var authCookie = await SignInAsync("awaiting.wholetreemem");
+		var authCookie = await client.SignInAsync("awaiting.wholetreemem");
 
 		// As above: an accompanying remembered filter makes the replayed cookie real, so this asserts
 		// forgetting rather than an empty cookie.
@@ -596,9 +596,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.rootscope");
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Install cabinets", adminId);
-		var authCookie = await SignInAsync("awaiting.rootscope");
+		var authCookie = await client.SignInAsync("awaiting.rootscope");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={rootId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={rootId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -623,12 +623,12 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			NodeId = homeId,
 		});
-		var authCookie = await SignInAsync("awaiting.homelink");
+		var authCookie = await client.SignInAsync("awaiting.homelink");
 		var homeNodeLink = $"/Jobs/AwaitingProgress?subtreeRootId={homeId.Value}\">home node</a>";
 
-		var elsewhere = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={elsewhereId.Value}", authCookie);
-		var wholeTree = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={homeId.Value}&showWholeTree=true", authCookie);
-		var atHome = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={homeId.Value}", authCookie);
+		var elsewhere = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={elsewhereId.Value}", authCookie);
+		var wholeTree = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={homeId.Value}&showWholeTree=true", authCookie);
+		var atHome = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={homeId.Value}", authCookie);
 
 		(await elsewhere.Content.ReadAsStringAsync()).Should().Contain(homeNodeLink);
 		(await wholeTree.Content.ReadAsStringAsync()).Should().Contain(homeNodeLink, "the whole tree is not the home node's subtree");
@@ -643,9 +643,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
-		var authCookie = await SignInAsync("awaiting.nohomelink");
+		var authCookie = await client.SignInAsync("awaiting.nohomelink");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -664,9 +664,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
-		var authCookie = await SignInAsync("awaiting.browsescope");
+		var authCookie = await client.SignInAsync("awaiting.browsescope");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -690,9 +690,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			NodeId = branchId,
 		});
-		var authCookie = await SignInAsync("awaiting.browsewhole");
+		var authCookie = await client.SignInAsync("awaiting.browsewhole");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}&showWholeTree=true", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}&showWholeTree=true", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -712,11 +712,11 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
-		var authCookie = await SignInAsync("awaiting.wholetreelink");
+		var authCookie = await client.SignInAsync("awaiting.wholetreelink");
 
-		var scoped = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
+		var scoped = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
 		var scopedBody = await scoped.Content.ReadAsStringAsync();
-		var whole = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}&showWholeTree=true", authCookie);
+		var whole = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}&showWholeTree=true", authCookie);
 		var wholeBody = await whole.Content.ReadAsStringAsync();
 
 		scopedBody.Should().Contain("showWholeTree=true\">whole tree</a>");
@@ -733,9 +733,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation", adminId);
 		_ = await AddLeafWithWorkAsync(branchId, workerId, "Install cabinets", adminId);
 		_ = await AddLeafWithWorkAsync(rootId, workerId, "Outside the branch", adminId);
-		var authCookie = await SignInAsync("awaiting.subtree");
+		var authCookie = await client.SignInAsync("awaiting.subtree");
 
-		var response = await GetAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/AwaitingProgress?subtreeRootId={branchId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -755,11 +755,11 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			NodeId = branchId,
 		});
-		var authCookie = await SignInAsync("awaiting.homedefault");
+		var authCookie = await client.SignInAsync("awaiting.homedefault");
 
 		// A bare visit -- e.g. following the header's "Awaiting progress" link -- scopes to the actor's
 		// own home node rather than the entire tree, but still offers a way back to everything.
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -780,9 +780,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			NodeId = branchId,
 		});
-		var authCookie = await SignInAsync("awaiting.homeoverride");
+		var authCookie = await client.SignInAsync("awaiting.homeoverride");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress?showWholeTree=true", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress?showWholeTree=true", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -798,13 +798,13 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.toggle");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Toggle leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.toggle");
+		var authCookie = await client.SignInAsync("awaiting.toggle");
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var startResponse = await PostStartWorkAsync(authCookie, formCookie, token, leafId);
 
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var reloaded = await client.FollowRedirectAsync(startResponse, authCookie);
 		var startBody = await reloaded.Content.ReadAsStringAsync();
 		// Plan §5.3: the dashboard row never finishes inline -- the viewer's own one-click Start
 		// is replaced by the always-present "Sessions" link into /Jobs/Work, not an inline finish form.
@@ -824,11 +824,11 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.activecolumn");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Active column leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.activecolumn");
+		var authCookie = await client.SignInAsync("awaiting.activecolumn");
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var startResponse = await PostStartWorkAsync(authCookie, formCookie, token, leafId);
-		var reloaded = await FollowRedirectAsync(startResponse, authCookie);
+		var reloaded = await client.FollowRedirectAsync(startResponse, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
 		body.Should().Contain("<th class=\"col-10 col-md-5 col-lg-5 col-xxl-3\" aria-label=\"Description\">Desc</th>");
@@ -855,9 +855,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var deadline = Instant.FromUtc(2030, 1, 1, 12, 0);
 		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Due compact date leaf", adminId, deadline);
-		var authCookie = await SignInAsync("awaiting.due-compact-date");
+		var authCookie = await client.SignInAsync("awaiting.due-compact-date");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().Contain("1 Jan", "a deadline on a different day should show its bare date");
@@ -877,9 +877,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var dueToday = SystemClock.Instance.GetCurrentInstant();
 		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Due compact time leaf", adminId, dueToday);
-		var authCookie = await SignInAsync("awaiting.due-compact-time");
+		var authCookie = await client.SignInAsync("awaiting.due-compact-time");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		var bareTime = dueToday.InZone(DateTimeZone.Utc).TimeOfDay.ToString("HH:mm", CultureInfo.InvariantCulture);
@@ -900,9 +900,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Overdue due leaf", adminId, Instant.FromUtc(2020, 1, 1, 12, 0));
 		_ = await AddChildWithDeadlineAsync(rootId, workerId, "Future due leaf", adminId, Instant.FromUtc(2030, 1, 1, 12, 0));
-		var authCookie = await SignInAsync("awaiting.due-overdue");
+		var authCookie = await client.SignInAsync("awaiting.due-overdue");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().Contain("class=\"jt-overdue\">1 Jan</span>", "a deadline that has already passed should render red");
@@ -921,9 +921,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var started = await AddLeafWithWorkAsync(rootId, workerId, "Started leaf", adminId);
 		await SetAchievementAsync(started.JobNodeId, Achievement.InProgress, adminId, started.Version);
 		_ = await AddChildAsync(rootId, workerId, "Untouched leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.achievementinline");
+		var authCookie = await client.SignInAsync("awaiting.achievementinline");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		var startedIndex = body.IndexOf("Started leaf", StringComparison.Ordinal);
@@ -940,18 +940,18 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.finish");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Finish leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.finish");
+		var authCookie = await client.SignInAsync("awaiting.finish");
 
 		var (startFormCookie, startToken) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var startResponse = await PostStartWorkAsync(authCookie, startFormCookie, startToken, leafId);
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		await FollowRedirectAsync(startResponse, authCookie);
+		await client.FollowRedirectAsync(startResponse, authCookie);
 		var session = (await GetSessionsAsync(leafId, adminId)).Should().ContainSingle().Subject;
 
 		var (workFormCookie, workToken) = await GetFormAsync(authCookie, $"/Jobs/Work?leafNodeId={leafId.Value}");
 		var finishResponse = await PostFinishWorkAsync(authCookie, workFormCookie, workToken, leafId, session.Id.Value, session.Version);
 		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
+		var finishReloaded = await client.FollowRedirectAsync(finishResponse, authCookie);
 		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
 
 		finishBody.Should().Contain("Ends this session; the job stays In Progress.");
@@ -970,14 +970,14 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.backdate-start");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Backdated start leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.backdate-start");
+		var authCookie = await client.SignInAsync("awaiting.backdate-start");
 		var backdatedAt = MinutesAgo(HoursBackdated * MinutesPerHour);
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var response = await PostStartWorkAsync(authCookie, formCookie, token, leafId, FormatForDateTimeLocal(backdatedAt));
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Session started");
 		body.Should().Contain("title=\"Sessions\"");
@@ -992,14 +992,14 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.future-start");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Future start leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.future-start");
+		var authCookie = await client.SignInAsync("awaiting.future-start");
 		var future = FormatForDateTimeLocal(MinutesAgo(-HoursBackdated * MinutesPerHour));
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var response = await PostStartWorkAsync(authCookie, formCookie, token, leafId, future);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("in the future");
 	}
@@ -1010,13 +1010,13 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.malformed-start");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Malformed dashboard start", adminId);
-		var authCookie = await SignInAsync("awaiting.malformed-start");
+		var authCookie = await client.SignInAsync("awaiting.malformed-start");
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var response = await PostStartWorkAsync(authCookie, formCookie, token, leafId, "not-a-local-date-time");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Enter a valid date and time.");
 		(await GetSessionsAsync(leafId, adminId)).Should().BeEmpty();
@@ -1028,14 +1028,14 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.backdate-finish");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Backdated finish leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.backdate-finish");
+		var authCookie = await client.SignInAsync("awaiting.backdate-finish");
 		var startedAt = MinutesAgo(HoursBeforeFinish * MinutesPerHour);
 		var finishedAt = MinutesAgo(HoursBeforeNowFinished * MinutesPerHour);
 
 		var (startFormCookie, startToken) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var startResponse = await PostStartWorkAsync(authCookie, startFormCookie, startToken, leafId, FormatForDateTimeLocal(startedAt));
 		startResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		await FollowRedirectAsync(startResponse, authCookie);
+		await client.FollowRedirectAsync(startResponse, authCookie);
 		var session = (await GetSessionsAsync(leafId, adminId)).Should().ContainSingle().Subject;
 
 		var (workFormCookie, workToken) = await GetFormAsync(authCookie, $"/Jobs/Work?leafNodeId={leafId.Value}");
@@ -1043,7 +1043,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			await PostFinishWorkAsync(authCookie, workFormCookie, workToken, leafId, session.Id.Value, session.Version,
 				FormatForDateTimeLocal(finishedAt));
 		finishResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var finishReloaded = await FollowRedirectAsync(finishResponse, authCookie);
+		var finishReloaded = await client.FollowRedirectAsync(finishResponse, authCookie);
 		var finishBody = await finishReloaded.Content.ReadAsStringAsync();
 		finishBody.Should().Contain("Ends this session; the job stays In Progress.");
 
@@ -1060,7 +1060,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.tz-auckland", "Pacific/Auckland");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Backdated in Auckland's own zone", adminId);
-		var authCookie = await SignInAsync("awaiting.tz-auckland");
+		var authCookie = await client.SignInAsync("awaiting.tz-auckland");
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var response = await PostStartWorkAsync(authCookie, formCookie, token, leafId, "2026-06-15T09:00");
@@ -1076,7 +1076,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		// compact date (InstantDisplay.FormatCompact) for a non-today session, dropping the time --
 		// but 15 June is still the proof: in UTC this instant falls on the 14th, so only a correct
 		// Auckland conversion produces the 15th.
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("15 Jun");
 	}
@@ -1091,7 +1091,7 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.tz-dst-gap", "Europe/London");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Backdated into a spring-forward gap", adminId);
-		var authCookie = await SignInAsync("awaiting.tz-dst-gap");
+		var authCookie = await client.SignInAsync("awaiting.tz-dst-gap");
 
 		const string gapLocalWallClock = "2026-03-29T01:30";
 		var londonZone = DateTimeZoneProviders.Tzdb["Europe/London"];
@@ -1112,9 +1112,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.icons");
 		var rootId = bootstrappedRootId!.Value;
 		_ = await AddChildAsync(rootId, workerId, "Icon row leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.icons");
+		var authCookie = await client.SignInAsync("awaiting.icons");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1129,13 +1129,13 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("awaiting.finish-icon");
 		var rootId = bootstrappedRootId!.Value;
 		var leafId = await AddChildAsync(rootId, workerId, "Finish icon leaf", adminId);
-		var authCookie = await SignInAsync("awaiting.finish-icon");
+		var authCookie = await client.SignInAsync("awaiting.finish-icon");
 
 		var (formCookie, token) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var response = await PostStartWorkAsync(authCookie, formCookie, token, leafId);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("#jt-icon-sessions");
 		body.Should().NotContain("btn btn-secondary\">Finish / pause");
@@ -1163,9 +1163,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 			WorkedByUserId = workerId,
 			StartedAt = now - Duration.FromHours(1),
 		});
-		var authCookie = await SignInAsync("awaiting.costs.viewer");
+		var authCookie = await client.SignInAsync("awaiting.costs.viewer");
 
-		var response = await GetAsync("/Jobs/AwaitingProgress", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1264,8 +1264,8 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		chooseRequest.Headers.Add("Cookie", authCookie);
 		var chooseResponse = await client.SendAsync(chooseRequest);
 
-		return ExtractCookiePair(
-			FindSetCookie(chooseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
+		return WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(chooseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
 	}
 
 	/// <summary>A bare return visit carrying no filter parameters at all — every one must be recalled.</summary>
@@ -1346,25 +1346,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
-		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
-		request.Headers.Add("Cookie", cookieHeader);
 
-		return await client.SendAsync(request);
-	}
 
-	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
-
-		return await client.SendAsync(request);
-	}
 
 	/// <summary>
 	///     A minute-aligned UTC wall time, <paramref name="minutes" /> ago. UTC, not the test process's
@@ -1443,53 +1427,18 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException($"No antiforgery cookie in {path} response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException($"No antiforgery token in {path} body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex(">&#xA3;(?<amount>[0-9]+\\.[0-9]{2})(?= /|<)")]
 	private static partial Regex MoneyAmountPattern();
@@ -1546,28 +1495,6 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		return new(appUserId);
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

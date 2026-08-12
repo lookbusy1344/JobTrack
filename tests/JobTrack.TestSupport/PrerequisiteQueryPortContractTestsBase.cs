@@ -210,7 +210,7 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 	/// <summary>Seeds two leaves with a prerequisite edge (required -&gt; dependent) and a third, unrelated leaf.</summary>
 	private async Task<(JobNodeId RequiredId, JobNodeId DependentId, JobNodeId UnrelatedId)> SeedEdgeAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -258,11 +258,5 @@ public abstract class PrerequisiteQueryPortContractTestsBase : IAsyncLifetime
 		return (required.Id, dependent.Id, unrelated.Id);
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
+
 }

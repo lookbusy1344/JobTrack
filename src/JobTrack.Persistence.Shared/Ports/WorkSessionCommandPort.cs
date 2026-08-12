@@ -667,7 +667,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	private static async Task AuthorizeCompleteOrThrowAsync(
 		DbContext context, AppUserId actorId, JobNodeId leafId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -681,7 +681,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		DbContext context, AppUserId actorId, JobNodeId leafId, AppUserId targetWorkedByUserId, Instant now,
 		CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);
 		var actorParticipatedPreviously = await context.Set<WorkSessionEntity>().AsNoTracking()
@@ -736,7 +736,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			return;
 		}
 
-		var actorRoles = await GetActorRolesAsync(context, ctx.Actor, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, ctx.Actor, now, cancellationToken).ConfigureAwait(false);
 		if (!JobPickupPolicy.CanPickUp(actorRoles, true)) {
 			return;
 		}
@@ -807,7 +807,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		DbContext context, AppUserId actorId, JobNodeId leafId, List<WorkSessionEntity> activeSessions, Instant now,
 		CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);
 		var controlsNode = ancestorOwnerIds.Contains(actorId.Value);
@@ -822,7 +822,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	private static async Task AuthorizeOrThrowAsync(
 		DbContext context, AppUserId actorId, JobNodeId leafId, Instant now, CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -842,7 +842,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		DbContext context, AppUserId actorId, JobNodeId leafId, AppUserId sessionWorkedByUserId, Instant now,
 		CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, leafId.Value, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -850,22 +850,6 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 				actorRoles, ancestorOwnerIds.Contains(actorId.Value), actorId == sessionWorkedByUserId)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not finish this session on job node {leafId}.");
 		}
-	}
-
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		DbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
-	{
-		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
-								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
-
-		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
-
-		return [.. roles];
 	}
 
 	/// <summary>

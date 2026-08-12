@@ -120,7 +120,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 		var port = CreatePort(database.ConnectionString);
 		var result = await port.BootstrapAsync(CreateRequest("ada"));
 
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		var act = async () => await ExecuteNonQueryAsync(
 			connection, $"DELETE FROM job_node WHERE id = {result.RootJobNodeId.Value};");
@@ -160,7 +160,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 
 	private async Task DeploySchemaAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 		var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
@@ -169,20 +169,20 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 
 	private async Task<string> ReadAppUserZoneIdAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT iana_time_zone FROM app_user WHERE id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		return (string)(await command.ExecuteScalarAsync())!;
 	}
 
 	private async Task<decimal> GetDefaultHourlyRateAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT default_hourly_rate FROM app_user WHERE id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		var value = await command.ExecuteScalarAsync();
 		return value switch {
@@ -194,7 +194,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 
 	private async Task<ScheduleSummary> GetOnlyScheduleAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  SELECT sv.effective_start, sv.effective_end, sv.iana_time_zone,
@@ -204,7 +204,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 							  WHERE sv.user_id = @appUserId
 							  ORDER BY si.day_of_week;
 							  """;
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		await using var reader = await command.ExecuteReaderAsync();
 		var intervals = new List<ScheduleIntervalSummary>();
@@ -247,13 +247,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 	private static string FormatTime(int hour, int minute, int second) =>
 		$"{hour:D2}:{minute:D2}:{second:D2}";
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
+
 
 	private static async Task ExecuteNonQueryAsync(DbConnection connection, string commandText)
 	{
@@ -262,13 +256,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
 
 	private sealed class ScheduleSummary(
 		string effectiveStart,

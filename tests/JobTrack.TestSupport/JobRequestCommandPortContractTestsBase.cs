@@ -70,7 +70,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task The_default_owner_configured_on_the_holding_area_is_applied_to_the_new_request()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var staffId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper", EmployeeRole.Worker);
+		var staffId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper", EmployeeRole.Worker);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, staffId, true);
 		var port = CreateCommandPort(database.ConnectionString);
 
@@ -135,7 +135,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_non_requester_role_cannot_submit_a_request()
 	{
 		await SeedRootAndRequesterAsync();
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper", EmployeeRole.Worker);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 
@@ -172,8 +172,8 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_job_manager_can_move_a_requester_job_to_a_new_parent_without_owning_it()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
-		var strangerId = await SeedEmployeeAsync("Sam Stranger", "sam.stranger", EmployeeRole.Worker);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var strangerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Sam Stranger", "sam.stranger", EmployeeRole.Worker);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var destinationId = await InsertNodeAsync(rootId.Value, strangerId, "Destination branch");
 		var port = CreateCommandPort(database.ConnectionString);
@@ -188,8 +188,8 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task The_assigned_owner_of_a_requester_job_can_move_it_without_owning_the_destination_parent()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper", EmployeeRole.Worker);
-		var strangerId = await SeedEmployeeAsync("Sam Stranger", "sam.stranger", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper", EmployeeRole.Worker);
+		var strangerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Sam Stranger", "sam.stranger", EmployeeRole.Worker);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, workerId, true);
 		var destinationId = await InsertNodeAsync(rootId.Value, strangerId, "Destination branch");
 		var port = CreateCommandPort(database.ConnectionString);
@@ -204,8 +204,8 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task An_owner_of_an_ancestor_of_a_requester_job_can_move_it_without_owning_the_destination_parent()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var ancestorOwnerId = await SeedEmployeeAsync("Ada Ancestor", "ada.ancestor", EmployeeRole.Worker);
-		var strangerId = await SeedEmployeeAsync("Sam Stranger", "sam.stranger", EmployeeRole.Worker);
+		var ancestorOwnerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Ada Ancestor", "ada.ancestor", EmployeeRole.Worker);
+		var strangerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Sam Stranger", "sam.stranger", EmployeeRole.Worker);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		await SetHoldingAreaNodeOwnerAsync(holdingAreaId, ancestorOwnerId);
 		var destinationId = await InsertNodeAsync(rootId.Value, strangerId, "Destination branch");
@@ -222,7 +222,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_worker_who_does_not_control_the_requester_job_cannot_move_it()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var strangerId = await SeedEmployeeAsync("Sam Stranger", "sam.stranger", EmployeeRole.Worker);
+		var strangerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Sam Stranger", "sam.stranger", EmployeeRole.Worker);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var destinationId = await InsertNodeAsync(rootId.Value, strangerId, "Destination branch");
 		var port = CreateCommandPort(database.ConnectionString);
@@ -237,7 +237,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Moving_a_requester_job_preserves_the_job_request_anchor()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var destinationId = await InsertNodeAsync(rootId.Value, jobManagerId, "Destination branch");
 		var port = CreateCommandPort(database.ConnectionString);
@@ -254,7 +254,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Moving_an_ordinary_job_node_without_a_job_request_row_is_rejected()
 	{
 		var (rootId, _) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var ordinaryNodeId = await InsertNodeAsync(rootId.Value, jobManagerId, "Ordinary node");
 		var destinationId = await InsertNodeAsync(rootId.Value, jobManagerId, "Destination branch");
 		var port = CreateCommandPort(database.ConnectionString);
@@ -268,7 +268,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Moving_a_requester_job_to_a_descendant_of_itself_is_rejected_as_a_cycle()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -290,7 +290,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Moving_a_requester_job_under_a_node_it_is_a_prerequisite_of_is_rejected()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var dependentId = await InsertNodeAsync(rootId.Value, jobManagerId, "Dependent branch");
 		var port = CreateCommandPort(database.ConnectionString);
@@ -308,7 +308,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Moving_a_requester_job_with_a_stale_version_is_rejected_as_a_conflict()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var destinationId = await InsertNodeAsync(rootId.Value, jobManagerId, "Destination branch");
 		var port = CreateCommandPort(database.ConnectionString);
@@ -324,7 +324,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_requester_sees_only_their_own_submitted_requests_most_recent_first()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var otherRequesterId = await SeedEmployeeAsync("Ravi Requester", "ravi.requester", EmployeeRole.Requester);
+		var otherRequesterId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Ravi Requester", "ravi.requester", EmployeeRole.Requester);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var first = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -341,7 +341,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task My_requests_derives_each_status_from_the_requests_current_subtree()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, jobManagerId, true);
 		var requestPort = CreateCommandPort(database.ConnectionString);
 		var submitted = await requestPort.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -423,7 +423,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_job_manager_can_acknowledge_a_requester_job()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -437,7 +437,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Acknowledging_a_request_writes_an_audit_event()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -455,7 +455,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_worker_who_does_not_control_the_requester_job_cannot_acknowledge_it()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var strangerId = await SeedEmployeeAsync("Sam Stranger", "sam.stranger", EmployeeRole.Worker);
+		var strangerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Sam Stranger", "sam.stranger", EmployeeRole.Worker);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -469,7 +469,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Acknowledging_a_request_with_a_stale_version_is_rejected_as_a_conflict()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -483,7 +483,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Acknowledging_a_request_a_second_time_is_rejected()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -500,7 +500,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Staff_can_add_a_private_note_not_visible_to_the_requester()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -514,7 +514,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Staff_can_add_a_requester_visible_note()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -541,7 +541,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_different_requester_cannot_add_a_note_to_someone_elses_request()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var otherRequesterId = await SeedEmployeeAsync("Ravi Requester", "ravi.requester", EmployeeRole.Requester);
+		var otherRequesterId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Ravi Requester", "ravi.requester", EmployeeRole.Requester);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -573,7 +573,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task The_requester_can_view_their_own_request_detail_including_status_and_subtree()
 	{
 		var (rootId, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -620,7 +620,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_worked_anchor_leaf_reports_its_own_achievement_alongside_the_subtree_rollup()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, jobManagerId, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -646,7 +646,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_decomposed_anchor_is_a_branch_with_no_leaf_achievement_of_its_own()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -681,7 +681,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Requesting_detail_reflects_acknowledged_status()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -697,7 +697,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_requester_sees_only_requester_visible_notes_while_staff_see_every_note()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -715,7 +715,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_different_requester_cannot_view_someone_elses_request_detail()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var otherRequesterId = await SeedEmployeeAsync("Ravi Requester", "ravi.requester", EmployeeRole.Requester);
+		var otherRequesterId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Ravi Requester", "ravi.requester", EmployeeRole.Requester);
 		var holdingAreaId = await SeedHoldingAreaAsync(null, null, true);
 		var port = CreateCommandPort(database.ConnectionString);
 		var submitted = await port.SubmitAsync(SubmitRequest(requesterId, holdingAreaId));
@@ -746,7 +746,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Decomposing_a_requester_job_preserves_the_job_request_anchor()
 	{
 		var (_, requesterId) = await SeedRootAndRequesterAsync();
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager", EmployeeRole.JobManager);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync(
 			null, jobManagerId, true);
 		var requestPort = CreateCommandPort(database.ConnectionString);
@@ -838,7 +838,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<(JobNodeId RootId, AppUserId RequesterId)> SeedRootAndRequesterAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -853,87 +853,42 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		var requesterId = await SeedEmployeeAsync("Rita Requester", "rita.requester", EmployeeRole.Requester);
+		var requesterId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Rita Requester", "rita.requester", EmployeeRole.Requester);
 
 		return (result.RootJobNodeId, requesterId);
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
-	{
-		await using var connection = await OpenExistingConnectionAsync();
 
-		await using var appUserCommand = connection.CreateCommand();
-		appUserCommand.CommandText = """
-									 INSERT INTO app_user (display_name, iana_time_zone)
-									 VALUES (@displayName, 'Europe/London')
-									 RETURNING id;
-									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
-		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
-		await using var identityUserCommand = connection.CreateCommand();
-		identityUserCommand.CommandText = """
-										  INSERT INTO identity_user
-										    (app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										     concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										  VALUES
-										    (@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-										     @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
-		_ = await identityUserCommand.ExecuteNonQueryAsync();
 
-		await AssignRoleAsync(connection, appUserId, role);
-
-		return appUserId;
-	}
-
-	private static async Task AssignRoleAsync(DbConnection connection, AppUserId appUserId, EmployeeRole role)
-	{
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-	}
 
 	private async Task<DepartmentId> SeedDepartmentAsync(string name)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  INSERT INTO department (name, is_active)
 							  VALUES (@name, true)
 							  RETURNING id;
 							  """;
-		AddParameter(command, "@name", name);
+		command.AddParameter("@name", name);
 		return new(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
 
 	private async Task SeedAppUserDepartmentAsync(AppUserId appUserId, DepartmentId departmentId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "INSERT INTO app_user_department (app_user_id, department_id) VALUES (@appUserId, @departmentId);";
-		AddParameter(command, "@appUserId", appUserId.Value);
-		AddParameter(command, "@departmentId", departmentId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
+		command.AddParameter("@departmentId", departmentId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task<RequestHoldingAreaId> SeedHoldingAreaAsync(
 		DepartmentId? departmentId, AppUserId? defaultOwnerUserId, bool isActive)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		var rootId = await ReadRootIdAsync(connection);
 
@@ -943,10 +898,10 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 								  VALUES (@parentId, 'Holding area', @postedByUserId, @postedByUserId, @priorityId, @postedAt)
 								  RETURNING id;
 								  """;
-		AddParameter(nodeCommand, "@parentId", rootId);
-		AddParameter(nodeCommand, "@postedByUserId", rootId);
-		AddParameter(nodeCommand, "@priorityId", PriorityMedium);
-		AddParameter(nodeCommand, "@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		nodeCommand.AddParameter("@parentId", rootId);
+		nodeCommand.AddParameter("@postedByUserId", rootId);
+		nodeCommand.AddParameter("@priorityId", PriorityMedium);
+		nodeCommand.AddParameter("@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
 		var jobNodeId = Convert.ToInt64(await nodeCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
 		await using var holdingAreaCommand = connection.CreateCommand();
@@ -957,11 +912,11 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 										    (@jobNodeId, @departmentId, 'IT Intake', @priorityId, @defaultOwnerUserId, @isActive)
 										 RETURNING id;
 										 """;
-		AddParameter(holdingAreaCommand, "@jobNodeId", jobNodeId);
-		AddParameter(holdingAreaCommand, "@departmentId", (object?)departmentId?.Value ?? DBNull.Value);
-		AddParameter(holdingAreaCommand, "@priorityId", PriorityMedium);
-		AddParameter(holdingAreaCommand, "@defaultOwnerUserId", (object?)defaultOwnerUserId?.Value ?? DBNull.Value);
-		AddParameter(holdingAreaCommand, "@isActive", isActive);
+		holdingAreaCommand.AddParameter("@jobNodeId", jobNodeId);
+		holdingAreaCommand.AddParameter("@departmentId", (object?)departmentId?.Value ?? DBNull.Value);
+		holdingAreaCommand.AddParameter("@priorityId", PriorityMedium);
+		holdingAreaCommand.AddParameter("@defaultOwnerUserId", (object?)defaultOwnerUserId?.Value ?? DBNull.Value);
+		holdingAreaCommand.AddParameter("@isActive", isActive);
 
 		return new(Convert.ToInt64(await holdingAreaCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
@@ -975,18 +930,18 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task<long> InsertNodeAsync(long parentId, AppUserId ownerUserId, string description)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)
 							  VALUES (@parentId, @description, @ownerUserId, @ownerUserId, @priorityId, @postedAt)
 							  RETURNING id;
 							  """;
-		AddParameter(command, "@parentId", parentId);
-		AddParameter(command, "@description", description);
-		AddParameter(command, "@ownerUserId", ownerUserId.Value);
-		AddParameter(command, "@priorityId", PriorityMedium);
-		AddParameter(command, "@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@parentId", parentId);
+		command.AddParameter("@description", description);
+		command.AddParameter("@ownerUserId", ownerUserId.Value);
+		command.AddParameter("@priorityId", PriorityMedium);
+		command.AddParameter("@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
@@ -996,42 +951,42 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task InsertPrerequisiteAsync(long requiredJobId, long dependentJobId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "INSERT INTO job_prerequisite (from_id, to_id) VALUES (@fromId, @toId);";
-		AddParameter(command, "@fromId", requiredJobId);
-		AddParameter(command, "@toId", dependentJobId);
+		command.AddParameter("@fromId", requiredJobId);
+		command.AddParameter("@toId", dependentJobId);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task SetHoldingAreaNodeOwnerAsync(RequestHoldingAreaId holdingAreaId, AppUserId ownerUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  UPDATE job_node SET owner_user_id = @ownerUserId
 							  WHERE id = (SELECT job_node_id FROM request_holding_area WHERE id = @holdingAreaId);
 							  """;
-		AddParameter(command, "@ownerUserId", ownerUserId.Value);
-		AddParameter(command, "@holdingAreaId", holdingAreaId.Value);
+		command.AddParameter("@ownerUserId", ownerUserId.Value);
+		command.AddParameter("@holdingAreaId", holdingAreaId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task<JobNodeId> ReadHoldingAreaJobNodeIdAsync(RequestHoldingAreaId holdingAreaId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT job_node_id FROM request_holding_area WHERE id = @holdingAreaId;";
-		AddParameter(command, "@holdingAreaId", holdingAreaId.Value);
+		command.AddParameter("@holdingAreaId", holdingAreaId.Value);
 		return new(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
 
 	private async Task<(RequestHoldingAreaId HoldingAreaId, AppUserId RequesterUserId)> ReadJobRequestAnchorAsync(JobNodeId jobNodeId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT holding_area_id, requester_user_id FROM job_request WHERE job_node_id = @jobNodeId;";
-		AddParameter(command, "@jobNodeId", jobNodeId.Value);
+		command.AddParameter("@jobNodeId", jobNodeId.Value);
 
 		await using var reader = await command.ExecuteReaderAsync();
 		_ = await reader.ReadAsync();
@@ -1040,28 +995,16 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task SetActorAccountStateAsync(AppUserId appUserId, bool isEnabled, DateTimeOffset? lockoutEnd)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "UPDATE identity_user SET is_enabled = @isEnabled, lockout_end = @lockoutEnd WHERE app_user_id = @appUserId;";
-		AddParameter(command, "@isEnabled", isEnabled);
-		AddParameter(command, "@lockoutEnd", lockoutEnd is null ? DBNull.Value : EncodeInstant(lockoutEnd.Value));
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@isEnabled", isEnabled);
+		command.AddParameter("@lockoutEnd", lockoutEnd is null ? DBNull.Value : EncodeInstant(lockoutEnd.Value));
+		command.AddParameter("@appUserId", appUserId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 }

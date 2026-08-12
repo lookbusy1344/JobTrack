@@ -29,7 +29,7 @@ public sealed class ProductionSecurityConfigurationTests : IAsyncLifetime, IDisp
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 		(certificatePath, certificatePasswordPath) = WriteDataProtectionCertificate();
 	}
 
@@ -102,20 +102,7 @@ public sealed class ProductionSecurityConfigurationTests : IAsyncLifetime, IDisp
 		act.Should().NotThrow();
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
 	private static (string CertificatePath, string PasswordPath) WriteDataProtectionCertificate()
 	{

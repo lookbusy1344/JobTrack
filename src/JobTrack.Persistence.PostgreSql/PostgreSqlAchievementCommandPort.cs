@@ -134,7 +134,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, JobNodeId nodeId, bool isReopening, Instant now,
 		CancellationToken cancellationToken)
 	{
-		var actorRoles = await GetActorRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
+		var actorRoles = await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 		var ancestorOwnerIds = await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken)
 			.ConfigureAwait(false);
 
@@ -145,22 +145,6 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 		if (!AchievementAccessPolicy.CanSetAchievement(actorRoles, ancestorOwnerIds.Contains(actorId.Value), isReopening)) {
 			throw new AuthorizationDeniedException($"Actor {actorId} may not change achievement for job node {nodeId}.");
 		}
-	}
-
-	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
-		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
-	{
-		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-									.FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
-								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
-
-		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-			.Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-			.Select(ur => (EmployeeRole)ur.IdentityRoleId)
-			.ToArrayAsync(cancellationToken).ConfigureAwait(false);
-
-		return [.. roles];
 	}
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)

@@ -2,15 +2,15 @@
 @{
 	(string Modifier, string IconId, string Label)? status =
 		(Model.Count, Model.Closed, Model.Paused, Model.UnacknowledgedRequest, Model.Unstarted) switch {
-		(> 0, _, _, _, _) => (
-			Modifier: "status-pill-active", IconId: "jt-icon-active", Label: Model.Count == 1 ? "Active" : $"{Model.Count} active"),
-		(0, true, _, _, _) => (Modifier: "status-pill-closed", IconId: "jt-icon-achievement-closed", Label: "Closed"),
-		(0, false, true, _, _) => (Modifier: "status-pill-paused", IconId: "jt-icon-finish", Label: "Paused"),
-		(0, false, false, true, _) => (Modifier: "status-pill-unack", IconId: "jt-icon-achievement-waiting", Label: "Unack"),
-		(0, false, false, false, true) => (Modifier: "status-pill-inactive", IconId: "jt-icon-achievement-waiting", Label: "Unstarted"),
-		(0, false, false, false, false) => null,
-		(< 0, _, _, _, _) => throw new InvalidOperationException("An active-session count cannot be negative."),
-	};
+			(> 0, _, _, _, _) => (
+				Modifier: "status-pill-active", IconId: "jt-icon-active", Label: Model.Count == 1 ? "Active" : $"{Model.Count} active"),
+			(0, true, _, _, _) => (Modifier: "status-pill-closed", IconId: "jt-icon-achievement-closed", Label: "Closed"),
+			(0, false, true, _, _) => (Modifier: "status-pill-paused", IconId: "jt-icon-finish", Label: "Paused"),
+			(0, false, false, true, _) => (Modifier: "status-pill-unack", IconId: "jt-icon-achievement-waiting", Label: "Unack"),
+			(0, false, false, false, true) => (Modifier: "status-pill-inactive", IconId: "jt-icon-achievement-waiting", Label: "Unstarted"),
+			(0, false, false, false, false) => null,
+			(< 0, _, _, _, _) => throw new InvalidOperationException("An active-session count cannot be negative."),
+		};
 }
 @if (status.HasValue) {
 	var (modifier, iconId, label) = status.Value;

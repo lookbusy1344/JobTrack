@@ -219,7 +219,7 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 	public async Task GetManageCapabilitiesAsync_does_not_report_control_for_a_worker_who_does_not_own_the_leaf()
 	{
 		var (_, _, leafId) = await SeedWorkedLeafAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.capability", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.capability", EmployeeRole.Worker);
 		var port = CreateQueryPort(database.ConnectionString);
 
 		var result = await port.GetManageCapabilitiesAsync(otherWorkerId, [leafId]);
@@ -416,7 +416,7 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 	/// <summary>Seeds root -&gt; leaf "Pour foundation" (worker-owned, LeafWork attached), owned and worked by a seeded worker.</summary>
 	private async Task<(AppUserId AdministratorId, AppUserId WorkerId, JobNodeId LeafId)> SeedWorkedLeafAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -432,7 +432,7 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		});
 		var administratorId = bootstrap.AdministratorId;
 
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper", EmployeeRole.Worker);
 
 		var jobCommandPort = CreateJobCommandPort(database.ConnectionString);
 		var leaf = await jobCommandPort.AddChildAsync(new() {
@@ -499,71 +499,17 @@ public abstract class WorkSessionQueryPortContractTestsBase : IAsyncLifetime
 		});
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
-	{
-		await using var connection = await OpenExistingConnectionAsync();
 
-		await using var appUserCommand = connection.CreateCommand();
-		appUserCommand.CommandText = """
-									 INSERT INTO app_user (display_name, iana_time_zone)
-									 VALUES (@displayName, 'Europe/London')
-									 RETURNING id;
-									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
-		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
-
-		await using var identityUserCommand = connection.CreateCommand();
-		identityUserCommand.CommandText = """
-										  INSERT INTO identity_user
-										  	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										  	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										  VALUES
-										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-										  	 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
-		_ = await identityUserCommand.ExecuteNonQueryAsync();
-
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-
-		return appUserId;
-	}
 
 	private async Task<JobNodeId> FindRootAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT id FROM job_node WHERE parent_id IS NULL;";
 		return new(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 }

@@ -330,9 +330,7 @@ public sealed class WorkModel(
 				SessionId = new(sessionId),
 				Version = version,
 				FinishedAt = finishedAtInstant,
-				WriteUpChange = nodeVersion is long expectedNodeVersion
-					? new() { NodeVersion = expectedNodeVersion, WriteUp = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp }
-					: null,
+				WriteUpChange = WriteUpChangeOrNull(nodeVersion, writeUp),
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote("Ends this session; the job stays In Progress.", result.WriteUpChanged);
 
@@ -404,9 +402,7 @@ public sealed class WorkModel(
 				FinishedAt = finishedAtInstant,
 				CompletionNote = string.IsNullOrWhiteSpace(completionNote) ? null : completionNote,
 				FinalAchievement = finalAchievement,
-				WriteUpChange = nodeVersion is long expectedNodeVersion
-					? new() { NodeVersion = expectedNodeVersion, WriteUp = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp }
-					: null,
+				WriteUpChange = WriteUpChangeOrNull(nodeVersion, writeUp),
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote(
 				DescribeCompletionOutcome(result.Achievement, result.FinishedSessions.Count), result.WriteUpChanged);
@@ -478,9 +474,7 @@ public sealed class WorkModel(
 				JobNodeId = new(LeafNodeId),
 				ExpectedActiveSessions = confirmed,
 				FinishedAt = finishedAtInstant,
-				WriteUpChange = nodeVersion is long expectedNodeVersion
-					? new() { NodeVersion = expectedNodeVersion, WriteUp = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp }
-					: null,
+				WriteUpChange = WriteUpChangeOrNull(nodeVersion, writeUp),
 			}, cancellationToken);
 			SuccessMessage = WithWriteUpNote(DescribePauseOutcome(result.FinishedSessions.Count), result.WriteUpChanged);
 
@@ -731,6 +725,18 @@ public sealed class WorkModel(
 		1 => "Ends this session; the job stays In Progress.",
 		var n => $"Job paused and {n} sessions finished.",
 	};
+
+	/// <summary>
+	///     The write-up half of the shared "How is this job ending?" form, as the optional change the Pause,
+	///     Complete and Finish-session commands each carry. <see langword="null" /> when the form posted no node
+	///     version -- the write-up was left alone, so the command must not burn a node version on it. A blank
+	///     write-up is a deliberate clear, carried as a <see langword="null" /> <see cref="WriteUpChange.WriteUp" />.
+	/// </summary>
+	private static WriteUpChange? WriteUpChangeOrNull(long? nodeVersion, string? writeUp)
+	{
+		var trimmed = string.IsNullOrWhiteSpace(writeUp) ? null : writeUp;
+		return nodeVersion.HasValue ? new WriteUpChange { NodeVersion = nodeVersion.Value, WriteUp = trimmed } : null;
+	}
 
 	/// <summary>Appends the write-up's own confirmation to a command's success message, but only when it actually changed.</summary>
 	private static string WithWriteUpNote(string message, bool writeUpSaved) => writeUpSaved ? $"{message} Write-up saved." : message;

@@ -44,7 +44,7 @@ public abstract class ScheduleBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Rota/Index");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -59,7 +59,7 @@ public abstract class ScheduleBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Rota/Index");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -75,7 +75,7 @@ public abstract class ScheduleBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Rota/Index");
 
 		await page.EvaluateAsync("document.body.focus()");
@@ -107,10 +107,10 @@ public abstract class ScheduleBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Rota/Index");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Rota/Index");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Rota/Index");
 	}
 
 	[Fact]
@@ -121,10 +121,10 @@ public abstract class ScheduleBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Rota/CorrectVersion?userId={fixture.AdministratorId.Value}&versionId={versionId.Value}");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Rota/CorrectVersion");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Rota/CorrectVersion");
 	}
 
 	[Fact]
@@ -136,23 +136,14 @@ public abstract class ScheduleBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync(
 			$"{fixture.BaseAddress}/Rota/CorrectException?userId={fixture.AdministratorId.Value}&exceptionId={exceptionId.Value}");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Rota/CorrectException");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Rota/CorrectException");
 	}
 
-	private static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)
-	{
-		var criticalOrSerious = results.Violations
-			.Where(violation => violation.Impact is "critical" or "serious")
-			.ToArray();
 
-		criticalOrSerious.Should().BeEmpty(
-			$"{pageName} should have no critical/serious accessibility violations, found: " +
-			string.Join("; ", criticalOrSerious.Select(v => $"{v.Id} ({v.Impact}): {v.Help}")));
-	}
 
 	private static async Task TabToAsync(IPage page, string targetElementId, int maxTabs)
 	{
@@ -167,14 +158,7 @@ public abstract class ScheduleBrowserTestsBase
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class SqliteScheduleBrowserTests : ScheduleBrowserTestsBase, IClassFixture<SqliteBrowserFixture>

@@ -55,7 +55,7 @@ public sealed class EditModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -85,7 +85,7 @@ public sealed class EditModel(
 
 	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -163,12 +163,6 @@ public sealed class EditModel(
 			cancellationToken);
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Unassigned", string.Empty));
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class EditInput

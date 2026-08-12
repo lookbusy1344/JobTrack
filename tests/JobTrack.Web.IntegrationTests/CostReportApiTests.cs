@@ -42,7 +42,7 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrap = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -75,10 +75,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task A_cost_viewer_can_get_a_leafs_cost_details_via_the_api()
 	{
 		var (workerId, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.details.worker");
-		_ = await SeedEmployeeAsync("cost.details.viewer", EmployeeRole.CostViewer);
-		var authCookie = await SignInAsync("cost.details.viewer");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.details.viewer", EmployeeRole.CostViewer);
+		var authCookie = await client.SignInAsync("cost.details.viewer");
 
-		var response = await GetAsync($"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -93,10 +93,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task A_cost_viewer_can_get_hierarchy_totals_via_the_api()
 	{
 		var (workerId, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.hierarchy.worker");
-		_ = await SeedEmployeeAsync("cost.hierarchy.viewer", EmployeeRole.CostViewer);
-		var authCookie = await SignInAsync("cost.hierarchy.viewer");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.hierarchy.viewer", EmployeeRole.CostViewer);
+		var authCookie = await client.SignInAsync("cost.hierarchy.viewer");
 
-		var response = await GetAsync($"/api/jobs/{rootId.Value}/cost/hierarchy?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{rootId.Value}/cost/hierarchy?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -113,9 +113,9 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_without_cost_permission_is_denied_and_receives_problem_details()
 	{
 		var (workerId, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.denied.worker");
-		var authCookie = await SignInAsync("cost.denied.worker");
+		var authCookie = await client.SignInAsync("cost.denied.worker");
 
-		var response = await GetAsync($"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 		response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
@@ -149,7 +149,7 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task A_cost_viewer_can_get_cost_details_via_a_bearer_token()
 	{
 		var (workerId, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.bearer.worker");
-		var viewerId = await SeedEmployeeAsync("cost.bearer.viewer", EmployeeRole.CostViewer);
+		var viewerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.bearer.viewer", EmployeeRole.CostViewer);
 		var issued = await seedClient.Tokens.IssueAsync(new() {
 			Context = new() { Actor = viewerId, CorrelationId = Guid.NewGuid() },
 			TargetUserId = viewerId,
@@ -166,10 +166,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task Cost_details_rejects_a_non_positive_trace_segment_limit()
 	{
 		var (_, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.trace-limit.worker");
-		_ = await SeedEmployeeAsync("cost.trace-limit.viewer", EmployeeRole.CostViewer);
-		var authCookie = await SignInAsync("cost.trace-limit.viewer");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.trace-limit.viewer", EmployeeRole.CostViewer);
+		var authCookie = await client.SignInAsync("cost.trace-limit.viewer");
 
-		var response = await GetAsync(
+		var response = await client.GetAuthenticatedAsync(
 			$"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00&maxTraceSegments=0",
 			authCookie);
 
@@ -181,10 +181,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task Cost_details_reports_an_unprocessable_entity_when_no_rate_resolves()
 	{
 		var (_, leafId) = await SeedWorkedLeafWithFinishedSessionAsync("cost.no-rate.worker", false);
-		_ = await SeedEmployeeAsync("cost.no-rate.viewer", EmployeeRole.CostViewer);
-		var authCookie = await SignInAsync("cost.no-rate.viewer");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.no-rate.viewer", EmployeeRole.CostViewer);
+		var authCookie = await client.SignInAsync("cost.no-rate.viewer");
 
-		var response = await GetAsync($"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{leafId.Value}/cost?asOf=2026-01-02T00:00:00%2B00:00", authCookie);
 
 		// A valid, authorized request the server cannot cost because no rate source applies is a
 		// semantic failure of the request against server data, not a caller usage error (spec
@@ -197,10 +197,10 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	public async Task Hierarchy_totals_rejects_a_subtree_larger_than_the_requested_node_limit()
 	{
 		_ = await SeedWorkedLeafWithFinishedSessionAsync("cost.node-limit.worker");
-		_ = await SeedEmployeeAsync("cost.node-limit.viewer", EmployeeRole.CostViewer);
-		var authCookie = await SignInAsync("cost.node-limit.viewer");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "cost.node-limit.viewer", EmployeeRole.CostViewer);
+		var authCookie = await client.SignInAsync("cost.node-limit.viewer");
 
-		var response = await GetAsync(
+		var response = await client.GetAuthenticatedAsync(
 			$"/api/jobs/{rootId.Value}/cost/hierarchy?asOf=2026-01-02T00:00:00%2B00:00&maxHierarchyNodes=1",
 			authCookie);
 
@@ -211,7 +211,7 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 	private async Task<(AppUserId WorkerId, JobNodeId LeafId)> SeedWorkedLeafWithFinishedSessionAsync(
 		string workerUserName, bool addUserRate = true)
 	{
-		var workerId = await SeedEmployeeAsync(workerUserName, EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, workerUserName, EmployeeRole.Worker);
 		var leaf = await seedClient.Jobs.AddChildAsync(new() {
 			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
 			ParentId = rootId,
@@ -256,12 +256,7 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		return (workerId, leaf.Id);
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
-		return await client.SendAsync(request);
-	}
+
 
 	private async Task<HttpResponseMessage> GetWithBearerAsync(string path, string token)
 	{
@@ -270,118 +265,15 @@ public sealed partial class CostReportApiTests : IAsyncLifetime, IDisposable
 		return await client.SendAsync(request);
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
 
-		return new(appUserId);
-	}
-
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
-
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
-
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
-
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

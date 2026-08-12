@@ -1183,7 +1183,8 @@ fieldset legend {
    since this sits inline with other text rather than leading a tree row. `_KindIcon.cshtml` renders
    the label as visible text when there is room, or visually-hidden-only in a table cell -- either
    way the glyph itself is `aria-hidden`, so the fact is always carried by text for assistive tech. */
-.jt-kind-icon {
+.jt-kind-icon,
+.jt-achievement-icon {
     display: inline-flex;
     align-items: center;
     gap: var(--jt-space-1);
@@ -1239,12 +1240,6 @@ fieldset legend {
    open work session on the "Active since" pill, and a leaf can be In Progress with nobody working
    on it right now. Red is not used at all here -- it is reserved for blocked (`.status-pill-blocked`),
    which is an orthogonal fact a job carries *alongside* its achievement, not one of these values. */
-.jt-achievement-icon {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--jt-space-1);
-}
-
 .jt-achievement-icon-glyph {
     flex: 0 0 auto;
     width: var(--jt-icon-size-kind-inline);
@@ -1271,7 +1266,8 @@ fieldset legend {
 
 /* Warm dim, against Waiting's cool slate: the two neutrals must not be mistaken for each other, and
    a terminal state should recede rather than compete with the rows still needing attention. */
-.jt-achievement-icon--closed {
+.jt-achievement-icon--closed,
+.jt-muted {
     color: var(--jt-muted);
 }
 
@@ -1965,10 +1961,6 @@ nav[aria-label="breadcrumb"] li + li::before {
     color: var(--jt-orange-700);
 }
 
-.jt-muted {
-    color: var(--jt-muted);
-}
-
 /* ---- Priority label ------------------------------------------------------------------------ */
 
 /* _PriorityLabel's per-level modifier classes. High and Urgent carry a rule so far -- Low/Medium
@@ -2029,7 +2021,8 @@ nav[aria-label="breadcrumb"] li + li::before {
 /* The inherited-blockers list isn't split into a two-column grid like Requires/Depends-on above
    it, so the narrow-content cap those share would leave it looking stranded on wide screens
    instead of filling the full-width card it sits in. */
-.jt-list--wide {
+.jt-list--wide,
+.jt-notice--wide {
     max-width: none;
 }
 
@@ -2095,10 +2088,6 @@ nav[aria-label="breadcrumb"] li + li::before {
    scroll. Line length is not what the cap was protecting here anyway — `p` carries its own
    `--jt-measure-prose` ceiling, so the paragraphs inside stay readable at any box width. Only for a
    notice sitting in a column of full-width siblings; a notice standing alone keeps the default. */
-.jt-notice--wide {
-    max-width: none;
-}
-
 /* Empty-state line used across list/table pages ("None.", "No jobs to show."). */
 .jt-empty {
     padding: var(--jt-space-4);

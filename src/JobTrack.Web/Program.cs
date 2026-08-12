@@ -651,10 +651,12 @@ public sealed class Program
 			// AntiforgeryValidationException with the BadHttpRequestException as its InnerException.
 			_ = app.UseExceptionHandler(new ExceptionHandlerOptions {
 				ExceptionHandlingPath = "/Error",
-				StatusCodeSelector = exception => (exception is BadHttpRequestException ? exception : exception.InnerException) is
-					BadHttpRequestException badHttpRequestException
-						? badHttpRequestException.StatusCode
-						: StatusCodes.Status500InternalServerError,
+				StatusCodeSelector = static exception => exception switch {
+					BadHttpRequestException badHttpRequestException => badHttpRequestException.StatusCode,
+					{ InnerException: BadHttpRequestException innerBadHttpRequestException } =>
+						innerBadHttpRequestException.StatusCode,
+					_ => StatusCodes.Status500InternalServerError,
+				},
 			});
 			// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
 			_ = app.UseHsts();

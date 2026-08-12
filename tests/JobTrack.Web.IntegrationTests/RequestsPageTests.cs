@@ -72,7 +72,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrapResult = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -106,13 +106,13 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	{
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		_ = await SeedEmployeeAsync("rita.requester", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.requester");
+		var authCookie = await client.SignInAsync("rita.requester");
 
 		var (antiforgeryCookie, token) = await GetPageFormAsync(authCookie);
 		var response = await PostSubmitAsync(authCookie, antiforgeryCookie, token, holdingAreaId, "Printer will not turn on");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Printer will not turn on");
 		body.Should().Contain("<th scope=\"col\" class=\"col-4 col-md-3\">Status</th>");
@@ -125,7 +125,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	{
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		_ = await SeedEmployeeAsync("rita.one-area", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.one-area");
+		var authCookie = await client.SignInAsync("rita.one-area");
 
 		var response = await GetPageAsync(authCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -143,7 +143,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		_ = await SeedHoldingAreaAsync();
 		_ = await SeedHoldingAreaAsync("Facilities Intake", "Site maintenance");
 		_ = await SeedEmployeeAsync("rita.node-titles", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.node-titles");
+		var authCookie = await client.SignInAsync("rita.node-titles");
 
 		var response = await GetPageAsync(authCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -160,7 +160,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		_ = await SeedHoldingAreaAsync();
 		_ = await SeedHoldingAreaAsync("Facilities Intake");
 		_ = await SeedEmployeeAsync("rita.two-areas", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.two-areas");
+		var authCookie = await client.SignInAsync("rita.two-areas");
 
 		var response = await GetPageAsync(authCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -185,7 +185,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = blocker.Id });
 		await seedClient.Jobs.AddPrerequisiteAsync(new() { Context = context, DependentJobId = submitted.JobNodeId, RequiredJobId = blocker.Id });
-		var authCookie = await SignInAsync("rita.list-blocked");
+		var authCookie = await client.SignInAsync("rita.list-blocked");
 
 		var response = await GetPageAsync(authCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -225,7 +225,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			Reason = "Exercise requester list subtree status",
 			Version = replacementWork.Version,
 		});
-		var authCookie = await SignInAsync("rita.list-status");
+		var authCookie = await client.SignInAsync("rita.list-status");
 
 		var response = await GetPageAsync(authCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -242,12 +242,12 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		const string InjectedDescription = "<script>alert('xss')</script>";
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		_ = await SeedEmployeeAsync("rita.xss", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.xss");
+		var authCookie = await client.SignInAsync("rita.xss");
 
 		var (antiforgeryCookie, token) = await GetPageFormAsync(authCookie);
 		var response = await PostSubmitAsync(authCookie, antiforgeryCookie, token, holdingAreaId, InjectedDescription);
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 
 		body.Should().NotContain(InjectedDescription);
@@ -259,7 +259,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	{
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		_ = await SeedEmployeeAsync("rita.blank", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.blank");
+		var authCookie = await client.SignInAsync("rita.blank");
 
 		var (antiforgeryCookie, token) = await GetPageFormAsync(authCookie);
 		var response = await PostSubmitAsync(authCookie, antiforgeryCookie, token, holdingAreaId, string.Empty);
@@ -274,12 +274,12 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	{
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		_ = await SeedEmployeeAsync("rita.owner", EmployeeRole.Requester);
-		var ownerCookie = await SignInAsync("rita.owner");
+		var ownerCookie = await client.SignInAsync("rita.owner");
 		var (ownerAntiforgery, ownerToken) = await GetPageFormAsync(ownerCookie);
 		_ = await PostSubmitAsync(ownerCookie, ownerAntiforgery, ownerToken, holdingAreaId, "Owner's private request");
 
 		_ = await SeedEmployeeAsync("ravi.other", EmployeeRole.Requester);
-		var otherCookie = await SignInAsync("ravi.other");
+		var otherCookie = await client.SignInAsync("ravi.other");
 
 		var otherPage = await GetPageAsync(otherCookie);
 		var otherBody = await otherPage.Content.ReadAsStringAsync();
@@ -291,7 +291,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	public async Task A_requester_cannot_reach_the_operational_job_browse_page()
 	{
 		_ = await SeedEmployeeAsync("rita.blocked", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.blocked");
+		var authCookie = await client.SignInAsync("rita.blocked");
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Browse?nodeId={rootId.Value}");
 		request.Headers.Add("Cookie", authCookie);
@@ -304,7 +304,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	public async Task Landing_redirects_a_requester_to_their_requests()
 	{
 		_ = await SeedEmployeeAsync("rita.landing", EmployeeRole.Requester);
-		var authCookie = await SignInAsync("rita.landing");
+		var authCookie = await client.SignInAsync("rita.landing");
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/");
 		request.Headers.Add("Cookie", authCookie);
@@ -318,7 +318,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_cannot_reach_the_requests_page()
 	{
 		_ = await SeedEmployeeAsync("wanda.worker", EmployeeRole.Worker);
-		var authCookie = await SignInAsync("wanda.worker");
+		var authCookie = await client.SignInAsync("wanda.worker");
 
 		var response = await GetPageAsync(authCookie);
 
@@ -331,7 +331,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.detail", EmployeeRole.Requester, "Rita Detail");
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
-		var authCookie = await SignInAsync("rita.detail");
+		var authCookie = await client.SignInAsync("rita.detail");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
 
@@ -361,7 +361,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.longtitle", EmployeeRole.Requester);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, description);
-		var authCookie = await SignInAsync("rita.longtitle");
+		var authCookie = await client.SignInAsync("rita.longtitle");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -384,7 +384,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.rollup", EmployeeRole.Requester, "Rita Rollup");
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Rollup and readiness fields");
-		var authCookie = await SignInAsync("rita.rollup");
+		var authCookie = await client.SignInAsync("rita.rollup");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
 
@@ -418,7 +418,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			Reason = "Exercise the leaf status field",
 			Version = leafWork.Version,
 		});
-		var authCookie = await SignInAsync("rita.leafstatus");
+		var authCookie = await client.SignInAsync("rita.leafstatus");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
 
@@ -449,7 +449,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		});
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() { Context = context, JobNodeId = blocker.Id });
 		await seedClient.Jobs.AddPrerequisiteAsync(new() { Context = context, DependentJobId = submitted.JobNodeId, RequiredJobId = blocker.Id });
-		var authCookie = await SignInAsync("rita.blocked");
+		var authCookie = await client.SignInAsync("rita.blocked");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
 
@@ -504,7 +504,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		await AddFinishedSessionAsync(
 			workerId, replacementId,
 			Instant.FromUtc(2026, 1, 1, 12, 0), Instant.FromUtc(2026, 1, 1, 15, 0));
-		var authCookie = await SignInAsync("rita.decomposed");
+		var authCookie = await client.SignInAsync("rita.decomposed");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, authCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -535,7 +535,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var requesterId = await SeedEmployeeAsync("rita.detail-owner", EmployeeRole.Requester);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Owner's private request");
 		_ = await SeedEmployeeAsync("ravi.detail-stranger", EmployeeRole.Requester);
-		var strangerCookie = await SignInAsync("ravi.detail-stranger");
+		var strangerCookie = await client.SignInAsync("ravi.detail-stranger");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, strangerCookie);
 
@@ -548,7 +548,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.note", EmployeeRole.Requester);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
-		var authCookie = await SignInAsync("rita.note");
+		var authCookie = await client.SignInAsync("rita.note");
 		const string ReturnUrl = "/Requests?view=recent";
 
 		var (antiforgeryCookie, token) =
@@ -562,7 +562,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			ReturnUrl);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("Any update?");
 		body.Should().Contain("<a href=\"/Requests?view=recent\">&larr; Back</a>");
@@ -588,7 +588,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			Content = "Internal triage note",
 			VisibleToRequester = false,
 		});
-		var staffCookie = await SignInAsync("priya.note-visibility");
+		var staffCookie = await client.SignInAsync("priya.note-visibility");
 
 		var response = await GetDetailPageAsync(submitted.JobNodeId.Value, staffCookie);
 		var body = await response.Content.ReadAsStringAsync();
@@ -619,7 +619,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var requesterId = await SeedEmployeeAsync("rita.for-ack", EmployeeRole.Requester);
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
 		_ = await SeedEmployeeAsync("priya.jobmanager", EmployeeRole.JobManager);
-		var staffCookie = await SignInAsync("priya.jobmanager");
+		var staffCookie = await client.SignInAsync("priya.jobmanager");
 
 		var (antiforgeryCookie, token) = await GetDetailPageFormAsync(submitted.JobNodeId.Value, staffCookie);
 
@@ -632,7 +632,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var response = await client.SendAsync(request);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, staffCookie);
+		var reloaded = await client.FollowRedirectAsync(response, staffCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("<dt class=\"col-12 col-sm-4\">Acknow</dt>");
 		body.Should().Contain($"<a href=\"/Jobs/Browse?nodeId={submitted.JobNodeId.Value}\">&larr; Back</a>");
@@ -645,7 +645,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var requesterId = await SeedEmployeeAsync("rita.triage", EmployeeRole.Requester, "Client Requester");
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, "Printer will not turn on");
 		_ = await SeedEmployeeAsync("priya.triage-manager", EmployeeRole.JobManager);
-		var staffCookie = await SignInAsync("priya.triage-manager");
+		var staffCookie = await client.SignInAsync("priya.triage-manager");
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Browse?nodeId={submitted.JobNodeId.Value}");
 		request.Headers.Add("Cookie", staffCookie);
@@ -671,7 +671,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	public async Task A_job_manager_browsing_an_ordinary_node_sees_no_request_action()
 	{
 		_ = await SeedEmployeeAsync("priya.no-request", EmployeeRole.JobManager);
-		var staffCookie = await SignInAsync("priya.no-request");
+		var staffCookie = await client.SignInAsync("priya.no-request");
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Jobs/Browse?nodeId={rootId.Value}");
 		request.Headers.Add("Cookie", staffCookie);
@@ -696,7 +696,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
 			NodeId = submitted.JobNodeId,
 		});
-		var staffCookie = await SignInAsync("will.return-target");
+		var staffCookie = await client.SignInAsync("will.return-target");
 		const string LocalReturnUrl = "/Jobs/AwaitingProgress?showWholeTree=true";
 
 		var localResponse = await GetDetailPageAsync(submitted.JobNodeId.Value, staffCookie, LocalReturnUrl);
@@ -717,7 +717,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		// Seeded through the client rather than the HTTP form deliberately: a form submit leaves the
 		// untruncated description in the page's success banner, which would mask the row truncation.
 		var submitted = await SubmitAsync(requesterId, holdingAreaId, LongDescription);
-		var authCookie = await SignInAsync("rita.verbose");
+		var authCookie = await client.SignInAsync("rita.verbose");
 
 		var listBody = await (await GetPageAsync(authCookie)).Content.ReadAsStringAsync();
 		listBody.Should().Contain(TruncatedDescription);
@@ -734,7 +734,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		var holdingAreaId = await SeedHoldingAreaAsync();
 		var requesterId = await SeedEmployeeAsync("rita.boundary", EmployeeRole.Requester);
 		_ = await SubmitAsync(requesterId, holdingAreaId, BoundarySpaceDescription);
-		var authCookie = await SignInAsync("rita.boundary");
+		var authCookie = await client.SignInAsync("rita.boundary");
 
 		var listBody = await (await GetPageAsync(authCookie)).Content.ReadAsStringAsync();
 
@@ -784,13 +784,13 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	{
 		var response = await GetDetailPageAsync(jobNodeId, authCookie, returnUrl);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery")
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery")
 								?? throw new InvalidOperationException("No antiforgery cookie in request detail page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in request detail page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private async Task<HttpResponseMessage> PostAddNoteAsync(
@@ -831,17 +831,7 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
-		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
-		request.Headers.Add("Cookie", cookieHeader);
 
-		return await client.SendAsync(request);
-	}
-
-	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
 
 	private async Task<HttpResponseMessage> GetPageAsync(string authCookie)
 	{
@@ -854,53 +844,18 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 	{
 		var response = await GetPageAsync(authCookie);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery")
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery")
 								?? throw new InvalidOperationException("No antiforgery cookie in Requests page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in Requests page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application")
-						 ?? throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery")
-								?? throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
@@ -992,32 +947,10 @@ public sealed partial class RequestsPageTests : IAsyncLifetime, IDisposable
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
 	[GeneratedRegex(
 		"""<span class="jt-preserve-whitespace">Replace feed roller \(ID \d+\)</span>&#x2060;\s*<span class="jt-achievement-icon jt-achievement-icon--in-progress">""")]
 	private static partial Regex MyRegex();
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

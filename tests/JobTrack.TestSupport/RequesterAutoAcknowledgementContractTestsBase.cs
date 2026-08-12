@@ -483,7 +483,7 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 	private async Task<(AppUserId RequesterId, AppUserId JobManagerId, RequestHoldingAreaId HoldingAreaId,
 		IJobRequestCommandPort RequestPort, JobRequestResult Submitted)> SeedSubmittedRequestAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -498,8 +498,8 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		var requesterId = await SeedEmployeeAsync("Rita Requester", "rita.requester.autoack", EmployeeRole.Requester);
-		var jobManagerId = await SeedEmployeeAsync("Priya Manager", "priya.manager.autoack", EmployeeRole.JobManager);
+		var requesterId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Rita Requester", "rita.requester.autoack", EmployeeRole.Requester);
+		var jobManagerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Priya Manager", "priya.manager.autoack", EmployeeRole.JobManager);
 		var holdingAreaId = await SeedHoldingAreaAsync();
 
 		var requestPort = CreateRequestPort(database.ConnectionString);
@@ -518,67 +518,25 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 	/// </summary>
 	private async Task SeedRequestAnchorAsync(JobNodeId anchorId, AppUserId requesterId, RequestHoldingAreaId holdingAreaId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  INSERT INTO job_request (job_node_id, requester_user_id, holding_area_id, submitted_at)
 							  VALUES (@jobNodeId, @requesterUserId, @holdingAreaId, @submittedAt);
 							  """;
-		AddParameter(command, "@jobNodeId", anchorId.Value);
-		AddParameter(command, "@requesterUserId", requesterId.Value);
-		AddParameter(command, "@holdingAreaId", holdingAreaId.Value);
-		AddParameter(command, "@submittedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@jobNodeId", anchorId.Value);
+		command.AddParameter("@requesterUserId", requesterId.Value);
+		command.AddParameter("@holdingAreaId", holdingAreaId.Value);
+		command.AddParameter("@submittedAt", EncodeInstant(DateTimeOffset.UtcNow));
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
-	{
-		await using var connection = await OpenExistingConnectionAsync();
 
-		await using var appUserCommand = connection.CreateCommand();
-		appUserCommand.CommandText = """
-									 INSERT INTO app_user (display_name, iana_time_zone)
-									 VALUES (@displayName, 'Europe/London')
-									 RETURNING id;
-									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
-		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
-
-		await using var identityUserCommand = connection.CreateCommand();
-		identityUserCommand.CommandText = """
-										  INSERT INTO identity_user
-										    (app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										     concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										  VALUES
-										    (@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-										     @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
-		_ = await identityUserCommand.ExecuteNonQueryAsync();
-
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-
-		return appUserId;
-	}
 
 	private async Task<RequestHoldingAreaId> SeedHoldingAreaAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var rootCommand = connection.CreateCommand();
 		rootCommand.CommandText = "SELECT id FROM job_node WHERE parent_id IS NULL;";
@@ -590,10 +548,10 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 								  VALUES (@parentId, 'Holding area', @postedByUserId, @postedByUserId, @priorityId, @postedAt)
 								  RETURNING id;
 								  """;
-		AddParameter(nodeCommand, "@parentId", rootId);
-		AddParameter(nodeCommand, "@postedByUserId", rootId);
-		AddParameter(nodeCommand, "@priorityId", PriorityMedium);
-		AddParameter(nodeCommand, "@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		nodeCommand.AddParameter("@parentId", rootId);
+		nodeCommand.AddParameter("@postedByUserId", rootId);
+		nodeCommand.AddParameter("@priorityId", PriorityMedium);
+		nodeCommand.AddParameter("@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
 		var jobNodeId = Convert.ToInt64(await nodeCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
 		await using var holdingAreaCommand = connection.CreateCommand();
@@ -604,9 +562,9 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 										    (@jobNodeId, NULL, 'IT Intake', @priorityId, NULL, @isActive)
 										 RETURNING id;
 										 """;
-		AddParameter(holdingAreaCommand, "@jobNodeId", jobNodeId);
-		AddParameter(holdingAreaCommand, "@priorityId", PriorityMedium);
-		AddParameter(holdingAreaCommand, "@isActive", true);
+		holdingAreaCommand.AddParameter("@jobNodeId", jobNodeId);
+		holdingAreaCommand.AddParameter("@priorityId", PriorityMedium);
+		holdingAreaCommand.AddParameter("@isActive", true);
 
 		return new(Convert.ToInt64(await holdingAreaCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
@@ -618,31 +576,19 @@ public abstract class RequesterAutoAcknowledgementContractTestsBase : IAsyncLife
 	/// </summary>
 	private async Task<long?> ReadAcknowledgedByUserIdAsync(JobNodeId anchorId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT acknowledged_by_user_id FROM job_request WHERE job_node_id = @jobNodeId;";
-		AddParameter(command, "@jobNodeId", anchorId.Value);
+		command.AddParameter("@jobNodeId", anchorId.Value);
 		var value = await command.ExecuteScalarAsync();
 
 		return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 
 	/// <summary>A created child node with <c>LeafWork</c> attached, and that leaf work's current version.</summary>
 	private sealed record SeededLeaf(JobNodeId NodeId, long Version);

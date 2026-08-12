@@ -38,7 +38,7 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
@@ -256,8 +256,8 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		});
 		var response = await client.SendAsync(request);
 
-		return ExtractCookiePair(
-			FindSetCookie(response, "Identity.Application") ?? throw new InvalidOperationException("Sign-in did not set an auth cookie."));
+		return WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(response, "Identity.Application") ?? throw new InvalidOperationException("Sign-in did not set an auth cookie."));
 	}
 
 	private async Task<(string Secret, string AuthCookie, string AntiforgeryCookie, string Token)> GetEnrolmentFormAsync(string authCookie)
@@ -267,10 +267,10 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
 
-		var reissued = FindSetCookie(response, "Identity.Application");
-		var refreshedAuthCookie = reissued is not null ? ExtractCookiePair(reissued) : authCookie;
-		var antiforgeryCookie = ExtractCookiePair(
-			FindSetCookie(response, "Antiforgery") ?? throw new InvalidOperationException("No antiforgery cookie in the enrolment page response."));
+		var reissued = WebTestHttp.FindSetCookie(response, "Identity.Application");
+		var refreshedAuthCookie = reissued is not null ? WebTestHttp.ExtractCookiePair(reissued) : authCookie;
+		var antiforgeryCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(response, "Antiforgery") ?? throw new InvalidOperationException("No antiforgery cookie in the enrolment page response."));
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } tokenMatch
 			? tokenMatch.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in the enrolment page body.");
@@ -302,21 +302,14 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException($"No antiforgery cookie in {path} response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException($"No antiforgery token in {path} body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	private async Task<string> GetLatestAuditOperationAsync(AppUserId actorUserId)
 	{
@@ -475,28 +468,6 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		return (enabled, keyProtected);
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

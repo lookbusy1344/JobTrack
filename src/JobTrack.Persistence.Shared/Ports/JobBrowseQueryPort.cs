@@ -138,6 +138,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 				childIdsByParent.TryGetValue(row.Id, out var childIds) ? [.. childIds] : [],
 				row.AchievementId.HasValue ? (Achievement)row.AchievementId.Value : null));
 		var succeededByNodeId = AchievementCalculator.EvaluateSubtree(rootId, hierarchy);
+
 		BranchAchievement? BranchAchievementFor(JobNodeSubtreeRow row)
 		{
 			if (row.Kind is NodeKind.Leaf) {
@@ -147,9 +148,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 			return succeededByNodeId[row.Id] ? BranchAchievement.Success : BranchAchievement.Unfinished;
 		}
 
-		var enrichedRows = rows.Select(row => row with {
-			BranchAchievement = BranchAchievementFor(row),
-		}).ToArray();
+		var enrichedRows = rows.Select(row => row with { BranchAchievement = BranchAchievementFor(row) }).ToArray();
 		var rootAchievement = enrichedRows.Single(row => row.Id == rootId).BranchAchievement;
 		return new() { Rows = EquatableArray.CopyOf(enrichedRows), RootAchievement = rootAchievement };
 	}

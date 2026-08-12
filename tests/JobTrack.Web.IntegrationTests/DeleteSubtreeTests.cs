@@ -31,9 +31,9 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	private const string AppliedBy = "test-runner";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
 	private const string AdministratorPassword = "Bootstrap-Horse-Battery-77!";
+	private readonly ConcurrentBag<string> capturedLogEntries = [];
 
 	private readonly SqliteDatabaseFixture database = new();
-	private readonly ConcurrentBag<string> capturedLogEntries = [];
 	private AppUserId administratorId;
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
@@ -43,7 +43,7 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrapResult = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -75,12 +75,12 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_non_administrator_cannot_reach_the_subtree_delete_page()
 	{
-		var managerId = await SeedEmployeeAsync("subtree.manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.manager", EmployeeRole.JobManager);
 		var branch = await AddChildAsync(rootId, managerId, "Manager branch");
 		_ = await AddChildAsync(branch.Id, managerId, "Manager child");
-		var authCookie = await SignInAsync("subtree.manager");
+		var authCookie = await client.SignInAsync("subtree.manager");
 
-		var response = await GetAsync($"/Jobs/DeleteSubtree?nodeId={branch.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/DeleteSubtree?nodeId={branch.Id.Value}", authCookie);
 
 		response.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Redirect);
 	}
@@ -88,13 +88,13 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_confirmation_lists_every_descendant_as_a_tree_with_costs()
 	{
-		var adminId = await SeedEmployeeAsync("subtree.admin-render", EmployeeRole.Administrator);
+		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.admin-render", EmployeeRole.Administrator);
 		var branch = await AddChildAsync(rootId, adminId, "Doomed branch");
 		var child = await AddChildAsync(branch.Id, adminId, "Doomed child");
 		_ = await AddChildAsync(child.Id, adminId, "Doomed grandchild");
-		var authCookie = await SignInAsync("subtree.admin-render");
+		var authCookie = await client.SignInAsync("subtree.admin-render");
 
-		var response = await GetAsync($"/Jobs/DeleteSubtree?nodeId={branch.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/DeleteSubtree?nodeId={branch.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -131,11 +131,11 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_administrator_deletes_the_whole_subtree()
 	{
-		var adminId = await SeedEmployeeAsync("subtree.admin-delete", EmployeeRole.Administrator);
+		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.admin-delete", EmployeeRole.Administrator);
 		var branch = await AddChildAsync(rootId, adminId, "Branch to wipe");
 		var child = await AddChildAsync(branch.Id, adminId, "Child to wipe");
 		_ = await AddChildAsync(child.Id, adminId, "Grandchild to wipe");
-		var authCookie = await SignInAsync("subtree.admin-delete");
+		var authCookie = await client.SignInAsync("subtree.admin-delete");
 
 		var (antiforgeryCookie, token) = await GetFormAsync(authCookie, branch.Id);
 		var response = await PostAsync(
@@ -144,7 +144,7 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Jobs/Browse");
 
-		var afterDelete = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var afterDelete = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		var body = await afterDelete.Content.ReadAsStringAsync();
 		body.Should().NotContain("Branch to wipe").And.NotContain("Child to wipe").And.NotContain("Grandchild to wipe");
 	}
@@ -152,10 +152,10 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Deleting_a_subtree_without_a_reason_is_prompted_for_one()
 	{
-		var adminId = await SeedEmployeeAsync("subtree.admin-no-reason", EmployeeRole.Administrator);
+		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.admin-no-reason", EmployeeRole.Administrator);
 		var branch = await AddChildAsync(rootId, adminId, "Branch needing a reason");
 		_ = await AddChildAsync(branch.Id, adminId, "Child needing a reason");
-		var authCookie = await SignInAsync("subtree.admin-no-reason");
+		var authCookie = await client.SignInAsync("subtree.admin-no-reason");
 
 		var (antiforgeryCookie, token) = await GetFormAsync(authCookie, branch.Id);
 		var response = await PostAsync(authCookie, antiforgeryCookie, token, "Delete", branch.Id, branch.Version, null);
@@ -164,17 +164,17 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 		(await response.Content.ReadAsStringAsync()).Should().Contain("reason is required");
 
 		// Nothing was destroyed by the refused attempt.
-		var stillThere = await GetAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
+		var stillThere = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={rootId.Value}", authCookie);
 		(await stillThere.Content.ReadAsStringAsync()).Should().Contain("Branch needing a reason");
 	}
 
 	[Fact]
 	public async Task Archiving_the_subtree_instead_needs_no_reason_and_destroys_nothing()
 	{
-		var adminId = await SeedEmployeeAsync("subtree.admin-archive", EmployeeRole.Administrator);
+		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.admin-archive", EmployeeRole.Administrator);
 		var branch = await AddChildAsync(rootId, adminId, "Branch to archive");
 		_ = await AddChildAsync(branch.Id, adminId, "Child to archive");
-		var authCookie = await SignInAsync("subtree.admin-archive");
+		var authCookie = await client.SignInAsync("subtree.admin-archive");
 
 		var (antiforgeryCookie, token) = await GetFormAsync(authCookie, branch.Id);
 		var response = await PostAsync(authCookie, antiforgeryCookie, token, "Archive", branch.Id, branch.Version, null);
@@ -189,10 +189,10 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_stale_version_on_delete_is_reported_as_a_conflict_and_logged()
 	{
-		var adminId = await SeedEmployeeAsync("subtree.conflict-admin", EmployeeRole.Administrator);
+		var adminId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "subtree.conflict-admin", EmployeeRole.Administrator);
 		var branch = await AddChildAsync(rootId, adminId, "Contested branch");
 		_ = await AddChildAsync(branch.Id, adminId, "Contested child");
-		var authCookie = await SignInAsync("subtree.conflict-admin");
+		var authCookie = await client.SignInAsync("subtree.conflict-admin");
 
 		var (antiforgeryCookie, token) = await GetFormAsync(authCookie, branch.Id);
 
@@ -252,127 +252,27 @@ public sealed partial class DeleteSubtreeTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in DeleteSubtree page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in DeleteSubtree page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
 
-		return await client.SendAsync(request);
-	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
-
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
 	private sealed class TestWebApplicationFactory(string identityConnectionString, ConcurrentBag<string> capturedLogEntries)
 		: WebApplicationFactory<Program>

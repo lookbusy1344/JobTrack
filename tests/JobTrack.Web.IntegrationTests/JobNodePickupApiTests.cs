@@ -41,7 +41,7 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrap = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -73,10 +73,10 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_pick_up_an_unassigned_leaf_via_the_api()
 	{
-		var workerId = await SeedEmployeeAsync("pickup.api.worker");
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.worker");
 		var leafId = await AddUnassignedLeafAsync(rootId, "Unassigned pool leaf");
-		var authCookie = await SignInAsync("pickup.api.worker");
-		var (antiforgeryCookie, antiforgeryToken) = await GetAntiforgeryTokenAsync(authCookie);
+		var authCookie = await client.SignInAsync("pickup.api.worker");
+		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 
 		var response = await PostAsync($"/api/jobs/{leafId.Value}/pickup", authCookie, antiforgeryCookie, antiforgeryToken);
 		var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -88,11 +88,11 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Picking_up_an_already_owned_node_receives_a_conflict_problem_response()
 	{
-		_ = await SeedEmployeeAsync("pickup.api.owned.worker");
-		var otherWorkerId = await SeedEmployeeAsync("pickup.api.owned.other");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.owned.worker");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.owned.other");
 		var leafId = await AddChildAsync(rootId, otherWorkerId, "Already-owned leaf");
-		var authCookie = await SignInAsync("pickup.api.owned.worker");
-		var (antiforgeryCookie, antiforgeryToken) = await GetAntiforgeryTokenAsync(authCookie);
+		var authCookie = await client.SignInAsync("pickup.api.owned.worker");
+		var (antiforgeryCookie, antiforgeryToken) = await client.GetAntiforgeryTokenAsync(authCookie);
 
 		var response = await PostAsync($"/api/jobs/{leafId.Value}/pickup", authCookie, antiforgeryCookie, antiforgeryToken);
 
@@ -103,7 +103,7 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_can_pick_up_an_unassigned_leaf_via_a_bearer_token()
 	{
-		var workerId = await SeedEmployeeAsync("pickup.api.bearer.worker");
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.bearer.worker");
 		var leafId = await AddUnassignedLeafAsync(rootId, "Unassigned pool leaf");
 		var issued = await seedClient.Tokens.IssueAsync(new() {
 			Context = new() { Actor = workerId, CorrelationId = Guid.NewGuid() },
@@ -123,10 +123,10 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	public async Task An_unassigned_child_is_returned_with_a_null_owner_and_no_serialization_error()
 	{
 		_ = await AddUnassignedLeafAsync(rootId, "Unassigned pool leaf");
-		_ = await SeedEmployeeAsync("pickup.api.contract.viewer");
-		var authCookie = await SignInAsync("pickup.api.contract.viewer");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.contract.viewer");
+		var authCookie = await client.SignInAsync("pickup.api.contract.viewer");
 
-		var response = await GetAsync($"/api/jobs/{rootId.Value}/children", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{rootId.Value}/children", authCookie);
 		var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -137,13 +137,13 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task The_unassignedOnly_filter_returns_only_pool_children()
 	{
-		var ownerId = await SeedEmployeeAsync("pickup.api.filter.owner");
+		var ownerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.filter.owner");
 		_ = await AddChildAsync(rootId, ownerId, "Owned leaf");
 		var unassignedLeafId = await AddUnassignedLeafAsync(rootId, "Unassigned pool leaf");
-		_ = await SeedEmployeeAsync("pickup.api.filter.viewer");
-		var authCookie = await SignInAsync("pickup.api.filter.viewer");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "pickup.api.filter.viewer");
+		var authCookie = await client.SignInAsync("pickup.api.filter.viewer");
 
-		var response = await GetAsync($"/api/jobs/{rootId.Value}/children?unassignedOnly=true", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{rootId.Value}/children?unassignedOnly=true", authCookie);
 		var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -178,12 +178,7 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 		return result.Id;
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
-		return await client.SendAsync(request);
-	}
+
 
 	private async Task<HttpResponseMessage> PostAsync(string path, string authCookie, string antiforgeryCookie, string antiforgeryToken)
 	{
@@ -200,132 +195,17 @@ public sealed partial class JobNodePickupApiTests : IAsyncLifetime, IDisposable
 		return await client.SendAsync(request);
 	}
 
-	private async Task<(string CookieHeader, string Token)> GetAntiforgeryTokenAsync(string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, "/api/antiforgery-token");
-		request.Headers.Add("Cookie", authCookie);
-		var response = await client.SendAsync(request);
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in token response.");
-		var token = JsonDocument.Parse(body).RootElement.GetProperty("token").GetString()
-					?? throw new InvalidOperationException("No antiforgery token in token response.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role = EmployeeRole.Worker)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
 
-		return new(appUserId);
-	}
-
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
-
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
-
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
-
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

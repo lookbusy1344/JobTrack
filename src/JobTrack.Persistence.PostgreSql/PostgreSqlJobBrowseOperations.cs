@@ -3,7 +3,6 @@ namespace JobTrack.Persistence.PostgreSql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
-using Shared;
 using Shared.Ports;
 
 /// <summary>

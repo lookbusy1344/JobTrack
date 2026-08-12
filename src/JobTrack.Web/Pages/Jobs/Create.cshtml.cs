@@ -65,7 +65,7 @@ public sealed class CreateModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -80,7 +80,7 @@ public sealed class CreateModel(
 
 	public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -169,12 +169,6 @@ public sealed class CreateModel(
 		_employeeDirectoryById = directory.ToDictionary(entry => entry.Id);
 		OwnerOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("Unassigned", string.Empty));
 		BeginWorkOptions = EmployeeDirectoryDisplay.BuildOptions(directory, new SelectListItem("None", string.Empty));
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class CreateInput

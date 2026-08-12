@@ -61,7 +61,7 @@ public sealed class IndexModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -76,7 +76,7 @@ public sealed class IndexModel(
 
 	public async Task<IActionResult> OnPostAddVersionAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -133,7 +133,7 @@ public sealed class IndexModel(
 
 	public async Task<IActionResult> OnPostAddExceptionAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -231,12 +231,6 @@ public sealed class IndexModel(
 			return await jobTrackClient.Query.GetEmployeeDirectoryAsync(
 				new() { Context = new() { Actor = actor, CorrelationId = Guid.NewGuid() } }, cancellationToken);
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	private static LocalDate ToLocalDate(DateOnly date) => new(date.Year, date.Month, date.Day);

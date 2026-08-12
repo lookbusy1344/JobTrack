@@ -39,7 +39,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrap = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -74,7 +74,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	{
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync("/Jobs/Browse", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/Browse", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain("aria-label=\"breadcrumb\"");
@@ -89,7 +89,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		// The owner filter now lives only on the Search flow (Ownership/ArchiveFilter scope a
 		// whole-tree search, not the currently browsed subtree), reached via the toolbar's "Search"
 		// link -- the blank search-entry view, before any SearchText is submitted.
-		var response = await GetAsync("/Jobs/Browse?search=true", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/Browse?search=true", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		// The owner filter is a <select> of employee names defaulting to "All owners" (no filter),
@@ -103,7 +103,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	[Fact]
 	public async Task Search_remembers_the_owner_filter_across_a_return_visit()
 	{
-		var workerId = await SeedEmployeeAsync("browse-nav.filtermem", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse-nav.filtermem", EmployeeRole.Worker);
 		_ = await AddChildAsync(rootId, "Admin owned oak cabinet");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
@@ -113,8 +113,8 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		chooseRequest.Headers.Add("Cookie", authCookie);
 		var chooseResponse = await client.SendAsync(chooseRequest);
 		(await ReadNormalizedBodyAsync(chooseResponse)).Should().NotContain("Admin owned oak cabinet");
-		var sessionCookie = ExtractCookiePair(
-			FindSetCookie(chooseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
+		var sessionCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(chooseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
 
 		// Search again with no owner param: the remembered worker filter still hides the admin's match.
 		using var returnRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/Browse?searchText=oak");
@@ -131,7 +131,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		_ = await AddChildAsync(rootId, "Admin owned oak cabinet");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync("/Jobs/Browse?searchText=oak", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/Browse?searchText=oak", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain("Admin owned oak cabinet", "with nothing remembered Search defaults to all owners");
@@ -143,7 +143,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var branchId = await AddChildAsync(rootId, "Kitchen renovation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain("aria-label=\"breadcrumb\"");
@@ -158,7 +158,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var leafId = await AddChildAsync(branchId, "Fit cabinets");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain("href=\"/Jobs/Browse\"");
@@ -181,7 +181,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		});
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		// Its own dt/dd pair, and the priority label no longer carries the deadline as a parenthetical.
@@ -218,7 +218,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		});
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={branch.Id.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		// Cost and Active are conditional (cost visibility, an open session), so the fields this node
@@ -254,12 +254,12 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		});
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var pastResponse = await GetAsync($"/Jobs/Browse?nodeId={pastBranch.Id.Value}", authCookie);
+		var pastResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={pastBranch.Id.Value}", authCookie);
 		var pastBody = await ReadNormalizedBodyAsync(pastResponse);
 		pastBody.Should().Contain("class=\"jt-overdue\">1 Jan 2020 12:00 (", "a deadline that has already passed should render red");
 		pastBody.Should().Contain("overdue)</span>", "and should say how far past it the job now is");
 
-		var futureResponse = await GetAsync($"/Jobs/Browse?nodeId={futureBranch.Id.Value}", authCookie);
+		var futureResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={futureBranch.Id.Value}", authCookie);
 		var futureBody = await ReadNormalizedBodyAsync(futureResponse);
 		futureBody.Should().Contain("<span>1 Jan 2030 12:00 (", "a deadline still to come should not render red");
 		futureBody.Should().NotContain("jt-overdue");
@@ -271,7 +271,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var branchId = await AddChildAsync(rootId, "Kitchen renovation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={branchId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		// The node detail card spells the priority out in full; the abbreviation is the table form only
@@ -285,7 +285,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	{
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync("/Jobs/Browse", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/Browse", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().NotContain("Requires (must finish first)");
@@ -301,7 +301,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		// Neither Requires nor Depends-on has an edge on this leaf, so the shared card is hidden
@@ -322,13 +322,13 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		await AddPrerequisiteAsync(requiredLeafId, dependentLeafId);
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var dependentResponse = await GetAsync($"/Jobs/Browse?nodeId={dependentLeafId.Value}", authCookie);
+		var dependentResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={dependentLeafId.Value}", authCookie);
 		var dependentBody = await ReadNormalizedBodyAsync(dependentResponse);
 		dependentBody.Should().Contain("Requires (must finish first)");
 		dependentBody.Should().Contain($"href=\"/Jobs/Browse?nodeId={requiredLeafId.Value}\"");
 		dependentBody.Should().Contain("Old survey");
 
-		var requiredResponse = await GetAsync($"/Jobs/Browse?nodeId={requiredLeafId.Value}", authCookie);
+		var requiredResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={requiredLeafId.Value}", authCookie);
 		var requiredBody = await ReadNormalizedBodyAsync(requiredResponse);
 		requiredBody.Should().Contain("Depends on this job");
 		requiredBody.Should().Contain($"href=\"/Jobs/Browse?nodeId={dependentLeafId.Value}\"");
@@ -342,9 +342,9 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var authCookie = await SignInAsync("browse-nav.worker");
 
 		// Browse the leaf first; capture the session that now remembers it as the last-browsed node.
-		var browseResponse = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
-		var sessionCookie = ExtractCookiePair(
-			FindSetCookie(browseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
+		var browseResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var sessionCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(browseResponse, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
 
 		using var searchRequest = new HttpRequestMessage(HttpMethod.Get, "/Jobs/Browse?search=true");
 		searchRequest.Headers.Add("Cookie", $"{authCookie}; {sessionCookie}");
@@ -365,7 +365,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var authCookie = await SignInAsync("browse-nav.worker");
 
 		// A fresh session with nothing browsed yet -- the home node set above is the only fallback.
-		var response = await GetAsync("/Jobs/Browse?search=true", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/Browse?search=true", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={homeNodeId.Value}\">Browse</a>");
@@ -378,7 +378,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 
 		// A fresh session, no home node configured: the last-resort fallback is the root, i.e. a
 		// plain Browse link carrying no node id at all.
-		var response = await GetAsync("/Jobs/Browse?search=true", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Jobs/Browse?search=true", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain("href=\"/Jobs/Browse\">Browse</a>");
@@ -392,7 +392,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		await AddPrerequisiteAsync(requiredLeafId, dependentLeafId);
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Prerequisites?nodeId={dependentLeafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Prerequisites?nodeId={dependentLeafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={requiredLeafId.Value}\"");
@@ -410,7 +410,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var leafId = await AddChildAsync(branchId, "Fit cabinets");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Move?nodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Move?nodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
@@ -423,7 +423,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Decompose?leafNodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Decompose?leafNodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
@@ -435,7 +435,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Delete?nodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Delete?nodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
@@ -445,10 +445,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	public async Task CostReport_page_links_the_reported_nodes_own_name_to_browse()
 	{
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
-		await SeedEmployeeAsync("browse-nav.cost-viewer", EmployeeRole.CostViewer);
+		await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "browse-nav.cost-viewer", EmployeeRole.CostViewer);
 		var authCookie = await SignInAsync("browse-nav.cost-viewer");
 
-		var response = await GetAsync($"/Jobs/CostReport?nodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/CostReport?nodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={leafId.Value}\"");
@@ -460,7 +460,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Work?leafNodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Work?leafNodeId={leafId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain("<h1>Work sessions</h1>");
@@ -476,7 +476,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var parentId = await AddChildAsync(rootId, "Kitchen renovation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Create?parentId={parentId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Create?parentId={parentId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={parentId.Value}\">Kitchen renovation (ID {parentId.Value})</a>");
@@ -488,7 +488,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var nodeId = await AddChildAsync(rootId, "Kitchen renovation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Edit?nodeId={nodeId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Edit?nodeId={nodeId.Value}", authCookie);
 		var body = await ReadNormalizedBodyAsync(response);
 
 		body.Should().Contain($"href=\"/Jobs/Browse?nodeId={nodeId.Value}\">Kitchen renovation (ID {nodeId.Value})</a>");
@@ -505,7 +505,7 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		});
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var response = await GetAsync($"/Jobs/Achievement?jobNodeId={leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Achievement?jobNodeId={leafId.Value}", authCookie);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Be($"/Jobs/Work?leafNodeId={leafId.Value}#status");
@@ -517,12 +517,12 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		var leafId = await AddChildAsync(rootId, "Pour foundation");
 		var authCookie = await SignInAsync("browse-nav.worker");
 
-		var leafResponse = await GetAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
+		var leafResponse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={leafId.Value}", authCookie);
 		var leafBody = await ReadNormalizedBodyAsync(leafResponse);
 		leafBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}&amp;returnUrl=");
 		leafBody.Should().Contain("#jt-icon-sessions");
 
-		var rootResponse = await GetAsync("/Jobs/Browse", authCookie);
+		var rootResponse = await client.GetAuthenticatedAsync("/Jobs/Browse", authCookie);
 		var rootBody = await ReadNormalizedBodyAsync(rootResponse);
 		rootBody.Should().Contain($"href=\"/Jobs/Work?leafNodeId={leafId.Value}&amp;returnUrl=");
 	}
@@ -567,19 +567,13 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	private static async Task<string> ReadNormalizedBodyAsync(HttpResponseMessage response) =>
 		WhitespaceRunPattern().Replace(await response.Content.ReadAsStringAsync(), " ");
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
 
-		return await client.SendAsync(request);
-	}
 
 	private Task<string> SignInAsync(string userName) => SignInAsync(userName, KnownPassword);
 
 	private async Task<string> SignInAsync(string userName, string password)
 	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
+		var (antiforgeryCookie, token) = await client.GetLoginFormAsync();
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
 		request.Headers.Add("Cookie", antiforgeryCookie);
@@ -590,31 +584,13 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 		});
 
 		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
+		var authCookie = WebTestHttp.FindSetCookie(response, "Identity.Application") ??
 						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
+		return WebTestHttp.ExtractCookiePair(authCookie);
 	}
 
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
@@ -626,78 +602,10 @@ public sealed partial class JobBrowseNavigationTests : IAsyncLifetime, IDisposab
 	[GeneratedRegex("<dt[^>]*>(?<label>[^<]+)</dt>")]
 	private static partial Regex FieldLabelPattern();
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private Task<AppUserId> SeedWorkerEmployeeAsync(string userName) => SeedEmployeeAsync(userName, EmployeeRole.Worker);
+	private Task<AppUserId> SeedWorkerEmployeeAsync(string userName) => IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, userName, EmployeeRole.Worker);
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
-
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
-
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

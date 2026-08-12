@@ -36,7 +36,7 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
@@ -80,10 +80,10 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		otherSessionResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		otherSessionResponse.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
 
-		var refreshedCookie = FindSetCookie(changeResponse, "Identity.Application");
+		var refreshedCookie = WebTestHttp.FindSetCookie(changeResponse, "Identity.Application");
 		refreshedCookie.Should().NotBeNull();
 		using var changingSessionRequest = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
-		changingSessionRequest.Headers.Add("Cookie", ExtractCookiePair(refreshedCookie!));
+		changingSessionRequest.Headers.Add("Cookie", WebTestHttp.ExtractCookiePair(refreshedCookie!));
 		var changingSessionResponse = await client.SendAsync(changingSessionRequest);
 
 		changingSessionResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -318,7 +318,7 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 
 	private async Task<string> SignInAsync(string userName, string password)
 	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
+		var (antiforgeryCookie, token) = await client.GetLoginFormAsync();
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
 		request.Headers.Add("Cookie", antiforgeryCookie);
@@ -329,22 +329,11 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		});
 
 		var response = await client.SendAsync(request);
-		return ExtractCookiePair(FindSetCookie(response, "Identity.Application") ??
+		return WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(response, "Identity.Application") ??
 								 throw new InvalidOperationException("Sign-in did not set the authentication cookie."));
 	}
 
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
 
 	private async Task<(string CookieHeader, string Token)> GetChangePasswordFormAsync(string authCookie)
 	{
@@ -352,21 +341,14 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		request.Headers.Add("Cookie", authCookie);
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in change-password page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in change-password page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
@@ -443,28 +425,6 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 		return new(appUserId);
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

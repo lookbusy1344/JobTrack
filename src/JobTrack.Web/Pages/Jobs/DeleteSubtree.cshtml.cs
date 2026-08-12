@@ -65,7 +65,7 @@ public sealed partial class DeleteSubtreeModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -77,7 +77,7 @@ public sealed partial class DeleteSubtreeModel(
 
 	public async Task<IActionResult> OnPostDeleteAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -130,7 +130,7 @@ public sealed partial class DeleteSubtreeModel(
 
 	public async Task<IActionResult> OnPostArchiveAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -249,12 +249,6 @@ public sealed partial class DeleteSubtreeModel(
 		catch (ArgumentOutOfRangeException) {
 			CostUnavailableReason = "This subtree is too large to cost in one pass; the deletion figures above still apply.";
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class DeleteSubtreeInput

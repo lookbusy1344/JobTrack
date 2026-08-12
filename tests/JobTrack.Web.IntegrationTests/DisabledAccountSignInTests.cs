@@ -29,7 +29,7 @@ public sealed partial class DisabledAccountSignInTests : IAsyncLifetime, IDispos
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
@@ -70,12 +70,12 @@ public sealed partial class DisabledAccountSignInTests : IAsyncLifetime, IDispos
 
 		var response = await PostLoginAsync("disabled.no-cookie", KnownPassword);
 
-		FindSetCookie(response, "Identity.Application").Should().BeNull();
+		WebTestHttp.FindSetCookie(response, "Identity.Application").Should().BeNull();
 	}
 
 	private async Task<HttpResponseMessage> PostLoginAsync(string userName, string password)
 	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
+		var (antiforgeryCookie, token) = await client.GetLoginFormAsync();
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
 		request.Headers.Add("Cookie", antiforgeryCookie);
@@ -88,25 +88,7 @@ public sealed partial class DisabledAccountSignInTests : IAsyncLifetime, IDispos
 		return await client.SendAsync(request);
 	}
 
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	private static string ExtractGenericFailureMessage(string html) =>
 		FailureMessagePattern().Match(html) is { Success: true } match ? match.Groups["message"].Value : string.Empty;
@@ -157,28 +139,6 @@ public sealed partial class DisabledAccountSignInTests : IAsyncLifetime, IDispos
 		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

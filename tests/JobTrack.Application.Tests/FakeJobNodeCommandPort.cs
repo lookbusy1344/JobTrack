@@ -244,9 +244,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		for (var index = 0; index < result.Count; ++index) {
 			var row = result[index];
 			if (row.Kind is not NodeKind.Leaf) {
-				result[index] = row with {
-					BranchAchievement = await GetSubtreeAchievementAsync(row.Id, cancellationToken),
-				};
+				result[index] = row with { BranchAchievement = await GetSubtreeAchievementAsync(row.Id, cancellationToken) };
 			}
 		}
 
@@ -260,20 +258,6 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 
 		var achieved = AchievementCalculator.IsAchieved(rootId, BuildHierarchyNodes());
 		return Task.FromResult(achieved ? BranchAchievement.Success : BranchAchievement.Unfinished);
-	}
-
-	private Dictionary<JobNodeId, HierarchyNode> BuildHierarchyNodes()
-	{
-		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
-		foreach (var node in _nodes.Values) {
-			var childIds = _nodes.Values.Where(candidate => candidate.ParentId == node.Id).Select(candidate => candidate.Id);
-			var leafAchievement = node.Kind == NodeKind.Leaf && _leafWork.TryGetValue(node.Id, out var leafWork)
-				? leafWork.Achievement
-				: (Achievement?)null;
-			nodesById[node.Id] = new(node.Id, node.ParentId, EquatableArray.CopyOf(childIds), leafAchievement);
-		}
-
-		return nodesById;
 	}
 
 	/// <inheritdoc />
@@ -306,14 +290,14 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 			WorkSessionCount = subtreeIds.Count(_workedLeafIds.Contains),
 			TotalWorkedDuration = Duration.Zero,
 			InternalPrerequisiteEdgeCount = touching.Count - external.Count,
-			ExternalPrerequisiteEdges = EquatableArray.CopyOf(external.Select(edge => new SubtreeImpactPrerequisiteEdge {
-				FromId = edge.RequiredJobId,
-				ToId = edge.DependentJobId,
-				ExternalDescription = _nodes.TryGetValue(
-					inside.Contains(edge.RequiredJobId) ? edge.DependentJobId : edge.RequiredJobId, out var outside)
-					? outside.Description
-					: string.Empty,
-				ExternalNodeIsDependent = !inside.Contains(edge.DependentJobId),
+			ExternalPrerequisiteEdges = EquatableArray.CopyOf(external.Select(edge => {
+				var externalId = inside.Contains(edge.RequiredJobId) ? edge.DependentJobId : edge.RequiredJobId;
+				return new SubtreeImpactPrerequisiteEdge {
+					FromId = edge.RequiredJobId,
+					ToId = edge.DependentJobId,
+					ExternalDescription = _nodes.TryGetValue(externalId, out var outside) ? outside.Description : string.Empty,
+					ExternalNodeIsDependent = !inside.Contains(edge.DependentJobId),
+				};
 			}).ToArray()),
 			JobRequestCount = 0,
 			BlockingHoldingAreas = EquatableArray.CopyOf<SubtreeImpactHoldingArea>([]),
@@ -748,6 +732,20 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		}
 
 		return Task.FromResult(BuildReadinessInputs());
+	}
+
+	private Dictionary<JobNodeId, HierarchyNode> BuildHierarchyNodes()
+	{
+		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
+		foreach (var node in _nodes.Values) {
+			var childIds = _nodes.Values.Where(candidate => candidate.ParentId == node.Id).Select(candidate => candidate.Id);
+			var leafAchievement = node.Kind == NodeKind.Leaf && _leafWork.TryGetValue(node.Id, out var leafWork)
+				? leafWork.Achievement
+				: (Achievement?)null;
+			nodesById[node.Id] = new(node.Id, node.ParentId, EquatableArray.CopyOf(childIds), leafAchievement);
+		}
+
+		return nodesById;
 	}
 
 	private int DepthBelow(JobNodeId id, JobNodeId rootId)

@@ -43,7 +43,7 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
@@ -70,7 +70,7 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Account/LoginTwoFactor");
-		FindSetCookie(response, "Identity.Application").Should().BeNull("the session must not be established before the code step");
+		WebTestHttp.FindSetCookie(response, "Identity.Application").Should().BeNull("the session must not be established before the code step");
 	}
 
 	[Fact]
@@ -80,15 +80,15 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		var appUserId = await SeedUserWithTwoFactorAsync("grace.2fa", secret);
 
 		var loginResponse = await PostLoginAsync("grace.2fa", KnownPassword);
-		var twoFactorUserIdCookie = ExtractCookiePair(
-			FindSetCookie(loginResponse, "TwoFactorUserId") ?? throw new InvalidOperationException("No two-factor user id cookie set."));
+		var twoFactorUserIdCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(loginResponse, "TwoFactorUserId") ?? throw new InvalidOperationException("No two-factor user id cookie set."));
 
 		var code = GenerateTotpCode(secret, DateTimeOffset.UtcNow);
 		var response = await PostTwoFactorCodeAsync(twoFactorUserIdCookie, code);
 		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var authCookie = FindSetCookie(response, "Identity.Application");
+		var authCookie = WebTestHttp.FindSetCookie(response, "Identity.Application");
 		authCookie.Should().NotBeNull();
 		auditOperation.Should().Be("authentication.login-success");
 	}
@@ -142,14 +142,14 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		var appUserId = await SeedUserWithTwoFactorAsync("kat.2fa", secret);
 
 		var loginResponse = await PostLoginAsync("kat.2fa", KnownPassword);
-		var twoFactorUserIdCookie = ExtractCookiePair(
-			FindSetCookie(loginResponse, "TwoFactorUserId") ?? throw new InvalidOperationException("No two-factor user id cookie set."));
+		var twoFactorUserIdCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(loginResponse, "TwoFactorUserId") ?? throw new InvalidOperationException("No two-factor user id cookie set."));
 
 		var response = await PostTwoFactorCodeAsync(twoFactorUserIdCookie, "000000");
 		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		FindSetCookie(response, "Identity.Application").Should().BeNull();
+		WebTestHttp.FindSetCookie(response, "Identity.Application").Should().BeNull();
 		auditOperation.Should().Be("authentication.two-factor-failed");
 	}
 
@@ -191,12 +191,12 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		await SeedUserWithTwoFactorAsync("irene.2fa", secondSecret);
 
 		var firstLogin = await PostLoginAsync("heidi.2fa", KnownPassword);
-		var firstTwoFactorUserIdCookie = ExtractCookiePair(
-			FindSetCookie(firstLogin, "TwoFactorUserId") ??
+		var firstTwoFactorUserIdCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(firstLogin, "TwoFactorUserId") ??
 			throw new InvalidOperationException("No two-factor user id cookie set for the first account."));
 		var secondLogin = await PostLoginAsync("irene.2fa", KnownPassword);
-		var secondTwoFactorUserIdCookie = ExtractCookiePair(
-			FindSetCookie(secondLogin, "TwoFactorUserId") ??
+		var secondTwoFactorUserIdCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(secondLogin, "TwoFactorUserId") ??
 			throw new InvalidOperationException("No two-factor user id cookie set for the second account."));
 
 		var failedTwoFactor = await PostTwoFactorCodeAsync(secondTwoFactorUserIdCookie, "000000");
@@ -209,7 +209,7 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		var failedTwoFactorBody = await failedTwoFactor.Content.ReadAsStringAsync();
 		failedTwoFactorBody.Should().Contain("The verification code is incorrect.");
 		succeededTwoFactor.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		FindSetCookie(succeededTwoFactor, "Identity.Application").Should().NotBeNull();
+		WebTestHttp.FindSetCookie(succeededTwoFactor, "Identity.Application").Should().NotBeNull();
 	}
 
 	private async Task<HttpResponseMessage> PostLoginAsync(string userName, string password)
@@ -287,21 +287,14 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException($"No antiforgery cookie in {path} response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException($"No antiforgery token in {path} body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	private async Task<string> GetLatestAuditOperationAsync(AppUserId actorUserId)
 	{
@@ -434,20 +427,7 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		return new(appUserId);
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
 	private sealed class TestWebApplicationFactory(
 		string identityConnectionString,

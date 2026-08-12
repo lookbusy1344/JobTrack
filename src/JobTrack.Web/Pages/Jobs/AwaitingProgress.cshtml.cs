@@ -254,7 +254,7 @@ public sealed class AwaitingProgressModel(
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -265,7 +265,7 @@ public sealed class AwaitingProgressModel(
 
 	public async Task<IActionResult> OnPostStartWorkAsync(long jobNodeId, string? startedAt, CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -311,7 +311,7 @@ public sealed class AwaitingProgressModel(
 	public async Task<IActionResult> OnPostStartForAsync(
 		long jobNodeId, long? startForUserId, string? startedAt, CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -487,11 +487,5 @@ public sealed class AwaitingProgressModel(
 		var capabilities = await jobTrackClient.Query.GetSessionManageCapabilitiesAsync(
 			new() { Context = context, LeafWorkIds = [.. leafIds] }, cancellationToken);
 		CanManageByLeaf = capabilities.ToDictionary(c => c.LeafWorkId, c => c.CanManage);
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 }

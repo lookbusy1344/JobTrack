@@ -29,9 +29,9 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	private const string AppliedBy = "test-runner";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
 	private const string AdministratorPassword = "Bootstrap-Horse-Battery-77!";
+	private readonly ConcurrentBag<string> capturedLogEntries = [];
 
 	private readonly SqliteDatabaseFixture database = new();
-	private readonly ConcurrentBag<string> capturedLogEntries = [];
 	private AppUserId administratorId;
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
@@ -41,7 +41,7 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrapResult = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -73,11 +73,11 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_job_manager_can_save_moving_a_branch_to_a_new_parent()
 	{
-		var managerId = await SeedEmployeeAsync("move.manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.manager", EmployeeRole.JobManager);
 		var sourceBranch = await AddChildAsync(rootId, managerId, "Source branch");
 		var moved = await AddChildAsync(sourceBranch.Id, managerId, "Pour foundation");
 		var destinationBranch = await AddChildAsync(rootId, managerId, "Destination branch");
-		var authCookie = await SignInAsync("move.manager");
+		var authCookie = await client.SignInAsync("move.manager");
 
 		var (antiforgeryCookie, token) = await GetMoveFormAsync(authCookie, moved.Id);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, moved.Id, moved.Version, destinationBranch.Id);
@@ -85,21 +85,21 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 		saveResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		saveResponse.Headers.Location!.OriginalString.Should().Contain("/Jobs/Browse");
 
-		var afterSave = await GetAsync($"/Jobs/Browse?nodeId={destinationBranch.Id.Value}", authCookie);
+		var afterSave = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={destinationBranch.Id.Value}", authCookie);
 		(await afterSave.Content.ReadAsStringAsync()).Should().Contain("Pour foundation");
 
-		var oldParent = await GetAsync($"/Jobs/Browse?nodeId={sourceBranch.Id.Value}", authCookie);
+		var oldParent = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={sourceBranch.Id.Value}", authCookie);
 		(await oldParent.Content.ReadAsStringAsync()).Should().NotContain("Pour foundation");
 	}
 
 	[Fact]
 	public async Task The_move_page_offers_save_and_cancel_actions()
 	{
-		var managerId = await SeedEmployeeAsync("move.actions", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.actions", EmployeeRole.JobManager);
 		var moved = await AddChildAsync(rootId, managerId, "Movable branch");
-		var authCookie = await SignInAsync("move.actions");
+		var authCookie = await client.SignInAsync("move.actions");
 
-		var response = await GetAsync($"/Jobs/Move?nodeId={moved.Id.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/Move?nodeId={moved.Id.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -112,11 +112,11 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_who_does_not_own_the_node_is_denied_on_save()
 	{
-		var managerId = await SeedEmployeeAsync("move.owner-manager", EmployeeRole.JobManager);
-		var workerId = await SeedEmployeeAsync("move.denied-worker", EmployeeRole.Worker);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.owner-manager", EmployeeRole.JobManager);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.denied-worker", EmployeeRole.Worker);
 		var moved = await AddChildAsync(rootId, managerId, "Owned by manager");
 		var destination = await AddChildAsync(rootId, managerId, "Destination");
-		var authCookie = await SignInAsync("move.denied-worker");
+		var authCookie = await client.SignInAsync("move.denied-worker");
 
 		var (antiforgeryCookie, token) = await GetMoveFormAsync(authCookie, moved.Id);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, moved.Id, moved.Version, destination.Id);
@@ -128,10 +128,10 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Moving_a_branch_under_its_own_descendant_is_reported_as_a_cycle()
 	{
-		var managerId = await SeedEmployeeAsync("move.cycle-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.cycle-manager", EmployeeRole.JobManager);
 		var branch = await AddChildAsync(rootId, managerId, "Ancestor branch");
 		var descendant = await AddChildAsync(branch.Id, managerId, "Descendant branch");
-		var authCookie = await SignInAsync("move.cycle-manager");
+		var authCookie = await client.SignInAsync("move.cycle-manager");
 
 		var (antiforgeryCookie, token) = await GetMoveFormAsync(authCookie, branch.Id);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, branch.Id, branch.Version, descendant.Id);
@@ -149,7 +149,7 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task Moving_a_node_under_a_job_it_is_a_prerequisite_of_is_reported_as_a_prerequisite_problem()
 	{
-		var managerId = await SeedEmployeeAsync("move.prerequisite-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.prerequisite-manager", EmployeeRole.JobManager);
 		var required = await AddChildAsync(rootId, managerId, "Site survey");
 		var dependent = await AddChildAsync(rootId, managerId, "Excavate foundations");
 		await seedClient.Jobs.AddPrerequisiteAsync(new() {
@@ -157,7 +157,7 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 			RequiredJobId = required.Id,
 			DependentJobId = dependent.Id,
 		});
-		var authCookie = await SignInAsync("move.prerequisite-manager");
+		var authCookie = await client.SignInAsync("move.prerequisite-manager");
 
 		var (antiforgeryCookie, token) = await GetMoveFormAsync(authCookie, required.Id);
 		var saveResponse = await PostAsync(authCookie, antiforgeryCookie, token, required.Id, required.Version, dependent.Id);
@@ -171,10 +171,10 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_stale_version_on_save_is_reported_as_a_conflict()
 	{
-		var managerId = await SeedEmployeeAsync("move.conflict-manager", EmployeeRole.JobManager);
+		var managerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "move.conflict-manager", EmployeeRole.JobManager);
 		var moved = await AddChildAsync(rootId, managerId, "Contested leaf");
 		var destination = await AddChildAsync(rootId, managerId, "Destination");
-		var authCookie = await SignInAsync("move.conflict-manager");
+		var authCookie = await client.SignInAsync("move.conflict-manager");
 
 		var (antiforgeryCookie, token) = await GetMoveFormAsync(authCookie, moved.Id);
 
@@ -230,127 +230,27 @@ public sealed partial class MoveJobNodeTests : IAsyncLifetime, IDisposable
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in Move page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in Move page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
 
-		return await client.SendAsync(request);
-	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
-
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
 	private sealed class TestWebApplicationFactory(string identityConnectionString, ConcurrentBag<string> capturedLogEntries)
 		: WebApplicationFactory<Program>

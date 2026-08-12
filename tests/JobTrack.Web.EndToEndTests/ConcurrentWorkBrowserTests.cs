@@ -46,7 +46,7 @@ public abstract class ConcurrentWorkBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/ConcurrentWork?nodeId={leafId.Value}");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -63,7 +63,7 @@ public abstract class ConcurrentWorkBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/ConcurrentWork?nodeId={leafId.Value}");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -81,7 +81,7 @@ public abstract class ConcurrentWorkBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 		await page.GetByRole(AriaRole.Link, new() { Name = "Info" }).ClickAsync();
 
@@ -97,31 +97,15 @@ public abstract class ConcurrentWorkBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/ConcurrentWork?nodeId={leafId.Value}");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/ConcurrentWork");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/ConcurrentWork");
 	}
 
-	private static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)
-	{
-		var criticalOrSerious = results.Violations
-			.Where(violation => violation.Impact is "critical" or "serious")
-			.ToArray();
 
-		criticalOrSerious.Should().BeEmpty(
-			$"{pageName} should have no critical/serious accessibility violations, found: " +
-			string.Join("; ", criticalOrSerious.Select(v => $"{v.Id} ({v.Impact}): {v.Help}")));
-	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class SqliteConcurrentWorkBrowserTests : ConcurrentWorkBrowserTestsBase, IClassFixture<SqliteBrowserFixture>

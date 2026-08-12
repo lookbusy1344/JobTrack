@@ -58,7 +58,9 @@ public abstract class JobBrowseBrowserTestsBase
 	// sample one device pixel outside the element altogether.
 	private const double PopoverEdgeSampleInset = 4.0;
 	private const double MaximumInlineStatusGapPixels = 8.0;
+
 	private const float MaximumColumnAlignmentDifferencePixels = 1.0f;
+
 	// Unlike the other tiers below, this is not the table's literal col-9 allocation: at phone width
 	// the Active icon column and the Actions buttons are the min-content floor auto table layout
 	// satisfies first (same mechanism as the cost-column comment further down), so Description is
@@ -161,7 +163,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -176,7 +178,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -268,7 +270,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var results = await page.RunAxe();
 
-		AssertNoCriticalOrSeriousViolations(results, "/Account/Login");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(results, "/Account/Login");
 	}
 
 	[Fact]
@@ -277,7 +279,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		var history = page.Locator("#jt-history");
@@ -295,7 +297,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
 
@@ -312,7 +314,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
 		(await page.Locator($"#jt-history-list a[href='/Jobs/Browse?nodeId={firstLeafId.Value}']").CountAsync()).Should()
@@ -337,7 +339,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
 		await page.Locator("#jt-history-clear").ClickAsync();
@@ -361,7 +363,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		// Sign-in itself lands on Browse and records that node, so start from a genuinely empty
 		// history rather than from whatever the sign-in redirect happened to leave behind.
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
@@ -383,7 +385,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
 
@@ -393,7 +395,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await clear.PressAsync("Enter");
 
 		(await page.Locator("#jt-history-list a").CountAsync()).Should().Be(0);
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Browse after clearing the history");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Browse after clearing the history");
 	}
 
 	[Fact]
@@ -404,7 +406,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var historyBeforeSignOut = await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')");
@@ -428,7 +430,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		(await page.Locator(".jt-achievement-icon--waiting .jt-achievement-icon-label").InnerTextAsync()).Should().Be("Unfinished");
@@ -444,7 +446,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		(await page.Locator(".jt-achievement-icon--success .jt-achievement-icon-label").InnerTextAsync()).Should().Be("Success");
@@ -461,7 +463,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={outerBranchId.Value}");
 
 		(await page.Locator(".jt-achievement-icon--waiting .jt-achievement-icon-label").InnerTextAsync()).Should().Be("Unfinished");
@@ -475,7 +477,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		await page.EvaluateAsync(
@@ -507,7 +509,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var phone = await phoneContext.NewPageAsync();
-		await SignInAsync(phone);
+		await BrowserTestSupport.SignInAdministratorAsync(phone, fixture.BaseAddress);
 		// Rooted at this test's own branch, not the shared fixture root: every test in this class seeds
 		// under that root, so past JobSubtreeLimits.BreadthCap children the root view would truncate this
 		// leaf away and the assertions below would read as a reflow failure.
@@ -524,7 +526,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
-		await SignInAsync(desktop);
+		await BrowserTestSupport.SignInAdministratorAsync(desktop, fixture.BaseAddress);
 		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Fit cabinets" }).First;
@@ -545,7 +547,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var table = page.Locator(".jt-browse-children-table");
@@ -571,7 +573,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var table = page.Locator(".jt-browse-children-table");
@@ -603,7 +605,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 		await page.GetByText("Inherited blockers (from ancestor prerequisites)", new() { Exact = true }).ClickAsync();
 
@@ -638,7 +640,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var phone = await phoneContext.NewPageAsync();
-		await SignInAsync(phone);
+		await BrowserTestSupport.SignInAdministratorAsync(phone, fixture.BaseAddress);
 		// This test's own branch rather than the shared fixture root, for the JobSubtreeLimits.BreadthCap
 		// reason given on the secondary-column reflow test above.
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
@@ -653,7 +655,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
-		await SignInAsync(desktop);
+		await BrowserTestSupport.SignInAdministratorAsync(desktop, fixture.BaseAddress);
 		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Responsive active worker leaf" }).First;
@@ -691,7 +693,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -728,7 +730,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={fixture.RootJobNodeId.Value}");
 
 		var rowText = page.Locator($".jt-tree-name-link[href='/Jobs/Browse?nodeId={leafId.Value}']").Locator("..");
@@ -771,7 +773,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var phone = await phoneContext.NewPageAsync();
-		await SignInAsync(phone);
+		await BrowserTestSupport.SignInAdministratorAsync(phone, fixture.BaseAddress);
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var phoneRow = phone.Locator("tbody tr", new() { HasTextString = "Active Worker 1" }).First;
@@ -785,7 +787,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
-		await SignInAsync(desktop);
+		await BrowserTestSupport.SignInAdministratorAsync(desktop, fixture.BaseAddress);
 		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var desktopRow = desktop.Locator("tbody tr", new() { HasTextString = "Active Worker 1" }).First;
@@ -805,7 +807,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var tabletContext = await fixture.NewContextAsync(TabletWidth, TabletHeight);
 		var tablet = await tabletContext.NewPageAsync();
-		await SignInAsync(tablet);
+		await BrowserTestSupport.SignInAdministratorAsync(tablet, fixture.BaseAddress);
 		await tablet.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var tabletTable = tablet.Locator(".jt-table-block table");
@@ -816,7 +818,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var laptopContext = await fixture.NewContextAsync(LaptopWidth, LaptopHeight);
 		var laptop = await laptopContext.NewPageAsync();
-		await SignInAsync(laptop);
+		await BrowserTestSupport.SignInAdministratorAsync(laptop, fixture.BaseAddress);
 		await laptop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var laptopTable = laptop.Locator(".jt-table-block table");
@@ -837,7 +839,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var phone = await phoneContext.NewPageAsync();
-		await SignInAsync(phone);
+		await BrowserTestSupport.SignInAdministratorAsync(phone, fixture.BaseAddress);
 		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
 		var phoneRow = phone.Locator("tbody tr").First;
@@ -864,7 +866,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		var scrollers = await ScrollingRegionsAsync(page);
@@ -889,7 +891,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var lastRow = page.Locator("tbody tr", new() { HasTextString = "Popover last leaf" }).Last;
@@ -925,7 +927,7 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
 
 		var headings = page.Locator(".jt-browse-children-table thead th");
@@ -993,12 +995,12 @@ public abstract class JobBrowseBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		var results = await page.RunAxe();
 
-		AssertNoCriticalOrSeriousViolations(results, "/Jobs/Browse");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(results, "/Jobs/Browse");
 	}
 
 	/// <summary>
@@ -1027,7 +1029,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={satisfiedRequiredId.Value}");
 		var noneRequiresHeight = await RowHeightAsync(page.Locator(".jt-card .jt-prereq-col").Nth(0).Locator("li"));
@@ -1092,7 +1094,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={currentId.Value}");
 		var columns = page.Locator(".jt-card .jt-prereq-col");
@@ -1126,16 +1128,7 @@ public abstract class JobBrowseBrowserTestsBase
 		return box!.Width;
 	}
 
-	private static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)
-	{
-		var criticalOrSerious = results.Violations
-			.Where(violation => violation.Impact is "critical" or "serious")
-			.ToArray();
 
-		criticalOrSerious.Should().BeEmpty(
-			$"{pageName} should have no critical/serious accessibility violations, found: " +
-			string.Join("; ", criticalOrSerious.Select(v => $"{v.Id} ({v.Impact}): {v.Help}")));
-	}
 
 	private static async Task TabToAsync(IPage page, string targetElementId, int maxTabs)
 	{
@@ -1150,14 +1143,7 @@ public abstract class JobBrowseBrowserTestsBase
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached '#{targetElementId}'.");
 	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class SqliteJobBrowseBrowserTests : JobBrowseBrowserTestsBase, IClassFixture<SqliteBrowserFixture>

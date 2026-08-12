@@ -92,7 +92,7 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 
 	public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -111,7 +111,7 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 	/// </summary>
 	public async Task<IActionResult> OnPostAddSelectedAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -155,7 +155,7 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 
 	public async Task<IActionResult> OnPostRemoveAsync(long requiredJobId, long dependentJobId, CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -219,12 +219,6 @@ public sealed class PrerequisitesModel(IJobTrackClient jobTrackClient, UserManag
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
 		}
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class AddSelectionInput

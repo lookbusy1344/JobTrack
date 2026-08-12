@@ -32,7 +32,7 @@ public abstract class CrossBrowserCompatibilityTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		(await page.Locator("text=Root").First.IsVisibleAsync()).Should().BeTrue();
@@ -44,7 +44,7 @@ public abstract class CrossBrowserCompatibilityTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
 
 		var results = await page.RunAxe();
@@ -55,14 +55,7 @@ public abstract class CrossBrowserCompatibilityTestsBase
 			string.Join("; ", criticalOrSerious.Select(v => $"{v.Id} ({v.Impact}): {v.Help}")));
 	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class FirefoxCrossBrowserCompatibilityTests : CrossBrowserCompatibilityTestsBase, IClassFixture<FirefoxBrowserFixture>

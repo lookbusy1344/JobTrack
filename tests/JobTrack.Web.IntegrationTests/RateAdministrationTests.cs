@@ -39,7 +39,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrap = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -70,23 +70,23 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task An_administrator_can_add_a_user_cost_rate_and_a_node_rate_override()
 	{
-		var workerId = await SeedEmployeeAsync("rates.worker", EmployeeRole.Worker);
-		_ = await SeedEmployeeAsync("rates.admin", EmployeeRole.Administrator);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.worker", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.admin", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("rates.admin", KnownPassword);
 
 		var (rateCookie, rateToken) = await GetFormAsync(authCookie, workerId);
 		var rateResponse = await PostAddUserCostRateAsync(authCookie, rateCookie, rateToken, workerId, "25.00", "2026-01-01T00:00");
 		rateResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var rateReloaded = await FollowRedirectAsync(rateResponse, authCookie);
+		var rateReloaded = await client.FollowRedirectAsync(rateResponse, authCookie);
 		var rateBody = await rateReloaded.Content.ReadAsStringAsync();
 
 		rateBody.Should().Contain("User cost rate added");
 
-		var (overrideCookie, overrideToken) = await ExtractFormAsync(rateReloaded, rateCookie);
+		var (overrideCookie, overrideToken) = await WebTestHttp.ExtractFormAsync(rateReloaded, rateCookie);
 		var overrideResponse = await PostAddNodeRateOverrideAsync(
 			authCookie, overrideCookie, overrideToken, workerId, rootJobNodeId, "30.00", "2026-01-01T00:00");
 		overrideResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var overrideReloaded = await FollowRedirectAsync(overrideResponse, authCookie);
+		var overrideReloaded = await client.FollowRedirectAsync(overrideResponse, authCookie);
 		var overrideBody = await overrideReloaded.Content.ReadAsStringAsync();
 
 		overrideBody.Should().Contain("Node rate override added");
@@ -95,15 +95,15 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_rate_manager_can_add_a_rate_but_cannot_view_existing_rates()
 	{
-		var workerId = await SeedEmployeeAsync("rates.target", EmployeeRole.Worker);
-		_ = await SeedEmployeeAsync("rates.manager", EmployeeRole.RateManager);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.target", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.manager", EmployeeRole.RateManager);
 		var authCookie = await SignInAsync("rates.manager", KnownPassword);
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
 		var response = await PostAddUserCostRateAsync(authCookie, cookie, token, workerId, "25.00", "2026-01-01T00:00");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var reloaded = await FollowRedirectAsync(response, authCookie);
+		var reloaded = await client.FollowRedirectAsync(response, authCookie);
 		var body = await reloaded.Content.ReadAsStringAsync();
 		body.Should().Contain("User cost rate added");
 		body.Should().NotContain("may not view");
@@ -114,7 +114,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_worker_cannot_open_rate_administration()
 	{
-		var workerId = await SeedEmployeeAsync("rates.self", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.self", EmployeeRole.Worker);
 		var authCookie = await SignInAsync("rates.self", KnownPassword);
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Admin/Rates?userId={workerId.Value}");
@@ -128,7 +128,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_cost_viewer_can_view_rates_but_cannot_see_write_controls()
 	{
-		var workerId = await SeedEmployeeAsync("rates.viewed", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.viewed", EmployeeRole.Worker);
 		_ = await seedClient.Rates.AddUserCostRateAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
@@ -137,7 +137,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 				Instant.FromUtc(2026, 1, 1, 0, 0),
 				null),
 		});
-		_ = await SeedEmployeeAsync("rates.viewer", EmployeeRole.CostViewer);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.viewer", EmployeeRole.CostViewer);
 		var authCookie = await SignInAsync("rates.viewer", KnownPassword);
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, $"/Admin/Rates?userId={workerId.Value}");
@@ -154,13 +154,13 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task An_administrator_can_correct_a_user_cost_rate()
 	{
-		var workerId = await SeedEmployeeAsync("rates.correct-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-target", EmployeeRole.Worker);
 		var added = await seedClient.Rates.AddUserCostRateAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
 			Rate = new(new(25m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
-		_ = await SeedEmployeeAsync("rates.correct-manager", EmployeeRole.Administrator);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-manager", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("rates.correct-manager", KnownPassword);
 
 		var (cookie, token) = await GetFormAsync(authCookie, $"/Admin/CorrectUserCostRate?userId={workerId.Value}&rateId={added.Id.Value}");
@@ -174,14 +174,14 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task An_administrator_can_correct_a_node_rate_override()
 	{
-		var workerId = await SeedEmployeeAsync("rates.correct-override-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-override-target", EmployeeRole.Worker);
 		var added = await seedClient.Rates.AddNodeRateOverrideAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
 			Override = new(
 				rootJobNodeId, new(40m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
-		_ = await SeedEmployeeAsync("rates.correct-override-manager", EmployeeRole.Administrator);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-override-manager", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("rates.correct-override-manager", KnownPassword);
 
 		var (cookie, token) = await GetFormAsync(
@@ -202,14 +202,14 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	public async Task The_correct_user_cost_rate_form_prefills_in_the_actors_zone_and_rejects_a_malformed_resubmission()
 	{
 		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
-		var workerId = await SeedEmployeeAsync("rates.correct-zoned-target", EmployeeRole.Worker);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-zoned-target", EmployeeRole.Worker);
 		var stored = CivilTimeResolver.ToInstant(new(2026, 1, 1, 9, 0, 0), newYork);
 		var added = await seedClient.Rates.AddUserCostRateAsync(new() {
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
 			Rate = new(new(25m), stored, null),
 		});
-		_ = await SeedEmployeeAsync("rates.correct-zoned-manager", EmployeeRole.Administrator, "America/New_York");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-zoned-manager", EmployeeRole.Administrator, "America/New_York");
 		var authCookie = await SignInAsync("rates.correct-zoned-manager", KnownPassword);
 
 		var (cookie, token) = await GetFormAsync(authCookie, $"/Admin/CorrectUserCostRate?userId={workerId.Value}&rateId={added.Id.Value}");
@@ -232,8 +232,8 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	[Fact]
 	public async Task A_malformed_EffectiveStart_on_add_user_cost_rate_is_rejected_without_adding_the_rate()
 	{
-		var workerId = await SeedEmployeeAsync("rates.malformed-effective", EmployeeRole.Worker);
-		_ = await SeedEmployeeAsync("rates.malformed-admin", EmployeeRole.Administrator);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.malformed-effective", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.malformed-admin", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("rates.malformed-admin", KnownPassword);
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
@@ -255,8 +255,8 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	public async Task EffectiveStart_is_resolved_in_the_acting_administrators_own_zone_not_the_server_process_zone()
 	{
 		var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
-		var workerId = await SeedEmployeeAsync("rates.zoned-effective", EmployeeRole.Worker);
-		var administratorId = await SeedEmployeeAsync("rates.zoned-admin", EmployeeRole.Administrator, "America/New_York");
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.zoned-effective", EmployeeRole.Worker);
+		var administratorId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.zoned-admin", EmployeeRole.Administrator, "America/New_York");
 		var authCookie = await SignInAsync("rates.zoned-admin", KnownPassword);
 
 		var (cookie, token) = await GetFormAsync(authCookie, workerId);
@@ -356,13 +356,13 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in Rates page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in Rates page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private async Task<CommandContext> CreateContextForAsync(string userName)
@@ -383,21 +383,11 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		return new() { Actor = new(appUserId), CorrelationId = Guid.NewGuid() };
 	}
 
-	private static async Task<(string CookieHeader, string Token)> ExtractFormAsync(HttpResponseMessage response, string previousAntiforgeryCookie)
-	{
-		var body = await response.Content.ReadAsStringAsync();
-		var newCookie = FindSetCookie(response, "Antiforgery");
-		var cookie = newCookie is not null ? ExtractCookiePair(newCookie) : previousAntiforgeryCookie;
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in response body.");
 
-		return (cookie, token);
-	}
 
 	private async Task<string> SignInAsync(string userName, string password)
 	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
+		var (antiforgeryCookie, token) = await client.GetLoginFormAsync();
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
 		request.Headers.Add("Cookie", antiforgeryCookie);
@@ -408,123 +398,26 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		});
 
 		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
+		var authCookie = WebTestHttp.FindSetCookie(response, "Identity.Application") ??
 						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
+		return WebTestHttp.ExtractCookiePair(authCookie);
 	}
 
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
 
 	/// <summary>
 	///     Follows a redirect response, carrying forward any cookie the redirect itself set (notably
 	///     the TempData cookie a mutating handler's <c>SuccessMessage</c>/<c>ErrorMessage</c> rides in
 	///     on) alongside the caller's own auth cookie.
 	/// </summary>
-	private async Task<HttpResponseMessage> FollowRedirectAsync(HttpResponseMessage response, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, response.Headers.Location);
-		var cookieHeader = string.Join("; ", new[] { authCookie }.Concat(ExtractSetCookiePairs(response)));
-		request.Headers.Add("Cookie", cookieHeader);
 
-		return await client.SendAsync(request);
-	}
-
-	private static IEnumerable<string> ExtractSetCookiePairs(HttpResponseMessage response) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Select(ExtractCookiePair) : [];
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role, string ianaTimeZone = "UTC")
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, $ianaTimeZone); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		_ = insertAppUser.Parameters.AddWithValue("$ianaTimeZone", ianaTimeZone);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
 
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
 
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
-
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

@@ -58,7 +58,7 @@ public sealed class PersonalAccessTokensModel(
 	/// </summary>
 	public async Task OnGetAsync(bool issued, CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is not null && issued) {
 			if (PendingPatDeliveryCookie.TryConsume(HttpContext, dataProtectionProvider, actor.Value, out var label, out var plaintext)) {
 				IssuedPlaintextToken = plaintext;
@@ -81,7 +81,7 @@ public sealed class PersonalAccessTokensModel(
 			return Page();
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -122,7 +122,7 @@ public sealed class PersonalAccessTokensModel(
 
 	public async Task<IActionResult> OnPostRevokeAsync(long tokenId, CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -149,7 +149,7 @@ public sealed class PersonalAccessTokensModel(
 
 	private async Task LoadTokensAsync(CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return;
 		}
@@ -157,12 +157,6 @@ public sealed class PersonalAccessTokensModel(
 		ViewerZone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 		Tokens = await jobTrackClient.Tokens.ListAsync(
 			new() { Context = new() { Actor = actor.Value, CorrelationId = Guid.NewGuid() }, TargetUserId = actor.Value }, cancellationToken);
-	}
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
 	}
 
 	public sealed class IssueTokenInput

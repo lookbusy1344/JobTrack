@@ -42,7 +42,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString, clock);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
@@ -63,7 +63,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task A_session_within_the_absolute_ceiling_stays_authenticated()
 	{
-		_ = await SeedEmployeeAsync("ceiling.within");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "ceiling.within");
 		var authCookie = await SignInAsync("ceiling.within");
 
 		clock.Advance(Duration.FromHours(7) + Duration.FromMinutes(59));
@@ -76,7 +76,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task A_session_past_the_absolute_ceiling_is_rejected_even_though_it_was_never_idle()
 	{
-		_ = await SeedEmployeeAsync("ceiling.past");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "ceiling.past");
 		var authCookie = await SignInAsync("ceiling.past");
 
 		clock.Advance(Duration.FromHours(8) + Duration.FromMinutes(1));
@@ -90,7 +90,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task A_sensitive_action_is_redirected_to_confirm_access_once_recent_authentication_goes_stale()
 	{
-		_ = await SeedEmployeeAsync("stepup.stale");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.stale");
 		var authCookie = await SignInAsync("stepup.stale");
 
 		clock.Advance(Duration.FromMinutes(16));
@@ -104,7 +104,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task Creating_an_employee_is_redirected_to_confirm_access_once_recent_authentication_goes_stale()
 	{
-		_ = await SeedEmployeeAsync("stepup.create", EmployeeRole.Administrator);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.create", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("stepup.create");
 
 		clock.Advance(Duration.FromMinutes(16));
@@ -118,7 +118,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task A_sensitive_action_succeeds_immediately_after_sign_in_while_recent_authentication_is_fresh()
 	{
-		_ = await SeedEmployeeAsync("stepup.fresh");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.fresh");
 		var authCookie = await SignInAsync("stepup.fresh");
 
 		clock.Advance(Duration.FromMinutes(14));
@@ -132,7 +132,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task Confirming_access_with_the_correct_password_lets_the_sensitive_action_proceed()
 	{
-		_ = await SeedEmployeeAsync("stepup.confirm");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.confirm");
 		var authCookie = await SignInAsync("stepup.confirm");
 
 		clock.Advance(Duration.FromMinutes(16));
@@ -144,8 +144,8 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 		// The confirmation refreshed the session's own cookie (JobTrackSignInManager restamps
 		// `recent` via RefreshSignInAsync) -- carry that new cookie forward rather than the
 		// pre-confirmation one, exactly as a real browser would.
-		var refreshedCookie = FindSetCookie(confirmed, "Identity.Application");
-		authCookie = refreshedCookie is not null ? ExtractCookiePair(refreshedCookie) : authCookie;
+		var refreshedCookie = WebTestHttp.FindSetCookie(confirmed, "Identity.Application");
+		authCookie = refreshedCookie is not null ? WebTestHttp.ExtractCookiePair(refreshedCookie) : authCookie;
 
 		var response = await PostIssueAsync(authCookie, "laptop", 30);
 
@@ -156,7 +156,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task Confirming_access_with_the_wrong_password_does_not_refresh_recent_authentication()
 	{
-		_ = await SeedEmployeeAsync("stepup.wrong");
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.wrong");
 		var authCookie = await SignInAsync("stepup.wrong");
 
 		clock.Advance(Duration.FromMinutes(16));
@@ -173,7 +173,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	[Fact]
 	public async Task Confirming_access_with_repeated_wrong_two_factor_codes_is_rate_limited()
 	{
-		var userId = await SeedEmployeeAsync("stepup.2fa");
+		var userId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.2fa");
 		var authCookie = await SignInAsync("stepup.2fa");
 		await EnableTwoFactorAsync(userId, "JBSWY3DPEHPK3PXP");
 
@@ -256,13 +256,13 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException($"No antiforgery cookie in {path} response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException($"No antiforgery token in {path} body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private async Task<string> SignInAsync(string userName)
@@ -278,84 +278,18 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 		});
 
 		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
+		var authCookie = WebTestHttp.FindSetCookie(response, "Identity.Application") ??
 						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
+		return WebTestHttp.ExtractCookiePair(authCookie);
 	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role = EmployeeRole.Worker)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
-
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
-
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
-
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
 
 	private async Task EnableTwoFactorAsync(AppUserId appUserId, string base32Secret)
 	{

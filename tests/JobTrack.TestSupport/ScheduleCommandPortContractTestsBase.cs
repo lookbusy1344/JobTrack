@@ -110,7 +110,7 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_worker_cannot_add_a_schedule_version_for_another_employee()
 	{
 		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.schedule", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.schedule", EmployeeRole.Worker);
 		var port = CreateSchedulePort(database.ConnectionString);
 
 		var act = () => port.AddScheduleVersionAsync(new() {
@@ -206,7 +206,7 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_worker_cannot_add_a_schedule_exception_for_another_employee()
 	{
 		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.schedule.exception", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.schedule.exception", EmployeeRole.Worker);
 		var port = CreateSchedulePort(database.ConnectionString);
 		var entry = new ScheduleExceptionEntry(
 			ScheduleExceptionEffect.RemoveWorkingTime,
@@ -392,7 +392,7 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_worker_cannot_correct_another_employees_schedule_version()
 	{
 		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.correct-version", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.correct-version", EmployeeRole.Worker);
 		var port = CreateSchedulePort(database.ConnectionString);
 		var added = await port.AddScheduleVersionAsync(new() {
 			Context = ContextFor(workerId),
@@ -580,7 +580,7 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<(AppUserId AdministratorId, AppUserId WorkerId)> SeedAdministratorAndWorkerAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -595,82 +595,25 @@ public abstract class ScheduleCommandPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper.schedule", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper.schedule", EmployeeRole.Worker);
 
 		return (result.AdministratorId, workerId);
 	}
 
 	private async Task<string> ReadScheduleVersionZoneIdAsync(ScheduleVersionId scheduleVersionId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT iana_time_zone FROM user_schedule_version WHERE id = @scheduleVersionId;";
-		AddParameter(command, "@scheduleVersionId", scheduleVersionId.Value);
+		command.AddParameter("@scheduleVersionId", scheduleVersionId.Value);
 		return Convert.ToString(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture)!;
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
-	{
-		await using var connection = await OpenExistingConnectionAsync();
 
-		await using var appUserCommand = connection.CreateCommand();
-		appUserCommand.CommandText = """
-									 INSERT INTO app_user (display_name, iana_time_zone)
-									 VALUES (@displayName, 'Europe/London')
-									 RETURNING id;
-									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
-		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
-		await using var identityUserCommand = connection.CreateCommand();
-		identityUserCommand.CommandText = """
-										  INSERT INTO identity_user
-										  	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										  	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										  VALUES
-										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-										  	 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
-		_ = await identityUserCommand.ExecuteNonQueryAsync();
 
-		await AssignRoleAsync(connection, appUserId, role);
 
-		return appUserId;
-	}
 
-	private static async Task AssignRoleAsync(DbConnection connection, AppUserId appUserId, EmployeeRole role)
-	{
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
 }

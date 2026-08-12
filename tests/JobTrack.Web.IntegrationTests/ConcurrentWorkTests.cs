@@ -76,9 +76,9 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var other = await AddLeafWithWorkAsync(rootId, workerId, "Fit worktop", adminId);
 		await AddFinishedSessionAsync(workerId, subject.JobNodeId, HoursAgo(5), HoursAgo(2));
 		await AddFinishedSessionAsync(workerId, other.JobNodeId, HoursAgo(3), HoursAgo(1));
-		var authCookie = await SignInAsync("concurrent.basic");
+		var authCookie = await client.SignInAsync("concurrent.basic");
 
-		var response = await GetAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -96,9 +96,9 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var other = await AddLeafWithWorkAsync(rootId, workerId, "Fit worktop", adminId);
 		await AddFinishedSessionAsync(workerId, subject.JobNodeId, HoursAgo(5), HoursAgo(2));
 		await AddFinishedSessionAsync(workerId, other.JobNodeId, HoursAgo(3), HoursAgo(1));
-		var authCookie = await SignInAsync("concurrent.kind");
+		var authCookie = await client.SignInAsync("concurrent.kind");
 
-		var response = await GetAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().NotContain(">Kind</th>", "the kind is a glyph on the job, not a column of its own");
@@ -123,9 +123,9 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var other = await AddLeafWithWorkAsync(rootId, workerId, "Fit worktop", adminId);
 		await AddActiveSessionAsync(workerId, subject.JobNodeId, HoursAgo(2));
 		await AddActiveSessionAsync(workerId, other.JobNodeId, HoursAgo(1));
-		var authCookie = await SignInAsync("concurrent.running");
+		var authCookie = await client.SignInAsync("concurrent.running");
 
-		var response = await GetAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -142,9 +142,9 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var other = await AddLeafWithWorkAsync(rootId, workerId, "Fit worktop", adminId);
 		await AddFinishedSessionAsync(workerId, subject.JobNodeId, HoursAgo(5), HoursAgo(2));
 		await AddFinishedSessionAsync(workerId, other.JobNodeId, HoursAgo(3), HoursAgo(1));
-		var authCookie = await SignInAsync("concurrent.finished");
+		var authCookie = await client.SignInAsync("concurrent.finished");
 
-		var response = await GetAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().NotMatchRegex("&ndash;\\s*now", "a closed overlap ended at a real instant, and that is what it must report");
@@ -159,9 +159,9 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var other = await AddLeafWithWorkAsync(rootId, workerId, "Fit worktop", adminId);
 		await AddFinishedSessionAsync(workerId, subject.JobNodeId, HoursAgo(5), HoursAgo(4));
 		await AddFinishedSessionAsync(workerId, other.JobNodeId, HoursAgo(3), HoursAgo(2));
-		var authCookie = await SignInAsync("concurrent.disjoint");
+		var authCookie = await client.SignInAsync("concurrent.disjoint");
 
-		var response = await GetAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -176,9 +176,9 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var branch = await AddChildAsync(rootId, workerId, "Kitchen", adminId);
 		_ = await AddLeafWithWorkAsync(branch, workerId, "Install cabinets", adminId);
-		var authCookie = await SignInAsync("concurrent.branch");
+		var authCookie = await client.SignInAsync("concurrent.branch");
 
-		var response = await GetAsync($"/Jobs/ConcurrentWork?nodeId={branch.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/ConcurrentWork?nodeId={branch.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -192,11 +192,11 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var rootId = bootstrappedRootId!.Value;
 		var branch = await AddChildAsync(rootId, workerId, "Kitchen", adminId);
 		var leaf = await AddLeafWithWorkAsync(branch, workerId, "Install cabinets", adminId);
-		var authCookie = await SignInAsync("concurrent.link");
+		var authCookie = await client.SignInAsync("concurrent.link");
 
-		var leafBrowse = await GetAsync($"/Jobs/Browse?nodeId={leaf.JobNodeId.Value}", authCookie);
+		var leafBrowse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={leaf.JobNodeId.Value}", authCookie);
 		var leafBody = await leafBrowse.Content.ReadAsStringAsync();
-		var branchBrowse = await GetAsync($"/Jobs/Browse?nodeId={branch.Value}", authCookie);
+		var branchBrowse = await client.GetAuthenticatedAsync($"/Jobs/Browse?nodeId={branch.Value}", authCookie);
 		var branchBody = await branchBrowse.Content.ReadAsStringAsync();
 
 		leafBody.Should().Contain(
@@ -215,9 +215,9 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		var other = await AddLeafWithWorkAsync(rootId, otherWorkerId, "Fit worktop", adminId);
 		await AddFinishedSessionAsync(workerId, subject.JobNodeId, HoursAgo(5), HoursAgo(2));
 		await AddFinishedSessionAsync(otherWorkerId, other.JobNodeId, HoursAgo(5), HoursAgo(2));
-		var authCookie = await SignInAsync("concurrent.otherworker");
+		var authCookie = await client.SignInAsync("concurrent.otherworker");
 
-		var response = await GetAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/Jobs/ConcurrentWork?nodeId={subject.JobNodeId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.Should().NotContain("Fit worktop", "concurrency is per worker -- two people working at once share no allocation");
@@ -301,52 +301,11 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		});
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
 
-		return await client.SendAsync(request);
-	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
@@ -421,13 +380,4 @@ public sealed partial class ConcurrentWorkTests : IAsyncLifetime, IDisposable
 		await deployer.DeployAsync(scripts, CancellationToken.None);
 	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

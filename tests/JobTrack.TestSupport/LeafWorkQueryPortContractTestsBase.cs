@@ -79,7 +79,7 @@ public abstract class LeafWorkQueryPortContractTestsBase : IAsyncLifetime
 
 	private async Task<(AppUserId AdministratorId, JobNodeId LeafId)> SeedBareLeafAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -107,11 +107,5 @@ public abstract class LeafWorkQueryPortContractTestsBase : IAsyncLifetime
 		return (administratorId, leaf.Id);
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
+
 }

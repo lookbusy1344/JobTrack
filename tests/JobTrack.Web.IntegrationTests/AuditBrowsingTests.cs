@@ -35,7 +35,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		_ = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -65,13 +65,13 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task An_auditor_sees_ordinary_events_but_has_rate_events_redacted()
 	{
-		var administratorId = await SeedEmployeeAsync("audit.malformed-filter-admin", EmployeeRole.Administrator);
-		var workerId = await SeedEmployeeAsync("audit.worker", EmployeeRole.Worker);
-		_ = await SeedEmployeeAsync("audit.auditor", EmployeeRole.Auditor);
+		var administratorId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.malformed-filter-admin", EmployeeRole.Administrator);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.worker", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.auditor", EmployeeRole.Auditor);
 		await SeedRateChangeAsync(administratorId, workerId);
-		var authCookie = await SignInAsync("audit.auditor");
+		var authCookie = await client.SignInAsync("audit.auditor");
 
-		var response = await GetAsync("/Audit/Index?entityType=user_cost_rate", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Audit/Index?entityType=user_cost_rate", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -84,12 +84,12 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	public async Task An_administrator_sees_rate_event_detail_unredacted()
 	{
 		var administratorId = await SeedAdministratorAsync();
-		var workerId = await SeedEmployeeAsync("audit.worker-admin", EmployeeRole.Worker);
-		_ = await SeedEmployeeAsync("audit.admin", EmployeeRole.Administrator);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.worker-admin", EmployeeRole.Worker);
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.admin", EmployeeRole.Administrator);
 		await SeedRateChangeAsync(administratorId, workerId);
-		var authCookie = await SignInAsync("audit.admin");
+		var authCookie = await client.SignInAsync("audit.admin");
 
-		var response = await GetAsync("/Audit/Index?entityType=user_cost_rate", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Audit/Index?entityType=user_cost_rate", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -100,12 +100,12 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_malformed_audit_time_filter_is_rejected_instead_of_being_dropped()
 	{
-		var administratorId = await SeedEmployeeAsync("audit.malformed-filter-admin", EmployeeRole.Administrator);
-		var workerId = await SeedEmployeeAsync("audit.malformed-filter-worker", EmployeeRole.Worker);
+		var administratorId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.malformed-filter-admin", EmployeeRole.Administrator);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.malformed-filter-worker", EmployeeRole.Worker);
 		await SeedRateChangeAsync(administratorId, workerId);
-		var authCookie = await SignInAsync("audit.malformed-filter-admin");
+		var authCookie = await client.SignInAsync("audit.malformed-filter-admin");
 
-		var response = await GetAsync("/Audit/Index?from=not-a-local-date-time", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Audit/Index?from=not-a-local-date-time", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -116,11 +116,11 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_result_page_beyond_the_default_page_size_offers_a_next_page_link_that_preserves_filters()
 	{
-		var administratorId = await SeedEmployeeAsync("audit.paging-admin", EmployeeRole.Administrator);
+		var administratorId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.paging-admin", EmployeeRole.Administrator);
 		await SeedManyJobNodeEventsAsync(administratorId, AuditSearchPaging.DefaultPageSize + 1);
-		var authCookie = await SignInAsync("audit.paging-admin");
+		var authCookie = await client.SignInAsync("audit.paging-admin");
 
-		var firstResponse = await GetAsync("/Audit/Index?entityType=job_node", authCookie);
+		var firstResponse = await client.GetAuthenticatedAsync("/Audit/Index?entityType=job_node", authCookie);
 		var firstBody = await firstResponse.Content.ReadAsStringAsync();
 
 		firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -128,7 +128,7 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 		firstBody.Should().Contain("EntityType=job_node");
 
 		var nextLink = ExtractHrefContaining(firstBody, "Cursor=").Replace("&amp;", "&", StringComparison.Ordinal);
-		var secondResponse = await GetAsync(nextLink, authCookie);
+		var secondResponse = await client.GetAuthenticatedAsync(nextLink, authCookie);
 		var secondBody = await secondResponse.Content.ReadAsStringAsync();
 
 		secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -138,10 +138,10 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 	[Fact]
 	public async Task A_worker_cannot_open_audit_search()
 	{
-		var workerId = await SeedEmployeeAsync("audit.self", EmployeeRole.Worker);
-		var authCookie = await SignInAsync("audit.self");
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "audit.self", EmployeeRole.Worker);
+		var authCookie = await client.SignInAsync("audit.self");
 
-		var response = await GetAsync("/Audit/Index", authCookie);
+		var response = await client.GetAuthenticatedAsync("/Audit/Index", authCookie);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Account/AccessDenied");
@@ -207,41 +207,19 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 		return new(appUserId);
 	}
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
-		return await client.SendAsync(request);
-	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
-
-		return ExtractCookiePair(authCookie);
-	}
 
 	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
 	{
 		var response = await client.GetAsync("/Account/Login");
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in login page response.");
 		var token = AntiforgeryTokenValue(body) ?? throw new InvalidOperationException("No antiforgery token in login page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private static string? AntiforgeryTokenValue(string body)
@@ -263,83 +241,8 @@ public sealed class AuditBrowsingTests : IAsyncLifetime, IDisposable
 		return end < 0 ? null : body[start..end];
 	}
 
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
 
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
-	private async Task<AppUserId> SeedEmployeeAsync(string userName, EmployeeRole role)
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
 
-		await using var insertAppUser = connection.CreateCommand();
-		insertAppUser.CommandText =
-			"INSERT INTO app_user (display_name, iana_time_zone) VALUES ($displayName, 'UTC'); SELECT last_insert_rowid();";
-		_ = insertAppUser.Parameters.AddWithValue("$displayName", userName);
-		var appUserId = (long)(await insertAppUser.ExecuteScalarAsync())!;
 
-		var placeholderUser = new JobTrackIdentityUser {
-			AppUserId = new(appUserId),
-			UserName = userName,
-			NormalizedUserName = userName.ToUpperInvariant(),
-			PasswordHash = string.Empty,
-			SecurityStamp = Guid.NewGuid().ToString(),
-			ConcurrencyStamp = Guid.NewGuid().ToString(),
-		};
-		var passwordHash = new PasswordHasher<JobTrackIdentityUser>().HashPassword(placeholderUser, KnownPassword);
-
-		await using var insertIdentityUser = connection.CreateCommand();
-		insertIdentityUser.CommandText = """
-										 INSERT INTO identity_user
-										 	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										 	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										 VALUES
-										 	($appUserId, $userName, $normalizedUserName, $passwordHash, $securityStamp,
-										 	 $concurrencyStamp, 0, 1, 1, 0);
-										 """;
-		_ = insertIdentityUser.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertIdentityUser.Parameters.AddWithValue("$userName", userName);
-		_ = insertIdentityUser.Parameters.AddWithValue("$normalizedUserName", userName.ToUpperInvariant());
-		_ = insertIdentityUser.Parameters.AddWithValue("$passwordHash", passwordHash);
-		_ = insertIdentityUser.Parameters.AddWithValue("$securityStamp", placeholderUser.SecurityStamp);
-		_ = insertIdentityUser.Parameters.AddWithValue("$concurrencyStamp", placeholderUser.ConcurrencyStamp);
-		_ = await insertIdentityUser.ExecuteNonQueryAsync();
-
-		await using var insertRole = connection.CreateCommand();
-		insertRole.CommandText =
-			"INSERT INTO identity_user_role (identity_user_id, identity_role_id) SELECT id, $roleId FROM identity_user WHERE app_user_id = $appUserId;";
-		_ = insertRole.Parameters.AddWithValue("$appUserId", appUserId);
-		_ = insertRole.Parameters.AddWithValue("$roleId", (short)role);
-		_ = await insertRole.ExecuteNonQueryAsync();
-
-		return new(appUserId);
-	}
-
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
-
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

@@ -143,8 +143,8 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	{
 		var (rootId, jobManagerId, _) = await SeedRootAndUsersAsync();
 		var requesterId = await SeedEmployeeAsync("Requesting Worker", "requesting.worker.create-owner", EmployeeRole.Worker);
-		await using (var connection = await OpenExistingConnectionAsync()) {
-			await AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
+			await DatabaseContractTestSupport.AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
 		}
 
 		var port = CreateCommandPort(database.ConnectionString);
@@ -745,11 +745,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var holdingNode = await port.AddChildAsync(CreateRequest(jobManagerId, jobManagerId, rootId));
 		_ = await SeedHoldingAreaAsync(holdingNode.Id, "IT Intake");
 
-		var act = () => port.DeleteAsync(new() {
-			Context = ContextFor(jobManagerId),
-			NodeId = holdingNode.Id,
-			Version = holdingNode.Version,
-		});
+		var act = () => port.DeleteAsync(new() { Context = ContextFor(jobManagerId), NodeId = holdingNode.Id, Version = holdingNode.Version });
 
 		(await act.Should().ThrowAsync<InvariantViolationException>())
 			.Which.ConstraintId.Should().Be("job-node-holding-area-anchored");
@@ -1901,13 +1897,13 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		var port = CreateCommandPort(database.ConnectionString);
 		var childrenBefore = await CountChildrenAsync(rootId);
 
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var transaction = await connection.BeginTransactionAsync();
 		await using (var command = connection.CreateCommand()) {
 			command.Transaction = transaction;
 			command.CommandText = "UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
-			AddParameter(command, "@isEnabled", false);
-			AddParameter(command, "@appUserId", workerId.Value);
+			command.AddParameter("@isEnabled", false);
+			command.AddParameter("@appUserId", workerId.Value);
 			_ = await command.ExecuteNonQueryAsync();
 		}
 
@@ -1984,30 +1980,30 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task<long?> ReadHomeNodeIdAsync(AppUserId userId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT home_node_id FROM app_user WHERE id = @userId;";
-		AddParameter(command, "@userId", userId.Value);
+		command.AddParameter("@userId", userId.Value);
 		var value = await command.ExecuteScalarAsync();
 		return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 	}
 
 	private async Task<long> ReadAchievementIdAsync(JobNodeId leafId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT achievement_id FROM leaf_work WHERE job_node_id = @leafId;";
-		AddParameter(command, "@leafId", leafId.Value);
+		command.AddParameter("@leafId", leafId.Value);
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	/// <summary>The single still-open session on <paramref name="leafId" />; fails the test if there isn't exactly one.</summary>
 	private async Task<WorkSessionId> ReadActiveSessionIdAsync(JobNodeId leafId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT id FROM work_session WHERE leaf_work_id = @leafId AND finished_at IS NULL;";
-		AddParameter(command, "@leafId", leafId.Value);
+		command.AddParameter("@leafId", leafId.Value);
 
 		await using var reader = await command.ExecuteReaderAsync();
 		(await reader.ReadAsync()).Should().BeTrue("the leaf should have an open session");
@@ -2019,29 +2015,29 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task<long> CountLeafWorkAsync(JobNodeId nodeId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT COUNT(*) FROM leaf_work WHERE job_node_id = @nodeId;";
-		AddParameter(command, "@nodeId", nodeId.Value);
+		command.AddParameter("@nodeId", nodeId.Value);
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	private async Task<long?> ReadOwnerUserIdAsync(JobNodeId nodeId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT owner_user_id FROM job_node WHERE id = @nodeId;";
-		AddParameter(command, "@nodeId", nodeId.Value);
+		command.AddParameter("@nodeId", nodeId.Value);
 		var value = await command.ExecuteScalarAsync();
 		return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 	}
 
 	private async Task<long> ReadNodeVersionAsync(JobNodeId nodeId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT row_version FROM job_node WHERE id = @nodeId;";
-		AddParameter(command, "@nodeId", nodeId.Value);
+		command.AddParameter("@nodeId", nodeId.Value);
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
@@ -2053,27 +2049,27 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<long> CountSessionsAsync(JobNodeId leafId, bool finished)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText =
 			"SELECT COUNT(*) FROM work_session WHERE leaf_work_id = @leafId AND finished_at IS "
 			+ (finished ? "NOT NULL" : "NULL") + ";";
-		AddParameter(command, "@leafId", leafId.Value);
+		command.AddParameter("@leafId", leafId.Value);
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	private async Task<long> CountChildrenAsync(JobNodeId parentId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT COUNT(*) FROM job_node WHERE parent_id = @parentId;";
-		AddParameter(command, "@parentId", parentId.Value);
+		command.AddParameter("@parentId", parentId.Value);
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	private async Task<long> CountPrerequisitesAsync()
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT COUNT(*) FROM job_prerequisite;";
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
@@ -2407,7 +2403,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	protected async Task<(JobNodeId RootId, AppUserId JobManagerId, AppUserId WorkerId)> SeedRootAndUsersAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -2433,8 +2429,8 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		await using (var connection = await OpenExistingConnectionAsync()) {
-			await AssignRoleAsync(connection, result.AdministratorId, EmployeeRole.JobManager);
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
+			await DatabaseContractTestSupport.AssignRoleAsync(connection, result.AdministratorId, EmployeeRole.JobManager);
 		}
 
 		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper", EmployeeRole.Worker);
@@ -2449,7 +2445,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	protected async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var appUserCommand = connection.CreateCommand();
 		appUserCommand.CommandText = """
@@ -2457,7 +2453,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 									 VALUES (@displayName, 'Europe/London')
 									 RETURNING id;
 									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
+		appUserCommand.AddParameter("@displayName", displayName);
 		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
 		await using var identityUserCommand = connection.CreateCommand();
@@ -2469,17 +2465,17 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
 										  	 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
 										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
+		identityUserCommand.AddParameter("@appUserId", appUserId.Value);
+		identityUserCommand.AddParameter("@userName", userName);
+		identityUserCommand.AddParameter("@normalizedUserName", userName.ToUpperInvariant());
+		identityUserCommand.AddParameter("@securityStamp", Guid.NewGuid().ToString("N"));
+		identityUserCommand.AddParameter("@concurrencyStamp", Guid.NewGuid().ToString("N"));
+		identityUserCommand.AddParameter("@requiresPasswordChange", false);
+		identityUserCommand.AddParameter("@isEnabled", true);
+		identityUserCommand.AddParameter("@lockoutEnabled", true);
 		_ = await identityUserCommand.ExecuteNonQueryAsync();
 
-		await AssignRoleAsync(connection, appUserId, role);
+		await DatabaseContractTestSupport.AssignRoleAsync(connection, appUserId, role);
 
 		return appUserId;
 	}
@@ -2491,7 +2487,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<long> SeedHoldingAreaAsync(JobNodeId jobNodeId, string name)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
@@ -2499,73 +2495,73 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 							  VALUES (@jobNodeId, @name, @priorityId)
 							  RETURNING id;
 							  """;
-		AddParameter(command, "@jobNodeId", jobNodeId.Value);
-		AddParameter(command, "@name", name);
-		AddParameter(command, "@priorityId", (short)Priority.Medium);
+		command.AddParameter("@jobNodeId", jobNodeId.Value);
+		command.AddParameter("@name", name);
+		command.AddParameter("@priorityId", (short)Priority.Medium);
 
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	private async Task SeedJobRequestAsync(JobNodeId jobNodeId, AppUserId requesterUserId, long holdingAreaId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  INSERT INTO job_request (job_node_id, requester_user_id, holding_area_id, submitted_at)
 							  VALUES (@jobNodeId, @requesterUserId, @holdingAreaId, @submittedAt);
 							  """;
-		AddParameter(command, "@jobNodeId", jobNodeId.Value);
-		AddParameter(command, "@requesterUserId", requesterUserId.Value);
-		AddParameter(command, "@holdingAreaId", holdingAreaId);
-		AddParameter(command, "@submittedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@jobNodeId", jobNodeId.Value);
+		command.AddParameter("@requesterUserId", requesterUserId.Value);
+		command.AddParameter("@holdingAreaId", holdingAreaId);
+		command.AddParameter("@submittedAt", EncodeInstant(DateTimeOffset.UtcNow));
 
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task SeedJobRequestNoteAsync(JobNodeId jobNodeId, AppUserId authorUserId, string content)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  INSERT INTO job_request_note (job_node_id, author_user_id, content, is_visible_to_requester, created_at)
 							  VALUES (@jobNodeId, @authorUserId, @content, @isVisibleToRequester, @createdAt);
 							  """;
-		AddParameter(command, "@jobNodeId", jobNodeId.Value);
-		AddParameter(command, "@authorUserId", authorUserId.Value);
-		AddParameter(command, "@content", content);
-		AddParameter(command, "@isVisibleToRequester", true);
-		AddParameter(command, "@createdAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@jobNodeId", jobNodeId.Value);
+		command.AddParameter("@authorUserId", authorUserId.Value);
+		command.AddParameter("@content", content);
+		command.AddParameter("@isVisibleToRequester", true);
+		command.AddParameter("@createdAt", EncodeInstant(DateTimeOffset.UtcNow));
 
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task SeedNodeRateOverrideAsync(JobNodeId nodeId, AppUserId userId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  INSERT INTO node_rate_override (node_id, user_id, effective_start, rate, changed_at)
 							  VALUES (@nodeId, @userId, @effectiveStart, @rate, @changedAt);
 							  """;
-		AddParameter(command, "@nodeId", nodeId.Value);
-		AddParameter(command, "@userId", userId.Value);
-		AddParameter(command, "@effectiveStart", EncodeInstant(DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture)));
-		AddParameter(command, "@rate", OverrideHourlyRate);
-		AddParameter(command, "@changedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@nodeId", nodeId.Value);
+		command.AddParameter("@userId", userId.Value);
+		command.AddParameter("@effectiveStart", EncodeInstant(DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture)));
+		command.AddParameter("@rate", OverrideHourlyRate);
+		command.AddParameter("@changedAt", EncodeInstant(DateTimeOffset.UtcNow));
 
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task<long> CountRowsForNodeAsync(string tableName, string nodeColumnName, JobNodeId nodeId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = $"SELECT COUNT(*) FROM {tableName} WHERE {nodeColumnName} = @nodeId;";
-		AddParameter(command, "@nodeId", nodeId.Value);
+		command.AddParameter("@nodeId", nodeId.Value);
 
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
@@ -2573,7 +2569,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	private async Task<WorkSessionId> SeedWorkSessionAsync(
 		JobNodeId leafNodeId, AppUserId workedByUserId, DateTimeOffset startedAt, DateTimeOffset finishedAt)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
@@ -2581,11 +2577,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 							  VALUES (@leafWorkId, @workedByUserId, @startedAt, @finishedAt, @changedAt)
 							  RETURNING id;
 							  """;
-		AddParameter(command, "@leafWorkId", leafNodeId.Value);
-		AddParameter(command, "@workedByUserId", workedByUserId.Value);
-		AddParameter(command, "@startedAt", EncodeInstant(startedAt));
-		AddParameter(command, "@finishedAt", EncodeInstant(finishedAt));
-		AddParameter(command, "@changedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@leafWorkId", leafNodeId.Value);
+		command.AddParameter("@workedByUserId", workedByUserId.Value);
+		command.AddParameter("@startedAt", EncodeInstant(startedAt));
+		command.AddParameter("@finishedAt", EncodeInstant(finishedAt));
+		command.AddParameter("@changedAt", EncodeInstant(DateTimeOffset.UtcNow));
 
 		return new(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
@@ -2599,11 +2595,11 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 	private async Task<(long WorkedByUserId, object StartedAt, object? FinishedAt)> ReadWorkSessionPreservedFieldsAsync(
 		WorkSessionId sessionId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT worked_by_user_id, started_at, finished_at FROM work_session WHERE id = @sessionId;";
-		AddParameter(command, "@sessionId", sessionId.Value);
+		command.AddParameter("@sessionId", sessionId.Value);
 
 		await using var reader = await command.ExecuteReaderAsync();
 		_ = await reader.ReadAsync();
@@ -2612,7 +2608,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task<(JobNodeId LeafWorkId, string? FullCriteria)> ReadWorkSessionLeafWorkAsync(WorkSessionId sessionId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
@@ -2621,7 +2617,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 							  JOIN leaf_work lw ON lw.job_node_id = ws.leaf_work_id
 							  WHERE ws.id = @sessionId;
 							  """;
-		AddParameter(command, "@sessionId", sessionId.Value);
+		command.AddParameter("@sessionId", sessionId.Value);
 
 		await using var reader = await command.ExecuteReaderAsync();
 		_ = await reader.ReadAsync();
@@ -2630,42 +2626,20 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		return (leafWorkId, fullCriteria);
 	}
 
-	private static async Task AssignRoleAsync(DbConnection connection, AppUserId appUserId, EmployeeRole role)
-	{
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-	}
+
 
 	private async Task SetActorAccountStateAsync(AppUserId appUserId, bool isEnabled, DateTimeOffset? lockoutEnd)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "UPDATE identity_user SET is_enabled = @isEnabled, lockout_end = @lockoutEnd WHERE app_user_id = @appUserId;";
-		AddParameter(command, "@isEnabled", isEnabled);
-		AddParameter(command, "@lockoutEnd", lockoutEnd is null ? DBNull.Value : EncodeInstant(lockoutEnd.Value));
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@isEnabled", isEnabled);
+		command.AddParameter("@lockoutEnd", lockoutEnd is null ? DBNull.Value : EncodeInstant(lockoutEnd.Value));
+		command.AddParameter("@appUserId", appUserId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 }

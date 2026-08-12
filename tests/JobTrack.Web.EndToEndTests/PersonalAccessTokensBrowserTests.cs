@@ -35,7 +35,7 @@ public abstract class PersonalAccessTokensBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await IssueTokenAsync(page, "Nightly export job");
 
 		(await page.Locator(".alert-warning").IsVisibleAsync()).Should().BeTrue(
@@ -61,7 +61,7 @@ public abstract class PersonalAccessTokensBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await IssueTokenAsync(page, "Nightly export job");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -87,14 +87,7 @@ public abstract class PersonalAccessTokensBrowserTestsBase
 		await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class SqlitePersonalAccessTokensBrowserTests : PersonalAccessTokensBrowserTestsBase, IClassFixture<SqliteBrowserFixture>

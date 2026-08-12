@@ -327,8 +327,8 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		});
 		var issueResponse = await clientA.SendAsync(issueRequest);
 		issueResponse.StatusCode.Should().Be(HttpStatusCode.Redirect, "PRG: a successful issuance never renders the token directly");
-		var deliveryCookie = ExtractCookiePair(
-			FindSetCookie(issueResponse, "JobTrack.PendingPat") ?? throw new InvalidOperationException("No pending-PAT delivery cookie was set."));
+		var deliveryCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(issueResponse, "JobTrack.PendingPat") ?? throw new InvalidOperationException("No pending-PAT delivery cookie was set."));
 
 		using var revealRequest = new HttpRequestMessage(HttpMethod.Get, issueResponse.Headers.Location);
 		revealRequest.Headers.Add("Cookie", $"{authCookieB}; {deliveryCookie}");
@@ -397,7 +397,7 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var response = await client.SendAsync(request);
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-		return ExtractCookiePair(FindSetCookie(response, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
+		return WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(response, "JobTrack.Filters") ?? throw new InvalidOperationException("No session cookie was set."));
 	}
 
 	private static async Task<string> GetAwaitingProgressBodyAsync(HttpClient client, string authCookie, string sessionCookie)
@@ -486,22 +486,22 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	{
 		var response = await client.GetAsync("/Account/Login");
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in login page response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in login page body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private static async Task<string> SignInAsync(HttpClient client, string userName)
 	{
 		var response = await PostLoginAsync(client, userName, KnownPassword);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
+		var authCookie = WebTestHttp.FindSetCookie(response, "Identity.Application") ??
 						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
+		return WebTestHttp.ExtractCookiePair(authCookie);
 	}
 
 	private static async Task<HttpResponseMessage> PostLoginAsync(HttpClient client, string userName, string password)
@@ -541,10 +541,10 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
 
-		var reissued = FindSetCookie(response, "Identity.Application");
-		var refreshedAuthCookie = reissued is not null ? ExtractCookiePair(reissued) : authCookie;
-		var antiforgeryCookie = ExtractCookiePair(
-			FindSetCookie(response, "Antiforgery") ?? throw new InvalidOperationException("No antiforgery cookie in the enrolment page response."));
+		var reissued = WebTestHttp.FindSetCookie(response, "Identity.Application");
+		var refreshedAuthCookie = reissued is not null ? WebTestHttp.ExtractCookiePair(reissued) : authCookie;
+		var antiforgeryCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(response, "Antiforgery") ?? throw new InvalidOperationException("No antiforgery cookie in the enrolment page response."));
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } tokenMatch
 			? tokenMatch.Groups["token"].Value
 			: throw new InvalidOperationException("No antiforgery token in the enrolment page body.");
@@ -577,13 +577,13 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException($"No antiforgery cookie in {path} response.");
 		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
 			? match.Groups["token"].Value
 			: throw new InvalidOperationException($"No antiforgery token in {path} body.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
 
 	private static async Task<(string CookieHeader, string Token)> GetAntiforgeryTokenAsync(HttpClient client, string authCookie)
@@ -592,20 +592,13 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 		request.Headers.Add("Cookie", authCookie);
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.FindSetCookie(response, "Antiforgery") ??
 								throw new InvalidOperationException("No antiforgery cookie in token response.");
 		var token = JsonDocument.Parse(body).RootElement.GetProperty("token").GetString()
 					?? throw new InvalidOperationException("No antiforgery token in token response.");
 
-		return (ExtractCookiePair(antiforgeryCookie), token);
+		return (WebTestHttp.ExtractCookiePair(antiforgeryCookie), token);
 	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	private static string GenerateTotpCode(string base32Secret, DateTimeOffset timestamp)
 	{

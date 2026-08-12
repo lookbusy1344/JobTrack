@@ -32,7 +32,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
@@ -55,11 +55,11 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		var appUserId = await SeedUserAsync("ada", KnownPassword, false);
 
-		var response = await PostLoginAsync("ada", KnownPassword);
+		var response = await client.PostLoginAsync("ada", KnownPassword);
 		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var authCookie = FindSetCookie(response, "Identity.Application");
+		var authCookie = WebTestHttp.FindSetCookie(response, "Identity.Application");
 		authCookie.Should().NotBeNull();
 		authCookie.Should().ContainEquivalentOf("secure");
 		authCookie.Should().ContainEquivalentOf("httponly");
@@ -76,8 +76,8 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		var appUserId = await SeedUserAsync("grace", KnownPassword, false);
 
-		var unknownUserResponse = await PostLoginAsync("no-such-user", KnownPassword);
-		var wrongPasswordResponse = await PostLoginAsync("grace", "wrong-password");
+		var unknownUserResponse = await client.PostLoginAsync("no-such-user", KnownPassword);
+		var wrongPasswordResponse = await client.PostLoginAsync("grace", "wrong-password");
 		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
 		var unknownUserAudit = await GetLatestUnknownLoginFailureAuditAsync();
 
@@ -103,7 +103,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		var collidingActorId = await SeedAppUserOnlyAsync("JobTrack authentication audit");
 
-		_ = await PostLoginAsync("no-such-user", KnownPassword);
+		_ = await client.PostLoginAsync("no-such-user", KnownPassword);
 		var (actorUserId, entityType) = await GetLatestUnknownLoginFailureActorAsync();
 
 		actorUserId.Should().BeNull();
@@ -121,7 +121,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		const int concurrentAttempts = 8;
 
-		var responses = await Task.WhenAll(Enumerable.Range(0, concurrentAttempts).Select(_ => PostLoginAsync("no-such-user", KnownPassword)));
+		var responses = await Task.WhenAll(Enumerable.Range(0, concurrentAttempts).Select(_ => client.PostLoginAsync("no-such-user", KnownPassword)));
 
 		responses.Should().OnlyContain(response => response.StatusCode == HttpStatusCode.OK);
 		(await CountUnknownLoginFailuresWithNullActorAsync()).Should().Be(concurrentAttempts);
@@ -133,10 +133,10 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		var appUserId = await SeedUserAsync("katherine", KnownPassword, false);
 
 		for (var attempt = 0; attempt < MaxFailedAccessAttempts; ++attempt) {
-			_ = await PostLoginAsync("katherine", "wrong-password");
+			_ = await client.PostLoginAsync("katherine", "wrong-password");
 		}
 
-		var lockedOutAttempt = await PostLoginAsync("katherine", KnownPassword);
+		var lockedOutAttempt = await client.PostLoginAsync("katherine", KnownPassword);
 		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
 
 		lockedOutAttempt.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -149,7 +149,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	public async Task Posting_the_login_form_without_the_antiforgery_token_is_rejected()
 	{
 		await SeedUserAsync("margaret", KnownPassword, false);
-		var (antiforgeryCookie, _) = await GetLoginFormAsync();
+		var (antiforgeryCookie, _) = await client.GetLoginFormAsync();
 
 		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
 		request.Headers.Add("Cookie", antiforgeryCookie);
@@ -165,14 +165,14 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		// so no authentication cookie is issued for a forged (tokenless) login POST.
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
-		FindSetCookie(response, "Identity.Application").Should().BeNull();
+		WebTestHttp.FindSetCookie(response, "Identity.Application").Should().BeNull();
 	}
 
 	[Fact]
 	public async Task A_stale_antiforgery_token_redirects_to_a_fresh_login_form_showing_a_retry_notice()
 	{
 		await SeedUserAsync("dorothy", KnownPassword, false);
-		var (antiforgeryCookie, _) = await GetLoginFormAsync();
+		var (antiforgeryCookie, _) = await client.GetLoginFormAsync();
 
 		// A valid antiforgery cookie paired with a garbage request token fails validation exactly as a
 		// key rotated by a scale-to-zero cold start would -- the real-world trigger this fix targets.
@@ -187,7 +187,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 
 		postResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		postResponse.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
-		var tempDataCookie = ExtractCookiePair(FindSetCookie(postResponse, "TempData")
+		var tempDataCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(postResponse, "TempData")
 											   ?? throw new InvalidOperationException("No TempData cookie carrying the retry notice."));
 
 		using var followRequest = new HttpRequestMessage(HttpMethod.Get, postResponse.Headers.Location!.OriginalString);
@@ -204,7 +204,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		await SeedUserAsync("margaret-hamilton", KnownPassword, true);
 
-		var response = await PostLoginAsync("margaret-hamilton", KnownPassword);
+		var response = await client.PostLoginAsync("margaret-hamilton", KnownPassword);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location.Should().NotBeNull();
@@ -216,8 +216,8 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	{
 		await SeedUserAsync("rita.requester", KnownPassword, true, EmployeeRole.Requester);
 
-		var response = await PostLoginAsync("rita.requester", KnownPassword);
-		var authCookie = ExtractCookiePair(FindSetCookie(response, "Identity.Application")!);
+		var response = await client.PostLoginAsync("rita.requester", KnownPassword);
+		var authCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(response, "Identity.Application")!);
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/ChangePassword");
 		request.Headers.Add("Cookie", authCookie);
@@ -230,8 +230,8 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	public async Task Requesting_the_login_page_while_already_authenticated_redirects_into_the_app()
 	{
 		await SeedUserAsync("linus", KnownPassword, false);
-		var loginResponse = await PostLoginAsync("linus", KnownPassword);
-		var authCookie = ExtractCookiePair(FindSetCookie(loginResponse, "Identity.Application")!);
+		var loginResponse = await client.PostLoginAsync("linus", KnownPassword);
+		var authCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(loginResponse, "Identity.Application")!);
 
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/Login");
 		request.Headers.Add("Cookie", authCookie);
@@ -296,8 +296,8 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 	public async Task Signing_out_clears_the_authentication_cookie()
 	{
 		var appUserId = await SeedUserAsync("hopper", KnownPassword, false);
-		var loginResponse = await PostLoginAsync("hopper", KnownPassword);
-		var authCookie = ExtractCookiePair(FindSetCookie(loginResponse, "Identity.Application")!);
+		var loginResponse = await client.PostLoginAsync("hopper", KnownPassword);
+		var authCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(loginResponse, "Identity.Application")!);
 
 		// The antiforgery token embeds the caller's authentication state at issuance time (session-
 		// fixation protection) — fetch it with the auth cookie attached so it matches the POST below.
@@ -305,7 +305,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		getLogoutRequest.Headers.Add("Cookie", authCookie);
 		var getLogoutResponse = await client.SendAsync(getLogoutRequest);
 		var logoutBody = await getLogoutResponse.Content.ReadAsStringAsync();
-		var antiforgeryCookie = ExtractCookiePair(FindSetCookie(getLogoutResponse, "Antiforgery") ??
+		var antiforgeryCookie = WebTestHttp.ExtractCookiePair(WebTestHttp.FindSetCookie(getLogoutResponse, "Antiforgery") ??
 												  throw new InvalidOperationException("No antiforgery cookie in logout page response."));
 		var token = AntiforgeryTokenPattern().Match(logoutBody) is { Success: true } match
 			? match.Groups["token"].Value
@@ -319,7 +319,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
-		var clearedCookie = FindSetCookie(response, "Identity.Application");
+		var clearedCookie = WebTestHttp.FindSetCookie(response, "Identity.Application");
 		clearedCookie.Should().NotBeNull();
 		clearedCookie.Should().Contain("01 Jan 1970");
 		auditOperation.Should().Be("authentication.logout");
@@ -417,41 +417,6 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		var response = await cookieClient.SendAsync(request);
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 	}
-
-	private async Task<HttpResponseMessage> PostLoginAsync(string userName, string password)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
-
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = password,
-			["__RequestVerificationToken"] = token,
-		});
-
-		return await client.SendAsync(request);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	private static string ExtractGenericFailureMessage(string html) =>
 		FailureMessagePattern().Match(html) is { Success: true } match ? match.Groups["message"].Value : string.Empty;
@@ -596,31 +561,6 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		return new(appUserId);
 	}
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			// Program.cs reads Database:Provider/ConnectionStrings:JobTrackIdentity from
-			// WebApplicationBuilder.Configuration before Build() runs — UseSetting applies early
-			// enough for that read; ConfigureAppConfiguration (applied during Build()) is too late.
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

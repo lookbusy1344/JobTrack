@@ -69,7 +69,7 @@ public sealed class DetailsModel(
 			return await LoadAsync(id, cancellationToken);
 		}
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -96,7 +96,7 @@ public sealed class DetailsModel(
 	{
 		CanAcknowledge = IsStaff();
 
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -124,7 +124,7 @@ public sealed class DetailsModel(
 
 	private async Task<IActionResult> LoadAsync(long id, CancellationToken cancellationToken)
 	{
-		var actor = await ResolveActorAsync();
+		var actor = await userManager.GetAppUserIdAsync(User);
 		if (actor is null) {
 			return Challenge();
 		}
@@ -182,12 +182,6 @@ public sealed class DetailsModel(
 
 	private bool IsStaff() =>
 		User.IsInRole(EmployeeRoleNames.Administrator) || User.IsInRole(EmployeeRoleNames.JobManager) || User.IsInRole(EmployeeRoleNames.Worker);
-
-	private async Task<AppUserId?> ResolveActorAsync()
-	{
-		var actor = await userManager.GetUserAsync(User);
-		return actor?.AppUserId;
-	}
 
 	public sealed class AddNoteInput
 	{

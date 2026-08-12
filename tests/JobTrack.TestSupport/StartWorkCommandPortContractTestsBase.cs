@@ -81,7 +81,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Starting_work_when_already_in_progress_from_another_workers_session_starts_a_new_session()
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startwork", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.startwork", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 		_ = await port.StartWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leafId, WorkedByUserId = workerId });
 
@@ -137,7 +137,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_worker_cannot_start_work_for_another_worker()
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startwork.auth", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.startwork.auth", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var act = () => port.StartWorkAsync(new() { Context = ContextFor(otherWorkerId), JobNodeId = leafId, WorkedByUserId = workerId });
@@ -218,7 +218,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task An_administrator_can_start_work_for_another_worker_regardless_of_ownership()
 	{
 		var (_, jobManagerId, workerId, leafId) = await SeedReadyLeafAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.admin", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.startfor.admin", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		// jobManagerId is the bootstrap administrator (also separately granted JobManager) and owns
@@ -232,7 +232,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_job_manager_who_is_not_administrator_can_start_work_for_another_worker()
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
-		var jobManagerOnlyId = await SeedEmployeeAsync("Plain Manager", "plain.manager.startfor", EmployeeRole.JobManager);
+		var jobManagerOnlyId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Plain Manager", "plain.manager.startfor", EmployeeRole.JobManager);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var result = await port.StartWorkAsync(new() { Context = ContextFor(jobManagerOnlyId), JobNodeId = leafId, WorkedByUserId = workerId });
@@ -244,7 +244,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_direct_owner_can_start_work_for_another_worker_on_their_own_leaf()
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.owner", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.startfor.owner", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		// workerId owns leafId (SeedReadyLeafAsync), so they control it despite not being the target.
@@ -273,7 +273,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 			Priority = Priority.Medium,
 		});
 		_ = await jobNodePort.AttachLeafWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = descendantLeaf.Id });
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.ancestor", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.startfor.ancestor", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		// branchOwnerId owns the branch, not the leaf itself, so this exercises the ancestor-owner walk.
@@ -287,8 +287,8 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_non_controlling_worker_cannot_start_work_for_another_worker()
 	{
 		var (_, _, _, leafId) = await SeedReadyLeafAsync();
-		var bystanderId = await SeedEmployeeAsync("Bystander", "bystander.startfor", EmployeeRole.Worker);
-		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "other.worker.startfor.bystander", EmployeeRole.Worker);
+		var bystanderId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Bystander", "bystander.startfor", EmployeeRole.Worker);
+		var otherWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Other Worker", "other.worker.startfor.bystander", EmployeeRole.Worker);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var act = () => port.StartWorkAsync(new() { Context = ContextFor(bystanderId), JobNodeId = leafId, WorkedByUserId = otherWorkerId });
@@ -300,7 +300,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task A_read_only_operational_role_cannot_start_work_for_another_worker()
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
-		var costViewerId = await SeedEmployeeAsync("Cost Viewer", "cost.viewer.startfor", EmployeeRole.CostViewer);
+		var costViewerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Cost Viewer", "cost.viewer.startfor", EmployeeRole.CostViewer);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var act = () => port.StartWorkAsync(new() { Context = ContextFor(costViewerId), JobNodeId = leafId, WorkedByUserId = workerId });
@@ -312,7 +312,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Starting_work_for_a_disabled_target_worker_throws_an_invariant_violation()
 	{
 		var (_, jobManagerId, _, leafId) = await SeedReadyLeafAsync();
-		var disabledWorkerId = await SeedEmployeeAsync("Disabled Worker", "disabled.worker.startfor", EmployeeRole.Worker);
+		var disabledWorkerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Disabled Worker", "disabled.worker.startfor", EmployeeRole.Worker);
 		await SetEnabledAsync(disabledWorkerId, false);
 		var port = CreateSessionPort(database.ConnectionString);
 
@@ -326,7 +326,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Starting_work_for_a_target_with_no_eligible_workflow_role_throws_an_invariant_violation()
 	{
 		var (_, jobManagerId, _, leafId) = await SeedReadyLeafAsync();
-		var requesterId = await SeedEmployeeAsync("Requester Only", "requester.only.startfor", EmployeeRole.Requester);
+		var requesterId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Requester Only", "requester.only.startfor", EmployeeRole.Requester);
 		var port = CreateSessionPort(database.ConnectionString);
 
 		var act = () => port.StartWorkAsync(new() { Context = ContextFor(jobManagerId), JobNodeId = leafId, WorkedByUserId = requesterId });
@@ -339,9 +339,9 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 	public async Task Starting_work_for_a_target_who_also_has_the_requester_role_throws_an_invariant_violation()
 	{
 		var (_, jobManagerId, _, leafId) = await SeedReadyLeafAsync();
-		var requesterId = await SeedEmployeeAsync("Requesting Worker", "requesting.worker.startfor", EmployeeRole.Worker);
-		await using (var connection = await OpenExistingConnectionAsync()) {
-			await AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
+		var requesterId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Requesting Worker", "requesting.worker.startfor", EmployeeRole.Worker);
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
+			await DatabaseContractTestSupport.AssignRoleAsync(connection, requesterId, EmployeeRole.Requester);
 		}
 
 		var port = CreateSessionPort(database.ConnectionString);
@@ -354,11 +354,11 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task SetEnabledAsync(AppUserId appUserId, bool isEnabled)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
-		AddParameter(command, "@isEnabled", isEnabled);
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@isEnabled", isEnabled);
+		command.AddParameter("@appUserId", appUserId.Value);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
@@ -425,7 +425,7 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task<(JobNodeId RootId, AppUserId JobManagerId, AppUserId WorkerId)> SeedTreeAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -440,77 +440,20 @@ public abstract class StartWorkCommandPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		await using (var connection = await OpenExistingConnectionAsync()) {
-			await AssignRoleAsync(connection, result.AdministratorId, EmployeeRole.JobManager);
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
+			await DatabaseContractTestSupport.AssignRoleAsync(connection, result.AdministratorId, EmployeeRole.JobManager);
 		}
 
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper.startwork", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper.startwork", EmployeeRole.Worker);
 
 		return (result.RootJobNodeId, result.AdministratorId, workerId);
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
-	{
-		await using var connection = await OpenExistingConnectionAsync();
 
-		await using var appUserCommand = connection.CreateCommand();
-		appUserCommand.CommandText = """
-									 INSERT INTO app_user (display_name, iana_time_zone)
-									 VALUES (@displayName, 'Europe/London')
-									 RETURNING id;
-									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
-		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 
-		await using var identityUserCommand = connection.CreateCommand();
-		identityUserCommand.CommandText = """
-										  INSERT INTO identity_user
-										  	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										  	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										  VALUES
-										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-										  	 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
-		_ = await identityUserCommand.ExecuteNonQueryAsync();
 
-		await AssignRoleAsync(connection, appUserId, role);
 
-		return appUserId;
-	}
 
-	private static async Task AssignRoleAsync(DbConnection connection, AppUserId appUserId, EmployeeRole role)
-	{
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
 }

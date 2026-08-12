@@ -624,7 +624,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<(AppUserId AdministratorId, AppUserId WorkerId)> SeedAdministratorAndWorkerAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -640,7 +640,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper.employee-roles", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper.employee-roles", EmployeeRole.Worker);
 
 		return (result.AdministratorId, workerId);
 	}
@@ -651,7 +651,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task<(AppUserId AdministratorId, AppUserId WorkerId, JobNodeId RootId)> SeedAdministratorAndWorkerWithRootAsync()
 	{
-		await using (var connection = await OpenExistingConnectionAsync()) {
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
@@ -667,109 +667,67 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 			SecurityStamp = Guid.NewGuid().ToString("N"),
 		});
 
-		var workerId = await SeedEmployeeAsync("Grace Hopper", "grace.hopper.home-node", EmployeeRole.Worker);
+		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper.home-node", EmployeeRole.Worker);
 
 		return (result.AdministratorId, workerId, result.RootJobNodeId);
 	}
 
 	private async Task<JobNodeId> SeedJobNodeAsync(JobNodeId parentId, AppUserId postedByUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  INSERT INTO job_node (parent_id, description, posted_by_user_id, owner_user_id, priority_id, posted_at)
 							  VALUES (@parentId, 'Home node test node', @postedByUserId, @postedByUserId, @priorityId, @postedAt)
 							  RETURNING id;
 							  """;
-		AddParameter(command, "@parentId", parentId.Value);
-		AddParameter(command, "@postedByUserId", postedByUserId.Value);
-		AddParameter(command, "@priorityId", PriorityMedium);
-		AddParameter(command, "@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@parentId", parentId.Value);
+		command.AddParameter("@postedByUserId", postedByUserId.Value);
+		command.AddParameter("@priorityId", PriorityMedium);
+		command.AddParameter("@postedAt", EncodeInstant(DateTimeOffset.UtcNow));
 
 		return new(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
 	}
 
 	private async Task<long?> GetHomeNodeIdAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT home_node_id FROM app_user WHERE id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		var value = await command.ExecuteScalarAsync();
 		return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 	}
 
-	private async Task<AppUserId> SeedEmployeeAsync(string displayName, string userName, EmployeeRole role)
-	{
-		await using var connection = await OpenExistingConnectionAsync();
 
-		await using var appUserCommand = connection.CreateCommand();
-		appUserCommand.CommandText = """
-									 INSERT INTO app_user (display_name, iana_time_zone)
-									 VALUES (@displayName, 'Europe/London')
-									 RETURNING id;
-									 """;
-		AddParameter(appUserCommand, "@displayName", displayName);
-		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
-
-		await using var identityUserCommand = connection.CreateCommand();
-		identityUserCommand.CommandText = """
-										  INSERT INTO identity_user
-										  	(app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
-										  	 concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
-										  VALUES
-										  	(@appUserId, @userName, @normalizedUserName, 'test-hash', @securityStamp,
-										  	 @concurrencyStamp, @requiresPasswordChange, @isEnabled, @lockoutEnabled, 0);
-										  """;
-		AddParameter(identityUserCommand, "@appUserId", appUserId.Value);
-		AddParameter(identityUserCommand, "@userName", userName);
-		AddParameter(identityUserCommand, "@normalizedUserName", userName.ToUpperInvariant());
-		AddParameter(identityUserCommand, "@securityStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@concurrencyStamp", Guid.NewGuid().ToString("N"));
-		AddParameter(identityUserCommand, "@requiresPasswordChange", false);
-		AddParameter(identityUserCommand, "@isEnabled", true);
-		AddParameter(identityUserCommand, "@lockoutEnabled", true);
-		_ = await identityUserCommand.ExecuteNonQueryAsync();
-
-		await using var roleCommand = connection.CreateCommand();
-		roleCommand.CommandText = """
-								  INSERT INTO identity_user_role (identity_user_id, identity_role_id)
-								  SELECT id, @roleId FROM identity_user WHERE app_user_id = @appUserId;
-								  """;
-		AddParameter(roleCommand, "@appUserId", appUserId.Value);
-		AddParameter(roleCommand, "@roleId", (short)role);
-		_ = await roleCommand.ExecuteNonQueryAsync();
-
-		return appUserId;
-	}
 
 	private async Task<string> GetUserNameAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT user_name FROM identity_user WHERE app_user_id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		return (string)(await command.ExecuteScalarAsync())!;
 	}
 
 	private async Task<string> GetIanaTimeZoneAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT iana_time_zone FROM app_user WHERE id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		return (string)(await command.ExecuteScalarAsync())!;
 	}
 
 	private async Task<decimal> GetDefaultHourlyRateAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT default_hourly_rate FROM app_user WHERE id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		var value = await command.ExecuteScalarAsync();
 		return value switch {
@@ -781,7 +739,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task<ScheduleSummary> GetOnlyScheduleAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = """
 							  SELECT sv.effective_start, sv.effective_end, sv.iana_time_zone,
@@ -791,7 +749,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 							  WHERE sv.user_id = @appUserId
 							  ORDER BY si.day_of_week;
 							  """;
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		await using var reader = await command.ExecuteReaderAsync();
 		var intervals = new List<ScheduleIntervalSummary>();
@@ -836,10 +794,10 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 
 	private async Task<string> GetSecurityStampAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText = "SELECT security_stamp FROM identity_user WHERE app_user_id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		return (string)(await command.ExecuteScalarAsync())!;
 	}
@@ -850,24 +808,24 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 	/// </summary>
 	private async Task SeedTwoFactorEnabledAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText =
 			"UPDATE identity_user SET two_factor_enabled = @enabled, authenticator_key_protected = @key WHERE app_user_id = @appUserId;";
-		AddParameter(command, "@enabled", true);
-		AddParameter(command, "@key", new byte[] { 1, 2, 3 });
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@enabled", true);
+		command.AddParameter("@key", new byte[] { 1, 2, 3 });
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task<(bool Enabled, byte[]? KeyProtected)> GetTwoFactorStateAsync(AppUserId appUserId)
 	{
-		await using var connection = await OpenExistingConnectionAsync();
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
 		command.CommandText =
 			"SELECT two_factor_enabled, authenticator_key_protected FROM identity_user WHERE app_user_id = @appUserId;";
-		AddParameter(command, "@appUserId", appUserId.Value);
+		command.AddParameter("@appUserId", appUserId.Value);
 
 		await using var reader = await command.ExecuteReaderAsync();
 		_ = await reader.ReadAsync();
@@ -877,21 +835,9 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		return (enabled, keyProtected);
 	}
 
-	private async Task<DbConnection> OpenExistingConnectionAsync()
-	{
-		var connection = CreateConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await PrepareConnectionAsync(connection);
-		return connection;
-	}
 
-	private static void AddParameter(DbCommand command, string name, object value)
-	{
-		var parameter = command.CreateParameter();
-		parameter.ParameterName = name;
-		parameter.Value = value;
-		command.Parameters.Add(parameter);
-	}
+
+
 
 	private sealed class ScheduleSummary(
 		string effectiveStart,

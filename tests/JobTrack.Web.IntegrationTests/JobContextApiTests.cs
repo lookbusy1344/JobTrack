@@ -41,7 +41,7 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 	public async Task InitializeAsync()
 	{
 		await database.InitializeAsync();
-		await DeploySchemaAsync();
+		await SqliteSchemaTestSupport.DeployAsync(database.ConnectionString, ApplicationVersion, AppliedBy);
 
 		seedClient = JobTrackSqlite.Create(database.ConnectionString);
 		var bootstrap = await seedClient.Installation.BootstrapAdministratorAsync(new() {
@@ -74,9 +74,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_with_a_forced_password_change_cannot_use_the_api_until_the_password_is_changed()
 	{
 		_ = await SeedEmployeeAsync("jobs.root.worker", true);
-		var authCookie = await SignInAsync("jobs.root.worker");
+		var authCookie = await client.SignInAsync("jobs.root.worker");
 
-		var response = await GetAsync("/api/jobs/root", authCookie);
+		var response = await client.GetAuthenticatedAsync("/api/jobs/root", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -89,9 +89,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 	public async Task A_worker_can_get_the_root_job_node_via_the_api()
 	{
 		var workerId = await SeedEmployeeAsync("jobs.root.worker");
-		var authCookie = await SignInAsync("jobs.root.worker");
+		var authCookie = await client.SignInAsync("jobs.root.worker");
 
-		var response = await GetAsync("/api/jobs/root", authCookie);
+		var response = await client.GetAuthenticatedAsync("/api/jobs/root", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -105,9 +105,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		var workerId = await SeedEmployeeAsync("jobs.detail.worker");
 		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation");
 		var leafId = await AddChildAsync(branchId, workerId, "Fit cabinets");
-		var authCookie = await SignInAsync("jobs.detail.worker");
+		var authCookie = await client.SignInAsync("jobs.detail.worker");
 
-		var response = await GetAsync($"/api/jobs/{leafId.Value}", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{leafId.Value}", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -122,9 +122,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 	public async Task Getting_a_nonexistent_node_returns_problem_details_not_found()
 	{
 		var workerId = await SeedEmployeeAsync("jobs.detail.missing");
-		var authCookie = await SignInAsync("jobs.detail.missing");
+		var authCookie = await client.SignInAsync("jobs.detail.missing");
 
-		var response = await GetAsync("/api/jobs/999999999", authCookie);
+		var response = await client.GetAuthenticatedAsync("/api/jobs/999999999", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 		var jsonDocument = JsonDocument.Parse(body);
 
@@ -141,13 +141,13 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		var workerId = await SeedEmployeeAsync("jobs.children.archive");
 		var branchId = await AddChildAsync(rootId, workerId, "Decommissioned wing");
 		await ArchiveAsync(branchId);
-		var authCookie = await SignInAsync("jobs.children.archive");
+		var authCookie = await client.SignInAsync("jobs.children.archive");
 
-		var activeOnlyResponse = await GetAsync($"/api/jobs/{rootId.Value}/children", authCookie);
+		var activeOnlyResponse = await client.GetAuthenticatedAsync($"/api/jobs/{rootId.Value}/children", authCookie);
 		var activeOnlyBody = await activeOnlyResponse.Content.ReadAsStringAsync();
 		activeOnlyBody.Should().NotContain("Decommissioned wing");
 
-		var allResponse = await GetAsync($"/api/jobs/{rootId.Value}/children?archiveFilter=All", authCookie);
+		var allResponse = await client.GetAuthenticatedAsync($"/api/jobs/{rootId.Value}/children?archiveFilter=All", authCookie);
 		var allBody = await allResponse.Content.ReadAsStringAsync();
 		allBody.Should().Contain("Decommissioned wing");
 	}
@@ -158,9 +158,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		var workerId = await SeedEmployeeAsync("jobs.search.worker");
 		var branchId = await AddChildAsync(rootId, workerId, "Kitchen renovation");
 		_ = await AddChildAsync(branchId, workerId, "Fit oak cabinets");
-		var authCookie = await SignInAsync("jobs.search.worker");
+		var authCookie = await client.SignInAsync("jobs.search.worker");
 
-		var response = await GetAsync("/api/jobs/search?searchText=oak", authCookie);
+		var response = await client.GetAuthenticatedAsync("/api/jobs/search?searchText=oak", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -178,11 +178,11 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		_ = await AddChildAsync(branchId, workerId, "Leaf 1");
 		_ = await AddChildAsync(branchId, workerId, "Leaf 2");
 		_ = await AddChildAsync(branchId, workerId, "Leaf 3");
-		var authCookie = await SignInAsync("jobs.children.paging");
+		var authCookie = await client.SignInAsync("jobs.children.paging");
 
-		var firstPage = await GetAsync($"/api/jobs/{branchId.Value}/children?pageSize=2", authCookie);
+		var firstPage = await client.GetAuthenticatedAsync($"/api/jobs/{branchId.Value}/children?pageSize=2", authCookie);
 		var firstDocument = JsonDocument.Parse(await firstPage.Content.ReadAsStringAsync());
-		var secondPage = await GetAsync($"/api/jobs/{branchId.Value}/children?offset=2&pageSize=2", authCookie);
+		var secondPage = await client.GetAuthenticatedAsync($"/api/jobs/{branchId.Value}/children?offset=2&pageSize=2", authCookie);
 		var secondDocument = JsonDocument.Parse(await secondPage.Content.ReadAsStringAsync());
 
 		firstDocument.RootElement.GetProperty("items").GetArrayLength().Should().Be(2);
@@ -198,9 +198,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		var workerId = await SeedEmployeeAsync("jobs.children.clamp");
 		var branchId = await AddChildAsync(rootId, workerId, "Clamp branch");
 		_ = await AddChildAsync(branchId, workerId, "Leaf 1");
-		var authCookie = await SignInAsync("jobs.children.clamp");
+		var authCookie = await client.SignInAsync("jobs.children.clamp");
 
-		var response = await GetAsync($"/api/jobs/{branchId.Value}/children?pageSize=100000", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{branchId.Value}/children?pageSize=100000", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -211,9 +211,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 	public async Task Getting_children_with_a_negative_offset_returns_a_validation_problem()
 	{
 		var workerId = await SeedEmployeeAsync("jobs.children.negative-offset");
-		var authCookie = await SignInAsync("jobs.children.negative-offset");
+		var authCookie = await client.SignInAsync("jobs.children.negative-offset");
 
-		var response = await GetAsync($"/api/jobs/{rootId.Value}/children?offset=-1", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{rootId.Value}/children?offset=-1", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 		var jsonDocument = JsonDocument.Parse(body);
 
@@ -232,9 +232,9 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		var requiredLeafId = await AddChildAsync(rootId, workerId, "Pour foundation");
 		var dependentLeafId = await AddChildAsync(rootId, workerId, "Frame walls");
 		await AddPrerequisiteAsync(requiredLeafId, dependentLeafId);
-		var authCookie = await SignInAsync("jobs.readiness.worker");
+		var authCookie = await client.SignInAsync("jobs.readiness.worker");
 
-		var response = await GetAsync($"/api/jobs/{dependentLeafId.Value}/readiness", authCookie);
+		var response = await client.GetAuthenticatedAsync($"/api/jobs/{dependentLeafId.Value}/readiness", authCookie);
 		var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -304,12 +304,7 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 			DependentJobId = dependentJobId,
 		});
 
-	private async Task<HttpResponseMessage> GetAsync(string path, string authCookie)
-	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, path);
-		request.Headers.Add("Cookie", authCookie);
-		return await client.SendAsync(request);
-	}
+
 
 	private async Task<HttpResponseMessage> GetWithBearerAsync(string path, string token)
 	{
@@ -367,70 +362,13 @@ public sealed partial class JobContextApiTests : IAsyncLifetime, IDisposable
 		return new(appUserId);
 	}
 
-	private async Task<string> SignInAsync(string userName)
-	{
-		var (antiforgeryCookie, token) = await GetLoginFormAsync();
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
-		request.Headers.Add("Cookie", antiforgeryCookie);
-		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
-			["Input.UserName"] = userName,
-			["Input.Password"] = KnownPassword,
-			["__RequestVerificationToken"] = token,
-		});
 
-		var response = await client.SendAsync(request);
-		var authCookie = FindSetCookie(response, "Identity.Application") ??
-						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
-		return ExtractCookiePair(authCookie);
-	}
-
-	private async Task<(string CookieHeader, string Token)> GetLoginFormAsync()
-	{
-		var response = await client.GetAsync("/Account/Login");
-		var body = await response.Content.ReadAsStringAsync();
-		var antiforgeryCookie = FindSetCookie(response, "Antiforgery") ??
-								throw new InvalidOperationException("No antiforgery cookie in login page response.");
-		var token = AntiforgeryTokenPattern().Match(body) is { Success: true } match
-			? match.Groups["token"].Value
-			: throw new InvalidOperationException("No antiforgery token in login page body.");
-
-		return (ExtractCookiePair(antiforgeryCookie), token);
-	}
-
-	private static string? FindSetCookie(HttpResponseMessage response, string nameContains) =>
-		response.Headers.TryGetValues("Set-Cookie", out var values)
-			? values.FirstOrDefault(value => value.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-			: null;
-
-	private static string ExtractCookiePair(string setCookieHeader) => setCookieHeader.Split(';')[0];
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
 
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
 
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
-	}
 
-	private sealed class TestWebApplicationFactory(string identityConnectionString) : WebApplicationFactory<Program>
-	{
-		protected override void ConfigureWebHost(IWebHostBuilder builder)
-		{
-			_ = builder.UseEnvironment("Development");
-			_ = builder.UseSetting("Database:Provider", "Sqlite");
-			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
-		}
-	}
 }

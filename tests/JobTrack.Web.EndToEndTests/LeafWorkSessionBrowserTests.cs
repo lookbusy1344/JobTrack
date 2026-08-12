@@ -54,7 +54,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(width, height);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -71,7 +71,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");
@@ -94,7 +94,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(ReflowWidth, ReflowHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		(await page.Locator("table tbody tr").CountAsync()).Should().BeGreaterThan(0,
@@ -115,7 +115,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		var page = await context.NewPageAsync();
 		await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		var mainAnimationName = await page.Locator("main[role=\"main\"]").EvaluateAsync<string>(
@@ -135,7 +135,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.EvaluateAsync("document.body.focus()");
@@ -163,7 +163,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.Locator("#writeUp").FillAsync("Materials delivered; starting install.");
@@ -184,7 +184,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.Locator("#writeUp").FillAsync("Reopened after client follow-up.");
@@ -203,7 +203,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		var disclosure = page.Locator("details.jt-start-for-disclosure");
@@ -225,7 +225,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		(await page.GetByText($"{RequiredSimultaneousWorkerCount} active", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
@@ -234,7 +234,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		}
 
 		(await page.GetByText("more", new() { Exact = false }).CountAsync()).Should().Be(0, "the Sessions summary must not cap its worker list");
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work with three active workers");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work with three active workers");
 	}
 
 	/// <summary>
@@ -255,7 +255,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		var notice = await page.Locator("#status .jt-notice").BoundingBoxAsync();
@@ -277,10 +277,10 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work");
 	}
 
 	[Fact]
@@ -291,11 +291,11 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		(await page.Locator(".status-pill-closed").IsVisibleAsync()).Should().BeTrue();
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for a successful leaf");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for a successful leaf");
 	}
 
 	[Fact]
@@ -306,13 +306,13 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		(await page.GetByText("Archived", new() { Exact = false }).First.IsVisibleAsync()).Should().BeTrue();
 		(await page.Locator("form[action*='handler=ReopenAndStart']").CountAsync()).Should()
 			.Be(0, "an archived leaf cannot start a new session regardless of achievement");
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for an archived terminal leaf");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for an archived terminal leaf");
 	}
 
 	/// <summary>
@@ -329,7 +329,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		var notice = await page.Locator("#status .jt-notice").BoundingBoxAsync();
@@ -363,7 +363,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		(await page.GetByText("Completed.", new() { Exact = false }).IsVisibleAsync()).Should().BeTrue();
 		(await page.Locator("form[action*='handler=ReopenAndStart']").CountAsync()).Should()
 			.Be(0, "a worker with no ownership or management capability must not see a reopen form (rendering hint follows server authorization)");
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for a bystander viewing a terminal leaf");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work for a bystander viewing a terminal leaf");
 	}
 
 	[Fact]
@@ -374,7 +374,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.GetByRole(AriaRole.Button, new() { Name = "Start session", Exact = true }).PressAsync("Enter");
@@ -402,7 +402,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 		await page.GetByText("Job reopened. Session started.", new() { Exact = true }).WaitForAsync();
 		(await page.GetByText("In Progress", new() { Exact = true }).First.IsVisibleAsync()).Should().BeTrue();
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after the complete reopen workflow");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after the complete reopen workflow");
 	}
 
 	[Fact]
@@ -414,7 +414,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		(await page.Locator("div.jt-completion-review").IsVisibleAsync()).Should().BeTrue();
@@ -430,7 +430,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 		(await page.GetByText("Closed", new() { Exact = true }).IsVisibleAsync()).Should().BeTrue();
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker completion");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker completion");
 	}
 
 	[Fact]
@@ -442,7 +442,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Work?LeafNodeId={leafId.Value}");
 
 		await page.Locator("#end-session")
@@ -455,7 +455,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		(await page.GetByText("Paused", new() { Exact = true }).First.IsVisibleAsync()).Should()
 			.BeTrue("no worker is left clocked on, so the leaf reads as paused");
 		(await page.GetByText("Active since", new() { Exact = false }).CountAsync()).Should().Be(0);
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker pause");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/Work after multi-worker pause");
 	}
 
 	[Fact]
@@ -466,23 +466,14 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
-		await SignInAsync(page);
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync(
 			$"{fixture.BaseAddress}/Jobs/CorrectSession?LeafNodeId={leafId.Value}&WorkedByUserId={fixture.AdministratorId.Value}&SessionId={sessionId.Value}");
 
-		AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/CorrectSession");
+		BrowserTestSupport.AssertNoCriticalOrSeriousViolations(await page.RunAxe(), "/Jobs/CorrectSession");
 	}
 
-	private static void AssertNoCriticalOrSeriousViolations(AxeResult results, string pageName)
-	{
-		var criticalOrSerious = results.Violations
-			.Where(violation => violation.Impact is "critical" or "serious")
-			.ToArray();
 
-		criticalOrSerious.Should().BeEmpty(
-			$"{pageName} should have no critical/serious accessibility violations, found: " +
-			string.Join("; ", criticalOrSerious.Select(v => $"{v.Id} ({v.Impact}): {v.Help}")));
-	}
 
 	private static async Task TabToButtonAsync(IPage page, string buttonText, int maxTabs)
 	{
@@ -499,14 +490,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		throw new InvalidOperationException($"Tabbing {maxTabs} times from the page load never reached the '{buttonText}' button.");
 	}
 
-	private async Task SignInAsync(IPage page)
-	{
-		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
-		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
-	}
+
 }
 
 public sealed class SqliteLeafWorkSessionBrowserTests : LeafWorkSessionBrowserTestsBase, IClassFixture<SqliteBrowserFixture>
