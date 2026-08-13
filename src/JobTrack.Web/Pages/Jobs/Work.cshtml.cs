@@ -304,9 +304,8 @@ public sealed class WorkModel(
 	///     from this page's unified ending form, where the write-up shares one form with Pause/Complete/Save
 	///     directly. Every other action on this page (Start, Reopen and start, Change outcome, and the
 	///     icon-only row action in <c>_LeafWorkSessions</c> reused from <c>/Jobs/Browse</c>) carries no
-	///     write-up of its own -- site.js's shared submit listener instead fires a separate SaveWriteUp
-	///     request first when a write-up textarea exists elsewhere on the page, so the edit is still saved,
-	///     just via a distinct request rather than these two fields on this one.
+	///     write-up of its own. The standalone Save write-up action remains an explicit, independent
+	///     decision; browser code must not prepend it as a separate transaction to another command.
 	///     <para>
 	///         Like <see cref="OnPostSaveWriteUpAsync" />, a successful pause returns to <c>/Jobs/Browse</c>
 	///         rooted at this leaf (ADR 0044: a specialist page returns to the workflow centre once its own

@@ -147,13 +147,14 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		certificatePath = null;
 	}
 
-	public Task<IBrowserContext> NewContextAsync(int width, int height) =>
+	public Task<IBrowserContext> NewContextAsync(int width, int height, bool javaScriptEnabled = true) =>
 		Browser.NewContextAsync(new() {
 			ViewportSize = new() {
 				Width = width,
 				Height = height,
 			},
 			IgnoreHTTPSErrors = true,
+			JavaScriptEnabled = javaScriptEnabled,
 		});
 
 	public async Task<JobNodeId> SeedLeafAsync(string description, JobNodeId? parentId = null)

@@ -320,7 +320,69 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
-	public async Task Clearing_the_recently_visited_history_empties_the_list_and_local_storage()
+	public async Task A_new_principal_cannot_see_the_previous_principals_recently_visited_jobs()
+	{
+		var firstLeafId = await fixture.SeedLeafAsync("Previous principal confidential job");
+		var secondLeafId = await fixture.SeedLeafAsync("Previous principal final job");
+		var (_, nextUserName) = await fixture.SeedBystanderWorkerAsync();
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
+		var previousPrincipalLink = $"#jt-history-list a[href='/Jobs/Browse?nodeId={firstLeafId.Value}']";
+		(await page.Locator(previousPrincipalLink).CountAsync()).Should().Be(1);
+
+		// Model expiry/invalidation rather than pressing Logout: cookies disappear, but origin-local
+		// browser storage survives. The next principal must still start with empty history.
+		await context.ClearCookiesAsync();
+		await SignInAsync(page, nextUserName, BrowserFixture.AdministratorPassword);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={fixture.RootJobNodeId.Value}");
+
+		(await page.Locator(previousPrincipalLink).CountAsync()).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Recently_visited_job_descriptions_are_not_persisted_in_local_storage()
+	{
+		var leafId = await fixture.SeedLeafAsync("Description that must stay server-side");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
+
+		var stored = await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')");
+		stored.Should().BeNull("recent history belongs in principal-bound protected state, not origin-global plaintext storage");
+	}
+
+	[Fact]
+	public async Task Recently_visited_history_and_clear_remain_operable_without_JavaScript()
+	{
+		var firstLeafId = await fixture.SeedLeafAsync("No-script first history job");
+		var secondLeafId = await fixture.SeedLeafAsync("No-script second history job");
+
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight, javaScriptEnabled: false);
+		var page = await context.NewPageAsync();
+
+		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
+		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
+		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
+		await page.Locator("#Input_Password").PressAsync("Enter");
+		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={firstLeafId.Value}");
+		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={secondLeafId.Value}");
+
+		(await page.Locator($"#jt-history-list a[href='/Jobs/Browse?nodeId={firstLeafId.Value}']").CountAsync()).Should().Be(1);
+		await page.Locator("#jt-history-clear").PressAsync("Enter");
+		(await page.Locator("#jt-history-list a").CountAsync()).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Clearing_the_recently_visited_history_empties_the_list()
 	{
 		var firstLeafId = await fixture.SeedLeafAsync("First clearable job");
 		var secondLeafId = await fixture.SeedLeafAsync("Second clearable job");
@@ -338,8 +400,6 @@ public abstract class JobBrowseBrowserTestsBase
 
 		(await page.Locator("#jt-history-list a").CountAsync()).Should().Be(0);
 		(await page.Locator(".jt-history-empty").InnerTextAsync()).Should().Be("None yet.");
-		var stored = await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')");
-		stored.Should().BeNullOrEmpty("clearing means clearing -- the current node's own breadcrumb goes too");
 	}
 
 	[Fact]
@@ -378,10 +438,10 @@ public abstract class JobBrowseBrowserTestsBase
 		var page = await context.NewPageAsync();
 
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
-		// Sign-in itself lands on Browse and records that node, so start from a genuinely empty
-		// history rather than from whatever the sign-in redirect happened to leave behind.
+		// Sign-in itself lands on Browse and records that node, so clear the principal-bound history
+		// before checking the current-node-only state.
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
-		await page.EvaluateAsync("window.localStorage.removeItem('jobtrack.history.v1')");
+		await page.Locator("#jt-history-clear").ClickAsync();
 		await page.ReloadAsync();
 
 		// The only breadcrumb is now the node being looked at, which the list never shows -- so there
@@ -416,7 +476,7 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
-	public async Task Signing_out_clears_the_recently_visited_history_from_local_storage()
+	public async Task Signing_out_clears_the_principal_bound_recently_visited_history()
 	{
 		var leafId = await fixture.SeedLeafAsync("Job visited before sign-out");
 
@@ -426,15 +486,12 @@ public abstract class JobBrowseBrowserTestsBase
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={leafId.Value}");
 
-		var historyBeforeSignOut = await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')");
-		historyBeforeSignOut.Should().NotBeNullOrEmpty("visiting a node records it in the recently-visited history");
-
-		await page.Locator("form[data-jt-clear-history-on-submit] button[type=submit]").ClickAsync();
+		await page.Locator("form[action='/Account/Logout'] button[type=submit]").ClickAsync();
 		await page.WaitForURLAsync(url => !url.Contains("/Jobs/Browse", StringComparison.Ordinal));
 
-		var historyAfterSignOut = await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')");
-		historyAfterSignOut.Should()
-						   .BeNullOrEmpty("signing out must clear a signed-out account's breadcrumbs so they don't leak into the next session");
+		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
+		(await page.Locator($"#jt-history-list a[href='/Jobs/Browse?nodeId={leafId.Value}']").CountAsync()).Should()
+			.Be(0, "a new authenticated session must not inherit the preceding session's breadcrumbs");
 	}
 
 	[Fact]
@@ -487,10 +544,8 @@ public abstract class JobBrowseBrowserTestsBase
 	}
 
 	[Fact]
-	public async Task Visiting_a_dead_breadcrumb_link_removes_it_from_the_recently_visited_history()
+	public async Task Legacy_local_storage_history_is_deleted_without_being_rendered()
 	{
-		const long NonExistentNodeId = 9_999_999L;
-
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var page = await context.NewPageAsync();
 
@@ -504,13 +559,13 @@ public abstract class JobBrowseBrowserTestsBase
 			]));
 			""");
 
-		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={NonExistentNodeId}");
-		await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse");
+		await page.ReloadAsync();
 
 		var historyLink = page.Locator("#jt-history-list a", new() {
 			HasTextString = "Deleted job",
 		});
 		(await historyLink.CountAsync()).Should().Be(0, "a breadcrumb pointing at a node that no longer exists should be dropped, not kept forever");
+		(await page.EvaluateAsync<string?>("window.localStorage.getItem('jobtrack.history.v1')")).Should().BeNull();
 	}
 
 	[Fact]
@@ -1232,7 +1287,14 @@ public abstract class JobBrowseBrowserTestsBase
 	private static async Task<double> LineHeightAsync(ILocator element) =>
 		await element.EvaluateAsync<double>("node => Number.parseFloat(getComputedStyle(node).lineHeight)");
 
-
+	private async Task SignInAsync(IPage page, string userName, string password)
+	{
+		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
+		await page.Locator("#Input_UserName").FillAsync(userName);
+		await page.Locator("#Input_Password").FillAsync(password);
+		await page.Locator("button[type=submit]").ClickAsync();
+		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
+	}
 
 	private static async Task TabToAsync(IPage page, string targetElementId, int maxTabs)
 	{

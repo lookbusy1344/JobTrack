@@ -998,7 +998,9 @@ public sealed partial class AwaitingProgressTests : IAsyncLifetime, IDisposable
 		var (completeCookie, completeToken) = await GetFormAsync(authCookie, "/Jobs/AwaitingProgress");
 		var dashboard = await client.GetAuthenticatedAsync("/Jobs/AwaitingProgress", authCookie);
 		var dashboardBody = await dashboard.Content.ReadAsStringAsync();
-		dashboardBody.Should().Contain("Complete this job? Every open session on it will be closed.");
+		dashboardBody.Should().Contain(
+			"data-jt-confirm=\"Complete this job? Every open session on it will be closed.\"",
+			"Awaiting Progress completion is intentionally a one-click Success shortcut protected by a client-side confirmation");
 
 		var response = await PostCompleteAsync(authCookie, completeCookie, completeToken, leaf.JobNodeId);
 

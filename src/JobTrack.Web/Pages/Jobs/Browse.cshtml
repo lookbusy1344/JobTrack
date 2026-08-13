@@ -30,10 +30,6 @@
 
 <partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
-@if (Model.ErrorMessage is not null && Model.NodeId is long missingNodeId) {
-	<div hidden data-jt-missing-node-id="@missingNodeId"></div>
-}
-
 <partial name="_SuccessAlert" model="Model.SuccessMessage"/>
 
 @if (!Model.IsSearch && !Model.ShowSearchEntry) {
@@ -718,25 +714,30 @@
 }
 
 @if (Model.CurrentNode is not null && !Model.IsSearch) {
-	@* Clear is a button, not a link: it acts on this page's own local storage and navigates nowhere.
-	   job-history.js unhides it only while there is something to clear, so it is never a control with
-	   no effect -- which also means it stays hidden entirely without JavaScript, where the history
-	   list is empty anyway. *@
 	<aside class="jt-history" id="jt-history" aria-label="Recently visited">
 		<div class="d-flex align-items-baseline gap-3 mb-2">
 			<p class="jt-history-label">Recently visited</p>
-			<button type="button" id="jt-history-clear" class="btn btn-link btn-sm jt-history-clear"
-			        aria-label="Clear recently visited" hidden>Clear
-			</button>
+			@if (Model.RecentNodes.Count > 0) {
+				<form method="post" asp-page-handler="ClearRecentHistory" class="inline-form">
+					@foreach (var field in Model.RowStateFields) {
+						<input type="hidden" name="@field.Key" value="@field.Value"/>
+					}
+					<button type="submit" id="jt-history-clear" class="btn btn-link btn-sm jt-history-clear"
+					        aria-label="Clear recently visited">Clear
+					</button>
+				</form>
+			}
 		</div>
-		<ul id="jt-history-list" class="jt-history-list"></ul>
+		<ul id="jt-history-list" class="jt-history-list">
+			@if (Model.RecentNodes.Count == 0) {
+				<li class="jt-history-empty">None yet.</li>
+			} else {
+				@foreach (var node in Model.RecentNodes) {
+					<li>
+						<a asp-page="/Jobs/Browse" asp-route-nodeId="@node.Id.Value" class="jt-preserve-whitespace">@(JobNodeDisplay.Truncate(node.Description, BrowseModel.RecentNodeDescriptionLength)) (ID @node.Id.Value)</a>
+					</li>
+				}
+			}
+		</ul>
 	</aside>
-	<div hidden
-	     data-jt-node-id="@Model.CurrentNode.Node.Id.Value"
-	     data-jt-node-description="@Model.CurrentNode.Node.Description"
-	     data-jt-node-kind="@Model.CurrentNode.Node.Kind"></div>
-}
-
-@section Scripts {
-	<script src="~/js/job-history.js" asp-append-version="true"></script>
 }

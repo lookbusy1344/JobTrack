@@ -52,6 +52,9 @@ public sealed class BrowseModel(
 	// "the root", matching FilterMemory's own convention; an absent key means nothing browsed yet
 	// this session.
 	private const string LastBrowsedNodeSessionKey = "Jobs.Browse.LastNode";
+	private const string RecentNodeIdsSessionKey = "Jobs.Browse.RecentNodeIds";
+	private const int RecentNodeCap = 20;
+	internal const int RecentNodeDescriptionLength = 30;
 	private EquatableArray<EmployeeDirectoryEntry> _employeeDirectory = [];
 	private IFilterMemoryStore? filterMemoryStore;
 
@@ -119,7 +122,15 @@ public sealed class BrowseModel(
 
 	[TempData] public string? SuccessMessage { get; set; }
 
+	[TempData] public bool RecentHistoryWasCleared { get; set; }
+
 	public JobNodeDetailResult? CurrentNode { get; private set; }
+
+	/// <summary>
+	///     Recently visited nodes resolved afresh through the authorized query boundary from the
+	///     principal-bound, protected identifier list. Descriptions never enter browser-local storage.
+	/// </summary>
+	public EquatableArray<JobNodeSummaryResult> RecentNodes { get; private set; } = [];
 
 	/// <summary>
 	///     Requester context for the currently displayed node, if it has an associated
@@ -350,6 +361,17 @@ public sealed class BrowseModel(
 
 		await LoadAsync(actor.Value, cancellationToken);
 		return Page();
+	}
+
+	public async Task<IActionResult> OnPostClearRecentHistoryAsync()
+	{
+		if (await ResolveActorAsync() is null) {
+			return Challenge();
+		}
+
+		FilterMemoryStore.SetString(RecentNodeIdsSessionKey, string.Empty);
+		RecentHistoryWasCleared = true;
+		return RedirectToPage(CurrentRouteValues());
 	}
 
 	public async Task<IActionResult> OnPostStartAsync(long leafNodeId, string? startedAt, CancellationToken cancellationToken)
@@ -761,11 +783,63 @@ public sealed class BrowseModel(
 				await LoadCurrentNodeAchievementAsync(context, CurrentNode.Node, cancellationToken);
 				await LoadLeafSessionsPanelAsync(context, CurrentNode.Node.Id, cancellationToken);
 			}
+
+			await LoadRecentNodesAsync(context, CurrentNode.Node.Id, cancellationToken);
 		}
 		catch (EntityNotFoundException) {
+			if (NodeId is long missingNodeId) {
+				ForgetRecentNode(new(missingNodeId));
+			}
 			ErrorMessage = "That job node does not exist.";
 		}
 	}
+
+	private async Task LoadRecentNodesAsync(CommandContext context, JobNodeId currentNodeId, CancellationToken cancellationToken)
+	{
+		if (RecentHistoryWasCleared) {
+			return;
+		}
+
+		var rememberedIds = ReadRecentNodeIds();
+		var visibleIds = rememberedIds.Where(id => id != currentNodeId).ToArray();
+		if (visibleIds.Length > 0) {
+			var summaries = await jobTrackClient.Query.GetJobSummariesAsync(new() {
+				Context = context,
+				NodeIds = [.. visibleIds],
+			}, cancellationToken);
+			var summariesById = summaries.ToDictionary(summary => summary.Id);
+			RecentNodes = [.. visibleIds.Where(summariesById.ContainsKey).Select(id => summariesById[id])];
+		}
+
+		var updatedIds = new[] { currentNodeId }
+			.Concat(rememberedIds.Where(id => id != currentNodeId))
+			.Take(RecentNodeCap);
+		WriteRecentNodeIds(updatedIds);
+	}
+
+	private void ForgetRecentNode(JobNodeId nodeId) =>
+		WriteRecentNodeIds(ReadRecentNodeIds().Where(id => id != nodeId));
+
+	private JobNodeId[] ReadRecentNodeIds()
+	{
+		var stored = FilterMemoryStore.GetString(RecentNodeIdsSessionKey);
+		if (string.IsNullOrEmpty(stored)) {
+			return [];
+		}
+
+		return stored.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			.Select(value => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0)
+			.Where(value => value > 0)
+			.Select(value => new JobNodeId(value))
+			.Distinct()
+			.Take(RecentNodeCap)
+			.ToArray();
+	}
+
+	private void WriteRecentNodeIds(IEnumerable<JobNodeId> nodeIds) =>
+		FilterMemoryStore.SetString(
+			RecentNodeIdsSessionKey,
+			string.Join(',', nodeIds.Select(id => id.Value.ToString(CultureInfo.InvariantCulture))));
 
 	private async Task LoadRequestContextAsync(CommandContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{

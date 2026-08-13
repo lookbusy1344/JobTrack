@@ -164,13 +164,10 @@ public abstract class LeafWorkSessionBrowserTestsBase
 	}
 
 	[Fact]
-	public async Task Typing_a_write_up_then_starting_a_session_saves_both()
+	public async Task Starting_a_session_does_not_implicitly_save_the_standalone_write_up()
 	{
-		// The write-up textarea and the "Start session" button live in two separate <form> elements;
-		// site.js fires a separate SaveWriteUp request before submitting the Start form so clicking it
-		// doesn't silently discard the edit. That background save's own TempData confirmation is
-		// consumed by the fetch's own followed redirect before the user's page navigates, so only the
-		// primary action's message is visible -- the persisted write-up (checked below) is the proof.
+		// Start and the standalone write-up editor are deliberately separate decisions. The browser must
+		// not turn one click into two independent mutations; the worker uses Save write-up explicitly.
 		var leafId = await fixture.SeedLeafAsync("Write-up start leaf");
 
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
@@ -185,15 +182,14 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		}).ClickAsync();
 
 		await page.WaitForSelectorAsync("text=Session started.");
-		(await page.Locator("#writeUp").InputValueAsync()).Should().Be("Materials delivered; starting install.");
+		(await page.Locator("#writeUp").InputValueAsync()).Should().BeEmpty();
 	}
 
 	[Fact]
-	public async Task Typing_a_write_up_then_reopening_and_starting_a_session_saves_both()
+	public async Task Reopening_and_starting_does_not_implicitly_save_the_standalone_write_up()
 	{
-		// The reported bug: the write-up textarea and the "Reopen and start session" button live in
-		// two separate <form> elements on a terminal leaf, so reopening used to silently discard
-		// whatever write-up text was typed alongside it.
+		// Reopen and start is one atomic workflow command. An unrelated write-up edit must not be
+		// prepended as another transaction by browser-side coordination.
 		var leafId = await fixture.SeedSuccessLeafAsync("Write-up reopen leaf");
 
 		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
@@ -209,7 +205,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		}).ClickAsync();
 
 		await page.WaitForSelectorAsync("text=Job reopened. Session started.");
-		(await page.Locator("#writeUp").InputValueAsync()).Should().Be("Reopened after client follow-up.");
+		(await page.Locator("#writeUp").InputValueAsync()).Should().BeEmpty();
 	}
 
 	[Fact]

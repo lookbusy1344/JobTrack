@@ -159,12 +159,8 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task Starting_a_session_saves_the_write_up_typed_beside_it()
+	public async Task Starting_a_session_leaves_the_standalone_write_up_unchanged()
 	{
-		// Start's own handler carries no write-up fields of its own (the architecture rule against a
-		// handler coordinating more than one IJobTrackClient mutation) -- site.js instead fires a
-		// separate SaveWriteUp request before submitting Start, which this reproduces as the two
-		// requests it actually is.
 		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "work.start-writeup");
 		var leaf = await AddChildAsync(rootId, workerId, "Pour foundation with write-up");
 		_ = await seedClient.Jobs.AttachLeafWorkAsync(new() {
@@ -175,11 +171,6 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 			JobNodeId = leaf.Id,
 		});
 		var authCookie = await client.SignInAsync("work.start-writeup");
-
-		var (writeUpCookie, writeUpToken) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
-		var writeUpResponse = await PostSaveWriteUpAsync(
-			authCookie, writeUpCookie, writeUpToken, leaf.Id, leaf.Version, "Foundation formwork is square and level.");
-		writeUpResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 
 		var (cookie, token) = await GetWorkFormAsync(authCookie, leaf.Id, workerId);
 		var response = await PostAsync("Start", authCookie, cookie, token, leaf.Id, workerId);
@@ -193,7 +184,7 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 				},
 				NodeId = leaf.Id,
 			});
-		current.Node.WriteUp.Should().Be("Foundation formwork is square and level.");
+		current.Node.WriteUp.Should().BeNull();
 	}
 
 	/// <summary>

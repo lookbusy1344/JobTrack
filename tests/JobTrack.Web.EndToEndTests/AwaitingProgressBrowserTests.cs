@@ -187,7 +187,6 @@ public abstract class AwaitingProgressBrowserTestsBase
 		}).First;
 		(await tabletRow.Locator(".status-pill-active.status-pill--icon").IsVisibleAsync()).Should().BeTrue();
 		(await tabletRow.Locator(".status-pill-active.status-pill--compact").IsVisibleAsync()).Should().BeFalse();
-		(await tabletRow.Locator("a.small").IsVisibleAsync()).Should().BeTrue();
 	}
 
 	/// <summary>

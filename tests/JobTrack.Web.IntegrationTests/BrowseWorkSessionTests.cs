@@ -101,7 +101,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 
 		var (cookie, token) = await GetFormAsync(authCookie, $"/Jobs/Browse?nodeId={leaf.Id.Value.ToString(CultureInfo.InvariantCulture)}");
 		var body = await (await GetLeafDetailAsync(authCookie, leaf.Id)).Content.ReadAsStringAsync();
-		body.Should().Contain("Complete this job? Every open session on it will be closed.");
+		body.Should().Contain(
+			"data-jt-confirm=\"Complete this job? Every open session on it will be closed.\"",
+			"Browse completion is intentionally a one-click Success shortcut protected by a client-side confirmation");
 
 		var response = await PostCompleteAsync(authCookie, cookie, token, leaf.Id);
 

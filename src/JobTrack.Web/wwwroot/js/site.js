@@ -159,69 +159,13 @@ document.addEventListener('toggle', (event) => {
     });
 }, true);
 
-// Clear client-side "recently visited" job history on sign-out (data-jt-clear-history-on-submit),
-// so a stale account's breadcrumbs never leak into the next signed-in session. The storage key must
-// match STORAGE_KEY in job-history.js -- that module isn't loaded on every page, so the key is
-// duplicated here rather than shared.
+// Recent-job history moved to principal-bound protected state. Remove the legacy origin-global
+// payload on every page load so descriptions retained by an older deployment cannot survive until
+// another account uses this browser.
 const JT_HISTORY_STORAGE_KEY = 'jobtrack.history.v1';
 
-document.addEventListener('submit', (event) => {
-    if (!event.target.closest('[data-jt-clear-history-on-submit]')) {
-        return;
-    }
-
-    try {
-        window.localStorage.removeItem(JT_HISTORY_STORAGE_KEY);
-    } catch (error) {
-        // Storage unavailable -- nothing to clear.
-    }
-});
-
-// Jobs/Work carries one write-up textarea (#writeUp) shared by several independent action forms --
-// Start, Start-for, backdated start, Reopen and start, Change outcome, and each session row's own
-// Pause button. Every action must implicitly save whatever write-up text is currently typed, not
-// just the one form the textarea happens to live inside. The ending-decision form (Pause/Complete)
-// already carries the write-up as part of its own single atomic command, so that case is left alone;
-// every other form here fires a separate SaveWriteUp request first, then submits unmodified -- two
-// requests, each still a single mutation (an architecture rule Jobs/Work's Razor Page handlers keep
-// to), rather than one handler coordinating two. A no-op on every page without a #writeUp textarea,
-// and for the one form the textarea already lives in.
-document.addEventListener('submit', (event) => {
-    const form = event.target;
-    if (!(form instanceof HTMLFormElement)) {
-        return;
-    }
-
-    const writeUp = document.getElementById('writeUp');
-    if (!writeUp || form.contains(writeUp)) {
-        return;
-    }
-
-    const writeUpForm = writeUp.closest('form');
-    const nodeVersion = document.getElementById('writeUpNodeVersion');
-    if (!writeUpForm || !nodeVersion) {
-        return;
-    }
-
-    event.preventDefault();
-    saveWriteUpThenSubmit(form, writeUpForm, writeUp.value, nodeVersion.value);
-});
-
-async function saveWriteUpThenSubmit(form, writeUpForm, writeUp, nodeVersion) {
-    const body = new URLSearchParams({
-        LeafNodeId: writeUpForm.elements.namedItem('LeafNodeId')?.value ?? '',
-        nodeVersion,
-        writeUp,
-        __RequestVerificationToken: writeUpForm.elements.namedItem('__RequestVerificationToken')?.value ?? '',
-    });
-
-    try {
-        await fetch('/Jobs/Work?handler=SaveWriteUp', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body,
-        });
-    } finally {
-        form.submit();
-    }
+try {
+    window.localStorage.removeItem(JT_HISTORY_STORAGE_KEY);
+} catch (error) {
+    // Storage unavailable -- nothing to migrate.
 }
