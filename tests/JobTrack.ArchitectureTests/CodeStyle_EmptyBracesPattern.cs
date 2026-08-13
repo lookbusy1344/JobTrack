@@ -13,7 +13,7 @@ using TestSupport;
 ///     the tracked <c>.cs</c> and <c>.cshtml</c> sources under <c>src</c>, <c>tests</c>, and <c>samples</c> so
 ///     the pattern cannot creep back in.
 /// </summary>
-public sealed class EmptyBracesPatternArchitectureTests
+public sealed class CodeStyle_EmptyBracesPattern
 {
 	[Fact]
 	public void Repository_sources_do_not_use_the_empty_braces_property_pattern()

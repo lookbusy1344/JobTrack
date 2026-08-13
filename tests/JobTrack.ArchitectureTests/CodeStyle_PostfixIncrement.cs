@@ -16,7 +16,7 @@ using TestSupport;
 ///     Scans the tracked <c>.cs</c> and <c>.cshtml</c> sources under <c>src</c>, <c>tests</c>, and
 ///     <c>samples</c>.
 /// </summary>
-public sealed class PostfixIncrementArchitectureTests
+public sealed class CodeStyle_PostfixIncrement
 {
 	[Fact]
 	public void Repository_sources_do_not_discard_a_postfix_increment_result()

@@ -16,7 +16,7 @@ using TestSupport;
 ///     <c>@(…)</c> expressions and <c>@{…}</c> blocks — and parsing each one on its own. A ternary cannot appear
 ///     in an implicit expression (<c>@foo.Bar</c>) without parentheses, so those two forms are the whole surface.
 /// </remarks>
-public sealed class NestedConditionalArchitectureTests
+public sealed class CodeStyle_NestedConditional
 {
 	[Fact]
 	public void Repository_sources_do_not_nest_conditional_expressions()
