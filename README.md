@@ -13,7 +13,7 @@ This is a recreation of my original project running on SQL Server and .NET 4.8, 
 The app has 2 unusual features:
 
 - work is organised into **branches and leaves**, with a single root node; the tree can be arbitrarily deep, and any node can be moved to a new parent without losing its history or breaking its cost calculations. Actual work is done in leaves, which can be paused and resumed, and worked on by several people concurrently.
-- **cost is computed live**, according to work schedules (with overrides), and concurrent work is split fairly across all participants. See [details here](docs/costing-engine.md). Job cost is never stored, and can be recomputed at any time for any node in the tree, even if the tree has been restructured since the work was done.
+- **cost is computed live**, according to work schedules (with overrides), and concurrent work is split fairly across all participants. See [costing-engine.md](docs/costing-engine.md) and [rate-resolution.md](docs/rate-resolution.md). Job cost is never stored, and can be recomputed at any time for any node in the tree, even if the tree has been restructured since the work was done.
 
 Additionally, all jobs can have prerequisites, and the system will automatically prevent work from being started on a node until all its prerequisites are complete. As with other features, this applies to both branches and leaves. Since branches don't have work themselves, a branch is considered complete when all its leaves are complete.
 
@@ -125,6 +125,9 @@ The SQLite backend can be run in a throwaway docker container or as a persistent
 - [`docs/costing-engine.md`](docs/costing-engine.md) — the cost engine in depth: the
   boundary-partition algorithm and `1/N` concurrency allocation worked through a three-deep overlap,
   the PostgreSQL range column and GiST indexing behind it, and the EF Core materialization strategy.
+- [`docs/rate-resolution.md`](docs/rate-resolution.md) — how one worker's hourly rate at one instant
+  is resolved: the rota and schedule exceptions that decide eligibility, then the four-level
+  precedence (priced overtime, nearest-ancestor node override, effective-dated user rate, default).
 - [`docs/api/jobtrack-client-design.md`](docs/api/jobtrack-client-design.md) — the `IJobTrackClient`
   facade; [`docs/api/external-http-api-reference.md`](docs/api/external-http-api-reference.md) —
   HTTP routes and auth model.

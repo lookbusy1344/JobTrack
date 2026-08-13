@@ -6,7 +6,8 @@ materialization strategy that keeps a cost read proportional to the question rat
 installation.
 
 Normative source: [`jobtrack_spec_codex.md`](jobtrack_spec_codex.md) §10. Entity-level background:
-[`database-entities.md`](database-entities.md). Decisions:
+[`database-entities.md`](database-entities.md). The per-worker hourly rate this engine multiplies by
+is resolved separately — see [`rate-resolution.md`](rate-resolution.md). Decisions:
 [ADR 0002](decisions/0002-penny-reconciliation.md),
 [ADR 0009](decisions/0009-decimal-precision-and-allocation.md),
 [ADR 0017](decisions/0017-costing-read-scope.md),
@@ -119,13 +120,11 @@ summing to 8 hours. See [ADR 0009](decisions/0009-decimal-precision-and-allocati
 
 ### 2.4 Rates, resolved per session
 
-Rate precedence, applied independently for each session at each segment's start
-(`RateResolver.Resolve`):
-
-1. an explicit rate on an effective **priced additive schedule exception**;
-2. else the **nearest node-or-ancestor override** for that worker;
-3. else the worker's effective-dated **`UserCostRate`**;
-4. else the worker's **default rate**.
+Each session's rate is resolved independently, at each segment's start, by `RateResolver.Resolve` —
+the calculated cost per hour for this worker on this node at this instant, through the rota, the
+effective-dated tables, and the nearest-ancestor override walk. That whole machinery is its own
+subject: see **[rate-resolution.md](rate-resolution.md)**. The engine just asks it for one rate per
+segment.
 
 Give Dana a default rate of £60/h, with node overrides of £90/h on leaf B and £55/h on leaf C:
 
