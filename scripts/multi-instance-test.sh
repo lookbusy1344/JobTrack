@@ -81,6 +81,8 @@ generate_password() {
 
 db_admin_password="$(generate_password)"
 role_password_domain="$(generate_password)"
+role_password_history_deletion="$(generate_password)"
+role_password_credential_administration="$(generate_password)"
 role_password_identity="$(generate_password)"
 role_password_pat_management="$(generate_password)"
 role_password_pat_authentication="$(generate_password)"
@@ -97,7 +99,7 @@ user2_new_password="$(generate_password)"
 data_protection_certificate_password="$(generate_password)"
 
 redact_values=(
-	"$db_admin_password" "$role_password_domain" "$role_password_identity"
+	"$db_admin_password" "$role_password_domain" "$role_password_history_deletion" "$role_password_credential_administration" "$role_password_identity"
 	"$role_password_pat_management" "$role_password_pat_authentication" "$role_password_emergency_reset"
 	"$admin_password" "$admin_new_password" "$user1_password" "$user1_new_password" "$user2_password" "$user2_new_password"
 	"$data_protection_certificate_password"
@@ -119,6 +121,8 @@ JOBTRACK_DB_NAME=$db_name
 JOBTRACK_DB_ADMIN_USER=postgres
 JOBTRACK_DB_ADMIN_PASSWORD=$db_admin_password
 JOBTRACK_ROLE_PASSWORD_DOMAIN=$role_password_domain
+JOBTRACK_ROLE_PASSWORD_HISTORY_DELETION=$role_password_history_deletion
+JOBTRACK_ROLE_PASSWORD_CREDENTIAL_ADMINISTRATION=$role_password_credential_administration
 JOBTRACK_ROLE_PASSWORD_IDENTITY=$role_password_identity
 JOBTRACK_ROLE_PASSWORD_PAT_MANAGEMENT=$role_password_pat_management
 JOBTRACK_ROLE_PASSWORD_PAT_AUTHENTICATION=$role_password_pat_authentication
@@ -151,6 +155,8 @@ RateLimiting__ApiWindowSeconds=120
 AllowedHosts=localhost;web-a;web-b
 ForwardedHeaders__KnownNetworks__0=0.0.0.0/0
 ConnectionStrings__JobTrackDomain=$(connection_string jobtrack_domain_login "$role_password_domain")
+ConnectionStrings__JobTrackHistoryDeletion=$(connection_string jobtrack_history_deletion_login "$role_password_history_deletion")
+ConnectionStrings__JobTrackCredentialAdministration=$(connection_string jobtrack_credential_administration_login "$role_password_credential_administration")
 ConnectionStrings__JobTrackIdentity=$(connection_string jobtrack_identity_login "$role_password_identity")
 ConnectionStrings__JobTrackPatManagement=$(connection_string jobtrack_pat_management_login "$role_password_pat_management")
 ConnectionStrings__JobTrackPatAuthentication=$(connection_string jobtrack_pat_authentication_login "$role_password_pat_authentication")

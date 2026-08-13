@@ -58,8 +58,8 @@ public static class JobTrackPostgreSql
 		NpgsqlDataSource dataSource,
 		NpgsqlDataSource personalAccessTokenManagementDataSource,
 		NpgsqlDataSource personalAccessTokenAuthenticationDataSource) =>
-		CreateWithPatDataSources(
-			dataSource, personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource, null);
+		CreateWithRoleSeparatedDataSources(
+			dataSource, dataSource, dataSource, personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource, null);
 
 	/// <summary>Creates a provider-neutral client with distinct least-privilege PAT management and authentication connections.</summary>
 	/// <param name="dataSource">The pooled data source for the domain connection.</param>
@@ -80,9 +80,39 @@ public static class JobTrackPostgreSql
 		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
 		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
 		IClock? clock = null,
+		ILoggerFactory? loggerFactory = null) =>
+		CreateWithRoleSeparatedDataSources(
+			dataSource, dataSource, dataSource, personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource,
+			passwordHasher, employeePasswordHasher, clock, loggerFactory);
+
+	/// <summary>Creates a client with separate history-deletion and PAT capability connections.</summary>
+	[CLSCompliant(false)]
+	public static IJobTrackClient CreateWithRoleSeparatedDataSources(
+		NpgsqlDataSource dataSource,
+		NpgsqlDataSource historyDeletionDataSource,
+		NpgsqlDataSource credentialAdministrationDataSource,
+		NpgsqlDataSource personalAccessTokenManagementDataSource,
+		NpgsqlDataSource personalAccessTokenAuthenticationDataSource) =>
+		CreateWithRoleSeparatedDataSources(
+			dataSource, historyDeletionDataSource, credentialAdministrationDataSource, personalAccessTokenManagementDataSource,
+			personalAccessTokenAuthenticationDataSource, null);
+
+	/// <summary>Creates a client with separate least-privilege PostgreSQL capability connections.</summary>
+	[CLSCompliant(false)]
+	public static IJobTrackClient CreateWithRoleSeparatedDataSources(
+		NpgsqlDataSource dataSource,
+		NpgsqlDataSource historyDeletionDataSource,
+		NpgsqlDataSource credentialAdministrationDataSource,
+		NpgsqlDataSource personalAccessTokenManagementDataSource,
+		NpgsqlDataSource personalAccessTokenAuthenticationDataSource,
+		IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
+		IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
+		IClock? clock = null,
 		ILoggerFactory? loggerFactory = null)
 	{
 		ArgumentNullException.ThrowIfNull(dataSource);
+		ArgumentNullException.ThrowIfNull(historyDeletionDataSource);
+		ArgumentNullException.ThrowIfNull(credentialAdministrationDataSource);
 		ArgumentNullException.ThrowIfNull(personalAccessTokenManagementDataSource);
 		ArgumentNullException.ThrowIfNull(personalAccessTokenAuthenticationDataSource);
 
@@ -90,13 +120,14 @@ public static class JobTrackPostgreSql
 
 		var readOperations = new PostgreSqlReadOperations(dataSource);
 		var writeOperations = new PostgreSqlWriteOperations(dataSource);
-		var bootstrap = new PostgreSqlInstallationBootstrapPort(dataSource, clock);
+		var credentialWriteOperations = new PostgreSqlWriteOperations(credentialAdministrationDataSource);
+		var bootstrap = new PostgreSqlInstallationBootstrapPort(credentialAdministrationDataSource, clock);
 		var employees = new EmployeeQueryPort(readOperations, clock);
-		var employeeCommands = new EmployeeCommandPort(writeOperations, clock);
+		var employeeCommands = new EmployeeCommandPort(credentialWriteOperations, clock);
 		var readiness = new PostgreSqlReadinessQueryPort(dataSource);
 		var browse = new JobBrowseQueryPort(new PostgreSqlJobBrowseOperations(dataSource));
 		var awaitingProgress = new PostgreSqlAwaitingProgressQueryPort(dataSource);
-		var jobs = new PostgreSqlJobNodeCommandPort(dataSource, clock);
+		var jobs = new PostgreSqlJobNodeCommandPort(dataSource, historyDeletionDataSource, clock);
 		var sessions = new WorkSessionCommandPort(writeOperations, clock);
 		var leafSessions = new WorkSessionQueryPort(new PostgreSqlWorkSessionQueryOperations(dataSource), clock);
 		var leafWork = new LeafWorkQueryPort(readOperations);
@@ -111,9 +142,9 @@ public static class JobTrackPostgreSql
 		var tokens = new PostgreSqlPersonalAccessTokenPort(
 			personalAccessTokenManagementDataSource, personalAccessTokenAuthenticationDataSource, clock);
 		var requests = new PostgreSqlJobRequestCommandPort(dataSource, clock);
-		var authenticationAudit = new AuthenticationAuditPort(writeOperations, clock);
+		var authenticationAudit = new AuthenticationAuditPort(credentialWriteOperations, clock);
 		var credentials = new AccountCredentialPort(
-			writeOperations, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
+			credentialWriteOperations, clock, employeePasswordHasher ?? new PasswordHasher<EmployeeCredentialSubject>());
 		var costQueries = new CostQueries(costs, loggerFactory?.CreateLogger<CostQueries>());
 
 		return new JobTrackClient(

@@ -85,6 +85,8 @@ fi
 provision_secrets=(
 	jobtrack-db-admin-password
 	jobtrack-role-password-domain
+	jobtrack-role-password-history-deletion
+	jobtrack-role-password-credential-administration
 	jobtrack-role-password-identity
 	jobtrack-role-password-pat-management
 	jobtrack-role-password-pat-authentication
@@ -235,19 +237,21 @@ planned_peak_hosts=$((max_instances + overshoot_hosts + tagged_candidate_hosts))
 # `SHOW max_connections`, which fails the deployment if the real ceiling is smaller.
 database_max_connections=100
 # Reserved for the Cloud SQL admin/superuser connection, an operator's own psql session, and the
-# transient provisioning/emergency jobs -- never assumed available to the four application pools.
+# transient provisioning/emergency jobs -- never assumed available to the six application pools.
 operator_and_deployment_reserve=10
 usable_database_connections=$((database_max_connections - operator_and_deployment_reserve))
 host_budget=$((usable_database_connections / planned_peak_hosts))
 
-# A weighted, not equal, split of one host's budget across its four distinct connection-string pools:
+# A weighted, not equal, split of one host's budget across its six distinct connection-string pools:
 # the domain pool carries the bulk of Razor Pages and external-API traffic, Identity serves
 # authentication reads on every request, and the two PAT pools are comparatively low-volume.
-domain_pool_max_size=10
+domain_pool_max_size=7
+history_deletion_pool_max_size=2
+credential_administration_pool_max_size=3
 identity_pool_max_size=6
-pat_management_pool_max_size=3
-pat_authentication_pool_max_size=3
-pool_budget_total=$((domain_pool_max_size + identity_pool_max_size + pat_management_pool_max_size + pat_authentication_pool_max_size))
+pat_management_pool_max_size=2
+pat_authentication_pool_max_size=2
+pool_budget_total=$((domain_pool_max_size + history_deletion_pool_max_size + credential_administration_pool_max_size + identity_pool_max_size + pat_management_pool_max_size + pat_authentication_pool_max_size))
 if ((pool_budget_total > host_budget)); then
 	echo "ERROR: planned per-host pool budget ($pool_budget_total) exceeds the calculated host budget ($host_budget)." >&2
 	echo "Reduce a Maximum Pool Size value, raise the Cloud SQL tier, or lower max_instances." >&2
@@ -518,10 +522,12 @@ ensure_data_protection_material() {
 echo "==> ensuring secrets exist (existing values are preserved, never regenerated)"
 db_admin_password="$(ensure_database_secret jobtrack-db-admin-password)"
 role_password_domain="$(ensure_database_secret jobtrack-role-password-domain)"
+role_password_history_deletion="$(ensure_database_secret jobtrack-role-password-history-deletion)"
+role_password_credential_administration="$(ensure_database_secret jobtrack-role-password-credential-administration)"
 role_password_identity="$(ensure_database_secret jobtrack-role-password-identity)"
 role_password_pat_management="$(ensure_database_secret jobtrack-role-password-pat-management)"
 role_password_pat_authentication="$(ensure_database_secret jobtrack-role-password-pat-authentication)"
-# Not one of the four application connection strings -- no running service ever holds this one. It
+# Not one of the six application connection strings -- no running service ever holds this one. It
 # exists only so an operator can recover a locked or otherwise inaccessible account later via
 # docker/emergency-reset.sh, run by the transient least-privilege helper job. See
 # docs/operations/postgresql-cloud-run-deployment.md §"Recovering a locked or
@@ -535,6 +541,8 @@ ensure_data_protection_material
 
 db_admin_password_version="$(secret_version jobtrack-db-admin-password)"
 role_password_domain_version="$(secret_version jobtrack-role-password-domain)"
+role_password_history_deletion_version="$(secret_version jobtrack-role-password-history-deletion)"
+role_password_credential_administration_version="$(secret_version jobtrack-role-password-credential-administration)"
 role_password_identity_version="$(secret_version jobtrack-role-password-identity)"
 role_password_pat_management_version="$(secret_version jobtrack-role-password-pat-management)"
 role_password_pat_authentication_version="$(secret_version jobtrack-role-password-pat-authentication)"
@@ -637,19 +645,23 @@ instance_connection_name="$project:$region:$sql_instance"
 db_host="/cloudsql/$instance_connection_name"
 
 # Maximum Pool Size is explicit on every connection string (ADR 0066 §11): the aggregate across the
-# four distinct host pools must never exceed host_budget, validated above before any secret is
+# six distinct host pools must never exceed host_budget, validated above before any secret is
 # written.
 connection_string() {
 	printf 'Host=%s;Database=%s;Username=%s;Password=%s;Maximum Pool Size=%s' "$db_host" "$sql_database" "$1" "$2" "$3"
 }
 
-echo "==> storing the four application connection strings"
+echo "==> storing the six application connection strings"
 put_secret jobtrack-cs-domain "$(connection_string jobtrack_domain_login "$role_password_domain" "$domain_pool_max_size")"
+put_secret jobtrack-cs-history-deletion "$(connection_string jobtrack_history_deletion_login "$role_password_history_deletion" "$history_deletion_pool_max_size")"
+put_secret jobtrack-cs-credential-administration "$(connection_string jobtrack_credential_administration_login "$role_password_credential_administration" "$credential_administration_pool_max_size")"
 put_secret jobtrack-cs-identity "$(connection_string jobtrack_identity_login "$role_password_identity" "$identity_pool_max_size")"
 put_secret jobtrack-cs-pat-management "$(connection_string jobtrack_pat_management_login "$role_password_pat_management" "$pat_management_pool_max_size")"
 put_secret jobtrack-cs-pat-authentication "$(connection_string jobtrack_pat_authentication_login "$role_password_pat_authentication" "$pat_authentication_pool_max_size")"
 
 cs_domain_version="$(secret_version jobtrack-cs-domain)"
+cs_history_deletion_version="$(secret_version jobtrack-cs-history-deletion)"
+cs_credential_administration_version="$(secret_version jobtrack-cs-credential-administration)"
 cs_identity_version="$(secret_version jobtrack-cs-identity)"
 cs_pat_management_version="$(secret_version jobtrack-cs-pat-management)"
 cs_pat_authentication_version="$(secret_version jobtrack-cs-pat-authentication)"
@@ -682,11 +694,11 @@ grant_secret_access() {
 	done
 }
 
-# The service gets the four application connection strings and nothing else. It cannot read the
+# The service gets the six application connection strings and nothing else. It cannot read the
 # database admin password, so a compromise of the running app cannot escalate to the PostgreSQL
 # superuser, and it cannot read the three account passwords either.
 grant_secret_access "$run_service_account" \
-	jobtrack-cs-domain jobtrack-cs-identity jobtrack-cs-pat-management jobtrack-cs-pat-authentication \
+	jobtrack-cs-domain jobtrack-cs-history-deletion jobtrack-cs-credential-administration jobtrack-cs-identity jobtrack-cs-pat-management jobtrack-cs-pat-authentication \
 	jobtrack-data-protection-certificate jobtrack-data-protection-certificate-password
 
 # Remove grants left by the earlier standing-job design. The emergency helper grants these only for
@@ -960,7 +972,7 @@ deploy_candidate() {
 		--startup-probe="tcpSocket.port=8080,periodSeconds=10,failureThreshold=24,timeoutSeconds=5" \
 		--liveness-probe="" \
 		--set-env-vars="^@^ForwardedHeaders__KnownNetworks__0=0.0.0.0/0@AllowedHosts=$allowed_hosts@Deployment__Topology=MultiInstance@DataProtection__Store=PostgreSql@RateLimiting__Store=PostgreSql@Security__RequireSecureCookies=true" \
-		--set-secrets="ConnectionStrings__JobTrackDomain=jobtrack-cs-domain:$cs_domain_version,ConnectionStrings__JobTrackIdentity=jobtrack-cs-identity:$cs_identity_version,ConnectionStrings__JobTrackPatManagement=jobtrack-cs-pat-management:$cs_pat_management_version,ConnectionStrings__JobTrackPatAuthentication=jobtrack-cs-pat-authentication:$cs_pat_authentication_version,$certificate_mount_path=jobtrack-data-protection-certificate:$data_protection_certificate_version,$certificate_password_mount_path=jobtrack-data-protection-certificate-password:$data_protection_certificate_password_version" \
+		--set-secrets="ConnectionStrings__JobTrackDomain=jobtrack-cs-domain:$cs_domain_version,ConnectionStrings__JobTrackHistoryDeletion=jobtrack-cs-history-deletion:$cs_history_deletion_version,ConnectionStrings__JobTrackCredentialAdministration=jobtrack-cs-credential-administration:$cs_credential_administration_version,ConnectionStrings__JobTrackIdentity=jobtrack-cs-identity:$cs_identity_version,ConnectionStrings__JobTrackPatManagement=jobtrack-cs-pat-management:$cs_pat_management_version,ConnectionStrings__JobTrackPatAuthentication=jobtrack-cs-pat-authentication:$cs_pat_authentication_version,$certificate_mount_path=jobtrack-data-protection-certificate:$data_protection_certificate_version,$certificate_password_mount_path=jobtrack-data-protection-certificate-password:$data_protection_certificate_password_version" \
 		--binary-authorization=default \
 		"${routing_flags[@]}" \
 		--quiet
@@ -1011,7 +1023,7 @@ grant_provision_access() {
 	done
 }
 
-provision_secret_bindings="JOBTRACK_DB_ADMIN_PASSWORD=jobtrack-db-admin-password:$db_admin_password_version,JOBTRACK_ROLE_PASSWORD_DOMAIN=jobtrack-role-password-domain:$role_password_domain_version,JOBTRACK_ROLE_PASSWORD_IDENTITY=jobtrack-role-password-identity:$role_password_identity_version,JOBTRACK_ROLE_PASSWORD_PAT_MANAGEMENT=jobtrack-role-password-pat-management:$role_password_pat_management_version,JOBTRACK_ROLE_PASSWORD_PAT_AUTHENTICATION=jobtrack-role-password-pat-authentication:$role_password_pat_authentication_version,JOBTRACK_ROLE_PASSWORD_EMERGENCY_RESET=jobtrack-role-password-emergency-reset:$role_password_emergency_reset_version"
+provision_secret_bindings="JOBTRACK_DB_ADMIN_PASSWORD=jobtrack-db-admin-password:$db_admin_password_version,JOBTRACK_ROLE_PASSWORD_DOMAIN=jobtrack-role-password-domain:$role_password_domain_version,JOBTRACK_ROLE_PASSWORD_HISTORY_DELETION=jobtrack-role-password-history-deletion:$role_password_history_deletion_version,JOBTRACK_ROLE_PASSWORD_CREDENTIAL_ADMINISTRATION=jobtrack-role-password-credential-administration:$role_password_credential_administration_version,JOBTRACK_ROLE_PASSWORD_IDENTITY=jobtrack-role-password-identity:$role_password_identity_version,JOBTRACK_ROLE_PASSWORD_PAT_MANAGEMENT=jobtrack-role-password-pat-management:$role_password_pat_management_version,JOBTRACK_ROLE_PASSWORD_PAT_AUTHENTICATION=jobtrack-role-password-pat-authentication:$role_password_pat_authentication_version,JOBTRACK_ROLE_PASSWORD_EMERGENCY_RESET=jobtrack-role-password-emergency-reset:$role_password_emergency_reset_version"
 if [[ -n $admin_password_version ]]; then
 	provision_secret_bindings="$provision_secret_bindings,JOBTRACK_ADMIN_PASSWORD=jobtrack-account-password-admin:$admin_password_version"
 fi
@@ -1168,8 +1180,12 @@ echo "==> database: Cloud SQL $instance_connection_name (persistent -- survives 
 echo "==> no example job nodes were installed; the tree below the root node is empty"
 echo
 if [[ -n $admin_password_version || -n $user1_password_version || -n $user2_password_version ]]; then
-	echo "    Enabled one-time enrolment credentials remain. EACH PASSWORD MUST BE CHANGED ON FIRST SIGN-IN (ADR 0023)."
-	echo "    Retrieve a credential only when handing it to its intended user:"
+	echo "    An enabled enrolment secret remains for the accounts below. This means the secret has"
+	echo "    not been retired -- it does NOT mean the value below is still that account's password."
+	echo "    Sign-in with the SECRET forces a change (ADR 0023) only the FIRST time it is used; an"
+	echo "    account already in active use may have changed its password (and enabled 2FA) long ago,"
+	echo "    in which case this value is stale and irrelevant. Confirm with each user before treating"
+	echo "    the secret as live, and retrieve a credential only when handing it to its intended user:"
 	echo
 	printf '      %-10s %-36s %s\n' "USERNAME" "SECRET" "ROLES"
 	if [[ -n $admin_password_version ]]; then

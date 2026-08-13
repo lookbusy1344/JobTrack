@@ -367,6 +367,8 @@ public sealed class ExternalApiClientProofTests
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", connectionString);
 			if (provider == SchemaProvider.PostgreSql) {
 				_ = builder.UseSetting("ConnectionStrings:JobTrackDomain", connectionString);
+				_ = builder.UseSetting("ConnectionStrings:JobTrackHistoryDeletion", connectionString);
+				_ = builder.UseSetting("ConnectionStrings:JobTrackCredentialAdministration", connectionString);
 				_ = builder.UseSetting("ConnectionStrings:JobTrackPatManagement", connectionString);
 				_ = builder.UseSetting("ConnectionStrings:JobTrackPatAuthentication", connectionString);
 			}

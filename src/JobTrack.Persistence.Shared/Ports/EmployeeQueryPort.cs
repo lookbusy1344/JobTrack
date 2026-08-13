@@ -118,7 +118,9 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 		var actorRoles = await GetActorRolesAsync(context, actorId, cancellationToken).ConfigureAwait(false);
 
 		var target = await context.Set<IdentityUserEntity>().AsNoTracking()
-								  .FirstOrDefaultAsync(iu => iu.AppUserId == targetUserId, cancellationToken).ConfigureAwait(false)
+								  .Where(iu => iu.AppUserId == targetUserId)
+								  .Select(iu => new { iu.Id, iu.UserName, iu.IsEnabled, iu.RequiresPasswordChange, iu.LockoutEnd })
+								  .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {targetUserId} does not exist.");
 
 		var targetRoles = await GetRolesForIdentityUserAsync(context, target.Id, cancellationToken).ConfigureAwait(false);
@@ -138,14 +140,7 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 
 	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		DbContext context, AppUserId actorId, CancellationToken cancellationToken)
-	{
-		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
-								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
-
-		return await GetRolesForIdentityUserAsync(context, actorIdentityUser.Id, cancellationToken).ConfigureAwait(false);
-	}
+		=> await ActorAccountState.LoadRolesAsync(context, actorId, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 
 	private static async Task<EquatableArray<EmployeeRole>> GetRolesForIdentityUserAsync(
 		DbContext context, long identityUserId, CancellationToken cancellationToken)

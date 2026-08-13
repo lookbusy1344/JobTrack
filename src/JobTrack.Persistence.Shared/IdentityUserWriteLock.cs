@@ -3,6 +3,7 @@ namespace JobTrack.Persistence.Shared;
 using Abstractions;
 using Entities;
 using Microsoft.EntityFrameworkCore;
+using NodaTime;
 
 /// <summary>Serializes a compound write with concurrent credential-account state changes.</summary>
 internal static class IdentityUserWriteLock
@@ -17,17 +18,17 @@ internal static class IdentityUserWriteLock
 	}
 
 	/// <summary>
-	///     Locks and returns the identity row for <paramref name="appUserId" />. The self-assignment is
+	///     Locks the employee row and returns the credential-account facts for <paramref name="appUserId" />. The self-assignment is
 	///     intentionally one EF-authored conditional update: PostgreSQL takes the row lock, while
 	///     SQLite's enclosing <c>BEGIN IMMEDIATE</c> transaction already owns the provider write lock.
 	/// </summary>
-	public static async Task<IdentityUserEntity> AcquireAsync(
+	public static async Task<IdentityUserAccountState> AcquireAsync(
 		DbContext context, AppUserId appUserId, CancellationToken cancellationToken)
 	{
-		var affected = await context.Set<IdentityUserEntity>()
-									.Where(identityUser => identityUser.AppUserId == appUserId)
+		var affected = await context.Set<AppUserEntity>()
+									.Where(user => user.Id == appUserId)
 									.ExecuteUpdateAsync(
-										setters => setters.SetProperty(identityUser => identityUser.ConcurrencyStamp, identityUser => identityUser.ConcurrencyStamp),
+										setters => setters.SetProperty(user => user.RowVersion, user => user.RowVersion),
 										cancellationToken)
 									.ConfigureAwait(false);
 		if (affected == 0) {
@@ -35,6 +36,11 @@ internal static class IdentityUserWriteLock
 		}
 
 		return await context.Set<IdentityUserEntity>().AsNoTracking()
-							.SingleAsync(identityUser => identityUser.AppUserId == appUserId, cancellationToken).ConfigureAwait(false);
+							.Where(identityUser => identityUser.AppUserId == appUserId)
+							.Select(identityUser => new IdentityUserAccountState(
+								identityUser.Id, identityUser.IsEnabled, identityUser.LockoutEnabled, identityUser.LockoutEnd))
+							.SingleAsync(cancellationToken).ConfigureAwait(false);
 	}
 }
+
+internal sealed record IdentityUserAccountState(long Id, bool IsEnabled, bool LockoutEnabled, Instant? LockoutEnd);

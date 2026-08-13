@@ -126,6 +126,22 @@ whether or not it is ticked. Both compose with the owner selector and the subtre
 replacing them, so "who is working what inside this subtree, right now" is one query; like every
 other filter on the dashboard they are remembered per session (ADR 0052).
 
+**One-click completion is an important fast path on both Browse and Awaiting Progress.** An
+authorized actor can press **Complete** on an eligible open leaf, accept the client-side confirmation
+that every open session will be closed, and record `Success` without navigating to `/Jobs/Work`.
+This Success shortcut is deliberate: the command re-checks authorization, readiness, node version
+and the active-session set, then closes the leaf and its confirmed sessions atomically. `/Jobs/Work`
+remains the full ending surface when the actor needs `Cancelled` or `Unsuccessful`, write-up changes,
+or the other completion options. Do not remove or redirect either page's one-click Complete action
+on the grounds that Work owns the full workflow.
+
+Browse's **Recently visited** list is session state, not browser-global history. It retains at most
+twenty node identifiers in the same time-limited, encrypted, principal-bound cookie used for
+remembered filters; descriptions are resolved afresh through the authorized job-summary query and
+rendered by the server. A new login, logout, expired cookie, different principal, malformed cookie,
+or Clear starts an empty list. The feature and its Clear action work without JavaScript. An older
+`jobtrack.history.v1` local-storage payload is deleted on the next page load and is never rendered.
+
 The subtree scope is the exception to that memory, because it is a place rather than a filter.
 Reaching the dashboard by a URL that names no node — the header link above all — always scopes to
 the viewer's own home node, whatever the last visit was looking at, and falls back to the whole tree

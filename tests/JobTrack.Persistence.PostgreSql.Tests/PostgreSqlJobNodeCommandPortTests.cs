@@ -28,13 +28,18 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new PostgreSqlInstallationBootstrapPort(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build(), SystemClock.Instance);
 
 	internal override IJobNodeCommandPort CreateCommandPort(string connectionString) =>
-		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new PostgreSqlJobNodeCommandPort(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_domain").Build(),
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_history_deletion").Build(),
+			SystemClock.Instance);
 
 	internal override IAuditQueryPort CreateAuditQueryPort(string connectionString) =>
-		new AuditQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
+		new AuditQueryPort(new PostgreSqlReadOperations(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_domain").Build()), SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value;
 
@@ -231,7 +236,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 		await using var roleTransaction = await roleConnection.BeginTransactionAsync();
 		await using (var lockCommand = roleConnection.CreateCommand()) {
 			lockCommand.Transaction = roleTransaction;
-			lockCommand.CommandText = "SELECT id FROM identity_user WHERE app_user_id = @appUserId FOR UPDATE;";
+			lockCommand.CommandText = "SELECT id FROM app_user WHERE id = @appUserId FOR UPDATE;";
 			lockCommand.Parameters.AddWithValue("appUserId", workerId.Value);
 			_ = await lockCommand.ExecuteScalarAsync();
 		}
@@ -289,7 +294,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 		await using var roleTransaction = await roleConnection.BeginTransactionAsync();
 		await using (var lockCommand = roleConnection.CreateCommand()) {
 			lockCommand.Transaction = roleTransaction;
-			lockCommand.CommandText = "SELECT id FROM identity_user WHERE app_user_id = @appUserId FOR UPDATE;";
+			lockCommand.CommandText = "SELECT id FROM app_user WHERE id = @appUserId FOR UPDATE;";
 			lockCommand.Parameters.AddWithValue("appUserId", workerId.Value);
 			_ = await lockCommand.ExecuteScalarAsync();
 		}

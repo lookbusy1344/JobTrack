@@ -26,7 +26,8 @@ public sealed class PostgreSqlAccountCredentialPortTests()
 	protected override object FormatInstantForRawSql(Instant instant) => instant.ToDateTimeOffset();
 
 	internal override IAccountCredentialPort CreatePort(string connectionString, IClock clock) =>
-		new AccountCredentialPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+		new AccountCredentialPort(new PostgreSqlWriteOperations(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
 			clock,
 			new PasswordHasher<EmployeeCredentialSubject>());
 }

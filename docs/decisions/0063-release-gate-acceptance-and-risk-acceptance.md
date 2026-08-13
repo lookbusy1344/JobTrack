@@ -41,7 +41,13 @@ Accepted by the owner for the 1.0 internal release. Each names its revisit trigg
    `jobtrack_identity` (credential-transition commands update those columns in the same transaction
    as their audit row), and retains direct append-only `audit_event` insertion. Compromise of the
    ordinary domain credential can therefore read password hashes and append plausible audit rows.
-   Mitigations already in place: four split runtime roles, PAT secrets behind `SECURITY DEFINER`
+
+   **Remediated 2026-08-13:** `jobtrack_credential_administration` now owns those command ports and
+   their authentication audit path. `jobtrack_domain` has column-level access only to non-secret
+   account facts, cannot mutate Identity or role rows, and a database trigger refuses the fixed
+   credential/role/authentication audit operation names from that role. The remaining residual is
+   limited to misattribution of domain audit events for mutation capabilities the role genuinely has.
+   Mitigations already in place: capability-specific runtime roles, PAT secrets behind `SECURITY DEFINER`
    functions only, append-only audit enforcement. Revisit: any multi-tenant or externally exposed
    deployment.
 4. **Binary Authorization is enforced by the deploy script's own flag, not a platform control.**

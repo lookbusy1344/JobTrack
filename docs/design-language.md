@@ -229,21 +229,22 @@ above), and the neighbouring Sessions action always opens the complete history.
 `.status-pill-active` (amber — `--jt-amber-100`/`--jt-amber-700`) is the dedicated colour for this,
 replacing the green `.status-pill-ready` an active-session pill used to borrow before this rule was
 written down: amber is otherwise unclaimed (blocked moved from amber to red, per "Stop and go"
-above), so "someone is clocked in right now" never visually doubles as "this may proceed." Zero
-active workers renders nothing in the column; exactly one keeps the familiar compact stopwatch pill
+above), so "someone is clocked in right now" never visually doubles as "this may proceed." Exactly
+one active worker keeps the familiar compact stopwatch pill
 (worker named only when it is not the viewer); two or more render a `status-pill-active` "N active"
 pill followed by a stable, wrapping (`d-inline-flex flex-wrap`) name list — the viewer's own session
 labelled "You" first, then every other worker in start order, capped at
 `ActiveSessionSummaryModel.PreviewLimit` in the dense per-row form only (the toolbar/Sessions-page
 summary always names everyone, since it has the width). On the narrowest viewport the Browse
 subtree keeps Active as one Bootstrap column and renders only the coloured glyph with an accessible
-name; at `md` and above the ordinary worded or counted pill returns.
+name through `md`; at `lg` and above the ordinary worded or counted pill returns.
 
 Zero active workers has several meaningful states, and Browse subtree rows distinguish them. A
-recursively successful branch gets green `.status-pill-closed` **Closed**, consuming the same
-request-cached branch result as its trailing green tick; an unfinished branch renders no Active
-state. A leaf nobody has started gets neutral `.status-pill-inactive` **Unstarted**. An
-unacknowledged requester submission gets informational-blue `.status-pill-unack` **Unack**. A leaf
+recursively successful branch gets green `.status-pill-success` **Succ**, consuming the same
+request-cached branch result as the node detail; an unfinished branch renders no Active state. A
+leaf with no work record gets neutral `.status-pill-inactive` **Unstrt**; a recorded Waiting outcome
+gets the distinct purple `.status-pill-waiting` **Wait**. An unacknowledged requester submission gets
+informational-blue `.status-pill-unack` **Unack**. A leaf
 that is `InProgress` with nobody clocked on is **paused** — `LeafActivity.IsPaused`, the one place
 that predicate lives — and gets `.status-pill-paused` via the `_PausedPill` partial, carrying the
 same pause sign as the Pause job button. It is amber ink (`--jt-amber-700`, the same "someone is
@@ -308,26 +309,24 @@ drawn instead of spelled.
 
 Containers are `--jt-folder-600` (the container blue, used nowhere else) and a leaf is
 `--jt-green-700`, taking the metaphor literally so structure and terminal work separate at a glance.
-Neither is a state: both are glyphs beside a name, and the status pill remains the only thing that
-reports state.
+Neither is a state: both are glyphs beside a name. Achievement glyphs do not follow row titles; the
+Active-column pill is the sole row-state presentation on Browse and Awaiting Progress.
 
 The row carries facts a column used to: there is no Kind column (the glyph names it) and no Archived
 column (a `.jt-tree-flag` archive glyph sits beside the name on the few rows that are archived,
 rather than a column of "no" against every row that isn't).
 
 **Reflow.** Below 768px the table keeps only the name and the work controls; `.jt-col-secondary`
-marks owner, priority, cost, and the span bar, and they are `display: none` at that width. Six
-columns at 320px would squeeze the name to a couple of characters per line and push the page into
-the horizontal scroll WCAG 1.4.10 forbids. Every dropped column is one tap away on the row's own
-page, and the same class does the same job in the flat search-results table. Use it for any column
-that is genuinely redundant at phone width — not for content that assistive tech still needs, which
-belongs in a visually-hidden span instead.
-
-**Row geometry never uses a `style` attribute.** The CSP is `style-src 'self'` with no
-`'unsafe-inline'`, so an inline style is dropped by the browser and whatever it positioned renders
-at zero size — silently, with only a console warning. The span bar carries its per-row geometry as
-SVG `x`/`width` presentation attributes on a rect inside a `viewBox="0 0 100 6"`, which the CSP does
-not police.
+marks cost and deadline, and they are `display: none` at that width. The Active column stays at one
+Bootstrap column with an icon through `md`, then returns to its labelled two-column form at `lg`.
+At `md`, Cost remains two columns and the released width goes to Description: seven columns on
+Browse and six on Awaiting Progress, whose larger Actions toolbar retains three.
+Description takes the released `md` column. One `.jt-description-link` is rendered at every width;
+its rem-based body-size token follows the existing 14px/16px root progression without swapping
+elements at a breakpoint. Its computed size is therefore identical from `md` upward—including
+between `xl` and `xxl`—and steps down only with the phone root. Priority and the legacy
+subtree-position indicator do not return at `xxl`; `xl` and `xxl` deliberately retain the same
+five-column allocation. Every omitted fact is one tap away on the row's own page.
 
 Three details are load-bearing:
 

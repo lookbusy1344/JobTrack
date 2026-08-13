@@ -6,7 +6,7 @@ commit gate; [`architecture-overview.md`](architecture-overview.md) is the file-
 
 ## Requirements
 
-- .NET SDK `10.0.301` or later within the same feature band (pinned in `global.json`).
+- .NET SDK `10.0.400` or later within the same feature band (pinned in `global.json`).
 - PostgreSQL, for the primary provider and its test suites — this project expects a local instance
   reachable at the Unix socket `/tmp:5432` (no Docker setup is provided). On macOS via Homebrew:
 
@@ -302,11 +302,13 @@ working directory, so a relative SQLite path resolves from wherever you invoke i
    interactive prompt (security review remediation §2.7).
 
 4. **Point the web app at that database and run it.** Either edit
-   `src/JobTrack.Web/appsettings.Development.json` (`Database:Provider` → `PostgreSql`,
-   `ConnectionStrings:JobTrackIdentity`, `ConnectionStrings:JobTrackDomain`,
-   `ConnectionStrings:JobTrackPatManagement`, and `ConnectionStrings:JobTrackPatAuthentication` →
-   the connection string above. Security review remediation §2.6 split the runtime credentials by
-   capability; a local superuser connection satisfies all four, so the same connection string works
+	`src/JobTrack.Web/appsettings.Development.json` (`Database:Provider` → `PostgreSql`,
+	`ConnectionStrings:JobTrackIdentity`, `ConnectionStrings:JobTrackDomain`,
+	`ConnectionStrings:JobTrackHistoryDeletion`,
+	`ConnectionStrings:JobTrackCredentialAdministration`,
+	`ConnectionStrings:JobTrackPatManagement`, and `ConnectionStrings:JobTrackPatAuthentication` →
+	the connection string above. Security reviews split the runtime credentials by capability; a
+	local superuser connection satisfies all six, so the same connection string works
    for every key here) or set the equivalent environment variables, then:
 
    ```bash

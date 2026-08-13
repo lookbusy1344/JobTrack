@@ -1,6 +1,7 @@
 namespace JobTrack.Persistence.PostgreSql;
 
 using System.Globalization;
+using System.Text.Json;
 using Abstractions;
 using Application;
 using Application.Ports;
@@ -37,11 +38,20 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 	private readonly IClock clock;
 	private readonly NpgsqlDataSource dataSource;
+	private readonly NpgsqlDataSource historyDeletionDataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobNodeCommandPort(NpgsqlDataSource dataSource, IClock clock)
+		: this(dataSource, dataSource, clock)
+	{
+	}
+
+	/// <summary>Creates the port with a separate capability connection for destructive history operations.</summary>
+	public PostgreSqlJobNodeCommandPort(
+		NpgsqlDataSource dataSource, NpgsqlDataSource historyDeletionDataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
+		this.historyDeletionDataSource = historyDeletionDataSource;
 		this.clock = clock;
 	}
 
@@ -225,7 +235,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	/// <inheritdoc />
 	public async Task DeleteAsync(DeleteJobNodeRequest request, CancellationToken cancellationToken = default)
 	{
-		await using var context = CreateContext();
+		await using var context = CreateHistoryDeletionContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
@@ -258,12 +268,13 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		Dictionary<string, string?> before;
 		string operation;
 		string? reason = null;
+		var auditWrittenByHistoryCapability = false;
 
 		if (leafWork is null) {
 			before = SnapshotJobNode(node);
 			operation = "delete-job-node";
 		} else {
-			// AsNoTracking: force_delete_work_sessions removes these rows via raw SQL below, bypassing
+			// AsNoTracking: the history-deletion capability removes these rows through a stored function, bypassing
 			// the change tracker entirely, so a tracked fetch here would leave EF believing rows exist
 			// that no longer do -- removing leafWork afterward then throws attempting a cascade-delete
 			// fixup against sessions it thinks are still related but were never marked for deletion.
@@ -290,7 +301,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 				before = SnapshotWorkedLeaf(node, leafWork, sessions);
 				operation = "delete-worked-leaf";
 				reason = request.Reason;
-				_ = await ForceDeleteWorkSessionsAsync(context, [request.NodeId], cancellationToken).ConfigureAwait(false);
+				auditWrittenByHistoryCapability = true;
 				_ = context.Remove(leafWork);
 			}
 		}
@@ -300,9 +311,14 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			before[key] = value;
 		}
 
-		AuditEventWriter.Add(
-			context, request.Context.Actor, now, operation, "job_node", node.Id.Value,
-			request.Context.CorrelationId, reason, before, null);
+		if (auditWrittenByHistoryCapability) {
+			_ = await DeleteWorkedLeafHistoryAsync(
+				context, request, now, before, cancellationToken).ConfigureAwait(false);
+		} else {
+			AuditEventWriter.Add(
+				context, request.Context.Actor, now, operation, "job_node", node.Id.Value,
+				request.Context.CorrelationId, reason, before, null);
+		}
 
 		_ = context.Remove(node);
 
@@ -317,7 +333,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 				"subtree-delete-reason-required", "Deleting a subtree requires a reason.");
 		}
 
-		await using var context = CreateContext();
+		await using var context = CreateHistoryDeletionContext();
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		var now = clock.GetCurrentInstant();
@@ -350,14 +366,11 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		return await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
 			transaction,
 			async ct => {
-				// Written before the rows go, since nothing else will survive to describe them.
-				AuditEventWriter.Add(
-					context, request.Context.Actor, now, "delete-subtree", "job_node", node.Id.Value,
-					request.Context.CorrelationId, request.Reason, SubtreeAuditSnapshot.Create(impact), null);
-				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
+				_ = await DeleteSubtreeHistoryAsync(
+					context, request, now, SubtreeAuditSnapshot.Create(impact), ct).ConfigureAwait(false);
 
 				var edgesDropped = await SubtreeDeletionCascade.ExecuteAsync(
-					context, impact, ForceDeleteWorkSessionsAsync, ct).ConfigureAwait(false);
+					context, impact, WorkSessionsAlreadyDeletedAsync, ct).ConfigureAwait(false);
 
 				// The root goes through the tracked entity so its row_version concurrency token is
 				// checked: a concurrent deleter that already removed this subtree makes this affect
@@ -1166,9 +1179,15 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	}
 
 	private PostgreSqlJobTrackDbContext CreateContext()
+		=> CreateContext(dataSource);
+
+	private PostgreSqlJobTrackDbContext CreateHistoryDeletionContext()
+		=> CreateContext(historyDeletionDataSource);
+
+	private static PostgreSqlJobTrackDbContext CreateContext(NpgsqlDataSource source)
 	{
 		var options = new DbContextOptionsBuilder<PostgreSqlJobTrackDbContext>()
-					  .UseNpgsql(dataSource, o => o.UseNodaTime())
+					  .UseNpgsql(source, o => o.UseNodaTime())
 					  .Options;
 
 		return new(options);
@@ -1209,31 +1228,36 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 	private static async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		PostgreSqlJobTrackDbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
-	{
-		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
-								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, now);
-
-		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-								 .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
-								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
-
-		return [.. roles];
-	}
+		=> await ActorAccountState.LoadRolesAsync(context, actorId, now, cancellationToken).ConfigureAwait(false);
 
 	/// <summary>
-	///     ADR 0036/0061's sole route to deleting <c>work_session</c> rows: <c>jobtrack_domain</c> has no
-	///     direct DELETE grant on the table (../roles/jobtrack-roles-and-grants.sql), only EXECUTE on the
-	///     narrow <c>force_delete_work_sessions</c> SECURITY DEFINER function
-	///     (database/postgresql/functions/jobtrack-security-definer-functions.sql).
+	///     ADR 0036's command-shaped capability validates the target, expected version, administrator,
+	///     reason and correlation data, then deletes history and appends its audit event atomically.
 	/// </summary>
-	private static async Task<int> ForceDeleteWorkSessionsAsync(
-		DbContext context, IReadOnlyList<JobNodeId> leafWorkIds, CancellationToken cancellationToken) =>
+	private static async Task<int> DeleteWorkedLeafHistoryAsync(
+		DbContext context,
+		DeleteJobNodeRequest request,
+		Instant occurredAt,
+		IReadOnlyDictionary<string, string?> before,
+		CancellationToken cancellationToken) =>
 		await context.Database.SqlQuery<int>(
-						 $"SELECT force_delete_work_sessions({leafWorkIds.Select(id => id.Value).ToArray()}) AS \"Value\"")
+						 $"SELECT delete_worked_leaf_history({request.NodeId.Value}, {request.Version}, {request.Context.Actor.Value}, {occurredAt}, {request.Context.CorrelationId}, {request.Reason}, {JsonSerializer.Serialize(before)}::jsonb) AS \"Value\"")
 					 .SingleAsync(cancellationToken).ConfigureAwait(false);
+
+	/// <summary>ADR 0061's subtree-shaped counterpart to <see cref="DeleteWorkedLeafHistoryAsync" />.</summary>
+	private static async Task<int> DeleteSubtreeHistoryAsync(
+		DbContext context,
+		DeleteSubtreeRequest request,
+		Instant occurredAt,
+		IReadOnlyDictionary<string, string?> before,
+		CancellationToken cancellationToken) =>
+		await context.Database.SqlQuery<int>(
+						 $"SELECT delete_subtree_history({request.RootId.Value}, {request.Version}, {request.Context.Actor.Value}, {occurredAt}, {request.Context.CorrelationId}, {request.Reason}, {JsonSerializer.Serialize(before)}::jsonb) AS \"Value\"")
+					 .SingleAsync(cancellationToken).ConfigureAwait(false);
+
+	private static Task WorkSessionsAlreadyDeletedAsync(
+		DbContext context, IReadOnlyList<JobNodeId> leafWorkIds, CancellationToken cancellationToken) =>
+		Task.CompletedTask;
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)
 	{

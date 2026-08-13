@@ -22,13 +22,16 @@ public sealed class PostgreSqlEmployeeQueryPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new PostgreSqlInstallationBootstrapPort(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build(), SystemClock.Instance);
 
 	internal override IEmployeeQueryPort CreateQueryPort(string connectionString) =>
-		new EmployeeQueryPort(new PostgreSqlReadOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+		new EmployeeQueryPort(new PostgreSqlReadOperations(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_domain").Build()),
 			SystemClock.Instance);
 
 	internal override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
-		new EmployeeCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+		new EmployeeCommandPort(new PostgreSqlWriteOperations(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
 			SystemClock.Instance);
 }

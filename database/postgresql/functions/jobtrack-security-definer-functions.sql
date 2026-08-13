@@ -1,7 +1,8 @@
--- SECURITY DEFINER functions narrowing runtime access to personal_access_token and (since ADR 0066
--- Stage 5) rate_limit_window -- two unrelated tables sharing this file only because both are
--- reached exclusively through a narrow function surface rather than a direct table grant, and both
--- are unversioned deployment-tool infrastructure re-applied after every schema deployment.
+-- SECURITY DEFINER functions narrowing runtime access to personal_access_token, (since ADR 0066
+-- Stage 5) rate_limit_window, and (since ADR 0036/0061) work_session -- unrelated tables sharing
+-- this file only because each is reached exclusively through a narrow function surface rather than
+-- a direct table grant, and all are unversioned deployment-tool infrastructure re-applied after
+-- every schema deployment.
 --
 -- personal_access_token (security review remediation §2.6). jobtrack_domain
 -- has no direct SELECT/INSERT/UPDATE grant on personal_access_token at all
@@ -182,6 +183,128 @@ GRANT EXECUTE ON FUNCTION pat_revoke_all(bigint, timestamptz) TO jobtrack_pat_ma
 GRANT EXECUTE ON FUNCTION pat_revoke_all(bigint, timestamptz) TO jobtrack_domain;
 GRANT EXECUTE ON FUNCTION pat_try_authenticate(text, timestamptz) TO jobtrack_pat_authentication;
 
+-- Command-shaped retained-history deletion (ADR 0036 worked-leaf force delete, ADR 0061
+-- administrator subtree delete): jobtrack_domain has no direct DELETE grant on work_session and no
+-- EXECUTE grant on these
+-- function. Only the separately credentialed jobtrack_history_deletion role may invoke it, so a
+-- compromised ordinary domain credential cannot manufacture an administrator request and erase
+-- arbitrary retained history. Each function independently verifies the administrator, target,
+-- expected version and reason, derives the affected sessions, and writes the audit event.
+-- (../roles/jobtrack-roles-and-grants.sql) -- it is cost-relevant execution history that the spec
+-- says is "never physically deleted" except through these two narrow, role-gated application code
+-- paths (JobNodeDeletePolicy.CanForceDeleteWorkedLeaf / CanDeleteSubtree). Routing the deletion
+-- through this function rather than a blanket table grant keeps a direct "DELETE FROM work_session"
+-- from any other query in the domain connection's session refused at the database, matching the
+-- impl plan §6.7 gate item "role grants prove the normal application role cannot ... delete retained
+-- history" for every path except this one reviewed mechanism.
+DROP FUNCTION IF EXISTS force_delete_work_sessions(bigint[]);
+
+CREATE OR REPLACE FUNCTION delete_worked_leaf_history(
+    p_node_id bigint,
+    p_expected_version bigint,
+    p_actor_user_id bigint,
+    p_occurred_at timestamptz,
+    p_correlation_id uuid,
+    p_reason text,
+    p_before_data jsonb) RETURNS integer
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS
+$$
+DECLARE
+    deleted_count integer;
+BEGIN
+    IF btrim(p_reason) = '' OR p_reason IS NULL THEN
+        RAISE EXCEPTION 'worked-leaf deletion requires a reason' USING ERRCODE = '22023';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM identity_user iu
+        JOIN identity_user_role iur ON iur.identity_user_id = iu.id
+        WHERE iu.app_user_id = p_actor_user_id
+          AND iu.is_enabled
+          AND (NOT iu.lockout_enabled OR iu.lockout_end IS NULL OR iu.lockout_end <= p_occurred_at)
+          AND iur.identity_role_id = 1
+    ) THEN
+        RAISE EXCEPTION 'worked-leaf deletion requires an administrator' USING ERRCODE = '42501';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM job_node jn JOIN leaf_work lw ON lw.job_node_id = jn.id
+        WHERE jn.id = p_node_id AND jn.row_version = p_expected_version
+    ) THEN
+        RAISE EXCEPTION 'worked-leaf target or version does not match' USING ERRCODE = 'P0004';
+    END IF;
+
+    DELETE FROM work_session WHERE leaf_work_id = p_node_id;
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    INSERT INTO audit_event (
+        occurred_at, actor_user_id, operation, entity_type, entity_id,
+        correlation_id, reason, before_data, after_data)
+    VALUES (
+        p_occurred_at, p_actor_user_id, 'delete-worked-leaf', 'job_node', p_node_id,
+        p_correlation_id, p_reason, p_before_data, NULL);
+    RETURN deleted_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION delete_subtree_history(
+    p_root_id bigint,
+    p_expected_version bigint,
+    p_actor_user_id bigint,
+    p_occurred_at timestamptz,
+    p_correlation_id uuid,
+    p_reason text,
+    p_before_data jsonb) RETURNS integer
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS
+$$
+DECLARE
+    deleted_count integer;
+BEGIN
+    IF btrim(p_reason) = '' OR p_reason IS NULL THEN
+        RAISE EXCEPTION 'subtree deletion requires a reason' USING ERRCODE = '22023';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM identity_user iu
+        JOIN identity_user_role iur ON iur.identity_user_id = iu.id
+        WHERE iu.app_user_id = p_actor_user_id
+          AND iu.is_enabled
+          AND (NOT iu.lockout_enabled OR iu.lockout_end IS NULL OR iu.lockout_end <= p_occurred_at)
+          AND iur.identity_role_id = 1
+    ) THEN
+        RAISE EXCEPTION 'subtree deletion requires an administrator' USING ERRCODE = '42501';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM job_node
+        WHERE id = p_root_id AND parent_id IS NOT NULL AND row_version = p_expected_version
+    ) THEN
+        RAISE EXCEPTION 'subtree target or version does not match' USING ERRCODE = 'P0004';
+    END IF;
+
+    WITH RECURSIVE subtree(id) AS (
+        SELECT p_root_id
+        UNION ALL
+        SELECT child.id FROM job_node child JOIN subtree parent ON child.parent_id = parent.id
+    )
+    DELETE FROM work_session ws WHERE ws.leaf_work_id IN (SELECT id FROM subtree);
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    INSERT INTO audit_event (
+        occurred_at, actor_user_id, operation, entity_type, entity_id,
+        correlation_id, reason, before_data, after_data)
+    VALUES (
+        p_occurred_at, p_actor_user_id, 'delete-subtree', 'job_node', p_root_id,
+        p_correlation_id, p_reason, p_before_data, NULL);
+    RETURN deleted_count;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION delete_worked_leaf_history(bigint, bigint, bigint, timestamptz, uuid, text, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION delete_subtree_history(bigint, bigint, bigint, timestamptz, uuid, text, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION delete_worked_leaf_history(bigint, bigint, bigint, timestamptz, uuid, text, jsonb) TO jobtrack_history_deletion;
+GRANT EXECUTE ON FUNCTION delete_subtree_history(bigint, bigint, bigint, timestamptz, uuid, text, jsonb) TO jobtrack_history_deletion;
+
 -- rate_limit_try_consume: the shared PostgreSQL fixed-window rate-limit primitive (ADR 0066 Stage 5,
 -- docs/plans/2026-07-26-multi-instance-web-deployment-plan.md §2.4). Atomically evaluates and
 -- consumes one or two partitions (a primary partition, and for the login limiter a coarser backstop
@@ -213,6 +336,11 @@ CREATE OR REPLACE FUNCTION rate_limit_try_consume(
 AS
 $$
 DECLARE
+    c_api_purpose                 constant text := 'api';
+    c_login_purpose               constant text := 'login';
+    c_max_window_seconds          constant integer := 3600;
+    c_max_permit_limit            constant integer := 1000000;
+    c_max_partition_count         constant integer := 65536;
     v_window_start   timestamptz;
     v_primary_count  integer := 0;
     v_backstop_count integer := 0;
@@ -221,8 +349,29 @@ DECLARE
     v_pruned_count   integer;
     v_row            record;
 BEGIN
-    IF p_max_partition_count <= 0 THEN
-        RAISE EXCEPTION 'p_max_partition_count must be positive';
+    IF p_purpose NOT IN (c_api_purpose, c_login_purpose) THEN
+        RAISE EXCEPTION 'unknown rate-limit purpose';
+    END IF;
+
+    IF p_window_seconds NOT BETWEEN 1 AND c_max_window_seconds THEN
+        RAISE EXCEPTION 'p_window_seconds is outside the permitted range';
+    END IF;
+
+    IF p_permit_limit NOT BETWEEN 1 AND c_max_permit_limit THEN
+        RAISE EXCEPTION 'p_permit_limit is outside the permitted range';
+    END IF;
+
+    IF p_max_partition_count NOT BETWEEN 1 AND c_max_partition_count THEN
+        RAISE EXCEPTION 'p_max_partition_count is outside the permitted range';
+    END IF;
+
+    IF p_backstop_digest IS NOT NULL
+        AND p_backstop_permit_limit NOT BETWEEN 1 AND c_max_permit_limit THEN
+        RAISE EXCEPTION 'p_backstop_permit_limit is outside the permitted range';
+    END IF;
+
+    IF p_backstop_digest IS NULL AND p_backstop_permit_limit <> 0 THEN
+        RAISE EXCEPTION 'a missing backstop requires a zero permit limit';
     END IF;
 
     v_window_start := to_timestamp(floor(extract(epoch FROM p_now) / p_window_seconds) * p_window_seconds);

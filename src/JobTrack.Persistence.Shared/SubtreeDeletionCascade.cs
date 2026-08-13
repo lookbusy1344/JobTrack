@@ -41,8 +41,8 @@ internal static class SubtreeDeletionCascade
 	///     issued directly here because the two providers reach it differently: SQLite has no roles, so
 	///     a plain <c>ExecuteDelete</c> is correct there, while PostgreSQL's <c>jobtrack_domain</c> role
 	///     has no direct DELETE grant on <c>work_session</c> at all (ADR 0036/0061 are the two accepted
-	///     exceptions to "cost-relevant history is never deleted") and must go through the narrow
-	///     <c>force_delete_work_sessions</c> SECURITY DEFINER function instead.
+	///     exceptions to "cost-relevant history is never deleted") and must go through its separately
+	///     credentialed, command-shaped SECURITY DEFINER capability instead.
 	/// </param>
 	/// <param name="cancellationToken">Cancellation for the deletes issued here.</param>
 	/// <returns>How many prerequisite edges were dropped, both internal and subtree-crossing.</returns>

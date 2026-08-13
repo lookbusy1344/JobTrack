@@ -64,6 +64,8 @@ public sealed class PostgreSqlTransportSecurityConfigurationTests
 			_ = builder.UseSetting("Database:Provider", "PostgreSql");
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", identityConnectionString);
 			_ = builder.UseSetting("ConnectionStrings:JobTrackDomain", domainConnectionString);
+			_ = builder.UseSetting("ConnectionStrings:JobTrackHistoryDeletion", domainConnectionString);
+			_ = builder.UseSetting("ConnectionStrings:JobTrackCredentialAdministration", domainConnectionString);
 			_ = builder.UseSetting("ConnectionStrings:JobTrackPatManagement", domainConnectionString);
 			_ = builder.UseSetting("ConnectionStrings:JobTrackPatAuthentication", domainConnectionString);
 		}

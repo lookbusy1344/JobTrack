@@ -57,20 +57,24 @@ for speculatively.
   unset value and the `*` catch-all outside Development (see `web-host-security.md`).
 - **PostgreSQL login role.** The repository ships group roles only
   (`database/postgresql/roles/jobtrack-roles-and-grants.sql`: `jobtrack_owner`,
-  `jobtrack_schema_deployer`, `jobtrack_domain`, `jobtrack_identity`, `jobtrack_pat_management`,
+  `jobtrack_schema_deployer`, `jobtrack_domain`, `jobtrack_history_deletion`,
+  `jobtrack_credential_administration`, `jobtrack_identity`, `jobtrack_pat_management`,
   `jobtrack_pat_authentication`, `jobtrack_readonly`, `jobtrack_emergency_reset`) and holds no environment credentials. Create an actual `LOGIN` role
   per environment and grant it membership in the appropriate group role (security review
   remediation §2.6 split the former single `jobtrack_application` role by capability):
-  - `jobtrack_domain` for `ConnectionStrings:JobTrackDomain` — `JobTrack.Web`'s `IJobTrackClient`
-    connection for domain data and audit writes, and also the connection `JobTrack.AdminCli` and `JobTrack.Database` use for their
-    single `--connection-string`: `jobtrack_domain` is a strict superset of what those tools need
-    (it retains `identity_user` access alongside its domain grants — see the roles script's own
-    documented residual), so provisioning the CLIs' one connection string with this role covers
-    every command they run. Do **not** provision the CLIs with `jobtrack_identity` — it cannot reach
-    domain tables those commands touch.
+  - `jobtrack_domain` for `ConnectionStrings:JobTrackDomain` — ordinary domain data and domain audit
+    writes only. It cannot read credential secrets or mutate logins and role assignments.
   - `jobtrack_identity` for `ConnectionStrings:JobTrackIdentity` — `JobTrack.Web`'s ASP.NET Core
     Identity sign-in path only (password/TOTP verification, security-stamp validation on every
     request). It can read role assignments for claims but cannot create or remove them.
+  - `jobtrack_history_deletion` for `ConnectionStrings:JobTrackHistoryDeletion` — the two
+    administrator job-deletion commands. It inherits domain access for their atomic authorization,
+    cascade and audit transaction, but alone can invoke retained-history deletion.
+  - `jobtrack_credential_administration` for `ConnectionStrings:JobTrackCredentialAdministration`
+    — bootstrap, employee/account credential and role commands, and authentication audit events.
+    `JobTrack.AdminCli` uses this role during provisioning because its single connection also runs
+    later domain commands; the role inherits `jobtrack_domain`. `JobTrack.Database` schema deployment
+    still uses the schema-deployer/owner credential, never either runtime role.
   - `jobtrack_pat_management` for `ConnectionStrings:JobTrackPatManagement` — self-service/admin
     PAT issue/list/revoke operations and their audit rows.
   - `jobtrack_pat_authentication` for `ConnectionStrings:JobTrackPatAuthentication` — bearer-token
@@ -136,7 +140,8 @@ for speculatively.
    ```
 
    `/etc/jobtrack/secrets.env` (holding `ConnectionStrings__JobTrackIdentity=...` and, for
-   PostgreSQL, `ConnectionStrings__JobTrackDomain=...`, `ConnectionStrings__JobTrackPatManagement=...`,
+   PostgreSQL, `ConnectionStrings__JobTrackDomain=...`, `ConnectionStrings__JobTrackHistoryDeletion=...`,
+   `ConnectionStrings__JobTrackCredentialAdministration=...`, `ConnectionStrings__JobTrackPatManagement=...`,
    and `ConnectionStrings__JobTrackPatAuthentication=...` too — see the role split above) should be
    `chmod 600`, owned by `jobtrack:jobtrack`, and
    excluded from any config management repo that isn't itself a secret store. Enable and start with
@@ -201,6 +206,8 @@ for speculatively.
 
    ```sql
    CREATE ROLE jobtrack_domain_login LOGIN PASSWORD '...' IN ROLE jobtrack_domain;
+   CREATE ROLE jobtrack_history_deletion_login LOGIN PASSWORD '...' IN ROLE jobtrack_history_deletion;
+   CREATE ROLE jobtrack_credential_administration_login LOGIN PASSWORD '...' IN ROLE jobtrack_credential_administration;
    CREATE ROLE jobtrack_identity_login LOGIN PASSWORD '...' IN ROLE jobtrack_identity;
    CREATE DATABASE jobtrack
        OWNER jobtrack_domain_login
@@ -259,9 +266,11 @@ for speculatively.
      Application Pool, or `web.config`'s `<environmentVariables>`.
    - Set `AllowedHosts` to the site's own host name(s) via the same mechanism — the IIS binding does
      not substitute for it, since ANCM forwards the client's original `Host` header through.
-   - Set `DataProtection:KeyPath` to the restricted directory from step 3, and all four
+   - Set `DataProtection:KeyPath` to the restricted directory from step 3, and all six
      `ConnectionStrings:JobTrackIdentity` (the `jobtrack_identity` role) and
      `ConnectionStrings:JobTrackDomain` (the `jobtrack_domain` role),
+     `ConnectionStrings:JobTrackHistoryDeletion` (the `jobtrack_history_deletion` role),
+     `ConnectionStrings:JobTrackCredentialAdministration` (the `jobtrack_credential_administration` role),
      `ConnectionStrings:JobTrackPatManagement` (the `jobtrack_pat_management` role), and
      `ConnectionStrings:JobTrackPatAuthentication` (the `jobtrack_pat_authentication` role) via a protected mechanism (see
      "secrets" below) rather than a plaintext `appsettings.Production.json` committed anywhere.

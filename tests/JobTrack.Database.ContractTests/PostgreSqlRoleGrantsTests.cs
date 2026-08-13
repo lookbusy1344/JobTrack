@@ -155,7 +155,7 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 				"SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
 				"WHERE n.nspname = 'public' AND c.relkind = 'r' " +
 				"AND c.relname NOT IN " +
-				"('schema_version', 'personal_access_token', 'data_protection_key', 'rate_limit_window', 'rate_limit_capacity_lock') " +
+				"('schema_version', 'identity_user', 'personal_access_token', 'data_protection_key', 'rate_limit_window', 'rate_limit_capacity_lock') " +
 				"AND NOT has_table_privilege('jobtrack_domain', c.oid, 'SELECT') " +
 				"ORDER BY c.relname;";
 			await using var reader = await command.ExecuteReaderAsync();
@@ -170,19 +170,69 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task The_domain_role_can_force_delete_work_sessions_through_the_narrow_function_but_not_directly()
+	public async Task Only_the_history_deletion_role_can_force_delete_work_sessions()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, leafWorkId) = await SeedUserAndLeafWorkAsync(connection, "Alice Example");
+		var identityUserId = await InsertIdentityUserAsync(connection, userId);
 		await InsertWorkSessionAsync(connection, leafWorkId, userId);
+		await using (var grantAdministrator = connection.CreateCommand()) {
+			grantAdministrator.CommandText =
+				$"INSERT INTO identity_user_role (identity_user_id, identity_role_id) VALUES ({identityUserId}, 1);";
+			_ = await grantAdministrator.ExecuteNonQueryAsync();
+		}
 
 		var directDeleteAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "DELETE FROM work_session;");
-		var functionAct = async () =>
-			await ExecuteAsRoleAsync(connection, "jobtrack_domain", $"SELECT force_delete_work_sessions(ARRAY[{leafWorkId}]::bigint[]);");
+		var domainFunctionAct = async () =>
+			await ExecuteAsRoleAsync(
+				connection, "jobtrack_domain",
+				$"SELECT delete_worked_leaf_history({leafWorkId}, 1, {userId}, now(), gen_random_uuid(), 'duplicate', '{{}}'::jsonb);");
+		var historyDeletionFunctionAct = async () =>
+			await ExecuteAsRoleAsync(
+				connection, "jobtrack_history_deletion",
+				$"SELECT delete_worked_leaf_history({leafWorkId}, 1, {userId}, now(), gen_random_uuid(), 'duplicate', '{{}}'::jsonb);");
 
 		await directDeleteAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
-		await functionAct.Should().NotThrowAsync();
+		await domainFunctionAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await historyDeletionFunctionAct.Should().NotThrowAsync();
 		(await CountRowsAsync(connection, "work_session")).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Security_definer_authority_matches_the_reviewed_capability_matrix()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText =
+			"WITH runtime_role(role_name) AS (VALUES " +
+			"('jobtrack_domain'), ('jobtrack_history_deletion'), ('jobtrack_credential_administration'), ('jobtrack_identity'), " +
+			"('jobtrack_pat_management'), ('jobtrack_pat_authentication'), ('jobtrack_readonly'), " +
+			"('jobtrack_emergency_reset')) " +
+			"SELECT role_name || ':' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' " +
+			"FROM runtime_role CROSS JOIN pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace " +
+			"WHERE n.nspname = 'public' AND p.prosecdef " +
+			"AND has_function_privilege(role_name, p.oid, 'EXECUTE') ORDER BY 1;";
+
+		var actual = new List<string>();
+		await using var reader = await command.ExecuteReaderAsync();
+		while (await reader.ReadAsync()) {
+			actual.Add(reader.GetString(0));
+		}
+
+		actual.Should().Equal(
+			"jobtrack_credential_administration:pat_revoke_all(p_app_user_id bigint, p_now timestamp with time zone)",
+			"jobtrack_domain:pat_revoke_all(p_app_user_id bigint, p_now timestamp with time zone)",
+			"jobtrack_history_deletion:delete_subtree_history(p_root_id bigint, p_expected_version bigint, p_actor_user_id bigint, p_occurred_at timestamp with time zone, p_correlation_id uuid, p_reason text, p_before_data jsonb)",
+			"jobtrack_history_deletion:delete_worked_leaf_history(p_node_id bigint, p_expected_version bigint, p_actor_user_id bigint, p_occurred_at timestamp with time zone, p_correlation_id uuid, p_reason text, p_before_data jsonb)",
+			"jobtrack_history_deletion:pat_revoke_all(p_app_user_id bigint, p_now timestamp with time zone)",
+			"jobtrack_identity:rate_limit_live_partition_count()",
+			"jobtrack_identity:rate_limit_try_consume(p_purpose text, p_partition_digest bytea, p_backstop_digest bytea, p_now timestamp with time zone, p_window_seconds integer, p_permit_limit integer, p_backstop_permit_limit integer, OUT out_allowed boolean, OUT out_rows_pruned integer)",
+			"jobtrack_identity:rate_limit_try_consume(p_purpose text, p_partition_digest bytea, p_backstop_digest bytea, p_now timestamp with time zone, p_window_seconds integer, p_permit_limit integer, p_backstop_permit_limit integer, p_max_partition_count integer, OUT out_allowed boolean, OUT out_rows_pruned integer)",
+			"jobtrack_pat_authentication:pat_try_authenticate(p_token_hash text, p_now timestamp with time zone)",
+			"jobtrack_pat_management:pat_issue(p_app_user_id bigint, p_token_hash text, p_label text, p_created_at timestamp with time zone, p_expires_at timestamp with time zone)",
+			"jobtrack_pat_management:pat_list(p_app_user_id bigint)",
+			"jobtrack_pat_management:pat_revoke(p_token_id bigint, p_app_user_id bigint, p_now timestamp with time zone)",
+			"jobtrack_pat_management:pat_revoke_all(p_app_user_id bigint, p_now timestamp with time zone)");
 	}
 
 	[Fact]
@@ -336,7 +386,7 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		var executeAct = async () => await ExecuteAsRoleAsync(
 			connection,
 			"jobtrack_identity",
-			"SELECT out_allowed FROM rate_limit_try_consume('login', '\\x01'::bytea, NULL, now(), 60, 5, 0);");
+			"SELECT out_allowed FROM rate_limit_try_consume('api', '\\x01'::bytea, NULL, now(), 60, 5, 0);");
 		var selectAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_identity", "SELECT * FROM rate_limit_window;");
 		var insertAct = async () => await ExecuteAsRoleAsync(
 			connection,
@@ -349,12 +399,45 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task The_identity_role_cannot_create_an_unknown_rate_limit_purpose()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+
+		var act = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_identity",
+			"SELECT out_allowed FROM rate_limit_try_consume('rogue', '\\x01'::bytea, NULL, now(), 60, 5, 0, 4096);");
+
+		await act.Should().ThrowAsync<PostgresException>();
+		(await CountRowsAsync(connection, "rate_limit_capacity_lock")).Should().Be(0);
+		(await CountRowsAsync(connection, "rate_limit_window")).Should().Be(0);
+	}
+
+	[Theory]
+	[InlineData("0, 5, 0, 4096")]
+	[InlineData("60, 0, 0, 4096")]
+	[InlineData("60, 5, 0, 65537")]
+	public async Task The_identity_role_cannot_supply_rate_limit_policy_outside_database_safety_bounds(string policyArguments)
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+
+		var act = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_identity",
+			$"SELECT out_allowed FROM rate_limit_try_consume('api', '\\x01'::bytea, NULL, now(), {policyArguments});");
+
+		await act.Should().ThrowAsync<PostgresException>();
+		(await CountRowsAsync(connection, "rate_limit_capacity_lock")).Should().Be(0);
+		(await CountRowsAsync(connection, "rate_limit_window")).Should().Be(0);
+	}
+
+	[Fact]
 	public async Task The_domain_role_has_no_access_to_rate_limit_window()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 
 		var executeAct = async () => await ExecuteAsRoleAsync(
-			connection, "jobtrack_domain", "SELECT out_allowed FROM rate_limit_try_consume('login', '\\x01'::bytea, NULL, now(), 60, 5, 0);");
+			connection, "jobtrack_domain", "SELECT out_allowed FROM rate_limit_try_consume('api', '\\x01'::bytea, NULL, now(), 60, 5, 0);");
 		var selectAct = async () => await ExecuteAsRoleAsync(connection, "jobtrack_domain", "SELECT * FROM rate_limit_window;");
 
 		await executeAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
@@ -409,6 +492,63 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		await securityStampAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		await concurrencyStampAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		await userNameAct.Should().NotThrowAsync();
+	}
+
+	[Fact]
+	public async Task The_domain_role_cannot_administer_credentials_roles_or_their_audit_trail()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var identityUserId = await InsertIdentityUserAsync(connection, userId);
+
+		var readPasswordHashAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_domain", "SELECT password_hash FROM identity_user;");
+		var readSecurityStampAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_domain", "SELECT security_stamp FROM identity_user;");
+		var readAuthenticatorKeyAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_domain", "SELECT authenticator_key_protected FROM identity_user;");
+		var insertIdentityAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_domain",
+			$"INSERT INTO identity_user (app_user_id, user_name, normalized_user_name, password_hash, security_stamp, concurrency_stamp) " +
+			$"VALUES ({userId}, 'rogue', 'ROGUE', 'hash', 'stamp', 'concurrency');");
+		var updateIdentityAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_domain", $"UPDATE identity_user SET password_hash = 'chosen' WHERE id = {identityUserId};");
+		var assignRoleAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_domain",
+			$"INSERT INTO identity_user_role (identity_user_id, identity_role_id) VALUES ({identityUserId}, 1);");
+		var revokeRoleAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_domain", $"DELETE FROM identity_user_role WHERE identity_user_id = {identityUserId};");
+		var fabricateAuditAct = async () => await ExecuteAsRoleAsync(
+			connection, "jobtrack_domain",
+			$"INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id) " +
+			$"VALUES ({userId}, 'reset-employee-password', 'identity_user', {identityUserId}, gen_random_uuid());");
+
+		await readPasswordHashAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await readSecurityStampAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await readAuthenticatorKeyAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await insertIdentityAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await updateIdentityAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await assignRoleAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await revokeRoleAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await fabricateAuditAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+	}
+
+	[Fact]
+	public async Task The_credential_administration_role_can_mutate_credentials_roles_and_their_audit_trail()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var identityUserId = await InsertIdentityUserAsync(connection, userId);
+
+		var act = async () => await ExecuteAsRoleAsync(
+			connection,
+			"jobtrack_credential_administration",
+			$"UPDATE identity_user SET password_hash = 'replacement' WHERE id = {identityUserId}; " +
+			$"INSERT INTO identity_user_role (identity_user_id, identity_role_id) VALUES ({identityUserId}, 1); " +
+			$"INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id) " +
+			$"VALUES ({userId}, 'reset-employee-password', 'identity_user', {identityUserId}, gen_random_uuid());");
+
+		await act.Should().NotThrowAsync();
 	}
 
 	[Fact]

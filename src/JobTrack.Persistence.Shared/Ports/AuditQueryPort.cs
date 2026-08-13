@@ -46,19 +46,8 @@ internal sealed class AuditQueryPort(IProviderReadOperations provider, IClock cl
 
 	private async Task<EquatableArray<EmployeeRole>> GetActorRolesAsync(
 		DbContext context, AppUserId actorId, CancellationToken cancellationToken)
-	{
-		var actorIdentityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-											 .FirstOrDefaultAsync(iu => iu.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
-								?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
-		ActorAccountState.EnsureMayAct(actorIdentityUser, actorId, clock.GetCurrentInstant());
-
-		var roles = await context.Set<IdentityUserRoleEntity>().AsNoTracking()
-								 .Where(ur => ur.IdentityUserId == actorIdentityUser.Id)
-								 .Select(ur => (EmployeeRole)ur.IdentityRoleId)
-								 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
-
-		return [.. roles];
-	}
+		=> await ActorAccountState.LoadRolesAsync(
+			context, actorId, clock.GetCurrentInstant(), cancellationToken).ConfigureAwait(false);
 }
 
 /// <summary>

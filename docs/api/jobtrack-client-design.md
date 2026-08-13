@@ -440,6 +440,13 @@ public static class JobTrackPostgreSql
         IPasswordHasher<BootstrapCredentialSubject>? passwordHasher = null,
         IPasswordHasher<EmployeeCredentialSubject>? employeePasswordHasher = null,
         IClock? clock = null);
+
+    public static IJobTrackClient CreateWithRoleSeparatedDataSources(
+        NpgsqlDataSource dataSource,
+        NpgsqlDataSource historyDeletionDataSource,
+        NpgsqlDataSource credentialAdministrationDataSource,
+        NpgsqlDataSource personalAccessTokenManagementDataSource,
+        NpgsqlDataSource personalAccessTokenAuthenticationDataSource);
 }
 ```
 

@@ -159,20 +159,32 @@ The command disables rather than destroys the versions, providing a recoverable 
 Later deployments omit retired credentials and do not recreate them. Provisioning queries the
 database first and fails closed if an account is unexpectedly missing without an enrolment secret.
 
+**An enabled enrolment secret is not evidence of the current password.** The deploy script prints
+its "must be changed on first sign-in" banner on *every* run for as long as the secret stays
+enabled — which only tells you nobody has run the retire command above, not that the value is
+still valid. An account already in active use may have changed its password (and enrolled 2FA)
+long before the operator got around to retiring the secret; that account's real credential and
+2FA state are entirely unaffected by any later re-deploy, because `bootstrap`/`create-employee`
+are skip-if-exists (confirm in the provisioning job logs: `"<username> already exists; leaving it
+alone"`). Treat the banner as "retire this if you haven't," not as "this deployment just reset
+these accounts."
+
 ## Credential separation
 
-The four connection strings `Program.cs` requires under PostgreSQL (security review remediation §2.6)
-get four *separate* login roles, each a member of exactly one group role from
+The six connection strings `Program.cs` requires under PostgreSQL get six *separate* login roles,
+each a member of exactly one group role from
 `database/postgresql/roles/jobtrack-roles-and-grants.sql`:
 
 | Connection string | Login role | Group role |
 | --- | --- | --- |
 | `ConnectionStrings:JobTrackDomain` | `jobtrack_domain_login` | `jobtrack_domain` |
+| `ConnectionStrings:JobTrackHistoryDeletion` | `jobtrack_history_deletion_login` | `jobtrack_history_deletion` |
+| `ConnectionStrings:JobTrackCredentialAdministration` | `jobtrack_credential_administration_login` | `jobtrack_credential_administration` |
 | `ConnectionStrings:JobTrackIdentity` | `jobtrack_identity_login` | `jobtrack_identity` |
 | `ConnectionStrings:JobTrackPatManagement` | `jobtrack_pat_management_login` | `jobtrack_pat_management` |
 | `ConnectionStrings:JobTrackPatAuthentication` | `jobtrack_pat_authentication_login` | `jobtrack_pat_authentication` |
 
-A fifth login role exists alongside these but backs no connection string — no running service ever
+A seventh login role exists alongside these but backs no connection string — no running service ever
 holds it:
 
 | Login role | Group role | Used by |
@@ -183,15 +195,15 @@ Each gets its own random password. The service never holds the Cloud SQL admin (
 credential at all — only the provisioning job does, and only for the length of one execution.
 
 Set `JOBTRACK_ROTATE_DATABASE_CREDENTIALS=true` for an explicit credential-rotation deployment. It
-adds new versions for the administrator and five login roles, rebuilds the four derived connection
+adds new versions for the administrator and seven login roles, rebuilds the six derived connection
 strings, applies the role passwords in the provisioning job, and promotes the matching revision.
 Because PostgreSQL password roles cannot accept old and new passwords concurrently, schedule this as
 a maintenance change: the old serving revision loses database access between the role update and
 candidate promotion. Do not leave the variable enabled for routine deployments.
 
-`JobTrack.AdminCli` runs as `jobtrack_domain_login` during provisioning, per
-[`production-deployment.md`](production-deployment.md): `jobtrack_domain` is a strict superset of what
-`bootstrap` and `create-employee` touch.
+`JobTrack.AdminCli` runs as `jobtrack_credential_administration_login` during provisioning, per
+[`production-deployment.md`](production-deployment.md). That role alone can bootstrap and administer
+employee credentials, and inherits domain authority for the later rota commands.
 
 **Secrets never reach `argv`.** `JobTrack.Database` and `JobTrack.AdminCli` reject a
 `--connection-string` containing a password, and `bootstrap`/`create-employee` reject a plaintext
@@ -212,7 +224,7 @@ identity is disabled and user-managed key creation/upload is blocked by organiza
 
 | Service account | Runs | Can read | Can write |
 | --- | --- | --- | --- |
-| `jobtrack-run` | the Cloud Run service | four application connection strings and the data-protection certificate/password | nothing outside the database |
+| `jobtrack-run` | the Cloud Run service | six application connection strings and the data-protection certificate/password | nothing outside the database |
 | `jobtrack-provision-sa` | the transient provisioning job | database admin password, five role passwords, and any still-enabled enrolment passwords | nothing outside the database |
 | `jobtrack-emergency-reset` | the transient recovery job | emergency-reset role password only | nothing outside the database |
 
@@ -234,7 +246,7 @@ the narrow roles needed by the deployment workflow rather than Owner; release-si
 deployer, signer and break-glass membership quarterly and after every personnel change.
 
 **Co-tenancy rule.** No other workload in this project may run as an identity holding any role on
-the four connection-string secrets, the data-protection certificate, or the Cloud SQL instance —
+the six connection-string secrets, the data-protection certificate, or the Cloud SQL instance —
 which since the key ring moved into `data_protection_key` now also guards the key ring itself. The
 project's
 demo services (`jobtrack-web`, the SQLite smoke test) were relocated to a dedicated

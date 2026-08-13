@@ -196,6 +196,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -274,6 +275,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -305,6 +307,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");

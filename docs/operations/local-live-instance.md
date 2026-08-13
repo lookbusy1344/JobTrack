@@ -12,7 +12,7 @@ data), follow the same three steps against a differently named database that you
 This is the "simple persistent local DB" tier — a single Homebrew PostgreSQL instance, your own OS
 login role, no separate `LOGIN` role or secrets file. For an actual multi-user production
 deployment, use [`production-deployment.md`](production-deployment.md) instead, which provisions a
-dedicated `LOGIN` roles scoped to the `jobtrack_domain`/`jobtrack_identity`/
+dedicated `LOGIN` roles scoped to the `jobtrack_domain`/`jobtrack_credential_administration`/`jobtrack_identity`/
 `jobtrack_pat_management`/`jobtrack_pat_authentication`/`jobtrack_schema_deployer` group roles.
 
 ```bash

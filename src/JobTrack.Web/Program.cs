@@ -29,6 +29,8 @@ public sealed class Program
 	private const string SqliteProviderName = "Sqlite";
 	private const string PostgreSqlProviderName = "PostgreSql";
 	private const string DomainDataSourceKey = "JobTrackDomain";
+	private const string HistoryDeletionDataSourceKey = "JobTrackHistoryDeletion";
+	private const string CredentialAdministrationDataSourceKey = "JobTrackCredentialAdministration";
 	private const string PatManagementDataSourceKey = "JobTrackPatManagement";
 	private const string PatAuthenticationDataSourceKey = "JobTrackPatAuthentication";
 	private const string CookieOrBearerSchemeName = "JobTrackCookieOrBearer";
@@ -149,6 +151,7 @@ public sealed class Program
 	private const string RequestTooLargeProblemType = "/problems/request-too-large";
 
 	private const int RequestTimeoutSeconds = 30;
+	private const int ReadinessProbeCacheSeconds = 2;
 
 	// Defense against a slow/stalled request body (e.g. slowloris-style resource exhaustion,
 	// security review remediation §2.6): AddRequestTimeouts' RequestTimeoutSeconds above only
@@ -255,6 +258,12 @@ public sealed class Program
 				// longer automatically carries the other's blast radius.
 				var domainConnectionString = builder.Configuration.GetConnectionString("JobTrackDomain")
 											 ?? throw new InvalidOperationException("ConnectionStrings:JobTrackDomain is not configured.");
+				var historyDeletionConnectionString = builder.Configuration.GetConnectionString("JobTrackHistoryDeletion")
+												 ?? throw new InvalidOperationException(
+													 "ConnectionStrings:JobTrackHistoryDeletion is not configured.");
+				var credentialAdministrationConnectionString = builder.Configuration.GetConnectionString("JobTrackCredentialAdministration")
+														  ?? throw new InvalidOperationException(
+															  "ConnectionStrings:JobTrackCredentialAdministration is not configured.");
 				var patManagementConnectionString = builder.Configuration.GetConnectionString("JobTrackPatManagement")
 													?? throw new InvalidOperationException(
 														"ConnectionStrings:JobTrackPatManagement is not configured.");
@@ -263,6 +272,8 @@ public sealed class Program
 															"ConnectionStrings:JobTrackPatAuthentication is not configured.");
 				if (!builder.Environment.IsDevelopment()) {
 					PostgreSqlTransportSecurity.Validate(domainConnectionString);
+					PostgreSqlTransportSecurity.Validate(historyDeletionConnectionString);
+					PostgreSqlTransportSecurity.Validate(credentialAdministrationConnectionString);
 					PostgreSqlTransportSecurity.Validate(patManagementConnectionString);
 					PostgreSqlTransportSecurity.Validate(patAuthenticationConnectionString);
 				}
@@ -270,11 +281,19 @@ public sealed class Program
 				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
 					DomainDataSourceKey, (_, _) => new NpgsqlDataSourceBuilder(domainConnectionString).UseNodaTime().Build());
 				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
+					HistoryDeletionDataSourceKey,
+					(_, _) => new NpgsqlDataSourceBuilder(historyDeletionConnectionString).UseNodaTime().Build());
+				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
+					CredentialAdministrationDataSourceKey,
+					(_, _) => new NpgsqlDataSourceBuilder(credentialAdministrationConnectionString).UseNodaTime().Build());
+				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
 					PatManagementDataSourceKey, (_, _) => new NpgsqlDataSourceBuilder(patManagementConnectionString).UseNodaTime().Build());
 				_ = builder.Services.AddKeyedSingleton<NpgsqlDataSource>(
 					PatAuthenticationDataSourceKey, (_, _) => new NpgsqlDataSourceBuilder(patAuthenticationConnectionString).UseNodaTime().Build());
-				_ = builder.Services.AddSingleton<IJobTrackClient>(sp => JobTrackPostgreSql.CreateWithPatDataSources(
+				_ = builder.Services.AddSingleton<IJobTrackClient>(sp => JobTrackPostgreSql.CreateWithRoleSeparatedDataSources(
 					sp.GetRequiredKeyedService<NpgsqlDataSource>(DomainDataSourceKey),
+					sp.GetRequiredKeyedService<NpgsqlDataSource>(HistoryDeletionDataSourceKey),
+					sp.GetRequiredKeyedService<NpgsqlDataSource>(CredentialAdministrationDataSourceKey),
 					sp.GetRequiredKeyedService<NpgsqlDataSource>(PatManagementDataSourceKey),
 					sp.GetRequiredKeyedService<NpgsqlDataSource>(PatAuthenticationDataSourceKey),
 					clock: sp.GetRequiredService<IClock>(),
@@ -501,6 +520,8 @@ public sealed class Program
 
 		_ = builder.Services.AddSingleton(TimeProvider.System);
 		_ = builder.Services.AddSingleton<ApplicationReadinessState>();
+		_ = builder.Services.AddSingleton(sp => new ReadinessProbeGate(
+			sp.GetRequiredService<TimeProvider>(), TimeSpan.FromSeconds(ReadinessProbeCacheSeconds)));
 
 		var knownProxies = builder.Configuration.GetSection(ForwardedHeadersKnownProxiesConfigKey).Get<string[]>() ?? [];
 		var knownNetworks = builder.Configuration.GetSection(ForwardedHeadersKnownNetworksConfigKey).Get<string[]>() ?? [];
@@ -774,26 +795,31 @@ public sealed class Program
 				return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 			}
 
-			try {
-				// EF Core's CanConnectAsync() is unreliable for this purpose on the Sqlite provider
-				// used by SingleInstance/demo topologies (observed returning false against a
-				// reachable, schema-deployed database) -- a direct open/close proves connectivity for
-				// both providers without depending on that behaviour.
-				var identityDbContext = context.RequestServices.GetRequiredService<JobTrackIdentityDbContext>();
-				await identityDbContext.Database.OpenConnectionAsync(context.RequestAborted);
-				await identityDbContext.Database.CloseConnectionAsync();
+			var probeGate = context.RequestServices.GetRequiredService<ReadinessProbeGate>();
+			var isReady = await probeGate.CheckAsync(async cancellationToken => {
+				try {
+					// EF Core's CanConnectAsync() is unreliable for this purpose on the Sqlite provider
+					// used by SingleInstance/demo topologies (observed returning false against a
+					// reachable, schema-deployed database) -- a direct open/close proves connectivity for
+					// both providers without depending on that behaviour.
+					var identityDbContext = context.RequestServices.GetRequiredService<JobTrackIdentityDbContext>();
+					await identityDbContext.Database.OpenConnectionAsync(cancellationToken);
+					await identityDbContext.Database.CloseConnectionAsync();
 
-				if (databaseProvider == PostgreSqlProviderName) {
-					var domainDataSource = context.RequestServices.GetRequiredKeyedService<NpgsqlDataSource>(DomainDataSourceKey);
-					await using var connection = domainDataSource.CreateConnection();
-					await connection.OpenAsync(context.RequestAborted);
+					if (databaseProvider == PostgreSqlProviderName) {
+						var domainDataSource = context.RequestServices.GetRequiredKeyedService<NpgsqlDataSource>(DomainDataSourceKey);
+						await using var connection = domainDataSource.CreateConnection();
+						await connection.OpenAsync(cancellationToken);
+					}
+
+					return true;
 				}
+				catch (Exception ex) when (ex is NpgsqlException or SqliteException or TimeoutException or InvalidOperationException) {
+					return false;
+				}
+			}, context.RequestAborted);
 
-				return Results.Ok();
-			}
-			catch (Exception ex) when (ex is NpgsqlException or SqliteException or TimeoutException or InvalidOperationException) {
-				return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-			}
+			return isReady ? Results.Ok() : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 		}).AllowAnonymous().ExcludeFromDescription();
 
 		_ = app.MapStaticAssets();

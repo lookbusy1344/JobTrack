@@ -2064,7 +2064,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 
 	/// <summary>
 	///     Remediation plan §3.3 step 1's target-account-state contention proof. A concurrent disable
-	///     holds the identity row until it commits; the import must then re-read the authoritative state
+	///     holds the shared employee-account lock row until it commits; the import must then re-read the authoritative state
 	///     under its own transaction and reject every write rather than assigning a preference to an
 	///     account that can no longer act.
 	/// </summary>
@@ -2079,7 +2079,8 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		await using var transaction = await connection.BeginTransactionAsync();
 		await using (var command = connection.CreateCommand()) {
 			command.Transaction = transaction;
-			command.CommandText = "UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
+			command.CommandText = "UPDATE app_user SET row_version = row_version WHERE id = @appUserId; " +
+				"UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
 			command.AddParameter("@isEnabled", false);
 			command.AddParameter("@appUserId", workerId.Value);
 			_ = await command.ExecuteNonQueryAsync();
@@ -2642,7 +2643,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 			await deployer.DeployAsync(scripts, CancellationToken.None);
 
 			// PostgreSqlJobNodeCommandPort's worked-leaf/subtree deletion paths (ADR 0036/0061) call
-			// force_delete_work_sessions, a SECURITY DEFINER function from the unversioned functions
+			// the command-shaped SECURITY DEFINER functions from the unversioned functions
 			// script rather than a schema-versions script -- so it must exist here too, even though
 			// these tests connect as an administrator and never exercise the EXECUTE-grant boundary
 			// PostgreSqlRoleGrantsTests covers. The roles script must apply first: the functions

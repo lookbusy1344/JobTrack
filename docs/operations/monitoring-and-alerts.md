@@ -47,6 +47,12 @@ The restart and backup policies use the user-defined log metrics
 `jobtrack_cloud_run_instance_starts` and `jobtrack_cloud_sql_backup_failures`. The other four use
 Google's built-in Cloud Run and Cloud SQL metrics.
 
+Every policy notifies on incident open only (`alertStrategy.notificationPrompts: ["OPENED"]`).
+Google's closure notification reads "*&lt;condition&gt; is below threshold of &lt;N&gt; with a value
+of &lt;M&gt;*" — indistinguishable at a glance from a firing alert, and carrying no operator action.
+Incidents still auto-close after seven days; confirm recovery in the Monitoring console, not by
+waiting for an email.
+
 ## Audit logging
 
 Every deployment enables targeted Data Access logs for:
@@ -58,7 +64,7 @@ Every deployment enables targeted Data Access logs for:
 
 Admin Activity logs remain always-on. Data Access logs live in the project's `_Default` bucket and
 therefore follow its configured retention and access controls. Review secret reads by principal,
-secret resource and deployment window; the runtime should read only its four connection strings and
+secret resource and deployment window; the runtime should read only its six connection strings and
 two certificate secrets, while the provisioning identity's access is temporary and condition-bound.
 
 ## Routine verification

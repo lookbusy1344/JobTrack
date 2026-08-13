@@ -563,6 +563,8 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		startInfo.EnvironmentVariables["ConnectionStrings__JobTrackIdentity"] = database.ConnectionString;
 		if (Provider == SchemaProvider.PostgreSql) {
 			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackDomain"] = database.ConnectionString;
+			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackHistoryDeletion"] = database.ConnectionString;
+			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackCredentialAdministration"] = database.ConnectionString;
 			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackPatManagement"] = database.ConnectionString;
 			startInfo.EnvironmentVariables["ConnectionStrings__JobTrackPatAuthentication"] = database.ConnectionString;
 		}

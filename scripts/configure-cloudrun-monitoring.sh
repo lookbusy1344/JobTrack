@@ -143,9 +143,12 @@ write_policy() {
 			notificationChannels: [$channel],
 			userLabels: {managed_by: $managedBy},
 			conditions: [$condition],
+			# OPENED only. A closure notification reads "<condition> is below threshold of <N> with a
+			# value of <M>", which is easily mistaken for a firing alert; the recovery carries no
+			# action for an operator. Incidents still auto-close after a week.
 			alertStrategy: {
 				autoClose: "604800s",
-				notificationPrompts: ["OPENED", "CLOSED"]
+				notificationPrompts: ["OPENED"]
 			}
 		}' >"$policy_file"
 }

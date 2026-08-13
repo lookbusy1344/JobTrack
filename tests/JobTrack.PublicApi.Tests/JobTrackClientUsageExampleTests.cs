@@ -47,10 +47,13 @@ public sealed class JobTrackClientUsageExampleTests
 		Func<NpgsqlDataSource, IJobTrackClient> postgreSqlCreate = JobTrackPostgreSql.Create;
 		Func<NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IJobTrackClient> postgreSqlCreateWithPatDataSources =
 			JobTrackPostgreSql.CreateWithPatDataSources;
+		Func<NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, NpgsqlDataSource, IJobTrackClient>
+			postgreSqlCreateWithRoleSeparatedDataSources = JobTrackPostgreSql.CreateWithRoleSeparatedDataSources;
 
 		sqliteCreate.Should().NotBeNull();
 		postgreSqlCreate.Should().NotBeNull();
 		postgreSqlCreateWithPatDataSources.Should().NotBeNull();
+		postgreSqlCreateWithRoleSeparatedDataSources.Should().NotBeNull();
 	}
 
 	/// <summary>

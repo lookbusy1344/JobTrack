@@ -20,6 +20,7 @@ internal sealed class AccountCredentialPort(
 	{
 		await using var context = await provider.CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, request.ActorUserId, cancellationToken).ConfigureAwait(false);
 
 		var identityUser = await context.Set<IdentityUserEntity>()
 										.FirstOrDefaultAsync(user => user.Id == request.IdentityUserId, cancellationToken).ConfigureAwait(false)
@@ -69,6 +70,7 @@ internal sealed class AccountCredentialPort(
 	{
 		await using var context = await provider.CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
 		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, request.ActorUserId, cancellationToken).ConfigureAwait(false);
 
 		var identityUser = await context.Set<IdentityUserEntity>()
 										.FirstOrDefaultAsync(user => user.Id == request.IdentityUserId, cancellationToken).ConfigureAwait(false)

@@ -8,7 +8,7 @@
 -- re-applied after every successful schema deployment on PostgreSQL, so
 -- grants stay in sync as tables are added across schema versions.
 --
--- Eight roles, from least to most privileged. All are NOLOGIN group roles;
+-- Ten roles, from least to most privileged. All are NOLOGIN group roles;
 -- an actual login account for a deployment environment is created
 -- separately (outside this repository, which holds no environment
 -- credentials) and granted membership in the appropriate role below.
@@ -28,6 +28,12 @@
 --                                reset/enable-disable command ports write
 --                                those columns inside the same ACID
 --                                transaction as their audit row.
+--   jobtrack_history_deletion -- domain authority plus the exceptional ability
+--                                to erase work-session history while deleting a
+--                                worked leaf or subtree. The web host uses this
+--                                credential only for those two commands.
+--   jobtrack_credential_administration -- domain authority plus credential,
+--                                account-state and role-assignment mutations.
 --   jobtrack_identity        -- ASP.NET Core Identity's own sign-in path
 --                                (JobTrackIdentityDbContext only): identity_user,
 --                                identity_user_role, identity_role.
@@ -61,6 +67,14 @@ BEGIN
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
     BEGIN
+        CREATE ROLE jobtrack_history_deletion NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
+        CREATE ROLE jobtrack_credential_administration NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
         CREATE ROLE jobtrack_identity NOLOGIN;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
@@ -87,6 +101,12 @@ $$;
 -- rights, so a login account granted jobtrack_schema_deployer can deploy
 -- schema versions without ever being the literal object owner itself.
 GRANT jobtrack_owner TO jobtrack_schema_deployer;
+
+-- A history-deletion transaction performs the ordinary authorization, cascade and audit writes
+-- as well as invoking its one exceptional function. Inheritance gives it the former without
+-- granting the latter back to the ordinary domain role.
+GRANT jobtrack_domain TO jobtrack_history_deletion;
+GRANT jobtrack_domain TO jobtrack_credential_administration;
 
 -- Reassigning existing objects to jobtrack_owner (REASSIGN OWNED BY
 -- CURRENT_USER TO jobtrack_owner) is deliberately not automated here: when
@@ -165,15 +185,15 @@ GRANT SELECT, INSERT ON initialised_marker TO jobtrack_domain;
 GRANT SELECT, INSERT, UPDATE ON app_user TO jobtrack_domain;
 GRANT SELECT, UPDATE ON app_user TO jobtrack_emergency_reset;
 
--- identity_user/identity_user_role (security review remediation §2.6,
--- documented residual): jobtrack_identity is ASP.NET Core Identity's own
--- sign-in path; jobtrack_domain also keeps full access because command
--- ports (password reset, 2FA reset, enable/disable, role assignment) write
--- these columns inside the same ACID transaction as their audit row (impl
--- plan §7.3, CLAUDE.md "compound writes are single ACID transactions") --
--- splitting those writes into a further SECURITY DEFINER boundary is left
--- as explicit follow-up work, not silently dropped (remediation item 6).
-GRANT SELECT, INSERT, UPDATE ON identity_user TO jobtrack_domain, jobtrack_identity;
+-- identity_user/identity_user_role: ordinary domain requests see only the account facts needed for
+-- authorization and display. Credential-equivalent secrets and every mutation are isolated behind
+-- jobtrack_credential_administration; ASP.NET Core Identity retains its independent full access.
+REVOKE ALL ON identity_user FROM jobtrack_domain;
+GRANT SELECT
+    (id, app_user_id, user_name, normalized_user_name, requires_password_change, is_enabled,
+     lockout_enabled, lockout_end, access_failed_count, two_factor_enabled, two_factor_enabled_at)
+    ON identity_user TO jobtrack_domain;
+GRANT SELECT, INSERT, UPDATE ON identity_user TO jobtrack_credential_administration, jobtrack_identity;
 
 -- data_protection_key (schema version 0021, ADR 0066 Stage 2): the multi-instance PostgreSQL key
 -- repository. jobtrack_identity is the only role that ever needs it -- it is
@@ -183,7 +203,9 @@ GRANT SELECT, INSERT, UPDATE ON identity_user TO jobtrack_domain, jobtrack_ident
 -- removing rows.
 GRANT SELECT, INSERT ON data_protection_key TO jobtrack_identity;
 GRANT SELECT, UPDATE ON identity_user TO jobtrack_emergency_reset;
-GRANT SELECT, INSERT, DELETE ON identity_user_role TO jobtrack_domain;
+REVOKE ALL ON identity_user_role FROM jobtrack_domain;
+GRANT SELECT ON identity_user_role TO jobtrack_domain;
+GRANT SELECT, INSERT, DELETE ON identity_user_role TO jobtrack_credential_administration;
 GRANT SELECT ON identity_user_role TO jobtrack_identity;
 
 -- PAT management authenticates and authorizes the actor against current Identity state before
@@ -214,23 +236,37 @@ GRANT SELECT, INSERT, DELETE ON job_prerequisite TO jobtrack_domain;
 -- catalog, so a table added later cannot repeat this.
 --
 --   job_request      -- submitted, then acknowledged in place
---                       (acknowledged_at/acknowledged_by_user_id). Never
---                       deleted: a withdrawn or rejected request stays as
---                       intake history, the same retention rule work_session
---                       follows above.
---   job_request_note -- append-only correspondence on a request.
+--                       (acknowledged_at/acknowledged_by_user_id). A live
+--                       request is never deleted on its own -- a withdrawn or
+--                       rejected request stays as intake history, the same
+--                       retention rule work_session follows above -- but ADR
+--                       0068's single-node/subtree deletion cascade deletes
+--                       whatever job_request row anchors at the node being
+--                       destroyed (JobNodeDependentCascade), so the grant
+--                       needs DELETE too: PostgreSQL checks table-level
+--                       privilege before checking whether any row matches, so
+--                       even deleting an ordinary node with zero job_request
+--                       rows issues a DELETE against this table and fails
+--                       without it.
+--   job_request_note -- append-only correspondence on a request; removed only
+--                       via job_request's ON DELETE CASCADE (schema version
+--                       0024), never directly.
 --   department, app_user_department, request_holding_area -- read-only to the
 --                       application. They are routing configuration, and no
 --                       code path in src/ writes them; provisioning them is an
 --                       administrative act outside the running application, so
 --                       granting writes here would widen the domain role for a
 --                       capability it does not exercise.
-GRANT SELECT, INSERT, UPDATE ON job_request TO jobtrack_domain;
+GRANT SELECT, INSERT, UPDATE, DELETE ON job_request TO jobtrack_domain;
 GRANT SELECT, INSERT ON job_request_note TO jobtrack_domain;
 GRANT SELECT ON department, app_user_department, request_holding_area TO jobtrack_domain;
 
--- work_session: cost-relevant execution history -- corrected, never
--- deleted (spec: "audited correction").
+-- work_session: cost-relevant execution history -- corrected, never deleted through a direct grant
+-- (spec: "audited correction"). ADR 0036 (administrator force-deletes a worked leaf) and ADR 0061
+-- (administrator subtree delete) are the two accepted exceptions; both are role-gated in the
+-- application layer and reach work_session only through the narrow, separately credentialed
+-- command-shaped SECURITY DEFINER functions in ../functions/jobtrack-security-definer-functions.sql,
+-- never a table-level DELETE grant here -- see those functions' comments.
 GRANT SELECT, INSERT, UPDATE ON work_session TO jobtrack_domain;
 
 -- personal_access_token (ADR 0029, security review remediation §2.6):

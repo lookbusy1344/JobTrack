@@ -12,7 +12,10 @@ internal static class ActorAccountState
 		DbContext context, AppUserId actorId, Instant now, CancellationToken cancellationToken)
 	{
 		var identityUser = await context.Set<IdentityUserEntity>().AsNoTracking()
-										.FirstOrDefaultAsync(user => user.AppUserId == actorId, cancellationToken).ConfigureAwait(false)
+										.Where(user => user.AppUserId == actorId)
+										.Select(user => new IdentityUserAccountState(
+											user.Id, user.IsEnabled, user.LockoutEnabled, user.LockoutEnd))
+										.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
 						   ?? throw new EntityNotFoundException($"Actor {actorId} does not exist.");
 		EnsureMayAct(identityUser, actorId, now);
 
@@ -25,6 +28,9 @@ internal static class ActorAccountState
 	}
 
 	public static void EnsureMayAct(IdentityUserEntity identityUser, AppUserId actorId, Instant now) =>
+		EnsureMayAct(identityUser.IsEnabled, identityUser.LockoutEnabled, identityUser.LockoutEnd, actorId, now);
+
+	public static void EnsureMayAct(IdentityUserAccountState identityUser, AppUserId actorId, Instant now) =>
 		EnsureMayAct(identityUser.IsEnabled, identityUser.LockoutEnabled, identityUser.LockoutEnd, actorId, now);
 
 	public static void EnsureMayAct(bool isEnabled, bool lockoutEnabled, Instant? lockoutEnd, AppUserId actorId, Instant now)

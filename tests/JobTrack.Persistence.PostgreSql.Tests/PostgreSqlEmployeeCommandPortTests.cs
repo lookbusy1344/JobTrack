@@ -22,10 +22,12 @@ public sealed class PostgreSqlEmployeeCommandPortTests()
 	protected override Task PrepareConnectionAsync(DbConnection connection) => Task.CompletedTask;
 
 	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
-		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+		new PostgreSqlInstallationBootstrapPort(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build(), SystemClock.Instance);
 
 	internal override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
-		new EmployeeCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()),
+		new EmployeeCommandPort(new PostgreSqlWriteOperations(
+			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
 			SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value;

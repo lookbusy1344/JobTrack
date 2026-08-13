@@ -36,13 +36,15 @@ readonly DEFAULT_TIME_ZONE=Europe/London
 # BootstrapCommand.DefaultHourlyRateAmount, which the administrator gets and which this matches.
 readonly DEFAULT_HOURLY_RATE=20
 
-# The four connection strings, and the group role each login role belongs to. Keep in step with the
+# The six connection strings, and the group role each login role belongs to. Keep in step with the
 # table in docs/operations/postgresql-cloud-run-deployment.md §"Credential separation".
 readonly DOMAIN_LOGIN_ROLE=jobtrack_domain_login
+readonly HISTORY_DELETION_LOGIN_ROLE=jobtrack_history_deletion_login
+readonly CREDENTIAL_ADMINISTRATION_LOGIN_ROLE=jobtrack_credential_administration_login
 readonly IDENTITY_LOGIN_ROLE=jobtrack_identity_login
 readonly PAT_MANAGEMENT_LOGIN_ROLE=jobtrack_pat_management_login
 readonly PAT_AUTHENTICATION_LOGIN_ROLE=jobtrack_pat_authentication_login
-# Not one of the four connection strings above -- no running service ever holds this one. It exists
+# Not one of the six connection strings above -- no running service ever holds this one. It exists
 # only so an operator can run emergency-reset.sh (AdminCli reset-password/reset-2fa) against a locked
 # or otherwise inaccessible account, via a Cloud Run job execution overriding this image's entrypoint.
 readonly EMERGENCY_RESET_LOGIN_ROLE=jobtrack_emergency_reset_login
@@ -60,7 +62,8 @@ require_env() {
 for required in \
 	JOBTRACK_DB_HOST JOBTRACK_DB_NAME \
 	JOBTRACK_DB_ADMIN_USER JOBTRACK_DB_ADMIN_PASSWORD \
-	JOBTRACK_ROLE_PASSWORD_DOMAIN JOBTRACK_ROLE_PASSWORD_IDENTITY \
+	JOBTRACK_ROLE_PASSWORD_DOMAIN JOBTRACK_ROLE_PASSWORD_HISTORY_DELETION \
+	JOBTRACK_ROLE_PASSWORD_CREDENTIAL_ADMINISTRATION JOBTRACK_ROLE_PASSWORD_IDENTITY \
 	JOBTRACK_ROLE_PASSWORD_PAT_MANAGEMENT JOBTRACK_ROLE_PASSWORD_PAT_AUTHENTICATION \
 	JOBTRACK_ROLE_PASSWORD_EMERGENCY_RESET \
 	JOBTRACK_ADMIN_USERNAME \
@@ -128,7 +131,8 @@ write_connection_file() {
 }
 
 admin_connection_file=$(write_connection_file "$JOBTRACK_DB_ADMIN_USER" "$JOBTRACK_DB_ADMIN_PASSWORD")
-domain_connection_file=$(write_connection_file "$DOMAIN_LOGIN_ROLE" "$JOBTRACK_ROLE_PASSWORD_DOMAIN")
+domain_connection_file=$(write_connection_file \
+	"$CREDENTIAL_ADMINISTRATION_LOGIN_ROLE" "$JOBTRACK_ROLE_PASSWORD_CREDENTIAL_ADMINISTRATION")
 
 # ---- 1. schema, group roles, grants, stored functions ----------------------
 echo "==> deploying schema to $JOBTRACK_DB_NAME"
@@ -172,6 +176,8 @@ create_login_role() {
 }
 
 create_login_role "$DOMAIN_LOGIN_ROLE" jobtrack_domain "$JOBTRACK_ROLE_PASSWORD_DOMAIN"
+create_login_role "$HISTORY_DELETION_LOGIN_ROLE" jobtrack_history_deletion "$JOBTRACK_ROLE_PASSWORD_HISTORY_DELETION"
+create_login_role "$CREDENTIAL_ADMINISTRATION_LOGIN_ROLE" jobtrack_credential_administration "$JOBTRACK_ROLE_PASSWORD_CREDENTIAL_ADMINISTRATION"
 create_login_role "$IDENTITY_LOGIN_ROLE" jobtrack_identity "$JOBTRACK_ROLE_PASSWORD_IDENTITY"
 create_login_role "$PAT_MANAGEMENT_LOGIN_ROLE" jobtrack_pat_management "$JOBTRACK_ROLE_PASSWORD_PAT_MANAGEMENT"
 create_login_role "$PAT_AUTHENTICATION_LOGIN_ROLE" jobtrack_pat_authentication "$JOBTRACK_ROLE_PASSWORD_PAT_AUTHENTICATION"
@@ -180,8 +186,8 @@ create_login_role "$EMERGENCY_RESET_LOGIN_ROLE" jobtrack_emergency_reset "$JOBTR
 # ---- 3. the administrator, and the permanent root node ---------------------
 # bootstrap prompts for display name, time zone, and username on stdin, and reads the password's
 # first line ahead of them because --password-stdin is resolved before the command runs -- hence this
-# four-line order. AdminCli connects as jobtrack_domain_login: jobtrack_domain is a strict superset of
-# what bootstrap and create-employee touch (docs/operations/production-deployment.md).
+# four-line order. AdminCli connects through the credential-administration capability, which inherits
+# domain authority for the later rota commands but alone may bootstrap and create employees.
 #
 # The ADR 0023 forced password change is deliberately left in place (no --no-force-password-change,
 # unlike the SQLite demo image): state persists here, so the generated password is a one-time

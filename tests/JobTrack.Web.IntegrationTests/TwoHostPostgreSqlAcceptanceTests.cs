@@ -716,6 +716,8 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 			_ = builder.UseSetting("Database:Provider", "PostgreSql");
 			_ = builder.UseSetting("ConnectionStrings:JobTrackIdentity", connectionString);
 			_ = builder.UseSetting("ConnectionStrings:JobTrackDomain", connectionString);
+			_ = builder.UseSetting("ConnectionStrings:JobTrackHistoryDeletion", connectionString);
+			_ = builder.UseSetting("ConnectionStrings:JobTrackCredentialAdministration", connectionString);
 			_ = builder.UseSetting("ConnectionStrings:JobTrackPatManagement", connectionString);
 			_ = builder.UseSetting("ConnectionStrings:JobTrackPatAuthentication", connectionString);
 			_ = builder.UseSetting("DataProtection:KeyPath", dataProtectionKeyPath);
