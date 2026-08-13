@@ -1,2 +1,1 @@
 #nullable enable
-static JobTrack.Persistence.Sqlite.JobTrackSqlite.Create(string! connectionString) -> JobTrack.Application.IJobTrackClient!

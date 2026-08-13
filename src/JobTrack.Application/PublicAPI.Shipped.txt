@@ -718,6 +718,8 @@ JobTrack.Application.GetAllEmployeesRequest.Equals(JobTrack.Application.GetAllEm
 JobTrack.Application.GetAllEmployeesRequest.GetAllEmployeesRequest() -> void
 JobTrack.Application.GetAwaitingProgressRequest
 JobTrack.Application.GetAwaitingProgressRequest.<Clone>$() -> JobTrack.Application.GetAwaitingProgressRequest!
+JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.get -> JobTrack.Abstractions.AppUserId?
+JobTrack.Application.GetAwaitingProgressRequest.ActiveWorkerUserId.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Context.get -> JobTrack.Application.CommandContext!
 JobTrack.Application.GetAwaitingProgressRequest.Context.init -> void
 JobTrack.Application.GetAwaitingProgressRequest.Equals(JobTrack.Application.GetAwaitingProgressRequest? other) -> bool
@@ -1353,6 +1355,8 @@ JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.get -> JobTrack.Doma
 JobTrack.Application.JobSubtreeNodeResult.AllocatedDuration.init -> void
 JobTrack.Application.JobSubtreeNodeResult.ArchivedAt.get -> NodaTime.Instant?
 JobTrack.Application.JobSubtreeNodeResult.ArchivedAt.init -> void
+JobTrack.Application.JobSubtreeNodeResult.BranchAchievement.get -> JobTrack.Abstractions.BranchAchievement?
+JobTrack.Application.JobSubtreeNodeResult.BranchAchievement.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Cost.get -> JobTrack.Abstractions.Money?
 JobTrack.Application.JobSubtreeNodeResult.Cost.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Depth.get -> int
@@ -1364,6 +1368,10 @@ JobTrack.Application.JobSubtreeNodeResult.HasChildren.get -> bool
 JobTrack.Application.JobSubtreeNodeResult.HasChildren.init -> void
 JobTrack.Application.JobSubtreeNodeResult.HasLeafWork.get -> bool
 JobTrack.Application.JobSubtreeNodeResult.HasLeafWork.init -> void
+JobTrack.Application.JobSubtreeNodeResult.HasSessionHistory.get -> bool
+JobTrack.Application.JobSubtreeNodeResult.HasSessionHistory.init -> void
+JobTrack.Application.JobSubtreeNodeResult.HasUnacknowledgedRequest.get -> bool
+JobTrack.Application.JobSubtreeNodeResult.HasUnacknowledgedRequest.init -> void
 JobTrack.Application.JobSubtreeNodeResult.HasUnexpandedChildren.get -> bool
 JobTrack.Application.JobSubtreeNodeResult.HasUnexpandedChildren.init -> void
 JobTrack.Application.JobSubtreeNodeResult.Id.get -> JobTrack.Abstractions.JobNodeId

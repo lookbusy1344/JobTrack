@@ -31,13 +31,17 @@ Every non-2xx response is an RFC 7807 problem-details JSON body (`Content-Type:
 application/problem+json`) with a stable `type` URI you can branch on (`/problems/entity-not-found`,
 `/problems/authorization-denied`, `/problems/validation`, `/problems/concurrency-conflict`,
 `/problems/invariant-violation`, `/problems/prerequisite-blocked`,
-`/problems/authentication-required`, `/problems/request-too-large`, `/problems/rate-limited`).
+`/problems/authentication-required`, `/problems/request-too-large`, `/problems/rate-limited`,
+`/problems/missing-rate`, `/problems/stored-time-zone-not-recognized`,
+`/problems/rate-limit-store-unavailable`).
 
 ## Operational limits
 
 - **Rate limiting** — each authenticated caller (by user identity, not by IP) gets its own fixed
   budget, separate from the browser login limiter. Exceeding it returns `429 Too Many Requests`
-  with a `/problems/rate-limited` body.
+  with a `/problems/rate-limited` body. If the shared rate-limit store itself is unreachable, the
+  request fails closed with `503 Service Unavailable` and a `/problems/rate-limit-store-unavailable`
+  body, rather than admitting unlimited traffic.
 - **Request body size** — capped (see `Program.cs`'s `MaxRequestBodyBytes`); an oversized body
   returns `413 Payload Too Large` with a `/problems/request-too-large` body.
 - **Timeouts** — every request runs under a default server-side timeout; cancellation propagates
@@ -68,8 +72,10 @@ mutation is already retry-safe through one of the mechanisms below.
 
 | Route | Command | Concurrency token | Retry result | Backing invariant |
 |---|---|---|---|---|
+| `POST /jobs/{nodeId}/pickup` | Pick up node | None | `409 Conflict` | The node is no longer unowned once claimed; a retry after success finds it already owned and is rejected rather than reassigned. |
 | `POST /jobs/{nodeId}/sessions` | Start session | None (create) | `409 Conflict` | `work-session-already-active`: a worker cannot have two open sessions on the same leaf. |
 | `POST /jobs/{nodeId}/sessions/{sessionId}/finish` | Finish session | `version` (optimistic) | `409 Conflict` | A retry after success submits the now-stale `version`; concurrency check rejects it before any second finish can apply. |
+| `POST /jobs/{nodeId}/sessions/{sessionId}/finish-and-update-write-up` | Finish session and update write-up | `version` (optimistic) | `409 Conflict` | Same as plain finish: stale `version` on retry; the write-up change and the finish commit together or not at all. |
 | `POST /jobs/{nodeId}/sessions/{sessionId}/correct` | Correct session | `version` (optimistic) | `409 Conflict` | Same as finish: stale `version` on retry. |
 | `POST /jobs/{nodeId}/prerequisites` | Add prerequisite | None (create) | `409 Conflict` | `job-prerequisite-already-exists`: the edge is a set member, not a counter: a retried add cannot double-apply. |
 | `DELETE /jobs/{nodeId}/prerequisites/{requiredJobId}` | Remove prerequisite | None | `404 Not Found` | The edge no longer exists after the first successful delete; a retry finds nothing to remove rather than erroring or re-deleting. |
@@ -77,9 +83,13 @@ mutation is already retry-safe through one of the mechanisms below.
 | `POST /jobs/{nodeId}/complete` | Complete leaf (ADR 0045) | leaf `version` and every `expectedActiveSessions[].version` | `409 Conflict` | Stale leaf `version`, or the leaf's actual active-session set no longer exactly matches `expectedActiveSessions` (a concurrent session start/finish moved it) — never silently included or excluded. |
 | `POST /jobs/{nodeId}/reopen-and-start-session` | Reopen and start (ADR 0045) | `version` (optimistic) | `409 Conflict` | Stale `version` on retry, same shape as session finish/correct. |
 | `POST /employees/{userId}/rates/user-cost-rates` | Add user cost rate | None (create) | `409 Conflict` | Effective-dated ranges may not overlap; a retried identical insert collides with the one just created. |
+| `POST /employees/{userId}/rates/user-cost-rates/{rateId}/correct` | Correct user cost rate | `version` (optimistic) | `409 Conflict` | Stale `version` on retry, same shape as session finish/correct. |
 | `POST /employees/{userId}/rates/node-rate-overrides` | Add node rate override | None (create) | `409 Conflict` | Same overlap invariant as user cost rates. |
+| `POST /employees/{userId}/rates/node-rate-overrides/{overrideId}/correct` | Correct node rate override | `version` (optimistic) | `409 Conflict` | Stale `version` on retry, same shape as session finish/correct. |
 | `POST /employees/{userId}/schedule/versions` | Add schedule version | None (create) | `409 Conflict` | Effective-dated schedule versions may not overlap. |
+| `POST /employees/{userId}/schedule/versions/{versionId}/correct` | Correct schedule version | `version` (optimistic) | `409 Conflict` | Stale `version` on retry, same shape as session finish/correct. |
 | `POST /employees/{userId}/schedule/exceptions` | Add schedule exception | None (create) | `409 Conflict` | Exact duplicate exceptions are rejected as `schedule-exception-already-exists`; overlapping priced additive exceptions are rejected by the existing `user_schedule_exception_no_overlap_priced_additive` invariant. Non-identical unpriced/additive exceptions may still overlap by design. |
+| `POST /employees/{userId}/schedule/exceptions/{exceptionId}/correct` | Correct schedule exception | `version` (optimistic) | `409 Conflict` | Stale `version` on retry, same shape as session finish/correct. |
 
 ## Routes
 
@@ -97,6 +107,12 @@ opaque `long` route identifiers.
 | GET | `/jobs/{nodeId}/readiness` | Whether prerequisites are satisfied, and the blocker set if not. |
 | GET | `/jobs/{nodeId}/subtree` | A bounded multi-level subtree rooted at a node (ADR 0039: `depth` optional, default 3, max 5; `ownerUserId`/`archiveFilter` filters). The cost roll-up (`rootTotal`/`rootAllocatedHours`, each node's `cost`/`allocatedHours`) is included only when the actor may view it (ADR 0040: `Administrator`/`CostViewer`, or ownership of the queried root or an ancestor) — both values are omitted as `null`, never a whole-request denial. |
 
+### Ownership (requires Administrator/JobManager/Worker)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/jobs/{nodeId}/pickup` | Claim an unassigned node from the pickup pool, setting its direct owner to the acting user (ownership model, ADR 0031/0032). |
+
 ### Work sessions (requires Administrator/JobManager/Worker)
 
 | Method | Path | Purpose |
@@ -104,6 +120,7 @@ opaque `long` route identifiers.
 | GET | `/jobs/{nodeId}/sessions` | A worker's sessions on a leaf, paged (`workedByUserId` required query param). |
 | POST | `/jobs/{nodeId}/sessions` | Start a session. Calling it again for an already-active worker/leaf pair is how a UI "resume" is expressed. |
 | POST | `/jobs/{nodeId}/sessions/{sessionId}/finish` | Finish the active session ("pause"/"stop" in a UI). |
+| POST | `/jobs/{nodeId}/sessions/{sessionId}/finish-and-update-write-up` | Atomic composite: finish the active session and, optionally, apply a write-up change to its leaf's node, in one commit. The plain finish endpoint above remains for a caller with no write-up to change. |
 | POST | `/jobs/{nodeId}/sessions/{sessionId}/correct` | Correct a historical session's interval, with an audited reason. |
 
 ### Prerequisites and achievement
@@ -125,6 +142,11 @@ opaque `long` route identifiers.
 | GET | `/jobs/{nodeId}/cost` | Exact and displayed cost plus concurrency-allocated hours, with the rate-provenance segment trace (`asOf` optional, defaults to now; `maxTraceSegments` optional, max 50,000). |
 | GET | `/jobs/{nodeId}/cost/hierarchy` | Reconciled cost totals and concurrency-allocated hours for a node and its entire subtree (`asOf` optional, defaults to now; `maxHierarchyNodes` optional, max 50,000). |
 
+Either cost route returns `422 Unprocessable Entity` with `type: "/problems/missing-rate"` if no rate
+resolves for a contributing session (a rate-table configuration gap, not caller error), and
+`500 Internal Server Error` with `type: "/problems/stored-time-zone-not-recognized"` if a stored
+record references a time zone the server no longer recognizes (a server-side data issue).
+
 ### Requester intake and progress
 
 | Method | Path | Purpose |
@@ -142,10 +164,14 @@ opaque `long` route identifiers.
 |---|---|---|
 | GET | `/employees/{userId}/rates` | One employee's user cost rates and node rate overrides. Bounded to 2,000 combined entries. |
 | POST | `/employees/{userId}/rates/user-cost-rates` | Add an effective-dated user cost rate. |
+| POST | `/employees/{userId}/rates/user-cost-rates/{rateId}/correct` | Correct a historical user cost rate's effective range and amount, with an audited reason. |
 | POST | `/employees/{userId}/rates/node-rate-overrides` | Add an effective-dated node rate override. |
+| POST | `/employees/{userId}/rates/node-rate-overrides/{overrideId}/correct` | Correct a historical node rate override's effective range and amount, with an audited reason. |
 | GET | `/employees/{userId}/schedule` | One employee's schedule versions and exceptions. Bounded to 2,000 combined entries. |
 | POST | `/employees/{userId}/schedule/versions` | Add an effective-dated schedule version. |
+| POST | `/employees/{userId}/schedule/versions/{versionId}/correct` | Correct a historical schedule version's effective range, zone, and weekly intervals, with an audited reason. |
 | POST | `/employees/{userId}/schedule/exceptions` | Add a dated schedule exception. |
+| POST | `/employees/{userId}/schedule/exceptions/{exceptionId}/correct` | Correct a historical schedule exception's effect, interval, and rate override, with an audited reason. |
 
 ### Utility
 

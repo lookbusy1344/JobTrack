@@ -19,10 +19,50 @@ JobTrack.Domain.Authorization.JobNodeAccessPolicy
 JobTrack.Domain.Authorization.JobNodeDeletePolicy
 JobTrack.Domain.Authorization.JobPickupPolicy
 JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.<Clone>$() -> JobTrack.Domain.Authorization.LeafReopenAndStartFacts!
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.ActorControlsNode.get -> bool
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.ActorControlsNode.init -> void
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.ActorParticipatedPreviously.get -> bool
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.ActorParticipatedPreviously.init -> void
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.ActorUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.ActorUserId.init -> void
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.Equals(JobTrack.Domain.Authorization.LeafReopenAndStartFacts? other) -> bool
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.LeafReopenAndStartFacts() -> void
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.TargetWorkedByUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Domain.Authorization.LeafReopenAndStartFacts.TargetWorkedByUserId.init -> void
 JobTrack.Domain.Authorization.PersonalAccessTokenAccessPolicy
 JobTrack.Domain.Authorization.PersonalAccessTokenPolicy
 JobTrack.Domain.Authorization.RateAccessPolicy
 JobTrack.Domain.Authorization.RequesterAccessPolicy
+JobTrack.Domain.Authorization.RequesterCommentFacts
+JobTrack.Domain.Authorization.RequesterCommentFacts.<Clone>$() -> JobTrack.Domain.Authorization.RequesterCommentFacts!
+JobTrack.Domain.Authorization.RequesterCommentFacts.Equals(JobTrack.Domain.Authorization.RequesterCommentFacts? other) -> bool
+JobTrack.Domain.Authorization.RequesterCommentFacts.IsOpenToRequester.get -> bool
+JobTrack.Domain.Authorization.RequesterCommentFacts.IsOpenToRequester.init -> void
+JobTrack.Domain.Authorization.RequesterCommentFacts.RequesterCommentFacts() -> void
+JobTrack.Domain.Authorization.RequesterCommentFacts.Visibility.get -> JobTrack.Domain.Authorization.RequesterVisibilityFacts!
+JobTrack.Domain.Authorization.RequesterCommentFacts.Visibility.init -> void
+JobTrack.Domain.Authorization.RequesterSubmissionFacts
+JobTrack.Domain.Authorization.RequesterSubmissionFacts.<Clone>$() -> JobTrack.Domain.Authorization.RequesterSubmissionFacts!
+JobTrack.Domain.Authorization.RequesterSubmissionFacts.ActorIsEligibleForHoldingArea.get -> bool
+JobTrack.Domain.Authorization.RequesterSubmissionFacts.ActorIsEligibleForHoldingArea.init -> void
+JobTrack.Domain.Authorization.RequesterSubmissionFacts.Equals(JobTrack.Domain.Authorization.RequesterSubmissionFacts? other) -> bool
+JobTrack.Domain.Authorization.RequesterSubmissionFacts.IsHoldingAreaActive.get -> bool
+JobTrack.Domain.Authorization.RequesterSubmissionFacts.IsHoldingAreaActive.init -> void
+JobTrack.Domain.Authorization.RequesterSubmissionFacts.RequesterSubmissionFacts() -> void
+JobTrack.Domain.Authorization.RequesterVisibilityFacts
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.<Clone>$() -> JobTrack.Domain.Authorization.RequesterVisibilityFacts!
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.ActorControlsAnchorNode.get -> bool
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.ActorControlsAnchorNode.init -> void
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.ActorIsRequestOwner.get -> bool
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.ActorIsRequestOwner.init -> void
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.ActorSharesRequestDepartment.get -> bool
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.ActorSharesRequestDepartment.init -> void
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.Equals(JobTrack.Domain.Authorization.RequesterVisibilityFacts? other) -> bool
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.IsDepartmentVisibilityEnabled.get -> bool
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.IsDepartmentVisibilityEnabled.init -> void
+JobTrack.Domain.Authorization.RequesterVisibilityFacts.RequesterVisibilityFacts() -> void
 JobTrack.Domain.Authorization.RequestHoldingAreaConfigurationPolicy
 JobTrack.Domain.Authorization.ScheduleAccessPolicy
 JobTrack.Domain.Authorization.WorkSessionAccessPolicy
@@ -328,6 +368,18 @@ JobTrack.Domain.Schedules.WeeklyInterval.Equals(JobTrack.Domain.Schedules.Weekly
 JobTrack.Domain.Schedules.WeeklyInterval.Start.get -> NodaTime.LocalTime
 JobTrack.Domain.Schedules.WeeklyInterval.WeeklyInterval() -> void
 JobTrack.Domain.Schedules.WeeklyInterval.WeeklyInterval(NodaTime.IsoDayOfWeek day, NodaTime.LocalTime start, NodaTime.LocalTime end) -> void
+override JobTrack.Domain.Authorization.LeafReopenAndStartFacts.Equals(object? obj) -> bool
+override JobTrack.Domain.Authorization.LeafReopenAndStartFacts.GetHashCode() -> int
+override JobTrack.Domain.Authorization.LeafReopenAndStartFacts.ToString() -> string!
+override JobTrack.Domain.Authorization.RequesterCommentFacts.Equals(object? obj) -> bool
+override JobTrack.Domain.Authorization.RequesterCommentFacts.GetHashCode() -> int
+override JobTrack.Domain.Authorization.RequesterCommentFacts.ToString() -> string!
+override JobTrack.Domain.Authorization.RequesterSubmissionFacts.Equals(object? obj) -> bool
+override JobTrack.Domain.Authorization.RequesterSubmissionFacts.GetHashCode() -> int
+override JobTrack.Domain.Authorization.RequesterSubmissionFacts.ToString() -> string!
+override JobTrack.Domain.Authorization.RequesterVisibilityFacts.Equals(object? obj) -> bool
+override JobTrack.Domain.Authorization.RequesterVisibilityFacts.GetHashCode() -> int
+override JobTrack.Domain.Authorization.RequesterVisibilityFacts.ToString() -> string!
 override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.Equals(object? obj) -> bool
 override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.GetHashCode() -> int
 override JobTrack.Domain.Concurrency.ConcurrentWorkOverlap.ToString() -> string!
@@ -404,14 +456,22 @@ static JobTrack.Domain.Authorization.JobNodeAccessPolicy.CanManage(System.Collec
 static JobTrack.Domain.Authorization.JobNodeDeletePolicy.CanDeleteSubtree(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobNodeDeletePolicy.CanForceDeleteWorkedLeaf(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.JobPickupPolicy.CanPickUp(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool ownerIsNull) -> bool
-static JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool actorParticipatedPreviously, JobTrack.Abstractions.AppUserId actorUserId, JobTrack.Abstractions.AppUserId targetWorkedByUserId) -> bool
+static JobTrack.Domain.Authorization.LeafReopenAndStartAccessPolicy.CanReopenAndStartFor(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, JobTrack.Domain.Authorization.LeafReopenAndStartFacts! facts) -> bool
+static JobTrack.Domain.Authorization.LeafReopenAndStartFacts.operator !=(JobTrack.Domain.Authorization.LeafReopenAndStartFacts? left, JobTrack.Domain.Authorization.LeafReopenAndStartFacts? right) -> bool
+static JobTrack.Domain.Authorization.LeafReopenAndStartFacts.operator ==(JobTrack.Domain.Authorization.LeafReopenAndStartFacts? left, JobTrack.Domain.Authorization.LeafReopenAndStartFacts? right) -> bool
 static JobTrack.Domain.Authorization.PersonalAccessTokenAccessPolicy.CanIssue(JobTrack.Abstractions.AppUserId actorId, JobTrack.Abstractions.AppUserId targetUserId) -> bool
 static JobTrack.Domain.Authorization.PersonalAccessTokenAccessPolicy.CanManage(JobTrack.Abstractions.AppUserId actorId, JobTrack.Abstractions.AppUserId targetUserId, System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.PersonalAccessTokenPolicy.EnsureValidExpiry(NodaTime.Instant now, NodaTime.Instant expiresAt) -> void
 static JobTrack.Domain.Authorization.RateAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
-static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanCommentAsRequester(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorIsRequestOwner, bool departmentVisibilityEnabled, bool actorSharesRequestDepartment, bool actorControlsAnchorNode, bool requestIsClosedToRequester) -> bool
-static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanSubmit(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool holdingAreaIsActive, bool actorIsEligibleForHoldingArea) -> bool
-static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanView(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorIsRequestOwner, bool departmentVisibilityEnabled, bool actorSharesRequestDepartment, bool actorControlsAnchorNode) -> bool
+static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanCommentAsRequester(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, JobTrack.Domain.Authorization.RequesterCommentFacts! facts) -> bool
+static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanSubmit(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, JobTrack.Domain.Authorization.RequesterSubmissionFacts! facts) -> bool
+static JobTrack.Domain.Authorization.RequesterAccessPolicy.CanView(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, JobTrack.Domain.Authorization.RequesterVisibilityFacts! facts) -> bool
+static JobTrack.Domain.Authorization.RequesterCommentFacts.operator !=(JobTrack.Domain.Authorization.RequesterCommentFacts? left, JobTrack.Domain.Authorization.RequesterCommentFacts? right) -> bool
+static JobTrack.Domain.Authorization.RequesterCommentFacts.operator ==(JobTrack.Domain.Authorization.RequesterCommentFacts? left, JobTrack.Domain.Authorization.RequesterCommentFacts? right) -> bool
+static JobTrack.Domain.Authorization.RequesterSubmissionFacts.operator !=(JobTrack.Domain.Authorization.RequesterSubmissionFacts? left, JobTrack.Domain.Authorization.RequesterSubmissionFacts? right) -> bool
+static JobTrack.Domain.Authorization.RequesterSubmissionFacts.operator ==(JobTrack.Domain.Authorization.RequesterSubmissionFacts? left, JobTrack.Domain.Authorization.RequesterSubmissionFacts? right) -> bool
+static JobTrack.Domain.Authorization.RequesterVisibilityFacts.operator !=(JobTrack.Domain.Authorization.RequesterVisibilityFacts? left, JobTrack.Domain.Authorization.RequesterVisibilityFacts? right) -> bool
+static JobTrack.Domain.Authorization.RequesterVisibilityFacts.operator ==(JobTrack.Domain.Authorization.RequesterVisibilityFacts? left, JobTrack.Domain.Authorization.RequesterVisibilityFacts? right) -> bool
 static JobTrack.Domain.Authorization.RequestHoldingAreaConfigurationPolicy.CanConfigure(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles) -> bool
 static JobTrack.Domain.Authorization.ScheduleAccessPolicy.CanManage(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool isOwnSchedule) -> bool
 static JobTrack.Domain.Authorization.WorkSessionAccessPolicy.CanFinishSession(System.Collections.Generic.IReadOnlyCollection<JobTrack.Abstractions.EmployeeRole>! actorRoles, bool actorControlsNode, bool isOwnSession) -> bool
@@ -451,6 +511,7 @@ static JobTrack.Domain.Costing.ReconciledChildCost.operator ==(JobTrack.Domain.C
 static JobTrack.Domain.Costing.SegmentCostCalculator.Calculate(JobTrack.Domain.Costing.AllocatedShare share, JobTrack.Abstractions.HourlyRate rate) -> JobTrack.Abstractions.Money
 static JobTrack.Domain.Costing.SessionSegmentAllocation.operator !=(JobTrack.Domain.Costing.SessionSegmentAllocation? left, JobTrack.Domain.Costing.SessionSegmentAllocation? right) -> bool
 static JobTrack.Domain.Costing.SessionSegmentAllocation.operator ==(JobTrack.Domain.Costing.SessionSegmentAllocation? left, JobTrack.Domain.Costing.SessionSegmentAllocation? right) -> bool
+static JobTrack.Domain.Hierarchy.AchievementCalculator.EvaluateSubtree(JobTrack.Abstractions.JobNodeId rootId, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById) -> System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, bool>!
 static JobTrack.Domain.Hierarchy.AchievementCalculator.IsAchieved(JobTrack.Abstractions.JobNodeId nodeId, System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById) -> bool
 static JobTrack.Domain.Hierarchy.AchievementTransitions.IsCompletedState(JobTrack.Abstractions.Achievement achievement) -> bool
 static JobTrack.Domain.Hierarchy.AchievementTransitions.IsPermitted(JobTrack.Abstractions.Achievement from, JobTrack.Abstractions.Achievement to) -> bool
