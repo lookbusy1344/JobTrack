@@ -107,6 +107,9 @@ The following rules shall hold after every committed transaction:
 8. A branch has one or more children and no `LeafWork`.
 9. A leaf has no children and zero or one `LeafWork`.
 10. A node can never have both a child and `LeafWork`.
+11. The root cannot be the target of a per-node override (a `node_rate_override`, and any future
+    per-node override table by the same rule). The root is a structurally special node: it is
+    unique, permanent, un-re-parentable, owner-bearing, and override-free.
 
 A leaf with no `LeafWork` is valid. It represents planned or placeholder work whose execution state has not yet been created. A `LeafWork` with no sessions is also valid and allows criteria and assignment state to be prepared before work starts; it is not evidence that work occurred.
 
@@ -419,6 +422,8 @@ Overlap prevention must be enforced transactionally:
 A node may define effective-dated rate overrides for a particular user. An override applies to that node and all descendants during its effective range unless a closer descendant defines an override for the same user at the costed instant.
 
 Overrides for the same node and user shall not have overlapping effective ranges. Adjacent ranges are valid. PostgreSQL shall enforce this with a range exclusion constraint; SQLite shall enforce it transactionally with triggers and library validation.
+
+An override shall not target the root node. A root override would apply to the whole tree for one worker, which is not a per-node deviation but a restatement of that worker's own rate — the user cost rate (§9.3 level 3) and default (level 4) already express a worker's tree-wide rate. Since there is exactly one root (§4.2 invariant 1) and it can never be re-parented (§12.4), a node targeted by an override can never become the root and the root can never shed its role, so this is enforced solely on override insert and update: the database (PostgreSQL trigger, SQLite trigger) and the library, in the same write transaction, shall reject an override whose node is the root. The root's rate for every worker resolves through §9.3 levels 3 and 4 alone.
 
 For a `WorkSession` at instant `t`, search from its `LeafWork` node toward the root and select the first override for the session's worker whose effective range contains `t`. If a closer node has no override effective at `t`, continue toward the root. This is the effective nearest-ancestor rule.
 
@@ -899,6 +904,7 @@ Run the complete behavioural contract against both PostgreSQL and SQLite from th
 - a second root;
 - parent cycles;
 - orphaned nodes;
+- a rate override targeting the root;
 - `LeafWork` on the root;
 - `LeafWork` on a branch;
 - adding a child to a node with `LeafWork` outside the explicit decomposition operation;

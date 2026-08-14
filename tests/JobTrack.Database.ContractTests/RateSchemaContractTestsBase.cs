@@ -115,11 +115,11 @@ public abstract class RateSchemaContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task Inserting_a_node_rate_override_succeeds()
+	public async Task Inserting_a_node_rate_override_on_a_non_root_node_succeeds()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
-		var nodeId = await InsertRootNodeAsync(connection, userId);
+		var nodeId = await InsertNonRootNodeAsync(connection, userId);
 
 		var id = await InsertNodeRateOverrideAsync(connection, nodeId, userId, Epoch, null, 40.00m);
 
@@ -128,11 +128,23 @@ public abstract class RateSchemaContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task Inserting_a_node_rate_override_on_the_root_node_is_rejected()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		var rootId = await InsertRootNodeAsync(connection, userId);
+
+		var act = async () => await InsertNodeRateOverrideAsync(connection, rootId, userId, Epoch, null, 40.00m);
+
+		await act.Should().ThrowAsync<DbException>();
+	}
+
+	[Fact]
 	public async Task Overlapping_node_rate_overrides_for_the_same_node_and_user_are_rejected()
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
-		var nodeId = await InsertRootNodeAsync(connection, userId);
+		var nodeId = await InsertNonRootNodeAsync(connection, userId);
 		await InsertNodeRateOverrideAsync(connection, nodeId, userId, Epoch, Epoch.AddDays(30), 40.00m);
 
 		var act = async () => await InsertNodeRateOverrideAsync(connection, nodeId, userId, Epoch.AddDays(15), null, 45.00m);
@@ -145,7 +157,7 @@ public abstract class RateSchemaContractTestsBase : IAsyncLifetime
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
-		var nodeId = await InsertRootNodeAsync(connection, userId);
+		var nodeId = await InsertNonRootNodeAsync(connection, userId);
 		var firstId = await InsertNodeRateOverrideAsync(connection, nodeId, userId, Epoch, Epoch.AddDays(30), 40.00m);
 
 		var id = await InsertNodeRateOverrideAsync(connection, nodeId, userId, Epoch.AddDays(30), null, 45.00m);
@@ -161,7 +173,7 @@ public abstract class RateSchemaContractTestsBase : IAsyncLifetime
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (firstUserId, _) = await SeedAppUserAsync(connection, "Alice Example");
 		var (secondUserId, _) = await SeedAppUserAsync(connection, "Bob Example");
-		var nodeId = await InsertRootNodeAsync(connection, firstUserId);
+		var nodeId = await InsertNonRootNodeAsync(connection, firstUserId);
 		await InsertNodeRateOverrideAsync(connection, nodeId, firstUserId, Epoch, null, 40.00m);
 
 		var id = await InsertNodeRateOverrideAsync(connection, nodeId, secondUserId, Epoch, null, 45.00m);
@@ -174,7 +186,8 @@ public abstract class RateSchemaContractTestsBase : IAsyncLifetime
 	{
 		await using var connection = await OpenDeployedConnectionAsync();
 		var (userId, _) = await SeedAppUserAsync(connection, "Alice Example");
-		var firstNodeId = await InsertRootNodeAsync(connection, userId);
+		var rootId = await InsertRootNodeAsync(connection, userId);
+		var firstNodeId = await InsertChildNodeAsync(connection, userId, rootId);
 		var secondNodeId = await InsertChildNodeAsync(connection, userId, firstNodeId);
 		await InsertNodeRateOverrideAsync(connection, firstNodeId, userId, Epoch, null, 40.00m);
 
@@ -204,7 +217,7 @@ public abstract class RateSchemaContractTestsBase : IAsyncLifetime
 	{
 		await using var seedConnection = await OpenDeployedConnectionAsync();
 		var (userId, _) = await SeedAppUserAsync(seedConnection, "Alice Example");
-		var nodeId = await InsertRootNodeAsync(seedConnection, userId);
+		var nodeId = await InsertNonRootNodeAsync(seedConnection, userId);
 
 		await using var connectionA = await OpenExistingConnectionAsync();
 		await using var connectionB = await OpenExistingConnectionAsync();
@@ -288,6 +301,17 @@ public abstract class RateSchemaContractTestsBase : IAsyncLifetime
 
 	private async Task<long> InsertChildNodeAsync(DbConnection connection, long ownerUserId, long parentId) =>
 		await InsertNodeAsync(connection, ownerUserId, parentId);
+
+	/// <summary>
+	///     A leaf child under a fresh root -- the smallest node that may legally carry a
+	///     <c>node_rate_override</c> (ADR 0069: the root may not). Overlap/adjacency fixtures use this
+	///     rather than the root they previously seeded on incidentally.
+	/// </summary>
+	private async Task<long> InsertNonRootNodeAsync(DbConnection connection, long ownerUserId)
+	{
+		var rootId = await InsertRootNodeAsync(connection, ownerUserId);
+		return await InsertChildNodeAsync(connection, ownerUserId, rootId);
+	}
 
 	private async Task<long> InsertNodeAsync(DbConnection connection, long ownerUserId, long? parentId)
 	{

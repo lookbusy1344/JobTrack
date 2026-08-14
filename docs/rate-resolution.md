@@ -127,6 +127,11 @@ Because the walk is per-worker, two workers on the same leaf can resolve to diff
 distant override can start applying the instant a nearer one lapses. `RateResolver.IndexOverridesByNode`
 groups overrides by node once per allocation set rather than per segment.
 
+The walk stops *at* the root, never *on* it: the root can never carry an override (ADR 0069, spec
+§9.2). An override there would price the whole tree for one worker, which is exactly what their
+`user_cost_rate` (level 3) expresses — so a session rooted directly at a childless single-node tree,
+or one whose only ancestor is the root, resolves through levels 3–4 alone.
+
 ### Levels 3 & 4 — user cost rate, then default
 
 With no exception and no override, the worker's own rate applies: their effective-dated `user_cost_rate`

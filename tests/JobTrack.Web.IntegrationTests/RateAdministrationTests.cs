@@ -28,6 +28,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
 	private JobNodeId rootJobNodeId;
+	private JobNodeId overridableJobNodeId;
 	private IJobTrackClient seedClient = null!;
 
 	public async Task InitializeAsync()
@@ -44,6 +45,16 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 			CorrelationId = Guid.NewGuid(),
 		});
 		rootJobNodeId = bootstrap.RootJobNodeId;
+
+		// Overrides target a child node, never the root (ADR 0069).
+		var child = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootJobNodeId,
+			Description = "Overridable leaf",
+			OwnerUserId = bootstrap.AdministratorId,
+			Priority = Priority.Medium,
+		});
+		overridableJobNodeId = child.Id;
 
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() {
@@ -81,7 +92,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 
 		var (overrideCookie, overrideToken) = await WebTestHttp.ExtractFormAsync(rateReloaded, rateCookie);
 		var overrideResponse = await PostAddNodeRateOverrideAsync(
-			authCookie, overrideCookie, overrideToken, workerId, rootJobNodeId, "30.00", "2026-01-01T00:00");
+			authCookie, overrideCookie, overrideToken, workerId, overridableJobNodeId, "30.00", "2026-01-01T00:00");
 		overrideResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		var overrideReloaded = await client.FollowRedirectAsync(overrideResponse, authCookie);
 		var overrideBody = await overrideReloaded.Content.ReadAsStringAsync();
@@ -176,7 +187,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 			Context = await CreateContextForAsync("admin.rate-tests"),
 			UserId = workerId,
 			Override = new(
-				rootJobNodeId, new(40m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
+				overridableJobNodeId, new(40m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "rates.correct-override-manager", EmployeeRole.Administrator);
 		var authCookie = await SignInAsync("rates.correct-override-manager", KnownPassword);
@@ -184,7 +195,7 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 		var (cookie, token) = await GetFormAsync(
 			authCookie, $"/Admin/CorrectNodeRateOverride?userId={workerId.Value}&overrideId={added.Id.Value}");
 		var response = await PostCorrectNodeRateOverrideAsync(
-			authCookie, cookie, token, workerId, added.Id, rootJobNodeId, "45.00", "2026-01-01T00:00", "Corrected the override rate");
+			authCookie, cookie, token, workerId, added.Id, overridableJobNodeId, "45.00", "2026-01-01T00:00", "Corrected the override rate");
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location!.OriginalString.Should().Contain("/Admin/Rates");

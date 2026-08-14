@@ -253,7 +253,9 @@ Two tables hold the inputs:
   `EXCLUDE` constraint over the effective-date range.
 - **`node_rate_override`** — the same shape plus `node_id`, letting a specific job (or its
   descendants, via ancestor search) pay a different rate for a given user. Non-overlapping per
-  `(node_id, user_id)` pair.
+  `(node_id, user_id)` pair. The `node_id` may not be the permanent root (ADR 0069): a root override
+  would price a worker's whole tree, which is what `user_cost_rate` already does. Enforced on
+  insert/update by a database trigger and the library, in the write transaction.
 
 At any costed instant, the applicable rate is resolved in this order (spec §9.3):
 

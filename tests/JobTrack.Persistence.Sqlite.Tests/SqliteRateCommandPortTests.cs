@@ -29,6 +29,9 @@ public sealed class SqliteRateCommandPortTests()
 	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new SqliteInstallationBootstrapPort(connectionString, SystemClock.Instance);
 
+	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
+		new SqliteJobNodeCommandPort(connectionString, SystemClock.Instance);
+
 	internal override IRateCommandPort CreateRatePort(string connectionString) =>
 		new RateCommandPort(new SqliteWriteOperations(connectionString), SystemClock.Instance);
 

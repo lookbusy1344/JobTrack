@@ -24,6 +24,9 @@ public sealed class PostgreSqlRateCommandPortTests()
 	internal override IInstallationBootstrapPort CreateBootstrapPort(string connectionString) =>
 		new PostgreSqlInstallationBootstrapPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
 
+	internal override IJobNodeCommandPort CreateJobNodePort(string connectionString) =>
+		new PostgreSqlJobNodeCommandPort(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build(), SystemClock.Instance);
+
 	internal override IRateCommandPort CreateRatePort(string connectionString) =>
 		new RateCommandPort(new PostgreSqlWriteOperations(new NpgsqlDataSourceBuilder(connectionString).UseNodaTime().Build()), SystemClock.Instance);
 

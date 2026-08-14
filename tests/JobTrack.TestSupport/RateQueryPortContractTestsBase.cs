@@ -98,6 +98,8 @@ public abstract class RateQueryPortContractTestsBase : IAsyncLifetime
 
 	internal abstract IInstallationBootstrapPort CreateBootstrapPort(string connectionString);
 
+	internal abstract IJobNodeCommandPort CreateJobNodePort(string connectionString);
+
 	internal abstract IRateCommandPort CreateCommandPort(string connectionString);
 
 	internal abstract IRateQueryPort CreateQueryPort(string connectionString);
@@ -127,6 +129,15 @@ public abstract class RateQueryPortContractTestsBase : IAsyncLifetime
 
 		var workerId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Grace Hopper", "grace.hopper.rate-query", EmployeeRole.Worker);
 
+		// Overrides target a child node, never the root (ADR 0069).
+		var child = await CreateJobNodePort(database.ConnectionString).AddChildAsync(new() {
+			Context = ContextFor(administratorId),
+			ParentId = bootstrap.RootJobNodeId,
+			Description = "Overridable leaf",
+			OwnerUserId = workerId,
+			Priority = Priority.Medium,
+		});
+
 		var commandPort = CreateCommandPort(database.ConnectionString);
 		_ = await commandPort.AddUserCostRateAsync(new() {
 			Context = ContextFor(administratorId),
@@ -136,9 +147,9 @@ public abstract class RateQueryPortContractTestsBase : IAsyncLifetime
 		_ = await commandPort.AddNodeRateOverrideAsync(new() {
 			Context = ContextFor(administratorId),
 			UserId = workerId,
-			Override = new(bootstrap.RootJobNodeId, new(30m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
+			Override = new(child.Id, new(30m), Instant.FromUtc(2026, 1, 1, 0, 0), null),
 		});
 
-		return (administratorId, workerId, bootstrap.RootJobNodeId);
+		return (administratorId, workerId, child.Id);
 	}
 }

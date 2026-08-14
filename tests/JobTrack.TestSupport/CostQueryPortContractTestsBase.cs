@@ -590,19 +590,20 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 	///     2026-07-24 code-review-scalability-remediation-plan §2.2 step 2: a cost read must not
 	///     materialize the whole <c>job_node</c> table. Seeds a decoy subtree of many nodes unrelated to
 	///     <c>leafId</c>'s own subtree and asserts none of them appear in the raw port's <c>NodesById</c>.
-	///     Also proves the narrowing did not break correctness: a rate override declared on the true
-	///     root -- an ancestor <em>above</em> <c>leafId</c>'s own requested subtree, and outside the decoy
-	///     subtree entirely -- still resolves (ADR 0040's owner carve-out and
-	///     <see cref="Domain.Rates.RateResolver" />'s nearest-ancestor walk both need every requested
-	///     root's own path to the true root, not just its descendants).
+	///     Also proves the narrowing did not break correctness: a rate override declared on
+	///     <c>branchId</c> -- the highest ancestor an override may target (ADR 0069 bars the true root),
+	///     <em>above</em> <c>leafId</c>'s own requested subtree and outside the decoy subtree entirely --
+	///     still resolves (ADR 0040's owner carve-out and <see cref="Domain.Rates.RateResolver" />'s
+	///     nearest-ancestor walk both need every requested root's own path to the true root, not just its
+	///     descendants).
 	/// </summary>
 	[Fact]
-	public async Task GetCostInputsAsync_excludes_nodes_outside_the_requested_subtree_while_still_resolving_a_true_root_override()
+	public async Task GetCostInputsAsync_excludes_nodes_outside_the_requested_subtree_while_still_resolving_an_ancestor_override()
 	{
-		var (rootId, _, leafId, _, administratorId, workerId) = await SeedTreeAsync();
+		var (rootId, branchId, leafId, _, administratorId, workerId) = await SeedTreeAsync();
 		await GiveWorkerFullDayWorkingTimeAsync(administratorId, workerId);
 		await AddUserCostRateAsync(administratorId, workerId, new(60m));
-		await AddNodeRateOverrideAsync(administratorId, workerId, rootId, new(100m));
+		await AddNodeRateOverrideAsync(administratorId, workerId, branchId, new(100m));
 		await CreateCorrectedSessionAsync(administratorId, workerId, leafId, At(9), At(11));
 
 		var jobNodePort = CreateJobNodePort(database.ConnectionString);
@@ -624,7 +625,7 @@ public abstract class CostQueryPortContractTestsBase : IAsyncLifetime
 		inputs.NodesById.Keys.Should().NotContain(decoyIds);
 		inputs.NodesById.Count.Should().BeLessThan(decoyIds.Count, "the decoy subtree must not be materialized");
 
-		// [09:00,11:00) at the 100/hr root override (not the 60/hr plain user rate) = 200: proves the
+		// [09:00,11:00) at the 100/hr branch override (not the 60/hr plain user rate) = 200: proves the
 		// override above leafId's own requested subtree was still found.
 		var sut = new CostQueries(port);
 		var result = await sut.GetCostDetailsAsync(new() {

@@ -526,13 +526,15 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 
 	public async Task<NodeRateOverrideId> SeedNodeRateOverrideAsync(Instant effectiveStart)
 	{
+		// Overrides target a child node, never the root (ADR 0069).
+		var leafId = await SeedLeafAsync("Overridable leaf");
 		var result = await seedClient.Rates.AddNodeRateOverrideAsync(new() {
 			Context = new() {
 				Actor = AdministratorId,
 				CorrelationId = Guid.NewGuid(),
 			},
 			UserId = AdministratorId,
-			Override = new(RootJobNodeId, new(40m), effectiveStart, null),
+			Override = new(leafId, new(40m), effectiveStart, null),
 		});
 		return result.Id;
 	}

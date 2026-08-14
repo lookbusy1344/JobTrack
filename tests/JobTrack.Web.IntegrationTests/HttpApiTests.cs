@@ -33,6 +33,7 @@ public sealed class HttpApiTests : IAsyncLifetime, IDisposable
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
 	private JobNodeId rootJobNodeId;
+	private JobNodeId overridableJobNodeId;
 	private IJobTrackClient seedClient = null!;
 
 	public async Task InitializeAsync()
@@ -50,6 +51,17 @@ public sealed class HttpApiTests : IAsyncLifetime, IDisposable
 		});
 		administratorId = bootstrap.AdministratorId;
 		rootJobNodeId = bootstrap.RootJobNodeId;
+
+		// Overrides target a child node, never the root (ADR 0069).
+		var child = await seedClient.Jobs.AddChildAsync(new() {
+			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			ParentId = rootJobNodeId,
+			Description = "Overridable leaf",
+			OwnerUserId = administratorId,
+			Priority = Priority.Medium,
+		});
+		overridableJobNodeId = child.Id;
+
 		await IdentityTestSupport.ClearRequiresPasswordChangeAsync(SchemaProvider.Sqlite, database.ConnectionString);
 		factory = new(database.ConnectionString);
 		client = factory.CreateClient(new() {
@@ -312,7 +324,7 @@ public sealed class HttpApiTests : IAsyncLifetime, IDisposable
 			antiforgeryToken,
 			$$"""
 			  {
-			    "nodeId": {{rootJobNodeId.Value}},
+			    "nodeId": {{overridableJobNodeId.Value}},
 			    "amountPerHour": 40.00,
 			    "effectiveStart": "2026-01-01T00:00:00+00:00"
 			  }
@@ -328,7 +340,7 @@ public sealed class HttpApiTests : IAsyncLifetime, IDisposable
 			antiforgeryToken,
 			$$"""
 			  {
-			    "nodeId": {{rootJobNodeId.Value}},
+			    "nodeId": {{overridableJobNodeId.Value}},
 			    "amountPerHour": 45.00,
 			    "effectiveStart": "2026-01-01T00:00:00+00:00",
 			    "reason": "Corrected the override rate",

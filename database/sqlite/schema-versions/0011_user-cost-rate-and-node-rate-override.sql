@@ -102,3 +102,23 @@ BEGIN
           AND (NEW.effective_end IS NULL OR nro.effective_start < NEW.effective_end)
     );
 END;
+
+-- ADR 0069 / spec §4.2 invariant 11: a node_rate_override may not target the
+-- permanent root (parent_id IS NULL). Mirrors PostgreSQL schema version 0026;
+-- checked on insert and on any node_id change -- the only writes that can point
+-- an override at the root.
+CREATE TRIGGER node_rate_override_not_on_root_on_insert
+    AFTER INSERT
+    ON node_rate_override
+BEGIN
+    SELECT RAISE(ABORT, 'a node_rate_override cannot target the root node')
+    WHERE (SELECT parent_id FROM job_node WHERE id = NEW.node_id) IS NULL;
+END;
+
+CREATE TRIGGER node_rate_override_not_on_root_on_update
+    AFTER UPDATE OF node_id
+    ON node_rate_override
+BEGIN
+    SELECT RAISE(ABORT, 'a node_rate_override cannot target the root node')
+    WHERE (SELECT parent_id FROM job_node WHERE id = NEW.node_id) IS NULL;
+END;

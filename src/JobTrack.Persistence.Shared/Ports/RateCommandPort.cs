@@ -82,7 +82,7 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 
 		var now = clock.GetCurrentInstant();
 		await EnsureEmployeeExistsAsync(context, request.UserId, cancellationToken).ConfigureAwait(false);
-		await EnsureNodeExistsAsync(context, request.Override.NodeId, cancellationToken).ConfigureAwait(false);
+		await EnsureOverridableNodeAsync(context, request.Override.NodeId, cancellationToken).ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 
 		var entity = new NodeRateOverrideEntity {
@@ -193,7 +193,7 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 		var now = clock.GetCurrentInstant();
 		var entity = await LoadTrackedNodeRateOverrideAsync(context, request.OverrideId, cancellationToken).ConfigureAwait(false);
 		EnsureUserMatchesOrThrow(entity.UserId, request.UserId, request.OverrideId.Value);
-		await EnsureNodeExistsAsync(context, request.Override.NodeId, cancellationToken).ConfigureAwait(false);
+		await EnsureOverridableNodeAsync(context, request.Override.NodeId, cancellationToken).ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(entity.RowVersion, request.Version);
 
@@ -252,12 +252,28 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 		}
 	}
 
-	private static async Task EnsureNodeExistsAsync(
+	/// <summary>
+	///     The node an override targets must exist and must not be the permanent root. A root override
+	///     would price a worker's whole tree, which their user cost rate already expresses; it is rejected
+	///     here (ADR 0069, spec §9.2) in the same write transaction the database trigger backstops. Both
+	///     the add and correct paths funnel through this, so a correction that re-points an override at the
+	///     root is caught too.
+	/// </summary>
+	private static async Task EnsureOverridableNodeAsync(
 		DbContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
-		if (!await context.Set<JobNodeEntity>().AsNoTracking()
-						  .AnyAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)) {
+		var target = await context.Set<JobNodeEntity>().AsNoTracking()
+								 .Where(n => n.Id == nodeId)
+								 .Select(n => new { n.ParentId })
+								 .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+		if (target is null) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
+		}
+
+		if (target.ParentId is null) {
+			throw new InvariantViolationException(
+				"node-rate-override-on-root", "A rate override cannot target the root node.");
 		}
 	}
 
