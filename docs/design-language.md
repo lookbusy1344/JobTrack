@@ -19,11 +19,10 @@ cards over a warm neutral paper ground, under a deep espresso command header, dr
 burnt-orange accent. Data is the hero — money and identifiers render in tabular monospace, and the
 cost figure is treated as an instrument read-out rather than body text.
 
-The burnt-orange-over-warm-neutral palette is a deliberate identity choice: it reads as a workshop
-/ foundry costing tool and steps away from the generic indigo/blue SaaS default. The look is also
-*not* a flat broadsheet ledger (hairline rules, uppercase everything, monospace body). Boldness is
-spent in one place — the command header and the metric read-out — and everything around them stays
-quiet.
+The burnt-orange-over-warm-neutral palette is an identity choice: it reads as a workshop / foundry
+costing tool and steps away from the generic indigo/blue SaaS default. It stops short of a flat
+broadsheet ledger (hairline rules, uppercase everything, monospace body). Boldness is spent in one
+place — the command header and the metric read-out — and everything around them stays quiet.
 
 ## Tokens
 
@@ -95,7 +94,7 @@ breakpoint.
 active-worker preview beside the "N active" pill ("You, Demo User (demo)"), wherever
 `_ActiveSincePill` renders it: Browse's record card and subtree table, Work, Awaiting Progress.
 `.jt-value-aside` shares that one declaration under a name of its own for a link qualifying the value
-it follows. Don't add a third "small text" class; a genuinely smaller step is `--jt-font-size-xs`/
+it follows. Don't add a third "small text" class; a smaller step is `--jt-font-size-xs`/
 `-xxs`, and those belong to the components that own them (record labels, pills), not to a utility.
 
 Every sub-body size is a token — no rem literals. `--jt-font-size-label` (`0.75rem`) is the label
@@ -119,7 +118,7 @@ decision rather than a rem literal repeated across unrelated rules:
 The field measure sits on the **controls**, not on `<form>`: a form also wraps toolbars, single
 buttons, filter grids and tables, none of which want a readable-text cap, and as an element rule it
 needed five `max-width: none` escapes to undo it. A control inside a grid column or a compact panel is
-already narrower than the cap, so on the control the rule simply never binds where it shouldn't.
+already narrower than the cap, so on the control the rule never binds where it shouldn't.
 
 `--jt-target-min` (`24px`) is WCAG 2.2 SC 2.5.8's AA minimum target size, used as a floor via
 `max(1.75rem, var(--jt-target-min))` on `.jt-icon-button` — a rem-sized control must not fall under a
@@ -174,15 +173,13 @@ its container, so a trailing action row never pads out the card it closes. Addin
 family means adding it to that rule and to `BlockComponentSpacingArchitectureTests`, which enforces
 both halves: the stylesheet must declare the margin, and no markup may restate it.
 
-Two mechanisms for one decision is what made this unguessable before: `.jt-form-card` spaced itself
-while `.jt-card` relied on an `mb-4` at three of its five uses, `<dl>` declared a margin *and* carried
-an `mb-4` at both call sites, `.jt-toolbar` had four different answers across sixteen uses, and
-`.jt-notice` declared nothing — which is how a blocked job's notice came to sit flush against the pill
-below it. The tokens are also breakpoint-scaled where Bootstrap's utilities are fixed `rem`, so a
-utility silently opts its element out of the responsive scale.
+One mechanism, one decision. Splitting spacing between a component rule and an `mb-*` utility lets the
+two disagree, and a component that declares no margin sits flush against whatever follows it. The
+tokens are also breakpoint-scaled where Bootstrap's utilities are fixed `rem`, so a utility opts its
+element out of the responsive scale.
 
-A markup utility remains correct for a deliberate per-instance deviation: `mb-0` to cancel the gap, or
-an `mt-*` to add a *top* margin, which is a different decision from the component's own trailing gap.
+A markup utility remains correct for a per-instance deviation: `mb-0` to cancel the gap, or an `mt-*`
+to add a *top* margin, which is a different decision from the component's own trailing gap.
 
 ### Stop and go
 
@@ -198,8 +195,8 @@ Two rules keep it compact and honest:
   standalone statement keeps its label ("Blocked", "Ready — every prerequisite is satisfied");
   a marker repeated once per row or list item uses `.status-pill--icon`, which drops the word to a
   visually-hidden span. A state costs a glyph's width per row, never a column.
-- **Blocked is red** (`--jt-red-*`), not the amber it used to be: the pill carries a red palm, and a
-  red hand on an amber ground reads as two states at once. Red is otherwise the error colour, but a
+- **Blocked is red** (`--jt-red-*`), not amber: the pill carries a red palm, and a red hand on an
+  amber ground would read as two states at once. Red is otherwise the error colour, but a
   blocked job is the nearest thing to a stop the domain has, and the error components
   (`.jt-notice--error`, `.jt-eyebrow--error`) never sit beside a status pill.
 
@@ -226,10 +223,9 @@ Active column reports the total count and a stable, capped worker preview (never
 — active time is operational state, not the stop/go prerequisite vocabulary this section documents
 above), and the neighbouring Sessions action always opens the complete history.
 
-`.status-pill-active` (amber — `--jt-amber-100`/`--jt-amber-700`) is the dedicated colour for this,
-replacing the green `.status-pill-ready` an active-session pill used to borrow before this rule was
-written down: amber is otherwise unclaimed (blocked moved from amber to red, per "Stop and go"
-above), so "someone is clocked in right now" never visually doubles as "this may proceed." Exactly
+`.status-pill-active` (amber — `--jt-amber-100`/`--jt-amber-700`) is the dedicated colour for this.
+Amber is otherwise unclaimed (blocked is red, per "Stop and go" above), so "someone is clocked in
+right now" never visually doubles as "this may proceed." Exactly
 one active worker keeps the familiar compact stopwatch pill
 (worker named only when it is not the viewer); two or more render a `status-pill-active` "N active"
 pill followed by a stable, wrapping (`d-inline-flex flex-wrap`) name list — the viewer's own session
@@ -250,8 +246,8 @@ that predicate lives — and gets `.status-pill-paused` via the `_PausedPill` pa
 same pause sign as the Pause job button. It is amber ink (`--jt-amber-700`, the same "someone is
 working this job" thread as `.status-pill-active`) on the neutral `--jt-slate-50` ground, so
 "started, nobody on it" reads as neither "running right now" nor the green-tinted settled state
-**Closed**. It is deliberately not a warning colour: ADR 0045 makes zero active sessions a valid
-state from `InProgress`, and Pause job produces it every time. `Closed` wins over `Paused` when both
+**Closed**. It is not a warning colour: ADR 0045 makes zero active sessions a valid state from
+`InProgress`, and Pause job produces it every time. `Closed` wins over `Paused` when both
 apply (an archived leaf can be `InProgress`, and "you cannot start here" is the more consequential
 fact).
 
@@ -265,9 +261,8 @@ identically down the column when the row can name its own target ("Remove depend
 foundation (ID 12)", "Revoke token workshop-laptop"). A page's *single* primary action has no
 repetition to earn an icon alone, so a standalone toolbar keeps the glyph **and** the word.
 
-The affordance glyphs are one family — outlined strokes at 1.5–1.6, taking the button's own colour
-— deliberately unlike the filled discs and signs, which report a state rather than offering an
-action:
+The affordance glyphs are one family — outlined strokes at 1.5–1.6, taking the button's own colour —
+unlike the filled discs and signs, which report a state rather than offering an action:
 
 | Glyph | Means | Where |
 | --- | --- | --- |
@@ -280,7 +275,7 @@ action:
 
 `jt-icon-pick-up` is a **person with a plus** ("assign this to me"), not a hand: `jt-icon-stop`
 already owns the hand silhouette, and a second hand glyph would read as a readiness sign at the
-~14px both actually render at. It sits on each unassigned row, and on the Owner field of Browse's
+~14px both render at. It sits on each unassigned row, and on the Owner field of Browse's
 record card — the field the action changes — never additionally in the page toolbar: one node's
 claim action appears exactly once, or the reader has to resolve a choice between two identical
 controls before acting.
@@ -325,8 +320,8 @@ Description takes the released `md` column. One `.jt-description-link` is render
 its rem-based body-size token follows the existing 14px/16px root progression without swapping
 elements at a breakpoint. Its computed size is therefore identical from `md` upward—including
 between `xl` and `xxl`—and steps down only with the phone root. Priority and the legacy
-subtree-position indicator do not return at `xxl`; `xl` and `xxl` deliberately retain the same
-five-column allocation. Every omitted fact is one tap away on the row's own page.
+subtree-position indicator do not return at `xxl`; `xl` and `xxl` keep the same five-column
+allocation. Every omitted fact is one tap away on the row's own page.
 
 Three details are load-bearing:
 

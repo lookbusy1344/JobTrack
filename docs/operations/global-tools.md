@@ -3,7 +3,7 @@
 JobTrack's gates depend on a small number of .NET CLI tools that are installed as **global** tools
 (`dotnet tool install --global`), not as a per-repo `.config/dotnet-tools.json` local manifest. This
 is a deliberate, standing convention for this working copy — the monorepo's development tooling is
-managed once per machine rather than restored per repository — so there is intentionally **no**
+managed once per machine rather than restored per repository — so there is **no**
 `.config/dotnet-tools.json` in JobTrack.
 
 Because the versions are therefore not pinned by a checked-in manifest, they are recorded here.
@@ -25,8 +25,8 @@ Confirm what is installed with `dotnet tool list --global`.
 
 - These are **development/verification** tools, not build-time dependencies of any project in the
   solution. The commit gate (`dotnet build` / `format` / `test`) needs none of them; they back the
-  additional gates (mutation testing now, client-asset restore in Phase 3) that are run
-  deliberately, not on every build.
+  additional gates (mutation testing now, client-asset restore in Phase 3) that are run on demand,
+  not on every build.
 - A global install matches how the rest of the monorepo's tooling is managed on this machine and
   avoids a per-repo restore step for tools that rarely change.
 - The trade-off is that the version is not enforced by tooling. This table is the record of record;

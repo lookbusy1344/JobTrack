@@ -5,7 +5,7 @@ HTTP connection against a real, already-running `JobTrack.Web` process — the o
 xUnit suites do. `JobTrack.Web.IntegrationTests` and `JobTrack.Web.EndToEndTests` drive an
 in-memory `WebApplicationFactory`/`TestServer` or a spawned production-host child process
 respectively (see `docs/operations/browser-testing.md`), but neither is a plain HTTP client hitting
-a plain socket the way an external API consumer or a browser actually does. These four suites are
+a plain socket the way an external API consumer or a browser does. These four suites are
 that gap: run them against a manually started dev server (or any deployed environment) as a
 post-deploy/regression smoke check, not as a replacement for the xUnit gates.
 

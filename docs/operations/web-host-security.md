@@ -27,7 +27,7 @@ host is built) when any of these is left unconfigured and `ASPNETCORE_ENVIRONMEN
   default (unset, or `*`) disables host filtering entirely, which lets a request forge the absolute
   URLs the application generates from the `Host` header and defeats virtual-host isolation on a
   shared front end, so both are rejected here. A subdomain wildcard (`*.example.com`) is still
-  accepted — only the bare catch-all is not. `appsettings.json` ships this empty deliberately; there
+  accepted — only the bare catch-all is not. `appsettings.json` ships this empty by default; there
   is no correct default for someone else's hostname.
 
 `ProductionSecurityConfigurationTests` (`tests/JobTrack.Web.IntegrationTests/`) proves each guard:
@@ -88,7 +88,7 @@ sockets, via `ProductionHostFixture`. It proves:
     before a second write is not valid evidence, because if the server aborts early, the write
     after the delay can only observe that abort once the delay itself elapses — the measured
     duration would equal the delay regardless of server behavior. The passing test instead trickles
-    one byte per second and lets a write fail as soon as the server actually closes the connection.
+    one byte per second and lets a write fail as soon as the server closes the connection.
 - **Forwarded-proto trust boundary.** A plain-HTTP request with a spoofed `X-Forwarded-Proto: https`
   header from a *trusted* configured proxy address is honored (no HTTPS redirect); the identical
   request from an *untrusted* address is ignored, and the plain-HTTP request is redirected to HTTPS

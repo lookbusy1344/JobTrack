@@ -1,7 +1,7 @@
 # Monitoring and alerts for the Cloud Run + Cloud SQL deployment
 
 This runbook covers the minimal production alert baseline for `jobtrack-web-pg` and `jobtrack-pg`.
-Full distributed tracing remains separately scoped; this baseline is deliberately small enough to be
+Full distributed tracing remains separately scoped; this baseline is small enough to be
 actionable and mandatory on every deployment.
 
 `scripts/configure-cloudrun-monitoring.sh` owns the configuration and is called by

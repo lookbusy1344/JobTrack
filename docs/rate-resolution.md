@@ -23,7 +23,7 @@ Resolving a rate at `t` is really two questions, answered in sequence:
 
 1. **Is the worker on the clock at `t`?** — decided by the *rota*: the effective schedule version,
    its weekly civil-time intervals, and any schedule exceptions. If `t` falls outside the resulting
-   effective working set, it is not costable and no rate is resolved — the instant is simply dropped.
+   effective working set, it is not costable and no rate is resolved — the instant is dropped.
 2. **What rate applies at `t`?** — decided by the four-level *precedence* over priced exceptions,
    node overrides, user cost rates, and the user default.
 

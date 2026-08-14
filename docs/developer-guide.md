@@ -121,7 +121,7 @@ dotnet test JobTrack.slnx
 It runs every provider-conformance, domain, application, identity, architecture, and web test
 project, against real (disposable, per-test-class) PostgreSQL and SQLite databases — a local
 PostgreSQL instance must be reachable for the PostgreSQL-backed suites to pass. **It does not run
-`JobTrack.Database.PerformanceTests`** — that project deliberately opts out of any solution-wide
+`JobTrack.Database.PerformanceTests`** — that project opts out of any solution-wide
 `dotnet test` (see "Performance lane" below) so the full suite can always pass on its own,
 regardless of shared-PostgreSQL-instance contention; run `./scripts/perf-test.sh` separately to
 cover it. To run a single project instead of the whole solution:
@@ -148,7 +148,7 @@ checkout; every project then runs `--no-build`, rather than each of the seven se
 and building the graph they all share). It covers domain/application logic, architecture-fitness
 rules, public API surface, and SQLite (file-based, no server needed), and skips PostgreSQL-backed,
 web-integration, and browser end-to-end coverage entirely — which is why the commit gate pairs it
-with a targeted `--filter` run against whichever of those projects the commit actually touches.
+with a targeted `--filter` run against whichever of those projects the commit touches.
 
 The 20-second budget is informational by default: a warning if exceeded, but the script still exits
 0, since a commit gate must never fail just because the machine running it is briefly loaded. Pass
@@ -189,7 +189,7 @@ busy" is a reason to fix the runner, not to widen a query budget.
 ### Running everything
 
 `dotnet test JobTrack.slnx` and `./scripts/perf-test.sh` cover different halves (the latter is
-deliberately excluded from the former, see above); to run both in one command:
+excluded from the former, see above); to run both in one command:
 
 ```bash
 ./scripts/all-test.sh
@@ -204,7 +204,7 @@ a substantial closing commit), not the per-commit gate. Any arguments are passed
 ### Multi-instance topology proof (opt-in)
 
 ADR 0066 Stage 7: proves the `Deployment:Topology=MultiInstance` configuration Stage 8 deploys to
-Cloud Run actually works on a real container runtime -- one PostgreSQL container, two independent
+Cloud Run works on a real container runtime -- one PostgreSQL container, two independent
 `JobTrack.Web` instances (`web-a`/`web-b`) built from the same image, and a round-robin HTTPS proxy
 with no session affinity. Requires Docker (OrbStack or Docker Engine); builds images, so this is not
 part of the fast-test.sh commit gate:
@@ -417,8 +417,8 @@ Three further commands exist for scripted setup, where the web interface is the 
 
 - `create-employee` provisions a non-administrator employee under an existing administrator
   (`--actor`), granting `--roles` (first entry as the initial role, the rest assigned after).
-  `--no-force-password-change` clears the ADR 0023 forced-change flag, for a deliberately shared
-  credential such as the container demo's `demo` account. The new account's password satisfies
+  `--no-force-password-change` clears the ADR 0023 forced-change flag, for a shared credential such
+  as the container demo's `demo` account. The new account's password satisfies
   `PasswordPolicy` (15+ characters, not blocklisted; ADR 0056) without an operational bypass.
   Omitting `--password-stdin` (like `bootstrap`) prompts interactively without echo; automation
   passes one line through standard input. Plaintext password arguments are rejected.

@@ -1,9 +1,8 @@
 # The cost engine
 
 How JobTrack turns recorded work sessions into money: the boundary-partition algorithm, the `1/N`
-concurrency rule, the PostgreSQL indexes that make the inputs cheap to find, and the EF Core
-materialization strategy that keeps a cost read proportional to the question rather than to the
-installation.
+concurrency rule, the PostgreSQL indexes that make the inputs cheap to find, and the EF Core loading
+that keeps a cost read's work proportional to the query, not the size of the database.
 
 Normative source: [`jobtrack_spec_codex.md`](jobtrack_spec_codex.md) §10. Entity-level background:
 [`database-entities.md`](database-entities.md). The per-worker hourly rate this engine multiplies by
@@ -18,12 +17,13 @@ is resolved separately — see [`rate-resolution.md`](rate-resolution.md). Decis
 
 ## 1. The problem
 
-Cost is never stored. It is recomputed on every read from the current rates, schedules, hierarchy,
-and sessions, against a single `asOf` instant captured at the start of the operation. Changing a
-historical rate changes historical reports, deliberately — cost figures are not accounting entries.
+Cost is recomputed on every read from the current rates, schedules, hierarchy, and sessions, against
+a single `asOf` instant captured at the start of the operation, and never stored. Change a historical
+rate and historical reports change with it: cost figures are live derivations, not accounting
+entries.
 
 The hard part is concurrency. One worker may have several sessions running at once, on different
-leaves. Their time cannot simply be summed: a worker who runs three sessions for an hour has worked
+leaves. Their time cannot be summed: a worker who runs three sessions for an hour has worked
 one hour, not three. The spec's rule is that at every eligible instant, a worker's cost is divided
 equally among their active sessions — each gets `1/N` of that instant. `N` has no upper bound and
 must not be computed pairwise.
@@ -72,7 +72,7 @@ S4 eligible                                 [=================)
 ```
 
 Leaving a session running overnight generates no overnight cost unless a priced additive exception
-covers that time. The last hour of `S4` is simply discarded.
+covers that time. The last hour of `S4` is discarded.
 
 ### 2.2 Boundaries and segments
 
@@ -110,8 +110,8 @@ Summing each session's shares:
 | | | | **8 h total** | |
 
 The total is exactly 8 hours — the length of the eligible working set that had at least one session
-active (`[09:00, 17:00)`). That conservation property is the point of the algorithm: allocation
-redistributes a worker's day, it never invents or destroys it.
+active (`[09:00, 17:00)`). Allocation redistributes a worker's day; it never invents or destroys it.
+That conservation is the whole point.
 
 Those thirds are why `AllocatedShare` is the **unreduced pair `(segmentTicks, N)`** and never a
 rounded tick count. Rounding ⅓ h to whole ticks three times loses a tick, and the day stops
@@ -140,7 +140,7 @@ and they earn £20.00, £30.00, and £18.33 respectively. Equal time, unequal mo
 spec requires.
 
 Each figure is one division, computed once: `rate × segmentTicks ÷ (N × ticksPerHour)`, straight to
-`decimal`. Never `round(share) × rate`, which would reintroduce precisely the error the exact
+`decimal`. Never `round(share) × rate`, which would reintroduce the error the exact
 `(segmentTicks, N)` pair exists to avoid.
 
 ### 2.5 Rate edges are boundaries too
@@ -161,11 +161,11 @@ S3 -> leaf C  [===========|===========)
 `N` is unchanged at 3 across both halves, but S1's contribution becomes `60 × ⅙` + `72 × ⅙` =
 £10.00 + £12.00 = £22.00, up from £20.00.
 
-Two things are worth noticing. The split is **global to the worker**, not local to S1 — S2 and S3
-are also partitioned at 11:30 and each emits two allocations, even though their overrides make both
-halves price identically. And the boundary set includes every rate-override edge on a session's node
-*and on every one of its ancestors*, not merely the ancestor that currently wins: a distant override
-can start applying the instant a nearer one lapses.
+Two points. The split is **global to the worker**, not local to S1 — S2 and S3 are also partitioned
+at 11:30 and each emits two allocations, even though their overrides make both halves price
+identically. And the boundary set includes every rate-override edge on a session's node *and on every
+one of its ancestors*, not merely the ancestor that currently wins: a distant override can start
+applying the instant a nearer one lapses.
 
 ### 2.6 Rolling up the hierarchy
 
@@ -234,7 +234,7 @@ session_range tstzrange GENERATED ALWAYS AS (
 ) STORED
 ```
 
-Three deliberate properties:
+Three properties:
 
 - **`'[)'` matches the domain.** The database's overlap operator and `WorkInterval`'s algebra agree
   on half-open semantics, so boundary-touching sessions behave identically in SQL and in C#.
@@ -288,8 +288,18 @@ CREATE INDEX work_session_user_range_gist_idx
 
 Worker-leading, because every cost read starts from "this worker, this window".
 
-The trap is worth stating plainly, because the index existed and was still not being used. Schema
-version 0014 originally expressed overlap discovery the way the spec writes it:
+Overlap discovery runs against the generated range column:
+
+```sql
+WHERE s.worked_by_user_id = p_user_id
+  AND s.session_range && tstzrange(p_query_start, p_query_end, '[)')
+```
+
+The worker equality and the range overlap go into `work_session_user_range_gist_idx` as a single
+index condition. On a 5,000-session worker spanning ~208 days, queried with a 10-hour window, this
+reads 4 blocks in 0.009 ms.
+
+The column-wise form of the same predicate is the trap:
 
 ```sql
 -- NOT sargable against any range index
@@ -298,38 +308,21 @@ WHERE s.worked_by_user_id = p_user_id
   AND (s.finished_at IS NULL OR s.finished_at > p_query_start)
 ```
 
-That predicate is correct and unusable. The `OR`/`NULL` test on a *different* column from the range
-bound means the planner cannot push the temporal condition into any index — not the GiST index, not
-the `(worked_by_user_id, started_at)` / `(worked_by_user_id, finished_at)` btree composites. In
-practice it degraded to an index scan keyed on `worked_by_user_id` alone, followed by an in-memory
-filter over that worker's *entire* history. Invisible on a new installation; steadily worse every
-year the worker accumulates sessions outside the query window.
+The `OR`/`NULL` test on a *different* column from the range bound blocks the planner from pushing the
+temporal condition into any index — not the GiST index, not the `(worked_by_user_id, started_at)` /
+`(worked_by_user_id, finished_at)` btree composites. It degrades to an index scan keyed on
+`worked_by_user_id` alone plus an in-memory filter over the worker's whole history, growing with
+session count. The two forms are equal — two half-open intervals `[a,b)` and `[c,d)` overlap iff
+`a < d ∧ c < b`, and substituting `session_range`'s definition yields the column form — so the range
+form is the one to write.
 
-Schema version 0018 rewrites it against the generated column:
-
-```sql
-WHERE s.worked_by_user_id = p_user_id
-  AND s.session_range && tstzrange(p_query_start, p_query_end, '[)')
-```
-
-Provably the same predicate — two half-open intervals `[a,b)` and `[c,d)` overlap iff `a < d ∧ c < b`,
-and substituting `session_range`'s definition yields the original expression — but now the worker
-equality and the range overlap go into `work_session_user_range_gist_idx` as a single index
-condition. Measured on a 5,000-session worker spanning ~208 days, queried with a 10-hour window:
-
-| | Time | Block reads |
-|---|---|---|
-| Before (v0014 predicate) | 0.31 ms | 89 |
-| After (v0018 predicate) | 0.009 ms | 4 |
-
-Two caveats recorded with the change. First, the GiST plan only wins once statistics are accurate;
-on a freshly bulk-loaded table with no `ANALYZE`, stale estimates can still make a btree composite
-look cheaper. Autovacuum handles this in production, so it is a fixture-freshness concern —
-`PerformanceScaleGenerator` runs an explicit `ANALYZE` after seeding. Second, at very low
-selectivity — a query spanning most of a worker's history — a plain index scan on
-`worked_by_user_id` correctly beats GiST, because there is nothing to prune. Both plans are
-acceptable; a sequential scan is not, and the budget in
-[`traceability/performance-budgets.md`](traceability/performance-budgets.md) is written that way.
+Two caveats. The GiST plan wins once statistics are accurate; on a freshly bulk-loaded table with no
+`ANALYZE`, stale estimates can still make a btree composite look cheaper, so
+`PerformanceScaleGenerator` runs an explicit `ANALYZE` after seeding. And at very low selectivity — a
+query spanning most of a worker's history — a plain index scan on `worked_by_user_id` beats GiST,
+because there is nothing to prune. Both plans are acceptable; a sequential scan is not, and the
+budget in [`traceability/performance-budgets.md`](traceability/performance-budgets.md) is written
+that way.
 
 ### 3.3 Why this lives in a stored function
 
@@ -341,10 +334,9 @@ alternative — an inline SQL string beside the call site — is what the house 
 function is source-controlled under `database/postgresql/schema-versions/`, and
 `InlineDmlArchitectureTests` enforces that it is invoked *through* EF rather than duplicated.
 
-It deliberately does **not** clip `finished_at` to `asOf`. It exposes both the raw `finished_at` and
-a computed `effective_finished_at`; the caller selects the raw column and applies
-`SessionEndClipping.ClipEnd` in C#, keeping one clipping rule shared with SQLite rather than two
-that could diverge.
+It exposes both the raw `finished_at` and a computed `effective_finished_at`, and does **not** clip
+`finished_at` to `asOf` itself. The caller selects the raw column and applies
+`SessionEndClipping.ClipEnd` in C#, so one clipping rule serves both providers.
 
 ### 3.4 Supporting structures
 
@@ -377,6 +369,17 @@ and demo provider; adding a consistency risk to buy speed it does not need is th
 materialized immutable structure to a pure function. The engine performs no I/O and no authorization
 filtering; the port performs no arithmetic.
 
+That split is why the engine is synchronous. `async`/`await` sits only at the I/O edge: the port's
+queries in `Persistence.PostgreSql`/`Persistence.Sqlite`, awaited once by `CostQueries` before any
+arithmetic. `JobTrack.Domain` — `CostEngine`, `CostSegmentPartitioner`, the aggregators,
+`RateResolver` — holds no `async`. It is CPU work over materialized inputs; wrapping it in tasks
+would buy scheduling overhead and no concurrency. `CostQueries.CalculateAsync` awaits the port, then
+runs the engine straight-line on the same thread, never on `Task.Run` or the pool. The per-worker
+helpers stay `static` and self-contained, so a measured bottleneck could be parallelised later
+without a rewrite — none is offloaded now. `ConfigureAwait(false)` goes on every library await and
+none in the hosts, enforced by each library's `.editorconfig`. The `Stopwatch` split behind the
+`cost_read_growth_signal` log times the DB and engine halves apart, because they scale differently.
+
 ### 4.1 One snapshot, one context
 
 Every cost read opens a single `DbContext`, begins a `RepeatableRead` transaction
@@ -385,28 +388,25 @@ figure assembled from a dozen queries across shifting snapshots would be interna
 sessions from one instant, rates from another. Everything is read-only and `AsNoTracking`; nothing
 here should ever pay for change tracking or identity resolution.
 
-### 4.2 Load the question, not the installation
+### 4.2 Load only the records a query needs
 
-The original implementation materialized the whole `job_node` table (plus `leaf_work` and
-prerequisites) before doing anything request-specific. At the combined-production-tree scale a
-*single-leaf, zero-session* cost read cost 360 ms purely on that upfront load.
+A cost read loads exactly two things, both through set-returning functions:
 
-It now loads exactly two things, both through set-returning functions:
+- **`job_node_subtrees(rootIds)`** — the requested roots' own subtrees.
+- **`job_node_ancestor_chains(nodeIds)`** — extends that node map with the ancestor chains ADR 0017's
+  elevated scope requires: each requested root's own path to the true root (an override may be
+  declared above the requested subtree), and, for any contributing session on a leaf *outside* the
+  requested subtree, that leaf's path to the root, because `RateResolver` walks every session's own
+  ancestor chain for the nearest override.
 
-- **`job_node_subtrees(rootIds)`** — the requested roots' own subtrees, nothing else.
-- **`job_node_ancestor_chains(nodeIds)`** — then extends that node map with precisely the ancestor
-  chains ADR 0017's elevated scope requires: each requested root's own path to the true root (an
-  override may be declared above the requested subtree), and, for any contributing session on a leaf
-  *outside* the requested subtree, that leaf's path to the root, because `RateResolver` walks every
-  session's own ancestor chain looking for the nearest override.
+Rows loaded scale with the query, not the size of the database:
 
-| Scale | `job_node` rows | Nodes loaded, before | After | Latency |
-|---|---|---|---|---|
-| Broad tree | 10,002 | 10,002 | 3 | 21.4 ms → 7.1 ms |
-| Combined production tree | 193,570 | 193,570 | 7 | 360.2 ms → 100.9 ms |
+| Scale | `job_node` rows | Nodes loaded | Latency |
+|---|---|---|---|
+| Broad tree | 10,002 | 3 | 7.1 ms |
+| Combined production tree | 193,570 | 7 | 100.9 ms |
 
-A >27,000× reduction in materialized rows. The residual latency is fixed per-request overhead —
-connection, snapshot, role lookup — not a function of installation size any more.
+The residual latency is fixed per-request overhead — connection, snapshot, role lookup.
 
 ### 4.3 Set-based, never N+1
 
@@ -449,7 +449,7 @@ worker's decade-old sessions are never fetched to cost a job started last week.
 
 Most per-worker loads here return tens of rows, where entity shaping is irrelevant. One does not:
 `schedule_exception` reaches 36,500 rows at the long-history scale. Projecting it to the five
-columns actually consumed measured **50.4 ms wide versus 9.7 ms narrow**. The rule that follows is
+columns it consumes measured **50.4 ms wide versus 9.7 ms narrow**. The rule that follows is
 not "always project" — it is "project where the row count makes shaping visible next to the query",
 and this is the only load in the method that qualifies.
 

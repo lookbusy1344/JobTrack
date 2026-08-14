@@ -15,23 +15,18 @@ This file is directives on the ownership model. Entity field detail lives in
 
 ## 1. Why this model exists
 
-The legacy schema attached at most one work record to a node (`0..1`), so "who worked this node"
-was unambiguous by construction. The current schema allows **many** `work_session` rows per
-`leaf_work`, each carrying its own `worked_by_user_id` — so a leaf can accumulate time from several
-people. That is desirable, but it removed the implicit single-worker guarantee and left work-session
-authorization gated only on *self-vs-others* (`WorkSessionAccessPolicy.CanManage(roles, isOwnSession)`),
-which means any authenticated Worker can record their own time against **any** node in the system,
-regardless of who controls it. That is too open.
+A leaf holds **many** `work_session` rows, each with its own `worked_by_user_id`, so several people
+can log time against one leaf. Ownership is the axis that decides who may do so. Without it,
+work-session authorization would rest on *self-vs-others* alone, and any Worker could record their
+own time against **any** node in the system — too open.
 
-The replacement makes **node ownership** the single axis of control for both structure and work,
-and reintroduces a controlled, explicit way for a worker to acquire a node to work on: the
-**unassigned pool** and **pickup**.
+So **node ownership** is the single axis of control for both structure and work, with one explicit
+route for a worker to acquire a node: the **unassigned pool** and **pickup**.
 
-This model deliberately separates **technical ownership** from **requester visibility**. The
-`job_node.owner_user_id` column answers "who controls this work in the technical hierarchy?" It does
-not answer "who asked for this work?" or "who is allowed to monitor it as a client." Requester
-intake uses a separate request anchor (§9) so client users can submit and track jobs without being
-made Workers and without inheriting operational tree access.
+Ownership is separate from **requester visibility**. `job_node.owner_user_id` answers "who controls
+this work in the technical hierarchy?" — not "who asked for it?" or "who may monitor it as a client?"
+Requester intake uses a separate request anchor (§9), so client users submit and track jobs without
+being made Workers and without operational tree access.
 
 ## 2. The core concept: direct ownership grants control, not evidence of work
 
@@ -52,7 +47,7 @@ Ownership is **never inferred** from the posting user, the current worker, or an
 claim. It is set explicitly at creation, changed only by an explicit reassignment, and acquired from
 the pool only by an explicit pickup.
 
-### 2.1 The `NULL` state is deliberate and self-standing
+### 2.1 The `NULL` state is a first-class state
 
 `owner_user_id IS NULL` is a first-class, intended state meaning *"this job is unassigned and anyone
 may pick it up."* It is **not** a data defect or a "missing owner" to be backfilled. Its pickup
@@ -100,13 +95,12 @@ canManageStructure(actor, node) =
     OR (actor has Worker AND controls(actor, node))
 ```
 
-Unchanged in shape from today's `JobNodeAccessPolicy.CanManage`; the only refinement is that
-`controls` must skip `NULL` owners in the ancestor walk. For **child creation**, `node` is the
+`controls` skips `NULL` owners in the ancestor walk. For **child creation**, `node` is the
 **parent** — you may add a child under any node you control.
 
 For **moving/re-parenting**, `node` is the node being moved. An actor who can manage that node may
 move it to any otherwise valid parent; they do **not** also need to control the destination parent.
-This deliberately keeps the permission model simple for intake and evolving large jobs: an assigned
+This keeps the permission model simple for intake and evolving large jobs: an assigned
 node owner, an owner of any ancestor of that node, JobManager, or Administrator can move the node
 out of a holding area and into a more logical part of the hierarchy.
 
@@ -137,7 +131,7 @@ This **replaces** the old `isOwnSession` rule. Consequences:
 - **An unassigned (`NULL`) node is claimed as part of starting a session on it** (ADR 0048): starting
   a session (`StartSessionAsync`, `StartWorkAsync`, `ReopenAndStartWorkAsync`) on an unassigned node
   performs the pickup itself, atomically, claiming the node for `worked_by_user_id` — the worker the
-  session is actually for, not necessarily the acting caller — immediately before `canRecordWork` is
+  session is for, not necessarily the acting caller — immediately before `canRecordWork` is
   evaluated. This is the same claim §4.3 describes, entered from a second call site: a work session
   naming a specific worker and an unassigned node are mutually contradictory states, so the obvious
   next action (claim it) is taken rather than requiring a separate round trip first. Practically: a
@@ -206,8 +200,8 @@ claim a node without also starting a session on it in the same call.
 ### 4.4 Reassignment and release to the pool
 
 The controlling manager of a node (anyone for whom `canManageStructure` is true) may set its direct
-owner to **any user** or to **`NULL`** (release back to the pool). This intentionally relaxes the old
-spec rule (`:303`) that restricted reassignment to Admin/JobManager: a Worker who controls a subtree
+owner to **any user** or to **`NULL`** (release back to the pool). This relaxes the earlier spec rule
+(`:303`) that restricted reassignment to Admin/JobManager: a Worker who controls a subtree
 may hand any node in it to another user, or park it as unassigned. Because ancestor ownership
 cascades, an ancestor owner may reassign or release a descendant even when that descendant has a
 different direct owner. The permanent root may never be released to `NULL`.
@@ -285,8 +279,8 @@ can be shown while the leaf-level figures behind it are withheld.
   reviewed against the Framework Design Guidelines and closed by ADR 0032.
 - The work-session command ports stop comparing `actorId == workedByUserId` and instead compute
   `controls(actor, leaf)` (reusing the ancestor-owner walk the job-node port already performs).
-- Query/read models and public DTOs represent `owner_user_id = NULL` deliberately, and owner filters
-  distinguish "no owner filter" from "only unassigned".
+- Query/read models and public DTOs represent `owner_user_id = NULL` as a first-class value, and
+  owner filters distinguish "no owner filter" from "only unassigned".
 - New `PickUp` (claim) command on `IJobCommands`/`IJobTrackClient`; owner reassignment/release
   surfaced through the existing edit path with the relaxed authority of §4.4.
 - Spec updates: `:85` (owner optional, `NULL` = unassigned), `:296` (Worker work-session wording),
@@ -325,7 +319,7 @@ Use `Requester` in code and documentation rather than `Client`: the permission m
 and monitor requests", not "belongs to an external customer tenant." The initial product remains a
 single-organisation employee-account system unless a separate multi-tenancy decision changes that.
 
-Requester is deliberately excluded from all technical control predicates:
+Requester is excluded from all technical control predicates:
 
 ```text
 canManageStructure(Requester, node) = false

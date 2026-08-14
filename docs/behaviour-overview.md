@@ -46,7 +46,7 @@ remains the way to claim a node you are not about to start work on.
   **another worker's individual leaf cost is redacted**. That figure alongside the leaf's visible
   session hours would reveal their hourly rate, which spec §7.3 reserves to the rate/cost roles.
 
-A redacted cost simply renders blank; cost is an optional field on an otherwise browsable listing,
+A redacted cost renders blank; cost is an optional field on an otherwise browsable listing,
 never a whole-request denial. When visible, actual cost is accompanied by the exact
 concurrency-allocated time underlying it and is rendered as, for example, `£50.00 / 3.5 hrs`
 (ADR 0053). See [`ownership-model.md`](ownership-model.md) §5.1 for the full read/write matrix.
@@ -67,7 +67,7 @@ enforced:
 - **Completing** a leaf (transitioning its `LeafWork` achievement into a completed state such as
   `Success`) is refused while the leaf is not ready.
 
-Two things are deliberately **not** gated:
+Two operations are **not** gated:
 
 - **Finishing a work session** — stopping the clock only records labour that physically happened;
   the spec keeps it ungated so a prerequisite added mid-session can't trap an active worker (and the
@@ -117,7 +117,7 @@ medium breakpoint the pill includes its word or active count. The complete list 
 away via Sessions, regardless of how many rows are capped in a dense table view.
 
 The Awaiting Progress dashboard offers two distinct "started work" filters, which answer different
-questions and are deliberately not merged. **In progress only** is about the achievement: work has
+questions and stay separate. **In progress only** is about the achievement: work has
 started and reached no closure, so a *paused* leaf — started, nobody clocked on — stays in. **Working
 now** is about sessions: choosing an employee keeps only leaves carrying an open session of theirs,
 so a paused leaf drops out and so does one someone else is working. Because starting a session
@@ -129,8 +129,8 @@ other filter on the dashboard they are remembered per session (ADR 0052).
 **One-click completion is an important fast path on both Browse and Awaiting Progress.** An
 authorized actor can press **Complete** on an eligible open leaf, accept the client-side confirmation
 that every open session will be closed, and record `Success` without navigating to `/Jobs/Work`.
-This Success shortcut is deliberate: the command re-checks authorization, readiness, node version
-and the active-session set, then closes the leaf and its confirmed sessions atomically. `/Jobs/Work`
+The command re-checks authorization, readiness, node version and the active-session set, then closes
+the leaf and its confirmed sessions atomically. `/Jobs/Work`
 remains the full ending surface when the actor needs `Cancelled` or `Unsuccessful`, write-up changes,
 or the other completion options. Do not remove or redirect either page's one-click Complete action
 on the grounds that Work owns the full workflow.
@@ -146,7 +146,7 @@ The subtree scope is the exception to that memory, because it is a place rather 
 Reaching the dashboard by a URL that names no node — the header link above all — always scopes to
 the viewer's own home node, whatever the last visit was looking at, and falls back to the whole tree
 for a viewer with no home node. The dashboard is always scoped to exactly one node, named on the page
-and opened by the toolbar's Browse button; showing the whole tree is simply being scoped to its root,
+and opened by the toolbar's Browse button; showing the whole tree is being scoped to its root,
 so the line reads "Scoped to *root*" and Browse opens the root. The line offers the places worth
 going instead: "Show whole tree" unless the scope already is the root, and "Show home node" whenever
 the viewer has a home node and is not already looking at exactly that subtree.
@@ -207,12 +207,11 @@ authorized for, including reopening without starting a session — through the o
 
 ### Who can pause, complete, and resolve a paused leaf
 
-Two distinct authorization rules govern a leaf's work sessions, and they're deliberately not the
-same rule:
+Two distinct authorization rules govern a leaf's work sessions:
 
 - **Finishing (pausing) your own session needs no ownership at all.** `WorkSessionAccessPolicy.CanFinishSession`
   ([`src/JobTrack.Domain/Authorization/WorkSessionAccessPolicy.cs:70-75`](../src/JobTrack.Domain/Authorization/WorkSessionAccessPolicy.cs#L70-L75))
-  grants finish authority to `CanManage` (below) **or** simply `Worker role && isOwnSession` — the
+  grants finish authority to `CanManage` (below) **or** `Worker role && isOwnSession` — the
   ADR 0045 §5 exception that lets a worker always stop their own clock, even if node ownership moved
   elsewhere after they started. It grants pause authority only, nothing more. The command port checks
   it per session at [`SqliteWorkSessionCommandPort.cs:857-869`](../src/JobTrack.Persistence.Sqlite/SqliteWorkSessionCommandPort.cs#L857-L869).
@@ -261,7 +260,7 @@ always states the scope before it is clicked.
 
 **One job** — `/Jobs/Delete`, offered on a job with no children. It never cascades: a job with
 children, a prerequisite edge, or the permanent root is refused (ADR 0036). A leaf whose work was
-never actually done deletes with its `LeafWork`; a leaf with real session history needs the
+never done deletes with its `LeafWork`; a leaf with real session history needs the
 Administrator role and a reason. What belongs to that one job goes with it (ADR 0068): its rate
 overrides, and — where the job arrived through client-request intake — the request and its whole note
 thread, recorded in the audit event since nothing else survives to describe them. It refuses the same
@@ -278,7 +277,7 @@ same indented tree Browse uses, with each job's own rolled-up cost beside it and
 the summary above. Costs are supplementary context, so if a rate no longer resolves (or the viewer
 cannot see costs) that one panel says so and the rest of the confirmation still works.
 
-Three things are worth knowing about it:
+Three points:
 
 - **Reported costs move.** Cost is computed live from current sessions and never snapshotted, so
   destroying a branch's history changes what every job above it reports from then on. Only the audit
@@ -310,14 +309,14 @@ auth model, and request/response examples;
 - **Surface** — read-only job-tree browsing and search, work sessions (start/finish/correct/list —
   a UI "resume"/"pause"/"stop" is the same start/finish command, not a separate endpoint),
   prerequisites and achievement, and cost reports. Structural job commands, audit browsing, and
-  account administration remain Razor-Pages-only for now (ADR 0030) — this is a deliberately scoped
-  surface, not a mechanical mirror of every browser workflow.
+  account administration remain Razor-Pages-only for now (ADR 0030) — a scoped surface,
+  not a mechanical mirror of every browser workflow.
 - **Operational qualities** — per-user rate limiting distinct from browser login throttling, and
   bounded per-request telemetry (operation, correlation id, status, duration, stable failure
   category) that never carries a rate/cost value or a token.
 - **Client proof** — `samples/JobTrack.ExternalApiClient` is a small first-party CLI client with
   **no project reference to any `JobTrack.*` library assembly**: it talks only to the published
-  HTTP contract, proving the API is genuinely usable from outside the reusable .NET library.
+  HTTP contract, proving the API is usable from outside the reusable .NET library.
   `tests/JobTrack.Web.EndToEndTests/ExternalApiClientProofTests.cs` drives it against both
   providers, exercising authentication, a read workflow, a mutation workflow, conflict handling,
   and revocation handling.

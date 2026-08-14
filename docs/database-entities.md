@@ -149,7 +149,7 @@ to it or to any of its ancestors is satisfied (a branch prerequisite is inherite
 subtree). This gates exactly two operations, each rechecking readiness live inside its own write
 transaction so a prerequisite added after work began is still enforced: **starting** a leaf's work
 session, and **completing** a leaf (its `LeafWork` entering a completed state such as `Success`).
-Both throw `PrerequisiteBlockedException` on both providers. Deliberately *not* gated: **finishing a
+Both throw `PrerequisiteBlockedException` on both providers. *Not* gated: **finishing a
 work session** (stopping the clock records labour that happened — the spec keeps it ungated so
 prerequisite regression can't trap an active worker; the recorded time stays costable, see the
 costing note below), and **branch completion** (a branch has no stored achievement to set — a
@@ -179,7 +179,7 @@ gaining any operational job-browse, ownership, or work-recording authority.
 | `app_user_department.is_primary` | `boolean`, nullable | At most one primary row per `app_user_id`. |
 
 `request_holding_area` is a configured `JobNode` parent that accepts requester-created children — not
-a new hierarchy type, deliberately: routing and eligibility metadata layered on the existing tree.
+a new hierarchy type: routing and eligibility metadata layered on the existing tree.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -244,7 +244,7 @@ ancestors (ADR 0040). `CanViewNodeCost` then filters each *individual* node insi
 (ADR 0042): a branch's roll-up stays visible because it is an aggregate, as does the actor's own leaf
 or an unassigned one, but another worker's individual leaf cost is withheld — that figure together
 with the leaf's session hours would expose their hourly rate, which spec §7.3 reserves to the
-rate/cost roles. A withheld cost is simply absent from the read model, never an error.
+rate/cost roles. A withheld cost is absent from the read model, never an error.
 
 Two tables hold the inputs:
 
@@ -284,7 +284,7 @@ If a user has *N* simultaneously active work sessions (necessarily on different 
 overlap is rejected at the database), each session gets an equal 1/N share of *time* for as long as
 that concurrency level holds, not necessarily an equal share of *money* — each session's rate is
 resolved independently, so two concurrent sessions on different jobs can have entirely different
-hourly rates even though both belong to the same user at the same instant. There is deliberately no
+hourly rates even though both belong to the same user at the same instant. There is no
 fixed limit on N (the spec explicitly forbids an algorithm whose correctness depends on enumerating
 pairs — 20+ simultaneous sessions must work correctly), and a session blocked by an unmet
 prerequisite still contributes cost and still counts toward N — prerequisite state only affects
@@ -318,7 +318,7 @@ overrides, and concurrency are always resolved per worker.
 
 `double`/`float` never appears anywhere on the duration or money path. Currency is carried at
 `numeric(19,6)` internally — six decimal places of headroom above pennies for chained rate/time
-multiplication — and rounded to pennies, midpoint-to-even, **only** at the point a value is actually
+multiplication — and rounded to pennies, midpoint-to-even, **only** at the point a value is
 displayed or exported (ADR 0009):
 
 - **`AllocatedDuration`** — the exact rational sum of the same `segmentTicks / N` shares used to
@@ -341,4 +341,4 @@ enough; **hierarchy-display reconciliation** (ADR 0002) instead:
    always add up exactly, one level at a time, leaf-to-branch and branch-to-branch up to the root.
 
 This reconciliation is a presentation-layer step over already-computed exact costs — it never
-changes what was actually earned or owed, only how a simultaneous multi-node display rounds.
+changes what was earned or owed, only how a simultaneous multi-node display rounds.

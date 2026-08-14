@@ -2,7 +2,7 @@
 
 **Closes:** Implementation plan §6.7 gate item "a schema-level PostgreSQL backup/restore smoke test
 passes". This document describes what the automated smoke test proves, and the manual procedure it
-is modelled on. It deliberately stops short of a production-like recovery-objective (RPO/RTO)
+is modelled on. It stops short of a production-like recovery-objective (RPO/RTO)
 rehearsal — plan §6.7 assigns that to the release gate, not the database gate.
 
 ## What the automated smoke test proves

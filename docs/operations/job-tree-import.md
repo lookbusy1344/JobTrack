@@ -21,7 +21,7 @@ dotnet run --project src/JobTrack.AdminCli -- import-tree --provider sqlite --co
 ```
 
 `--username` names the employee every created node is owned by *and* the actor the command runs as
-(there is deliberately no separate actor/owner split — see `JobTreeImportCommand`'s own doc comment).
+(there is no separate actor/owner split — see `JobTreeImportCommand`'s own doc comment).
 `--parent-id <job-node-id>` anchors the import under an existing node; omit it and the import attaches
 under the tree root (`job_node` id `1`). `--home-node-for <username[,username...]>` names further
 accounts that adopt the file's flagged home node — see "Flagging the home node" below.

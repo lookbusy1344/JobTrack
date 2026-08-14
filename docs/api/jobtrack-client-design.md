@@ -5,7 +5,7 @@ examples before creating implementations"). Reviewed against the monorepo-root
 `Framework_Design_Guidelines_Essentials.md` (one level above this repository, shared across the
 monorepo's projects — see top-level `CLAUDE.md`) and `jobtrack_spec_codex.md` §13.2. This document
 records the *design*, including the parts not yet implemented; `git log`/the current source tree is
-authoritative for what actually exists at any given moment (see the status table below).
+authoritative for what exists at any given moment (see the status table below).
 
 ## Why the facade grows additively instead of being declared complete up front
 
@@ -21,8 +21,8 @@ implemented. Two things in this repository's own configuration rule that out:
    to any other code: an interface property that exists only to be filled in later is exactly the
    half-finished shape that rule prohibits.
 
-So `IJobTrackClient` ships with exactly the sub-interfaces whose slice (plan §7.3) has actually been
-designed and declared, and grows one property at a time as each slice lands. Per ADR 0013, adding a
+So `IJobTrackClient` ships with the sub-interfaces whose slice (plan §7.3) is designed and declared,
+and grows one property at a time as each slice lands. Per ADR 0013, adding a
 property to `IJobTrackClient` is additive evolution, not a breaking change, because the facade is
 implemented only inside this repository (by the persistence assemblies) and consumers (`JobTrack.Web`,
 `JobTrack.AdminCli`) only ever call it, never implement it themselves — see
@@ -232,9 +232,9 @@ exclusivity already enforced by schema version 0006's deferred constraint trigge
 creates a child inheriting the existing `LeafWork` (and, once work sessions exist in §7.3 step 6,
 every session unchanged), creates each newly identified child in `NewChildren`, and converts the
 original leaf into their branch parent; it throws `InvariantViolationException` with `ConstraintId`
-`"leaf-work-not-attached"` if there is no existing `LeafWork` to decompose. Unlike the design
-sketch that originally stood in for this slice (a bare `Task`), it returns the new identifiers the
-caller needs to reference what was just created. See `src/JobTrack.Application/JobCommands.cs`,
+`"leaf-work-not-attached"` if there is no existing `LeafWork` to decompose. It returns the new
+identifiers the caller needs to reference what was just created. See
+`src/JobTrack.Application/JobCommands.cs`,
 `IJobNodeCommandPort.cs`, and `tests/JobTrack.Application.Tests/JobCommandsTests.cs` for the
 fake-port application tests; provider conformance tests — including the real acyclicity/lock
 mechanics already established by schema versions 0004/0005/0006, and the concurrency/rollback
@@ -373,15 +373,10 @@ constraint) — unpriced additive exceptions, and all subtractive exceptions, ma
 `tests/JobTrack.Application.Tests/ScheduleCommandsTests.cs` for the fake-port application tests;
 provider conformance tests land with the persistence slice (§7.4).
 
-## Rates, Costing, and Audit: now implemented — see source, not this historical sketch
+## Rates, costing, and audit
 
-The code block this section used to carry (illustrative, pre-implementation member shapes for
-`IRateCommands`/`ICostQueries`/`IAuditQueries`) is deleted rather than corrected in place: every
-name in it was superseded during implementation (e.g. `SetUserCostRateAsync` became
-`IRateCommands.AddUserCostRateAsync`; `GetCostBreakdownAsync`/`GetCostOfNodeAsync` became
-`ICostQueries.GetCostDetailsAsync`/`GetHierarchyTotalsAsync`), so keeping the old sketch next to
-the real interfaces invited exactly the confusion this document's own opening paragraph warns
-about. For the authoritative current shape of each, read:
+The `IRateCommands`, `ICostQueries`, and `IAuditQueries` member shapes live in source. Read them
+there:
 
 - `src/JobTrack.Application/IRateCommands.cs`
 - `src/JobTrack.Application/ICostQueries.cs` (also documented for HTTP consumers in
@@ -392,11 +387,11 @@ about. For the authoritative current shape of each, read:
 for every other command: `null` means "now", captured once inside the command (plan §2's "one
 captured clock value per operation").
 
-## Provider composition — implemented as static factories, not DI extension methods
+## Provider composition — static factories, not DI extension methods
 
-Spec §13.2 / spec_claude §12.8 originally called for parallel DI composition methods
-(`AddJobTrackPostgreSql`/`AddJobTrackSqlite`). What actually shipped, once both persistence
-providers existed to compose, is a static factory per provider that returns a ready `IJobTrackClient`
+Spec §13.2 / spec_claude §12.8 called for parallel DI composition methods
+(`AddJobTrackPostgreSql`/`AddJobTrackSqlite`). The shipped shape is a static factory per provider
+that returns a ready `IJobTrackClient`
 directly rather than registering services into an `IServiceCollection` — simpler for a facade with no
 public sub-services for a consumer to resolve independently, and it keeps connection/data-source
 ownership explicit at the call site. Each factory has a longest overload carrying every optional

@@ -106,7 +106,7 @@ one of:
   sidecar files is unsafe and can produce a corrupt or inconsistent copy — use one of the two
   options above for any backup taken while the application might be running.
 
-Restoring is simply replacing the deployment's database file with the backup file before the
+Restoring replaces the deployment's database file with the backup file before the
 application next opens it; there is no separate restore tool. See
 `docs/operations/postgresql-backup-restore.md` for the PostgreSQL-specific `pg_dump`/`pg_restore`
 smoke test and procedure — SQLite is not a PostgreSQL backup or disaster-recovery format (plan §1),

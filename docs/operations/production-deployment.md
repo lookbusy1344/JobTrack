@@ -313,7 +313,7 @@ only when a measured capacity or availability requirement justifies it.
 
 Four in-process stores once made a second web instance unsafe. **All four have been replaced**
 (ADR 0066), so this section is now a description of the design rather than a warning. The
-single-server topology in this runbook is unaffected either way — it simply no longer depends on
+single-server topology in this runbook is unaffected either way — it no longer depends on
 being single-server for correctness.
 
 Note the split: **only two of the four moved into PostgreSQL.** The other two moved *outward*, to the

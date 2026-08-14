@@ -22,7 +22,7 @@ residuals are listed at the end; stale descriptions of this path as a demo or pi
 ## Why Cloud SQL rather than PostgreSQL inside the image
 
 "A second image with a persistent PostgreSQL instance" has two possible shapes, and only one of them
-actually persists on Cloud Run:
+persists on Cloud Run:
 
 | Shape | Verdict |
 | --- | --- |
@@ -30,7 +30,7 @@ actually persists on Cloud Run:
 | PostgreSQL in the same container, data on a mounted Cloud Run volume | Cloud Storage FUSE is not a POSIX filesystem (no `fsync` durability guarantees, no file locking as PostgreSQL needs it) and PostgreSQL on it is unsupported and corrupts. NFS/Filestore works technically, but its smallest instance costs an order of magnitude more per month than the whole rest of this deployment. |
 | **PostgreSQL as a managed instance (Cloud SQL), app in the container** | **What this does.** Durable storage, automated backups and point-in-time recovery, no database process in the request-serving container, and the same `Database:Provider=PostgreSql` code path the real single-server topology uses. |
 
-The container therefore stays stateless, which is what Cloud Run is actually good at, and the
+The container therefore stays stateless, which is what Cloud Run is good at, and the
 database is a separate managed resource with its own lifecycle.
 
 ## What is deployed
@@ -230,7 +230,7 @@ identity is disabled and user-managed key creation/upload is blocked by organiza
 
 The runtime identity holds `roles/cloudsql.client`; the other two receive it only around their job
 execution and lose it in the cleanup trap. The role grants *connect and authenticate* only — not a
-database privilege. What each can actually do inside the database is still decided by the PostgreSQL
+database privilege. What each can do inside the database is still decided by the PostgreSQL
 role its connection string authenticates as.
 
 The split is the point: the running application cannot read the Cloud SQL admin password, so
@@ -357,7 +357,7 @@ form posted to another). Cloud Run exposes no per-instance addressing, so correl
 landed on a single instance. That case is covered deterministically by the two-host integration
 fixture and the OrbStack compose topology (`scripts/multi-instance-test.sh`).
 
-### Checking how many instances are actually serving
+### Checking how many instances are serving
 
 Cloud Run identifies an instance by an opaque **instance id**, surfaced on every request log entry as
 `labels.instanceId`. Counting distinct ids is the direct evidence; the autoscaler's configuration is
@@ -436,7 +436,7 @@ connections", and **nothing restarts a process that wedges while still holding i
 header. Closing this means giving host filtering a way to admit the probe — an application change.
 
 > Both probe and volume settings must be passed *explicitly*, including empty values to remove them.
-> `gcloud run deploy` **merges** into the existing revision, so simply dropping a flag leaves whatever
+> `gcloud run deploy` **merges** into the existing revision, so dropping a flag leaves whatever
 > an earlier revision configured. A stale `httpGet` liveness probe survived that way once and had
 > Cloud Run shutting an instance down roughly every 90 seconds.
 
@@ -463,7 +463,7 @@ header. Closing this means giving host filtering a way to admit the probe — an
 - APIs: Cloud Run, Cloud SQL Admin, Secret Manager, Artifact Registry, Container Scanning,
   On-Demand Scanning, Binary Authorization, Artifact Analysis, and Cloud KMS (the scripts enable
   them).
-- A one-time, project-wide Binary Authorization setup. Run this deliberately before the first
+- A one-time, project-wide Binary Authorization setup. Run this before the first
   deployment; it creates the KMS signing key and attestor and changes the default policy to require
   a JobTrack release attestation. It refuses to replace an existing customized admission policy:
 
@@ -479,12 +479,12 @@ header. Closing this means giving host filtering a way to admit the probe — an
   evaluated against each image.
 
   **This constraint does not make Binary Authorization mandatory project-wide** — a live test
-  confirmed a deploy that simply omits `--binary-authorization` is not evaluated against the
+  confirmed a deploy that omits `--binary-authorization` is not evaluated against the
   attestation policy, constraint applied or not (Cloud Run has no org-policy control that forces
   every deploy through Binary Authorization; the constraint only restricts which *value* the flag
   may be set to, and `"default"` is the only legal value regardless). See
   [`../plans/2026-08-06-cloudrun-persistent-isolation-plan.md`](../plans/2026-08-06-cloudrun-persistent-isolation-plan.md)
-  §2.2/§4 for the test. What actually keeps `jobtrack-web-pg` attested-only is that this deploy
+  §2.2/§4 for the test. What keeps `jobtrack-web-pg` attested-only is that this deploy
   script always passes the flag — script discipline, not policy enforcement. Apply the constraint
   anyway (it is still the documented intent and narrows what an explicit override could request),
   but do not rely on it as the control.
@@ -518,7 +518,7 @@ What it does, in order:
    final backup on deletion, deletion protection, `ssl-mode=ENCRYPTED_ONLY`, connector enforcement
    required, no authorized networks) and the `jobtrack` database, if absent. Those controls are
    patched onto an existing instance too. The
-   major version deliberately tracks the local development instance (`postgresql@18`) rather than
+   major version tracks the local development instance (`postgresql@18`) rather than
    trailing it.
 3. Generates and stores in Secret Manager, if absent: the Cloud SQL admin password, five login-role
    passwords, initial account enrolment passwords, and the data-protection certificate/password pair.
@@ -541,7 +541,7 @@ What it does, in order:
     channel; removes unused default-project residue; then prints the service URL and any still-enabled
     enrolment-secret names. Credential values stay out of deploy logs.
 
-### What provisioning actually runs
+### What provisioning runs
 
 `provision.sh` in the provisioning image, in this order, each step skipped if already done:
 
@@ -671,7 +671,7 @@ ephemeral database are all gone — but not empty:
   identity can access it only during a deploy.
 - **Release approval is not independent while one operator can administer the project, sign with the
   KMS key and deploy.** Managed group ownership and a separate signer narrow this; small-team
-  deployments that deliberately combine the duties must treat the owner credential as the highest
+  deployments that combine the duties must treat the owner credential as the highest
   value secret and require phishing-resistant MFA.
 - **Minimal observability, not full telemetry.** Built-in metrics, targeted Data Access logs and the
   mandatory alert baseline are deployed; full OpenTelemetry tracing remains trigger-based.

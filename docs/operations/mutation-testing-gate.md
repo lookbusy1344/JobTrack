@@ -16,7 +16,7 @@ branching logic add nothing to the score and only dilute it):
 - `Costing/*.cs`, `Rates/UserCostRate.cs` — costing
 
 `dotnet-stryker` 4.16.0 is a **global** .NET tool (`~/.dotnet/tools/dotnet-stryker`), not a local
-tool-manifest entry — there is deliberately no `.config/dotnet-tools.json` in this repo. Run it
+tool-manifest entry — there is no `.config/dotnet-tools.json` in this repo. Run it
 directly. The pinned version and the rest of the global toolset are recorded in
 [global-tools.md](global-tools.md); the mutation score depends on the Stryker version, so treat a
 version bump the same way as the recorded score below.
@@ -143,16 +143,16 @@ final report's `CompileError` count.
 Stryker's own score already excludes `Ignored` mutants (the 53 outside the `mutate` scope) and
 `CompileError` mutants. The remaining survivors below were triaged individually; each is either a
 provably equivalent mutant (the mutated code produces byte-for-byte identical observable output to
-the original for every reachable input) or a mutation of content this project deliberately does
-not test (exception message text). None represent a real gap in test coverage. They are recorded
-here — rather than chased with tests that couldn't actually distinguish the mutant from correct
+the original for every reachable input) or a mutation of content this project does not test
+(exception message text). None represent a real gap in test coverage. They are recorded here —
+rather than chased with tests that couldn't distinguish the mutant from correct
 code — so a future reviewer doesn't waste time re-deriving the same reasoning.
 
 ### Authorization null-guard removal (15 survivors across 11 policy files)
 
 Each policy's `ArgumentNullException.ThrowIfNull(actorRoles)` guard, when deleted by a "Statement
 mutation," is followed immediately by an `actorRoles.Contains(...)` call. `Enumerable.Contains` —
-the LINQ extension method actually invoked here — throws `ArgumentNullException` (parameter name
+the LINQ extension method invoked here — throws `ArgumentNullException` (parameter name
 `source`) on a null receiver internally. Removing the explicit guard therefore does not change the
 observable exception *type* a caller sees; the existing `A_null_role_collection_is_rejected` tests
 assert only the exception type (`Should().Throw<ArgumentNullException>()`), never the parameter
@@ -183,7 +183,7 @@ mutant that the non-self path could not distinguish.
 this library's tested public contract (exception *type* and, where documented, `ParamName`/data
 fields are); asserting exact message text would make tests brittle against copy-editing with no
 corresponding gain in defect detection. The two `PersonalAccessTokenPolicy.cs` survivors are the
-*message* arguments of its two `InvariantViolationException` throws; the new tests deliberately
+*message* arguments of its two `InvariantViolationException` throws; the new tests
 assert `ConstraintId` (a stable, documented contract identifier) rather than the free-text message,
 which is exactly why the message-string mutants survive while the constraint-selecting boundary
 mutants on the same lines are killed.

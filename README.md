@@ -20,7 +20,7 @@ Additionally, all jobs can have prerequisites, and the system will automatically
 Two database backends are supported:
 
 - **PostgreSQL** is the production backend, and is used in the live Google Cloud Run deployment. Supports multi-instance concurrent writes from multiple web hosts.
-- **SQLite** is a fully conforming second provider, intended for embedded and demo use. Write are always serial in SQLite by design, and we use WAL to ensure writes don’t block concurrent reads.
+- **SQLite** is a fully conforming second provider, intended for embedded and demo use. Writes are always serial in SQLite by design, and we use WAL to ensure writes don’t block concurrent reads.
 
 ## Overview
 
@@ -39,10 +39,9 @@ Two database backends are supported:
 
 More details: [`docs/architecture-overview.md`](docs/architecture-overview.md).
 
-Broadly ports and adapters (hexagonal) — close to Clean Architecture, but not a doctrinaire
-implementation of it: the database is treated as a layer that enforces its own invariants rather
-than as a detail hidden behind a repository, and the library exposes one coarse facade instead of an
-interface per use case.
+Ports and adapters (hexagonal), close to Clean Architecture with two departures: the database is a
+layer that enforces its own invariants, not a detail hidden behind a repository; and the library
+exposes one coarse facade, not an interface per use case.
 
 Five layers, built and depended on strictly bottom-up. The database and library stack; the three
 clients above them are siblings, each calling `IJobTrackClient` in-process — the web client does

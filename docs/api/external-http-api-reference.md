@@ -4,7 +4,7 @@ Human-readable companion to the generated OpenAPI document (`GET /openapi/v1.jso
 `JobTrack.Web` host) — this file explains auth, errors, and gives one example per resource; the
 OpenAPI document is the machine-readable, always-current source of truth for exact schemas. For the
 *design decisions* behind this surface (why these routes, why this auth mechanism, what's
-deliberately excluded), see `docs/plans/2026-07-09-external-http-api-plan.md` and ADRs 0024, 0029,
+excluded), see `docs/plans/2026-07-09-external-http-api-plan.md` and ADRs 0024, 0029,
 0030 — this document does not restate that reasoning, only the resulting surface.
 
 ## Authentication
@@ -179,7 +179,7 @@ record references a time zone the server no longer recognizes (a server-side dat
 |---|---|---|
 | GET | `/antiforgery-token` | A CSRF token for the `X-CSRF-TOKEN` header on cookie-authenticated writes. |
 
-Deliberately **not** exposed (ADR 0030): structural job commands (create/edit/move/archive/
+**Not** exposed (ADR 0030): structural job commands (create/edit/move/archive/
 decompose), audit browsing, and account administration remain Razor-Pages/`JobTrack.AdminCli`-only
 until a concrete non-browser need for them is identified.
 

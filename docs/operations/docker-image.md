@@ -30,7 +30,7 @@ first sign-in.
 The two providers are mutually exclusive per deployment, not a failover pair, and SQLite is a fully
 conforming backend rather than a reduced-feature fallback (see the README's "Dual-provider
 persistence"). Choosing it here keeps the whole demo to one container with no separate database
-server, no second image, and no orchestration — precisely the "embedded/single-node deployment
+server, no second image, and no orchestration — the "embedded/single-node deployment
 where running a separate PostgreSQL server isn't warranted" case SQLite exists for. Its operational
 envelope is documented in [`sqlite-limitations-and-configuration.md`](sqlite-limitations-and-configuration.md).
 
@@ -236,7 +236,7 @@ use the shipped `JobTrack.AdminCli`; the final requester scenario uses the build
    node** of `demo` (the importing account) and, via `--home-node-for admin`, of `admin` too: both
    sign in onto that subtree rather than the bare root, and the header's Jobs and Awaiting-progress
    links default to it. The remaining six files flag nothing and are unaffected. `requester` is
-   deliberately left without one — the requester UI has no job-tree browser.
+   left without one — the requester UI has no job-tree browser.
 6. **Seed six requester jobs** through `IJobTrackClient`'s requester-intake and work commands.
    `requester` is the recorded requester, while `demo` remains the technical work actor; the jobs
    span Submitted, Accepted, Waiting, In progress, Completed, and Cancelled public states.
@@ -291,7 +291,7 @@ at all:
 
 1. **The privileged `admin` account gets a random password** the script generates and prints, since
    Cloud Run is network-exposed and a known admin credential must never be reachable. The published
-   `demo` / `demo-jobtrack-1234` and `requester` / `requester-jobtrack-1234` accounts are deliberately left as-is —
+   `demo` / `demo-jobtrack-1234` and `requester` / `requester-jobtrack-1234` accounts are left as-is —
    both are normal, non-admin users with no account-management rights, and their whole point is to
    be shareable. Any change a visitor makes is wiped back to the seed on the next recycle (see
    below).
@@ -303,9 +303,9 @@ at all:
    as already secure and `CookieSecurePolicy.Always` still works correctly. This only needed a
    deploy-time env var, not an image change:
    `Kestrel__Endpoints__Http__Url=http://+:8080` alongside the image's existing
-   `Kestrel__Endpoints__Https__*` (which simply goes unused — nothing reaches the container on 8443
+   `Kestrel__Endpoints__Https__*` (which goes unused — nothing reaches the container on 8443
    through Cloud Run). The baked-in `ForwardedHeaders__KnownProxies__0=127.0.0.1` is likewise inert
-   here; `ForwardedHeaders__KnownNetworks__0=0.0.0.0/0` is what actually does the job, and is
+   here; `ForwardedHeaders__KnownNetworks__0=0.0.0.0/0` is what does the job, and is
    reasonable specifically because Cloud Run does not allow direct public access to the container —
    only Google's own front end can ever be the thing setting those headers.
 
@@ -334,7 +334,7 @@ so that a compromise of this public, credential-published demo cannot reach the 
 deployment's Cloud SQL instance, secrets, or data-protection key ring — see
 [`../plans/2026-08-06-cloudrun-persistent-isolation-plan.md`](../plans/2026-08-06-cloudrun-persistent-isolation-plan.md).
 The script also creates a dedicated `demo-run` service account with no IAM roles at all and deploys
-under it — the default compute service account is deliberately not used, since in a project holding
+under it — the default compute service account is not used, since in a project holding
 anything sensitive it can carry unrelated standing roles this service does not need.
 
 **The admin password is different on every run.** The script always generates a fresh one and passes
@@ -374,8 +374,8 @@ Two consequences that specifically catch people out:
   previously distributed admin password stops working after you redeploy; the demo one does not
   change.
 
-If you actually need live changes to persist, this ephemeral-filesystem path is the wrong tool: use
-a real backing store (PostgreSQL / Cloud SQL, or a mounted volume), which this demo deliberately does
+If you need live changes to persist, this ephemeral-filesystem path is the wrong tool: use
+a real backing store (PostgreSQL / Cloud SQL, or a mounted volume), which this demo does
 not wire up.
 
 **Tear down when done** — this is a real, billed, publicly reachable Cloud Run service for as long
