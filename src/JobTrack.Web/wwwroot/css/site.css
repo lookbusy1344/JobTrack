@@ -250,8 +250,8 @@ html {
    Because the root stays at 16px, every length below is the old 14px-root value rescaled by
    14/16 — the tightened spacing is preserved at its previous computed pixel size. */
 @media (min-width: 1400px) {
-	:root {
-		--jt-space-3: 0.65rem;
+    :root {
+        --jt-space-3: 0.65rem;
         --jt-space-4: 0.875rem;
         --jt-space-5: 1.2rem;
         --jt-space-6: 1.75rem;

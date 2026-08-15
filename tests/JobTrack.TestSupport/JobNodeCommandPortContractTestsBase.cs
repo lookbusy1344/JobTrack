@@ -2080,7 +2080,7 @@ public abstract class JobNodeCommandPortContractTestsBase : IAsyncLifetime
 		await using (var command = connection.CreateCommand()) {
 			command.Transaction = transaction;
 			command.CommandText = "UPDATE app_user SET row_version = row_version WHERE id = @appUserId; " +
-				"UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
+								  "UPDATE identity_user SET is_enabled = @isEnabled WHERE app_user_id = @appUserId;";
 			command.AddParameter("@isEnabled", false);
 			command.AddParameter("@appUserId", workerId.Value);
 			_ = await command.ExecuteNonQueryAsync();

@@ -73,16 +73,16 @@
 	</span>
 } else if (Model.IdleStatus is ActiveIdleStatus idleStatus) {
 	var (modifier, label, pillLabel) = idleStatus switch {
-		ActiveIdleStatus.Closed => ("status-pill-closed", "Closed", "Closed"),
-		ActiveIdleStatus.Paused => ("status-pill-paused", "Paused", "Paused"),
-		ActiveIdleStatus.Unacknowledged => ("status-pill-unack", "Unack", "Unack"),
-		ActiveIdleStatus.Unstarted => ("status-pill-inactive", "Unstarted", "Unstrt"),
-		ActiveIdleStatus.Waiting => ("status-pill-waiting", "Waiting", "Wait"),
-		ActiveIdleStatus.Success => ("status-pill-success", "Success", "Succ"),
-		ActiveIdleStatus.Cancelled => ("status-pill-cancelled", "Cancelled", "Cancel"),
-		ActiveIdleStatus.Unsuccessful => ("status-pill-unsuccessful", "Unsuccessful", "Unsucc"),
-		_ => throw new ArgumentOutOfRangeException(nameof(Model.IdleStatus), Model.IdleStatus, null),
-	};
+		                                   ActiveIdleStatus.Closed => ("status-pill-closed", "Closed", "Closed"),
+		                                   ActiveIdleStatus.Paused => ("status-pill-paused", "Paused", "Paused"),
+		                                   ActiveIdleStatus.Unacknowledged => ("status-pill-unack", "Unack", "Unack"),
+		                                   ActiveIdleStatus.Unstarted => ("status-pill-inactive", "Unstarted", "Unstrt"),
+		                                   ActiveIdleStatus.Waiting => ("status-pill-waiting", "Waiting", "Wait"),
+		                                   ActiveIdleStatus.Success => ("status-pill-success", "Success", "Succ"),
+		                                   ActiveIdleStatus.Cancelled => ("status-pill-cancelled", "Cancelled", "Cancel"),
+		                                   ActiveIdleStatus.Unsuccessful => ("status-pill-unsuccessful", "Unsuccessful", "Unsucc"),
+		                                   _ => throw new ArgumentOutOfRangeException(nameof(Model.IdleStatus), Model.IdleStatus, null),
+	                                   };
 	var title = pillLabel == label ? null : label;
 	<span class="status-pill @modifier@(Model.Compact ? " status-pill--compact" : string.Empty)" title="@title">@pillLabel</span>
 }

@@ -85,7 +85,7 @@ public static class ConcurrentWorkCalculator
 	}
 
 	/// <summary>Running total, count, and extent of one (worker, node) pair's intersections.</summary>
-	private readonly record struct OverlapAccumulator(Duration Total, int Count, Instant FirstStart, Instant LastEnd)
+	private sealed record OverlapAccumulator(Duration Total, int Count, Instant FirstStart, Instant LastEnd)
 	{
 		public static OverlapAccumulator Of(WorkInterval intersection) =>
 			new(intersection.Duration, 1, intersection.Start, intersection.End);

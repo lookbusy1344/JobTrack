@@ -27,11 +27,11 @@ public sealed class PostgreSqlEmployeeQueryPortTests()
 
 	internal override IEmployeeQueryPort CreateQueryPort(string connectionString) =>
 		new EmployeeQueryPort(new PostgreSqlReadOperations(
-			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_domain").Build()),
+				PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_domain").Build()),
 			SystemClock.Instance);
 
 	internal override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
 		new EmployeeCommandPort(new PostgreSqlWriteOperations(
-			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
+				PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
 			SystemClock.Instance);
 }

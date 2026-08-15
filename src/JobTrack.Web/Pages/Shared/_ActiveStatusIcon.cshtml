@@ -1,22 +1,22 @@
 @model ActiveSessionSummaryModel
 @{
 	(string Modifier, string IconId, string Label)? status = Model.Count switch {
-			> 0 => (
-				Modifier: "status-pill-active", IconId: "jt-icon-active", Label: Model.Count == 1 ? "Active" : $"{Model.Count} active"),
-			0 => Model.IdleStatus switch {
-				ActiveIdleStatus.Closed => ("status-pill-closed", "jt-icon-achievement-closed", "Closed"),
-				ActiveIdleStatus.Paused => ("status-pill-paused", "jt-icon-finish", "Paused"),
-				ActiveIdleStatus.Unacknowledged => ("status-pill-unack", "jt-icon-achievement-waiting", "Unack"),
-				ActiveIdleStatus.Unstarted => ("status-pill-inactive", "jt-icon-achievement-waiting", "Unstarted"),
-				ActiveIdleStatus.Waiting => ("status-pill-waiting", "jt-icon-achievement-waiting", "Waiting"),
-				ActiveIdleStatus.Success => ("status-pill-success", "jt-icon-achievement-success", "Success"),
-				ActiveIdleStatus.Cancelled => ("status-pill-cancelled", "jt-icon-achievement-closed", "Cancelled"),
-				ActiveIdleStatus.Unsuccessful => ("status-pill-unsuccessful", "jt-icon-achievement-closed", "Unsuccessful"),
-				null => null,
-				_ => throw new ArgumentOutOfRangeException(nameof(Model.IdleStatus), Model.IdleStatus, null),
-			},
-			< 0 => throw new InvalidOperationException("An active-session count cannot be negative."),
-		};
+		                                                         > 0 => (
+			                                                         Modifier: "status-pill-active", IconId: "jt-icon-active", Label: Model.Count == 1 ? "Active" : $"{Model.Count} active"),
+		                                                         0 => Model.IdleStatus switch {
+			                                                              ActiveIdleStatus.Closed => ("status-pill-closed", "jt-icon-achievement-closed", "Closed"),
+			                                                              ActiveIdleStatus.Paused => ("status-pill-paused", "jt-icon-finish", "Paused"),
+			                                                              ActiveIdleStatus.Unacknowledged => ("status-pill-unack", "jt-icon-achievement-waiting", "Unack"),
+			                                                              ActiveIdleStatus.Unstarted => ("status-pill-inactive", "jt-icon-achievement-waiting", "Unstarted"),
+			                                                              ActiveIdleStatus.Waiting => ("status-pill-waiting", "jt-icon-achievement-waiting", "Waiting"),
+			                                                              ActiveIdleStatus.Success => ("status-pill-success", "jt-icon-achievement-success", "Success"),
+			                                                              ActiveIdleStatus.Cancelled => ("status-pill-cancelled", "jt-icon-achievement-closed", "Cancelled"),
+			                                                              ActiveIdleStatus.Unsuccessful => ("status-pill-unsuccessful", "jt-icon-achievement-closed", "Unsuccessful"),
+			                                                              null => null,
+			                                                              _ => throw new ArgumentOutOfRangeException(nameof(Model.IdleStatus), Model.IdleStatus, null),
+		                                                              },
+		                                                         < 0 => throw new InvalidOperationException("An active-session count cannot be negative."),
+	                                                         };
 }
 @if (status.HasValue) {
 	var (modifier, iconId, label) = status.Value;

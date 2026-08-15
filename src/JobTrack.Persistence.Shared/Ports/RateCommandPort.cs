@@ -263,9 +263,12 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 		DbContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{
 		var target = await context.Set<JobNodeEntity>().AsNoTracking()
-								 .Where(n => n.Id == nodeId)
-								 .Select(n => new { n.ParentId })
-								 .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+								  .Where(n => n.Id == nodeId)
+								  .Select(n => new
+								  {
+									  n.ParentId,
+								  })
+								  .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
 		if (target is null) {
 			throw new EntityNotFoundException($"Job node {nodeId} does not exist.");

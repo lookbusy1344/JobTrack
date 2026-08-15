@@ -1,6 +1,7 @@
 namespace JobTrack.Domain.Intervals;
 
 using System.Collections;
+using Abstractions;
 
 /// <summary>
 ///     A search structure over a fixed set of <see cref="WorkInterval" />s, built once and queried many
@@ -99,6 +100,9 @@ internal sealed class IntervalIndex
 	}
 
 	/// <summary>A zero-allocation `foreach` source over <see cref="IntervalIndex.Overlapping" />'s results; see that member's remarks.</summary>
+	[LargeStruct(
+		"Carries its query and source array inline so foreach allocates nothing; the same trade-off " +
+		"Dictionary<TKey, TValue>.Enumerator makes in the BCL. Reviewed and accepted.")]
 	public readonly struct OverlappingEnumerable : IEnumerable<WorkInterval>
 	{
 		private readonly WorkInterval[] sorted;
@@ -119,6 +123,10 @@ internal sealed class IntervalIndex
 		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 		/// <summary>The struct enumerator itself -- boxed only when reached through <see cref="IEnumerator{T}" />, never on a direct `foreach`.</summary>
+		[LargeStruct(
+			"Carries its query, source array, and current WorkInterval inline so foreach allocates " +
+			"nothing; the same trade-off Dictionary<TKey, TValue>.Enumerator makes in the BCL. Reviewed " +
+			"and accepted.")]
 		public struct Enumerator : IEnumerator<WorkInterval>
 		{
 			private readonly WorkInterval[] sorted;

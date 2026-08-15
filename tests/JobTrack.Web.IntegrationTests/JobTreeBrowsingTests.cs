@@ -210,17 +210,19 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		foreach (var leafId in new[] { waitingLeafId, inProgressLeafId, successLeafId, cancelledLeafId, unsuccessfulLeafId }) {
+		foreach (var leafId in new[] {
+					 waitingLeafId, inProgressLeafId, successLeafId, cancelledLeafId, unsuccessfulLeafId,
+				 }) {
 			ExtractSubtreeRow(body, leafId).Should().NotContain("jt-achievement-icon");
 		}
 		ExtractSubtreeRow(body, waitingLeafId).Should()
-			.Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
+											  .Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
 		ExtractSubtreeRow(body, successLeafId).Should()
-			.Contain("status-pill-success status-pill--compact\" title=\"Success\">Succ</span>");
+											  .Contain("status-pill-success status-pill--compact\" title=\"Success\">Succ</span>");
 		ExtractSubtreeRow(body, cancelledLeafId).Should()
-			.Contain("status-pill-cancelled status-pill--compact\" title=\"Cancelled\">Cancel</span>");
+												.Contain("status-pill-cancelled status-pill--compact\" title=\"Cancelled\">Cancel</span>");
 		ExtractSubtreeRow(body, unsuccessfulLeafId).Should()
-			.Contain("status-pill-unsuccessful status-pill--compact\" title=\"Unsuccessful\">Unsucc</span>");
+												   .Contain("status-pill-unsuccessful status-pill--compact\" title=\"Unsuccessful\">Unsucc</span>");
 	}
 
 	[Fact]
@@ -292,9 +294,9 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		(body.Split("status-pill status-pill-inactive status-pill--compact\" title=\"Unstarted\">Unstrt</span>").Length - 1).Should()
-																			   .Be(1, "only a leaf without a work record is Unstarted");
+																															.Be(1, "only a leaf without a work record is Unstarted");
 		ExtractSubtreeRow(body, waitingId).Should()
-			.Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
+										  .Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
 		(body.Split("status-pill status-pill-unack status-pill--compact\">Unack</span>").Length - 1).Should()
 																									.Be(1, "an unacknowledged request is the more specific open state");
 		body.Should().Contain("status-pill-unack", "the request state has its own blue-tinted pill rather than the neutral Unstarted treatment");

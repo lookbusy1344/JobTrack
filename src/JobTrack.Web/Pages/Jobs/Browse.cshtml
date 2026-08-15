@@ -1,5 +1,4 @@
 @page
-@using System.Globalization
 @using JobTrack.Abstractions
 @using JobTrack.Identity
 @using NodaTime
@@ -734,7 +733,8 @@
 			} else {
 				@foreach (var node in Model.RecentNodes) {
 					<li>
-						<a asp-page="/Jobs/Browse" asp-route-nodeId="@node.Id.Value" class="jt-preserve-whitespace">@(JobNodeDisplay.Truncate(node.Description, BrowseModel.RecentNodeDescriptionLength)) (ID @node.Id.Value)</a>
+						<a asp-page="/Jobs/Browse" asp-route-nodeId="@node.Id.Value"
+						   class="jt-preserve-whitespace">@(JobNodeDisplay.Truncate(node.Description, BrowseModel.RecentNodeDescriptionLength)) (ID @node.Id.Value)</a>
 					</li>
 				}
 			}

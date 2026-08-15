@@ -42,9 +42,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobNodeCommandPort(NpgsqlDataSource dataSource, IClock clock)
-		: this(dataSource, dataSource, clock)
-	{
-	}
+		: this(dataSource, dataSource, clock) { }
 
 	/// <summary>Creates the port with a separate capability connection for destructive history operations.</summary>
 	public PostgreSqlJobNodeCommandPort(

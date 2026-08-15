@@ -16,15 +16,18 @@ public sealed class JobTrackApiClient : IDisposable
 {
 	private static readonly JsonSerializerOptions SerializerOptions = new() {
 		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-		Converters = { new JsonStringEnumConverter() },
+		Converters = {
+			new JsonStringEnumConverter(),
+		},
 	};
 
 	private readonly HttpClient _httpClient;
 
 	public JobTrackApiClient(Uri baseAddress, string bearerToken)
-		: this(new HttpClient { BaseAddress = baseAddress }, bearerToken)
-	{
-	}
+		: this(new HttpClient {
+			BaseAddress = baseAddress,
+		}, bearerToken)
+	{ }
 
 	/// <summary>Accepts a pre-configured <see cref="HttpClient" /> (e.g. a test server's in-memory client).</summary>
 	public JobTrackApiClient(HttpClient httpClient, string bearerToken)
@@ -55,7 +58,7 @@ public sealed class JobTrackApiClient : IDisposable
 	public async Task<PagedResult<JobNodeSummary>> GetJobChildrenAsync(long nodeId, CancellationToken cancellationToken = default)
 	{
 		using var response = await _httpClient.GetAsync(new Uri($"/api/jobs/{nodeId}/children", UriKind.Relative), cancellationToken)
-			.ConfigureAwait(false);
+											  .ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
 
 		return (await response.Content.ReadFromJsonAsync<PagedResult<JobNodeSummary>>(SerializerOptions, cancellationToken).ConfigureAwait(false))!;
@@ -87,7 +90,10 @@ public sealed class JobTrackApiClient : IDisposable
 	{
 		using var response = await _httpClient.PostAsJsonAsync(
 			new Uri($"/api/jobs/{leafNodeId}/sessions", UriKind.Relative),
-			new { workedByUserId },
+			new
+			{
+				workedByUserId,
+			},
 			SerializerOptions,
 			cancellationToken).ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
@@ -114,7 +120,7 @@ public sealed class JobTrackApiClient : IDisposable
 	public async Task<HoldingArea[]> GetEligibleHoldingAreasAsync(CancellationToken cancellationToken = default)
 	{
 		using var response = await _httpClient.GetAsync(new Uri("/api/request-holding-areas", UriKind.Relative), cancellationToken)
-			.ConfigureAwait(false);
+											  .ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
 
 		return (await response.Content.ReadFromJsonAsync<HoldingArea[]>(SerializerOptions, cancellationToken).ConfigureAwait(false))!;
@@ -125,7 +131,11 @@ public sealed class JobTrackApiClient : IDisposable
 	{
 		using var response = await _httpClient.PostAsJsonAsync(
 			new Uri("/api/requests", UriKind.Relative),
-			new { description, holdingAreaId },
+			new
+			{
+				description,
+				holdingAreaId,
+			},
 			SerializerOptions,
 			cancellationToken).ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
@@ -145,7 +155,11 @@ public sealed class JobTrackApiClient : IDisposable
 	{
 		using var response = await _httpClient.PostAsJsonAsync(
 			new Uri($"/api/jobs/{nodeId}/complete", UriKind.Relative),
-			new { version, expectedActiveSessions },
+			new
+			{
+				version,
+				expectedActiveSessions,
+			},
 			SerializerOptions,
 			cancellationToken).ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
@@ -164,7 +178,12 @@ public sealed class JobTrackApiClient : IDisposable
 	{
 		using var response = await _httpClient.PostAsJsonAsync(
 			new Uri($"/api/jobs/{nodeId}/reopen-and-start-session", UriKind.Relative),
-			new { version, reason, workedByUserId },
+			new
+			{
+				version,
+				reason,
+				workedByUserId,
+			},
 			SerializerOptions,
 			cancellationToken).ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
@@ -188,7 +207,7 @@ public sealed class JobTrackApiClient : IDisposable
 	public async Task<RequestDetail> GetRequestDetailAsync(long jobNodeId, CancellationToken cancellationToken = default)
 	{
 		using var response = await _httpClient.GetAsync(new Uri($"/api/requests/{jobNodeId}", UriKind.Relative), cancellationToken)
-			.ConfigureAwait(false);
+											  .ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
 
 		return (await response.Content.ReadFromJsonAsync<RequestDetail>(SerializerOptions, cancellationToken).ConfigureAwait(false))!;
@@ -204,7 +223,11 @@ public sealed class JobTrackApiClient : IDisposable
 	{
 		using var response = await _httpClient.PostAsJsonAsync(
 			new Uri($"/api/requests/{jobNodeId}/comments", UriKind.Relative),
-			new { content, visibleToRequester },
+			new
+			{
+				content,
+				visibleToRequester,
+			},
 			SerializerOptions,
 			cancellationToken).ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);
@@ -220,7 +243,10 @@ public sealed class JobTrackApiClient : IDisposable
 	{
 		using var response = await _httpClient.PostAsJsonAsync(
 			new Uri($"/api/requests/{jobNodeId}/acknowledge", UriKind.Relative),
-			new { version },
+			new
+			{
+				version,
+			},
 			SerializerOptions,
 			cancellationToken).ConfigureAwait(false);
 		await ThrowIfUnsuccessfulAsync(response, cancellationToken).ConfigureAwait(false);

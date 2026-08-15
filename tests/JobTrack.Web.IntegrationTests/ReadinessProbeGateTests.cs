@@ -22,8 +22,8 @@ public sealed class ReadinessProbeGateTests
 		}
 
 		var checks = Enumerable.Range(0, 20)
-			.Select(_ => gate.CheckAsync(ProbeAsync, CancellationToken.None))
-			.ToArray();
+							   .Select(_ => gate.CheckAsync(ProbeAsync, CancellationToken.None))
+							   .ToArray();
 		await Task.Yield();
 
 		callCount.Should().Be(1);
@@ -37,6 +37,7 @@ public sealed class ReadinessProbeGateTests
 		var timeProvider = new ManualTimeProvider();
 		using var gate = new ReadinessProbeGate(timeProvider, CacheLifetime);
 		var callCount = 0;
+
 		Task<bool> ProbeAsync(CancellationToken _)
 		{
 			++callCount;

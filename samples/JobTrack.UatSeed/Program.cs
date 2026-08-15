@@ -135,7 +135,7 @@ internal static class Program
 		}
 
 		if (provider is not ("postgresql" or "sqlite") || string.IsNullOrWhiteSpace(connectionString) ||
-			(requesterDemo && (string.IsNullOrWhiteSpace(requesterUserName) || string.IsNullOrWhiteSpace(jobManagerUserName)))) {
+			requesterDemo && (string.IsNullOrWhiteSpace(requesterUserName) || string.IsNullOrWhiteSpace(jobManagerUserName))) {
 			return null;
 		}
 

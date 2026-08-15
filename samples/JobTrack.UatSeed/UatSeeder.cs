@@ -40,8 +40,11 @@ public static class UatSeeder
 		ArgumentNullException.ThrowIfNull(connection);
 
 		var adminContext = ContextFor(administratorId);
-		var root = await client.Query.GetJobNodeAsync(new() { Context = adminContext, NodeId = null }, cancellationToken)
-			.ConfigureAwait(false);
+		var root = await client.Query.GetJobNodeAsync(new() {
+			Context = adminContext,
+			NodeId = null,
+		}, cancellationToken)
+							   .ConfigureAwait(false);
 
 		var jobManagerId =
 			await CreateEmployeeAsync(client, adminContext, "Priya Manager", "priya.manager", EmployeeRole.JobManager, cancellationToken)
@@ -76,15 +79,27 @@ public static class UatSeeder
 			.ConfigureAwait(false);
 
 		var unassignedRequest = await client.Requests
-			.SubmitAsync(new() { Context = requesterContext, HoldingAreaId = holdingAreaId, Description = "Printer will not turn on" },
-				cancellationToken).ConfigureAwait(false);
+											.SubmitAsync(new() {
+												Context = requesterContext,
+												HoldingAreaId = holdingAreaId,
+												Description = "Printer will not turn on",
+											},
+												cancellationToken).ConfigureAwait(false);
 
 		var assignedRequest = await client.Requests
-			.SubmitAsync(new() { Context = requesterContext, HoldingAreaId = holdingAreaId, Description = "New starter laptop setup" },
-				cancellationToken).ConfigureAwait(false);
+										  .SubmitAsync(new() {
+											  Context = requesterContext,
+											  HoldingAreaId = holdingAreaId,
+											  Description = "New starter laptop setup",
+										  },
+											  cancellationToken).ConfigureAwait(false);
 		_ = await client.Requests
-			.AcknowledgeAsync(new() { Context = jobManagerContext, NodeId = assignedRequest.JobNodeId, Version = assignedRequest.Version },
-				cancellationToken).ConfigureAwait(false);
+						.AcknowledgeAsync(new() {
+							Context = jobManagerContext,
+							NodeId = assignedRequest.JobNodeId,
+							Version = assignedRequest.Version,
+						},
+							cancellationToken).ConfigureAwait(false);
 		// Acknowledgement bumps job_request's own row version, not the job_node's — EditAsync below
 		// still expects job_node's version, unchanged from the submission above.
 		_ = await client.Jobs.EditAsync(new() {
@@ -109,14 +124,22 @@ public static class UatSeeder
 		var blockedLeaf = await AddAndAttachLeafAsync(
 			client, jobManagerContext, root.Node.Id, "Install new toner cartridge", workerId, cancellationToken).ConfigureAwait(false);
 		await client.Jobs
-			.AddPrerequisiteAsync(new() { Context = jobManagerContext, RequiredJobId = blockerLeaf.Id, DependentJobId = blockedLeaf.Id },
-				cancellationToken).ConfigureAwait(false);
+					.AddPrerequisiteAsync(new() {
+						Context = jobManagerContext,
+						RequiredJobId = blockerLeaf.Id,
+						DependentJobId = blockedLeaf.Id,
+					},
+						cancellationToken).ConfigureAwait(false);
 
 		var activeLeaf = await AddAndAttachLeafAsync(
 			client, jobManagerContext, root.Node.Id, "Diagnose network outage", workerId, cancellationToken).ConfigureAwait(false);
 		_ = await client.Work
-			.StartSessionAsync(new() { Context = workerContext, LeafWorkId = activeLeaf.Id, WorkedByUserId = workerId }, cancellationToken)
-			.ConfigureAwait(false);
+						.StartSessionAsync(new() {
+							Context = workerContext,
+							LeafWorkId = activeLeaf.Id,
+							WorkedByUserId = workerId,
+						}, cancellationToken)
+						.ConfigureAwait(false);
 
 		var costLeaf = await AddAndAttachLeafAsync(
 			client, jobManagerContext, root.Node.Id, "Replace failed network switch", workerId, cancellationToken).ConfigureAwait(false);
@@ -148,14 +171,21 @@ public static class UatSeeder
 			Version = inProgress.Version,
 		}, cancellationToken).ConfigureAwait(false);
 		_ = await client.Rates
-			.AddUserCostRateAsync(
-				new() { Context = ContextFor(rateManagerId), UserId = workerId, Rate = new(new(18.50m), now - Duration.FromDays(30), null) },
-				cancellationToken).ConfigureAwait(false);
+						.AddUserCostRateAsync(
+							new() {
+								Context = ContextFor(rateManagerId),
+								UserId = workerId,
+								Rate = new(new(18.50m), now - Duration.FromDays(30), null),
+							},
+							cancellationToken).ConfigureAwait(false);
 		// CreateEmployeeAsync already provisioned a default effective-dated schedule version for
 		// workerId (EmployeeProvisioningDefaults.CreateSchedule); replacing it in place (ADR 0003)
 		// avoids adding a second version that would overlap that open-ended default.
-		var provisionedSchedule = await client.Query.GetScheduleAsync(new() { Context = workerContext, UserId = workerId }, cancellationToken)
-			.ConfigureAwait(false);
+		var provisionedSchedule = await client.Query.GetScheduleAsync(new() {
+			Context = workerContext,
+			UserId = workerId,
+		}, cancellationToken)
+											  .ConfigureAwait(false);
 		var defaultVersion = provisionedSchedule.Versions[0];
 		_ = await client.Schedules.CorrectScheduleVersionAsync(new() {
 			Context = workerContext,
@@ -194,8 +224,11 @@ public static class UatSeeder
 
 		var jobManagerContext = ContextFor(jobManagerId);
 		var requesterContext = ContextFor(requesterId);
-		var root = await client.Query.GetJobNodeAsync(new() { Context = jobManagerContext, NodeId = null }, cancellationToken)
-			.ConfigureAwait(false);
+		var root = await client.Query.GetJobNodeAsync(new() {
+			Context = jobManagerContext,
+			NodeId = null,
+		}, cancellationToken)
+							   .ConfigureAwait(false);
 		var departmentId = await SeedDepartmentAsync(connection, "Client Services", cancellationToken).ConfigureAwait(false);
 		await SeedAppUserDepartmentAsync(connection, requesterId, departmentId, cancellationToken).ConfigureAwait(false);
 		var holdingAreaNode = await client.Jobs.AddChildAsync(new() {
@@ -225,8 +258,11 @@ public static class UatSeeder
 		_ = await AcknowledgeDemoRequestAsync(client, jobManagerContext, accepted, cancellationToken).ConfigureAwait(false);
 		_ = await AcknowledgeDemoRequestAsync(client, jobManagerContext, waiting, cancellationToken).ConfigureAwait(false);
 		_ = await client.Jobs
-			.AttachLeafWorkAsync(new() { Context = jobManagerContext, JobNodeId = waiting.JobNodeId }, cancellationToken)
-			.ConfigureAwait(false);
+						.AttachLeafWorkAsync(new() {
+							Context = jobManagerContext,
+							JobNodeId = waiting.JobNodeId,
+						}, cancellationToken)
+						.ConfigureAwait(false);
 
 		await SetDemoAchievementAsync(
 			client, jobManagerContext, inProgress, Achievement.InProgress, cancellationToken).ConfigureAwait(false);
@@ -251,13 +287,25 @@ public static class UatSeeder
 		IJobTrackClient client, CommandContext requesterContext, RequestHoldingAreaId holdingAreaId, string description,
 		CancellationToken cancellationToken) =>
 		client.Requests.SubmitAsync(
-			new() { Context = requesterContext with { CorrelationId = Guid.NewGuid() }, HoldingAreaId = holdingAreaId, Description = description },
+			new() {
+				Context = requesterContext with {
+					CorrelationId = Guid.NewGuid(),
+				},
+				HoldingAreaId = holdingAreaId,
+				Description = description,
+			},
 			cancellationToken);
 
 	private static Task<JobRequestResult> AcknowledgeDemoRequestAsync(
 		IJobTrackClient client, CommandContext jobManagerContext, JobRequestResult request, CancellationToken cancellationToken) =>
 		client.Requests.AcknowledgeAsync(
-			new() { Context = jobManagerContext with { CorrelationId = Guid.NewGuid() }, NodeId = request.JobNodeId, Version = request.Version },
+			new() {
+				Context = jobManagerContext with {
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = request.JobNodeId,
+				Version = request.Version,
+			},
 			cancellationToken);
 
 	private static async Task SetDemoAchievementAsync(
@@ -266,14 +314,21 @@ public static class UatSeeder
 	{
 		_ = await AcknowledgeDemoRequestAsync(client, jobManagerContext, request, cancellationToken).ConfigureAwait(false);
 		var leafWork = await client.Jobs
-			.AttachLeafWorkAsync(
-				new() { Context = jobManagerContext with { CorrelationId = Guid.NewGuid() }, JobNodeId = request.JobNodeId },
-				cancellationToken)
-			.ConfigureAwait(false);
+								   .AttachLeafWorkAsync(
+									   new() {
+										   Context = jobManagerContext with {
+											   CorrelationId = Guid.NewGuid(),
+										   },
+										   JobNodeId = request.JobNodeId,
+									   },
+									   cancellationToken)
+								   .ConfigureAwait(false);
 		var version = leafWork.Version;
 		if (achievement != Achievement.InProgress) {
 			var started = await client.Work.SetAchievementAsync(new() {
-				Context = jobManagerContext with { CorrelationId = Guid.NewGuid() },
+				Context = jobManagerContext with {
+					CorrelationId = Guid.NewGuid(),
+				},
 				JobNodeId = request.JobNodeId,
 				NewAchievement = Achievement.InProgress,
 				Reason = "Demo request work started.",
@@ -283,7 +338,9 @@ public static class UatSeeder
 		}
 
 		_ = await client.Work.SetAchievementAsync(new() {
-			Context = jobManagerContext with { CorrelationId = Guid.NewGuid() },
+			Context = jobManagerContext with {
+				CorrelationId = Guid.NewGuid(),
+			},
 			JobNodeId = request.JobNodeId,
 			NewAchievement = achievement,
 			Reason = "Seeded requester demo outcome.",
@@ -303,9 +360,13 @@ public static class UatSeeder
 			Priority = Priority.Medium,
 		}, cancellationToken).ConfigureAwait(false);
 		_ = await client.Jobs
-			.AttachLeafWorkAsync(
-				new() { Context = context, JobNodeId = leaf.Id, FullCriteria = "Done when the reported fault no longer reproduces." },
-				cancellationToken).ConfigureAwait(false);
+						.AttachLeafWorkAsync(
+							new() {
+								Context = context,
+								JobNodeId = leaf.Id,
+								FullCriteria = "Done when the reported fault no longer reproduces.",
+							},
+							cancellationToken).ConfigureAwait(false);
 
 		return leaf;
 	}
@@ -321,8 +382,8 @@ public static class UatSeeder
 		var effectiveStart = now.InZone(zone).Date.PlusDays(-60);
 		EquatableArray<WeeklyInterval> weeklyIntervals = [
 			.. Enum.GetValues<IsoDayOfWeek>()
-				.Where(day => day != IsoDayOfWeek.None)
-				.Select(day => new WeeklyInterval(day, new(0, 0, 0), new(23, 59, 0))),
+				   .Where(day => day != IsoDayOfWeek.None)
+				   .Select(day => new WeeklyInterval(day, new(0, 0, 0), new(23, 59, 0))),
 		];
 
 		return new(zone, effectiveStart, null, weeklyIntervals);
@@ -344,7 +405,10 @@ public static class UatSeeder
 		return result.Id;
 	}
 
-	private static CommandContext ContextFor(AppUserId actor) => new() { Actor = actor, CorrelationId = Guid.NewGuid() };
+	private static CommandContext ContextFor(AppUserId actor) => new() {
+		Actor = actor,
+		CorrelationId = Guid.NewGuid(),
+	};
 
 	private static async Task<DepartmentId> SeedDepartmentAsync(DbConnection connection, string name, CancellationToken cancellationToken)
 	{

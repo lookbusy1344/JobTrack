@@ -1,5 +1,6 @@
 namespace JobTrack.Domain.Intervals;
 
+using Abstractions;
 using NodaTime;
 
 /// <summary>
@@ -7,6 +8,11 @@ using NodaTime;
 ///     instant and excludes its end instant, so two intervals that merely touch at a boundary have no
 ///     overlap. The building block for session, working-time, and schedule-exception algebra.
 /// </summary>
+[LargeStruct(
+	"Two NodaTime Instants at 16 bytes each (32 bytes total): WorkInterval is the domain's core " +
+	"interval primitive (spec §4/§10.2.1), and every session, working-time, and schedule-exception " +
+	"algorithm passes it by value throughout. Reviewed and accepted -- narrowing the representation " +
+	"would mean re-deriving that algebra on a different primitive, not a local fix.")]
 public readonly record struct WorkInterval
 {
 	/// <summary>Creates a <see cref="WorkInterval" /> value.</summary>

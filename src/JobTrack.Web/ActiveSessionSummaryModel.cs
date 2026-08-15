@@ -99,7 +99,7 @@ public sealed class ActiveSessionSummaryModel
 	{
 		get
 		{
-			if (BranchAchievement is Abstractions.BranchAchievement branchAchievement) {
+			if (BranchAchievement is BranchAchievement branchAchievement) {
 				return branchAchievement switch {
 					Abstractions.BranchAchievement.Success => ActiveIdleStatus.Success,
 					Abstractions.BranchAchievement.Unfinished => null,
@@ -107,7 +107,7 @@ public sealed class ActiveSessionSummaryModel
 				};
 			}
 
-			if (Achievement is Abstractions.Achievement achievement) {
+			if (Achievement is Achievement achievement) {
 				var terminalStatus = achievement switch {
 					Abstractions.Achievement.Success => ActiveIdleStatus.Success,
 					Abstractions.Achievement.Cancelled => ActiveIdleStatus.Cancelled,

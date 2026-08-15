@@ -259,11 +259,11 @@ public sealed class Program
 				var domainConnectionString = builder.Configuration.GetConnectionString("JobTrackDomain")
 											 ?? throw new InvalidOperationException("ConnectionStrings:JobTrackDomain is not configured.");
 				var historyDeletionConnectionString = builder.Configuration.GetConnectionString("JobTrackHistoryDeletion")
-												 ?? throw new InvalidOperationException(
-													 "ConnectionStrings:JobTrackHistoryDeletion is not configured.");
+													  ?? throw new InvalidOperationException(
+														  "ConnectionStrings:JobTrackHistoryDeletion is not configured.");
 				var credentialAdministrationConnectionString = builder.Configuration.GetConnectionString("JobTrackCredentialAdministration")
-														  ?? throw new InvalidOperationException(
-															  "ConnectionStrings:JobTrackCredentialAdministration is not configured.");
+															   ?? throw new InvalidOperationException(
+																   "ConnectionStrings:JobTrackCredentialAdministration is not configured.");
 				var patManagementConnectionString = builder.Configuration.GetConnectionString("JobTrackPatManagement")
 													?? throw new InvalidOperationException(
 														"ConnectionStrings:JobTrackPatManagement is not configured.");

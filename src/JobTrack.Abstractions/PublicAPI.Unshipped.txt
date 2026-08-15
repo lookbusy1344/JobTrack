@@ -1,1 +1,4 @@
 #nullable enable
+JobTrack.Abstractions.LargeStructAttribute
+JobTrack.Abstractions.LargeStructAttribute.LargeStructAttribute(string! reason) -> void
+JobTrack.Abstractions.LargeStructAttribute.Reason.get -> string!

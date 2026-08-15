@@ -119,7 +119,14 @@ internal sealed class EmployeeQueryPort(IProviderReadOperations provider, IClock
 
 		var target = await context.Set<IdentityUserEntity>().AsNoTracking()
 								  .Where(iu => iu.AppUserId == targetUserId)
-								  .Select(iu => new { iu.Id, iu.UserName, iu.IsEnabled, iu.RequiresPasswordChange, iu.LockoutEnd })
+								  .Select(iu => new
+								  {
+									  iu.Id,
+									  iu.UserName,
+									  iu.IsEnabled,
+									  iu.RequiresPasswordChange,
+									  iu.LockoutEnd,
+								  })
 								  .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {targetUserId} does not exist.");
 

@@ -32,8 +32,8 @@ public sealed class HttpApiTests : IAsyncLifetime, IDisposable
 	private AppUserId administratorId;
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
-	private JobNodeId rootJobNodeId;
 	private JobNodeId overridableJobNodeId;
+	private JobNodeId rootJobNodeId;
 	private IJobTrackClient seedClient = null!;
 
 	public async Task InitializeAsync()
@@ -54,7 +54,10 @@ public sealed class HttpApiTests : IAsyncLifetime, IDisposable
 
 		// Overrides target a child node, never the root (ADR 0069).
 		var child = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = administratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = administratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootJobNodeId,
 			Description = "Overridable leaf",
 			OwnerUserId = administratorId,

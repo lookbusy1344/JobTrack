@@ -365,7 +365,7 @@ public abstract class JobBrowseBrowserTestsBase
 		var firstLeafId = await fixture.SeedLeafAsync("No-script first history job");
 		var secondLeafId = await fixture.SeedLeafAsync("No-script second history job");
 
-		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight, javaScriptEnabled: false);
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight, false);
 		var page = await context.NewPageAsync();
 
 		await page.GotoAsync($"{fixture.BaseAddress}/Account/Login");
@@ -491,7 +491,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
 		(await page.Locator($"#jt-history-list a[href='/Jobs/Browse?nodeId={leafId.Value}']").CountAsync()).Should()
-			.Be(0, "a new authenticated session must not inherit the preceding session's breadcrumbs");
+																										   .Be(0, "a new authenticated session must not inherit the preceding session's breadcrumbs");
 	}
 
 	[Fact]

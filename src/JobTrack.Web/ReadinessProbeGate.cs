@@ -10,6 +10,8 @@ internal sealed class ReadinessProbeGate(TimeProvider timeProvider, TimeSpan cac
 	private DateTimeOffset? lastCheckedAt;
 	private bool lastResult;
 
+	public void Dispose() => gate.Dispose();
+
 	public async Task<bool> CheckAsync(Func<CancellationToken, Task<bool>> probeAsync, CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(probeAsync);
@@ -29,6 +31,4 @@ internal sealed class ReadinessProbeGate(TimeProvider timeProvider, TimeSpan cac
 			_ = gate.Release();
 		}
 	}
-
-	public void Dispose() => gate.Dispose();
 }

@@ -27,7 +27,7 @@ public sealed class PostgreSqlAccountCredentialPortTests()
 
 	internal override IAccountCredentialPort CreatePort(string connectionString, IClock clock) =>
 		new AccountCredentialPort(new PostgreSqlWriteOperations(
-			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
+				PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
 			clock,
 			new PasswordHasher<EmployeeCredentialSubject>());
 }

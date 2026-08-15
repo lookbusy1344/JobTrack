@@ -811,9 +811,11 @@ public sealed class BrowseModel(
 			RecentNodes = [.. visibleIds.Where(summariesById.ContainsKey).Select(id => summariesById[id])];
 		}
 
-		var updatedIds = new[] { currentNodeId }
-			.Concat(rememberedIds.Where(id => id != currentNodeId))
-			.Take(RecentNodeCap);
+		var updatedIds = new[] {
+							 currentNodeId,
+						 }
+						 .Concat(rememberedIds.Where(id => id != currentNodeId))
+						 .Take(RecentNodeCap);
 		WriteRecentNodeIds(updatedIds);
 	}
 
@@ -828,12 +830,12 @@ public sealed class BrowseModel(
 		}
 
 		return stored.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-			.Select(value => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0)
-			.Where(value => value > 0)
-			.Select(value => new JobNodeId(value))
-			.Distinct()
-			.Take(RecentNodeCap)
-			.ToArray();
+					 .Select(value => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0)
+					 .Where(value => value > 0)
+					 .Select(value => new JobNodeId(value))
+					 .Distinct()
+					 .Take(RecentNodeCap)
+					 .ToArray();
 	}
 
 	private void WriteRecentNodeIds(IEnumerable<JobNodeId> nodeIds) =>

@@ -27,8 +27,8 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 	private readonly SqliteDatabaseFixture database = new();
 	private HttpClient client = null!;
 	private TestWebApplicationFactory factory = null!;
-	private JobNodeId rootJobNodeId;
 	private JobNodeId overridableJobNodeId;
+	private JobNodeId rootJobNodeId;
 	private IJobTrackClient seedClient = null!;
 
 	public async Task InitializeAsync()
@@ -48,7 +48,10 @@ public sealed partial class RateAdministrationTests : IAsyncLifetime, IDisposabl
 
 		// Overrides target a child node, never the root (ADR 0069).
 		var child = await seedClient.Jobs.AddChildAsync(new() {
-			Context = new() { Actor = bootstrap.AdministratorId, CorrelationId = Guid.NewGuid() },
+			Context = new() {
+				Actor = bootstrap.AdministratorId,
+				CorrelationId = Guid.NewGuid(),
+			},
 			ParentId = rootJobNodeId,
 			Description = "Overridable leaf",
 			OwnerUserId = bootstrap.AdministratorId,

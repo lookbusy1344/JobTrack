@@ -27,7 +27,7 @@ public sealed class PostgreSqlEmployeeCommandPortTests()
 
 	internal override IEmployeeCommandPort CreateCommandPort(string connectionString) =>
 		new EmployeeCommandPort(new PostgreSqlWriteOperations(
-			PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
+				PostgreSqlRoleDataSource.CreateBuilder(connectionString, "jobtrack_credential_administration").Build()),
 			SystemClock.Instance);
 
 	protected override object EncodeInstant(DateTimeOffset value) => value;

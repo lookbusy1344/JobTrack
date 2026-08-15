@@ -948,7 +948,9 @@ public sealed partial class BrowseWorkSessionTests : IAsyncLifetime, IDisposable
 		browseBody.Should().Contain("status-pill-success");
 		browseBody.Should().Contain("title=\"Success\">Succ</span>");
 
-		foreach (var body in new[] { browseBody, workBody }) {
+		foreach (var body in new[] {
+					 browseBody, workBody,
+				 }) {
 			// Browse's Active state preserves the leaf's actual terminal outcome. Both pages avoid a
 			// verbose closure sentence and keep state out of the Actions cell.
 			body.Should().NotContain("Reopen it before starting another session");
