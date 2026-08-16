@@ -5,12 +5,20 @@ name: JobTrack Full Test Suite
 # public API, web integration, and real-browser end-to-end coverage) against a real local
 # PostgreSQL instance, plus SQLite. Excludes JobTrack.Database.PerformanceTests, which sets
 # IsTestProject=false precisely so a solution-wide run skips it -- see docs/developer-guide.md,
-# "Performance lane". Takes several minutes, so it runs only on release tags rather than on every
-# push (see .github/workflows/jobtrack.yml for the fast per-commit gate).
+# "Performance lane". Takes several minutes -- intended to run on release tags rather than on
+# every push (see .github/workflows/jobtrack.yml for the fast per-commit gate).
+#
+# DISABLED (2026-08-16): flaky on GitHub's free runner even after raising PostgreSQL's
+# max_connections/pool size and serializing test projects with `-m:1` -- ContractTests,
+# AdminCli.Tests, and a Postgres-backed browser test still intermittently crash the test host
+# ("Test host process crashed: OperationCanceledException" from a timed-out xUnit internal
+# semaphore) or hit a Playwright navigation timeout, most likely xUnit's own within-project
+# parallelism exceeding what the runner's cores/memory can absorb, not something -m:1 addresses
+# (that only serializes across projects, not within one). Manual-trigger only until this is
+# properly diagnosed and fixed; do not re-enable the tags trigger without addressing the root
+# cause, not just tuning parallelism knobs further.
 on:
-  push:
-    tags:
-      - '*'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
