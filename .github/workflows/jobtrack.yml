@@ -2,8 +2,10 @@ name: JobTrack CI
 
 # Build, verify formatting and run the fast core test suite on every push
 # and pull request. Mirrors the local commit gate (see CLAUDE.md and
-# scripts/fast-test.sh) but runs in --strict mode, since a real budget
-# overrun should fail CI even though it only warns locally.
+# scripts/fast-test.sh). Runs fast-test.sh's default informational budget
+# mode, not --strict: GitHub-hosted runners are slower and noisier than a
+# dev machine, so the 20s/80s budgets aren't a meaningful CI gate here --
+# only a real test failure should fail the build.
 on:
   push:
   pull_request:
@@ -44,4 +46,4 @@ jobs:
       #   run: dotnet format JobTrack.slnx --verify-no-changes
 
       - name: Fast core tests
-        run: scripts/fast-test.sh --strict
+        run: scripts/fast-test.sh
