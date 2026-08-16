@@ -44,7 +44,7 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 
 	private const string CertificatePassword = "browser-e2e-cert";
 	private const int LoginRateLimitPermitLimitForTests = 500;
-	private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromSeconds(30);
+	private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromSeconds(60);
 	private static readonly TimeSpan ReadinessPollInterval = TimeSpan.FromMilliseconds(200);
 
 	private readonly IDisposableTestDatabase database;

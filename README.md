@@ -91,8 +91,9 @@ A short test script, aiming to complete in about 20 seconds, is used for pre-com
 
 ## Status
 
-**Current release: v1.1** (tagged 2026-08-13), a documentation and external-API-reference refresh
-over the accepted release gate below — no schema, contract, or behaviour changes.
+**Current release: v1.1.1** (2026-08-16) — forbids node rate overrides on the root
+node (ADR 0069) and hardens architecture guards, over the accepted release gate
+below — no schema or contract changes.
 
 **Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
 ([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),
