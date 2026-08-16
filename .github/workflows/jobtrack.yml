@@ -8,6 +8,8 @@ name: JobTrack CI
 # only a real test failure should fail the build.
 on:
   push:
+    tags-ignore:
+      - '*'
   pull_request:
 
 # Cancel superseded runs on the same ref to save CI minutes.
