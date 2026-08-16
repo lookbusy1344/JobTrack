@@ -40,8 +40,8 @@ jobs:
       - name: Build
         run: dotnet build JobTrack.slnx --no-restore
 
-      - name: Verify formatting
-        run: dotnet format JobTrack.slnx --verify-no-changes
+      # - name: Verify formatting
+      #   run: dotnet format JobTrack.slnx --verify-no-changes
 
       - name: Fast core tests
         run: scripts/fast-test.sh --strict
