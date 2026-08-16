@@ -5,6 +5,8 @@ namespace JobTrack.Abstractions;
 ///     enforced by <c>JobTrack.ArchitectureTests.CodeStyle_StructSize</c>: its copy cost was accepted on
 ///     purpose, not missed. <paramref name="reason" /> carries the justification alongside the type
 ///     itself rather than in a separate allowlist, so the exception cannot drift from why it was made.
+///     Do not apply this attribute without explicit user permission — get agreement before exempting
+///     a type from the size guideline; this is the reviewed exception, not a routine escape hatch.
 /// </summary>
 [AttributeUsage(AttributeTargets.Struct)]
 public sealed class LargeStructAttribute(string reason) : Attribute
