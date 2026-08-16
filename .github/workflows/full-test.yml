@@ -1,0 +1,62 @@
+name: JobTrack Full Test Suite
+
+# Runs the entire solution suite (everything `dotnet test JobTrack.slnx` reaches -- domain,
+# application, architecture-fitness, identity, both persistence providers, database contract,
+# public API, web integration, and real-browser end-to-end coverage) against a real local
+# PostgreSQL instance, plus SQLite. Excludes JobTrack.Database.PerformanceTests, which sets
+# IsTestProject=false precisely so a solution-wide run skips it -- see docs/developer-guide.md,
+# "Performance lane". Takes several minutes, so it runs only on release tags rather than on every
+# push (see .github/workflows/jobtrack.yml for the fast per-commit gate).
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  # docs/developer-guide.md documents a local instance reachable at the Unix socket /tmp:5432;
+  # the runner's PostgreSQL instead listens on its distro-default socket directory, so point the
+  # fixtures (tests/JobTrack.TestSupport/PostgreSqlDatabaseFixture.cs) at that instead of
+  # reconfiguring the server to match the docs' dev-machine path.
+  JOBTRACK_TEST_POSTGRES_ADMIN_CONNECTION_STRING: 'Host=/var/run/postgresql;Username=runner;Database=postgres'
+
+jobs:
+  full-test:
+    name: Full solution test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Start PostgreSQL and grant the runner a superuser role
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres createuser --superuser "$(whoami)"
+          pg_isready -h /var/run/postgresql
+
+      - name: Restore client-side assets
+        run: |
+          dotnet tool install --global Microsoft.Web.LibraryManager.Cli
+          cd src/JobTrack.Web && libman restore
+
+      - name: Restore
+        run: dotnet restore JobTrack.slnx
+
+      - name: Build
+        run: dotnet build JobTrack.slnx --no-restore
+
+      - name: Install Playwright browsers
+        run: pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium firefox webkit
+
+      - name: Full test suite
+        run: dotnet test JobTrack.slnx --no-build
