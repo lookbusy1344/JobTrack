@@ -22,8 +22,12 @@ env:
   # docs/developer-guide.md documents a local instance reachable at the Unix socket /tmp:5432;
   # the runner's PostgreSQL instead listens on its distro-default socket directory, so point the
   # fixtures (tests/JobTrack.TestSupport/PostgreSqlDatabaseFixture.cs) at that instead of
-  # reconfiguring the server to match the docs' dev-machine path.
-  JOBTRACK_TEST_POSTGRES_ADMIN_CONNECTION_STRING: 'Host=/var/run/postgresql;Username=runner;Database=postgres'
+  # reconfiguring the server to match the docs' dev-machine path. Maximum Pool Size caps each test
+  # process's own Npgsql pool (Npgsql's default is 100 per pool) -- every PostgreSQL-backed test
+  # project runs against this one instance in parallel (docs/developer-guide.md's "shared
+  # PostgreSQL instance contention"), and an uncapped pool from just one of them can exhaust the
+  # server's own max_connections (raised below, but still finite) on its own.
+  JOBTRACK_TEST_POSTGRES_ADMIN_CONNECTION_STRING: 'Host=/var/run/postgresql;Username=runner;Database=postgres;Maximum Pool Size=20'
 
 jobs:
   full-test:
@@ -41,6 +45,11 @@ jobs:
       - name: Start PostgreSQL and grant the runner a superuser role
         run: |
           sudo systemctl start postgresql.service
+          # Ubuntu's default max_connections (100) is easily exhausted once every PostgreSQL-backed
+          # test project (ContractTests, Persistence.PostgreSql.Tests, the Postgres-backed browser
+          # suite) runs concurrently against this one instance -- raise it before anything connects.
+          sudo -u postgres psql -c "ALTER SYSTEM SET max_connections = 300;"
+          sudo systemctl restart postgresql.service
           sudo -u postgres createuser --superuser "$(whoami)"
           pg_isready -h /var/run/postgresql
 
