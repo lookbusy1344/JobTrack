@@ -93,7 +93,12 @@
 					}
 					@* Which build am I looking at? -- a question asked when reporting a defect, before
 					   signing in. Login only: past the header it is noise on every working page. Omitted
-					   outright when the build had no git repository to read a revision from. *@
+					   outright when the build had no git repository to read a version/revision from. *@
+					@if (isLoginPage && BuildRevision.ProductVersion is not null) {
+						<li class="nav-item">
+							<span class="jt-build-revision" title="Project version">v@(BuildRevision.ProductVersion)</span>
+						</li>
+					}
 					@if (isLoginPage && BuildRevision.Short is not null) {
 						<li class="nav-item">
 							<span class="jt-build-revision" title="Build revision">@BuildRevision.Short</span>
