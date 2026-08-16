@@ -17,8 +17,8 @@ public sealed class CodeStyle_EmptyBracesPattern
 	public void Repository_sources_do_not_use_the_empty_braces_property_pattern()
 	{
 		var violations = RepositorySourceFiles.CSharpAndRazor()
-						 .SelectMany(static file => EmptyBracesPatternGuard.FindViolations(file, File.ReadAllText(file)))
-						 .ToArray();
+											  .SelectMany(static file => EmptyBracesPatternGuard.FindViolations(file, File.ReadAllText(file)))
+											  .ToArray();
 
 		violations.Should().BeEmpty();
 	}

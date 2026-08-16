@@ -20,8 +20,8 @@ public sealed class CodeStyle_PostfixIncrement
 	public void Repository_sources_do_not_discard_a_postfix_increment_result()
 	{
 		var violations = RepositorySourceFiles.CSharpAndRazor()
-						 .SelectMany(static file => PostfixIncrementGuard.FindViolations(file, File.ReadAllText(file)))
-						 .ToArray();
+											  .SelectMany(static file => PostfixIncrementGuard.FindViolations(file, File.ReadAllText(file)))
+											  .ToArray();
 
 		violations.Should().BeEmpty(
 			"the prefix form should be used wherever the result is discarded:{0}{1}",

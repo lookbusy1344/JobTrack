@@ -161,6 +161,8 @@ public sealed class CodeStyle_StructSize
 		_ = a + b + c + d + e;
 	}
 
+	private static GenericInlineWrapper<ThirtyTwoByteStruct> ClosedGenericUsage() => default;
+
 	private struct EightByteStruct
 	{
 		public long Value;
@@ -202,8 +204,6 @@ public sealed class CodeStyle_StructSize
 	{
 		public T Value { get; } = value;
 	}
-
-	private static GenericInlineWrapper<ThirtyTwoByteStruct> ClosedGenericUsage() => default;
 
 	private readonly ref struct LargeRefStruct
 	{
@@ -267,9 +267,9 @@ internal static class ValueTypeSizeGuard
 	public const int MaxSizeInBytes = 24;
 
 	public static readonly FrozenSet<string> ProductionAssemblyNames = Directory
-		.EnumerateFiles(Path.Combine(RepositoryPaths.SolutionRoot(), "src"), "*.csproj", SearchOption.AllDirectories)
-		.Select(static path => Path.GetFileNameWithoutExtension(path)!)
-		.ToFrozenSet(StringComparer.Ordinal);
+																	   .EnumerateFiles(Path.Combine(RepositoryPaths.SolutionRoot(), "src"), "*.csproj", SearchOption.AllDirectories)
+																	   .Select(static path => Path.GetFileNameWithoutExtension(path)!)
+																	   .ToFrozenSet(StringComparer.Ordinal);
 
 	private static readonly MethodInfo SizeOfMethod =
 		typeof(Unsafe).GetMethod(nameof(Unsafe.SizeOf), BindingFlags.Public | BindingFlags.Static)!;
@@ -288,13 +288,13 @@ internal static class ValueTypeSizeGuard
 		var assemblies = includedAssemblyNames.Select(Assembly.Load).ToArray();
 
 		return assemblies
-			.SelectMany(assembly => assembly.GetTypes()
-										 .Where(static type => !type.IsGenericTypeDefinition)
-										 .Concat(ClosedGenericTypes(assembly, includedAssemblyNames)))
-			.Distinct()
-			.Where(static type => type.IsValueType && !type.IsEnum)
-			.Where(static type => !Attribute.IsDefined(type, typeof(CompilerGeneratedAttribute)))
-			.Where(static type => !Attribute.IsDefined(type, typeof(GeneratedCodeAttribute)));
+			   .SelectMany(assembly => assembly.GetTypes()
+											   .Where(static type => !type.IsGenericTypeDefinition)
+											   .Concat(ClosedGenericTypes(assembly, includedAssemblyNames)))
+			   .Distinct()
+			   .Where(static type => type.IsValueType && !type.IsEnum)
+			   .Where(static type => !Attribute.IsDefined(type, typeof(CompilerGeneratedAttribute)))
+			   .Where(static type => !Attribute.IsDefined(type, typeof(GeneratedCodeAttribute)));
 	}
 
 	private static Type[] ClosedGenericTypes(Assembly assembly, FrozenSet<string> includedAssemblyNames)
@@ -305,14 +305,14 @@ internal static class ValueTypeSizeGuard
 		var typeSpecificationCount = metadataReader.GetTableRowCount(TableIndex.TypeSpec);
 
 		return Enumerable.Range(1, typeSpecificationCount)
-			.Select(MetadataTokens.TypeSpecificationHandle)
-			.Select(handle => ResolveClosedTypeSpecification(assembly.ManifestModule, MetadataTokens.GetToken(handle)))
-			.Where(static type => type is not null)
-			.Cast<Type>()
-			.SelectMany(ContainedTypes)
-			.Where(static type => type.IsConstructedGenericType && !type.ContainsGenericParameters)
-			.Where(type => includedAssemblyNames.Contains(type.GetGenericTypeDefinition().Assembly.GetName().Name!))
-			.ToArray();
+						 .Select(MetadataTokens.TypeSpecificationHandle)
+						 .Select(handle => ResolveClosedTypeSpecification(assembly.ManifestModule, MetadataTokens.GetToken(handle)))
+						 .Where(static type => type is not null)
+						 .Cast<Type>()
+						 .SelectMany(ContainedTypes)
+						 .Where(static type => type.IsConstructedGenericType && !type.ContainsGenericParameters)
+						 .Where(type => includedAssemblyNames.Contains(type.GetGenericTypeDefinition().Assembly.GetName().Name!))
+						 .ToArray();
 	}
 
 	private static Type? ResolveClosedTypeSpecification(Module module, int metadataToken)

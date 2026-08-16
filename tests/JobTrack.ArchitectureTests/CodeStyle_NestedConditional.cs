@@ -20,8 +20,8 @@ public sealed class CodeStyle_NestedConditional
 	public void Repository_sources_do_not_nest_conditional_expressions()
 	{
 		var violations = RepositorySourceFiles.CSharpAndRazor()
-						 .SelectMany(static file => NestedConditionalGuard.FindViolations(file, File.ReadAllText(file)))
-						 .ToArray();
+											  .SelectMany(static file => NestedConditionalGuard.FindViolations(file, File.ReadAllText(file)))
+											  .ToArray();
 
 		violations.Should().BeEmpty("nested conditionals found:{0}{1}", Environment.NewLine, string.Join(Environment.NewLine, violations));
 	}
@@ -96,8 +96,5 @@ internal static class NestedConditionalGuard
 	private static string Describe(string fileName, ConditionalExpressionSyntax conditional, int lineOffset) =>
 		Describe(fileName, conditional.GetLocation().GetLineSpan().StartLinePosition.Line + 1 + lineOffset);
 
-	private static string Describe(string fileName, int line)
-	{
-		return $"{Path.GetFileName(fileName)}:{line}: forbidden nested conditional expression";
-	}
+	private static string Describe(string fileName, int line) => $"{Path.GetFileName(fileName)}:{line}: forbidden nested conditional expression";
 }

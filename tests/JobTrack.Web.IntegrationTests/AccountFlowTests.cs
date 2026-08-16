@@ -287,6 +287,40 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 		body.Should().NotContain(BuildRevision.Short);
 	}
 
+	/// <summary>
+	///     The project version (e.g. <c>1.1.1</c> from <c>Directory.Build.props</c>), distinct from the
+	///     <c>git describe</c> revision above -- both are printed on the login header.
+	/// </summary>
+	[Fact]
+	public async Task The_login_page_names_the_project_version_in_the_header()
+	{
+		BuildRevision.ProductVersion.Should().NotBeNull("the build embeds the project's own Version");
+
+		var response = await client.GetAsync("/Account/Login");
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.Should().Contain($"v{BuildRevision.ProductVersion}");
+	}
+
+	[Fact]
+	public async Task No_page_past_the_login_page_names_the_project_version()
+	{
+		_ = await SeedUserAsync("adams", KnownPassword, false);
+		using var browserClient = factory.CreateClient(
+			new() {
+				AllowAutoRedirect = false,
+				HandleCookies = true,
+				BaseAddress = new("https://localhost"),
+			});
+		await PostLoginWithCookieClientAsync(browserClient, "adams", KnownPassword);
+
+		var response = await browserClient.GetAsync("/Jobs/AwaitingProgress");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain($"v{BuildRevision.ProductVersion}");
+	}
+
 	[Fact]
 	public async Task The_access_denied_page_renders_without_requiring_authentication_details()
 	{

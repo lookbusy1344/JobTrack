@@ -40,9 +40,9 @@ internal sealed class RazorCSharpDocument
 			sourceDocument,
 			RazorFileKind.Legacy,
 			ImmutableArray<RazorSourceDocument>.Empty,
-			tagHelpers: null);
+			null);
 		var generated = GetCSharpDocumentMethod.Invoke(codeDocument, null) as Microsoft.AspNetCore.Razor.Language.RazorCSharpDocument
-			?? throw new InvalidOperationException("The Razor compiler did not produce a generated C# document.");
+						?? throw new InvalidOperationException("The Razor compiler did not produce a generated C# document.");
 
 		return new(generated);
 	}
