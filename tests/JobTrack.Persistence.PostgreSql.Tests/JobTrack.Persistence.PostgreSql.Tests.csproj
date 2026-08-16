@@ -29,6 +29,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\..\src\JobTrack.Database\JobTrack.Database.csproj"/>
         <ProjectReference Include="..\..\src\JobTrack.Persistence.PostgreSql\JobTrack.Persistence.PostgreSql.csproj"/>
         <ProjectReference Include="..\JobTrack.TestSupport\JobTrack.TestSupport.csproj"/>
     </ItemGroup>
