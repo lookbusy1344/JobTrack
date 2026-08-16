@@ -33,7 +33,7 @@ jobs:
   full-test:
     name: Full solution test suite
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
@@ -68,4 +68,11 @@ jobs:
         run: pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium firefox webkit
 
       - name: Full test suite
-        run: dotnet test JobTrack.slnx --no-build
+        # -m:1: dotnet test's default per-project parallelism assumes a dev machine's core count.
+        # GitHub's standard runner has far fewer cores, and running every test project concurrently
+        # starved xUnit's own internal scheduling (test host crashes: "Test host process crashed:
+        # OperationCanceledException" from a timed-out SemaphoreSlim wait) and a Playwright browser
+        # test (30s navigation timeout waiting on a CPU-starved child web host process). One project
+        # at a time is slower but reliable; see docs/developer-guide.md's "shared PostgreSQL
+        # instance contention" for the same lesson applied to the database side.
+        run: dotnet test JobTrack.slnx --no-build -m:1
