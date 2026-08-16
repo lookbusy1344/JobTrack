@@ -2,6 +2,7 @@ namespace JobTrack.Web;
 
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Application;
@@ -193,6 +194,15 @@ public sealed class Program
 
 	public static void Main(string[] args)
 	{
+		// Rendered dates (e.g. NodaTime.LocalDate.ToString() on the Rota page) fall back to the
+		// process's ambient CultureInfo.CurrentCulture, which otherwise tracks the host OS's
+		// locale -- en-GB on a UK dev machine, commonly en-US on a Linux CI runner or server. Pin
+		// it explicitly so date formatting is deterministic across environments, matching this
+		// project's UK conventions elsewhere (Europe/London zones, the en-GB ICU locale used for
+		// PostgreSQL test databases).
+		CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("en-GB");
+		CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("en-GB");
+
 		var builder = WebApplication.CreateBuilder(args);
 
 		// Add services to the container.
