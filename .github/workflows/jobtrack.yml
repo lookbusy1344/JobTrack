@@ -8,8 +8,6 @@ name: JobTrack CI
 # only a real test failure should fail the build.
 on:
   push:
-    tags-ignore:
-      - '*'
   pull_request:
 
 # Cancel superseded runs on the same ref to save CI minutes.
@@ -27,6 +25,11 @@ env:
 
 jobs:
   build-test:
+    # A push-level tags-ignore filter here previously suppressed this workflow's trigger on
+    # ordinary branch pushes too, not just tags (observed: zero runs across four consecutive
+    # branch pushes after adding it) -- skip the job instead, which reliably excludes tag pushes
+    # (already covered by full-test.yml) without touching whether the workflow triggers at all.
+    if: github.ref_type != 'tag'
     name: Build, format & test
     runs-on: ubuntu-latest
     timeout-minutes: 15
