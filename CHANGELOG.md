@@ -1,8 +1,21 @@
 # Changelog
 
 All notable changes to JobTrack are recorded here. Format follows
-[Keep a Changelog](https://keepachangelog.com/); this project uses simple
-`MAJOR.MINOR` release numbers.
+[Keep a Changelog](https://keepachangelog.com/); this project uses
+`MAJOR.MINOR.PATCH` release numbers.
+
+## [1.1.1] — 2026-08-16
+
+### Changed
+
+- **Node rate overrides are forbidden on the root node** (ADR 0069). A root override
+  applied to a worker's entire tree, silently outranking their own hourly rate — a
+  restatement of `user_cost_rate`/`default_hourly_rate`, not a genuine per-node
+  deviation. Attempting one now fails at the boundary.
+- Hardened architecture guards: closed generic struct sizes are now measured, and
+  the code style guards (including the nested-ternary and empty-property-pattern
+  rules) are stricter.
+- Updated NuGet dependencies.
 
 ## [1.1] — 2026-08-13
 
