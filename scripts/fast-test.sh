@@ -29,6 +29,15 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# macOS (via `brew install coreutils`) only provides the GNU timeout binary as
+# `gtimeout`, to avoid clobbering the BSD one; Linux CI runners ship GNU
+# coreutils' `timeout` under its native name and have no `gtimeout`.
+if command -v gtimeout >/dev/null 2>&1; then
+	readonly TIMEOUT_BIN="gtimeout"
+else
+	readonly TIMEOUT_BIN="timeout"
+fi
+
 readonly FAST_CORE_SLNF="JobTrack.FastCore.slnf"
 readonly FAST_TEST_TIMEOUT_SECONDS=30
 readonly LONGER_TEST_TIMEOUT_SECONDS=60
@@ -103,7 +112,7 @@ is_longer_project() {
 if [[ "$skip_build" -eq 0 ]]; then
 	dotnet build-server shutdown
 	echo "==> dotnet build ${FAST_CORE_SLNF}"
-	gtimeout "$BUILD_TIMEOUT_SECONDS" dotnet build "$FAST_CORE_SLNF"
+	"$TIMEOUT_BIN" "$BUILD_TIMEOUT_SECONDS" dotnet build "$FAST_CORE_SLNF"
 fi
 
 for project in "${projects[@]}"; do
@@ -113,7 +122,7 @@ for project in "${projects[@]}"; do
 	else
 		timeout_seconds=$FAST_TEST_TIMEOUT_SECONDS
 	fi
-	gtimeout "$timeout_seconds" dotnet test "$project" --no-build
+	"$TIMEOUT_BIN" "$timeout_seconds" dotnet test "$project" --no-build
 done
 
 echo "${suite_name} suite passed."
