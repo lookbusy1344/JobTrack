@@ -36,7 +36,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	/// <summary>ADR 0044: schema version 0007's leaf-closure deferred constraint triggers' distinct SQLSTATE.</summary>
 	private const string ActiveSessionsSqlState = "P0008";
 
-	private readonly IClock clock;
+	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
 	private readonly NpgsqlDataSource historyDeletionDataSource;
 
@@ -50,7 +50,7 @@ internal sealed class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	{
 		this.dataSource = dataSource;
 		this.historyDeletionDataSource = historyDeletionDataSource;
-		this.clock = clock;
+		this.clock = new MicrosecondTruncatingClock(clock);
 	}
 
 	/// <inheritdoc />

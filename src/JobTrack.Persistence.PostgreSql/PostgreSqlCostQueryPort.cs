@@ -33,7 +33,7 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 {
-	private readonly IClock clock;
+	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
 	private readonly IReadOnlyList<IInterceptor> interceptors = [];
 
@@ -41,7 +41,7 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 	public PostgreSqlCostQueryPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
-		this.clock = clock;
+		this.clock = new MicrosecondTruncatingClock(clock);
 	}
 
 	/// <summary>Test-only seam for asserting bulk-query command and connection bounds.</summary>

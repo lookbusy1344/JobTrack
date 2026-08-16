@@ -7,6 +7,7 @@ using Domain.Schedules;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Npgsql;
+using Shared;
 using Shared.Entities;
 
 /// <summary>
@@ -15,14 +16,14 @@ using Shared.Entities;
 /// </summary>
 internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstrapPort
 {
-	private readonly IClock clock;
+	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlInstallationBootstrapPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
-		this.clock = clock;
+		this.clock = new MicrosecondTruncatingClock(clock);
 	}
 
 	/// <inheritdoc />

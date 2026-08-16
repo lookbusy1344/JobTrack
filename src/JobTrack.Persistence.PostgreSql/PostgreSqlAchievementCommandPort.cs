@@ -31,7 +31,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 	/// <summary>ADR 0044: schema version 0007's leaf-closure deferred constraint triggers' distinct SQLSTATE.</summary>
 	private const string ActiveSessionsSqlState = "P0008";
 
-	private readonly IClock clock;
+	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
 	private readonly IReadOnlyList<IInterceptor> interceptors;
 
@@ -42,7 +42,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 	internal PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock, IReadOnlyList<IInterceptor> interceptors)
 	{
 		this.dataSource = dataSource;
-		this.clock = clock;
+		this.clock = new MicrosecondTruncatingClock(clock);
 		this.interceptors = interceptors;
 	}
 

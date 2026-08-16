@@ -30,14 +30,14 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 	/// </summary>
 	private const string PrerequisiteEdgeAfterMoveSqlState = "P0009";
 
-	private readonly IClock clock;
+	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobRequestCommandPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
-		this.clock = clock;
+		this.clock = new MicrosecondTruncatingClock(clock);
 	}
 
 	/// <inheritdoc />

@@ -19,7 +19,7 @@ using Shared.Entities;
 internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPort
 {
 	private readonly NpgsqlDataSource authenticationDataSource;
-	private readonly IClock clock;
+	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource managementDataSource;
 
 	public PostgreSqlPersonalAccessTokenPort(NpgsqlDataSource dataSource, IClock clock)
@@ -33,7 +33,7 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	{
 		this.managementDataSource = managementDataSource;
 		this.authenticationDataSource = authenticationDataSource;
-		this.clock = clock;
+		this.clock = new MicrosecondTruncatingClock(clock);
 	}
 
 	/// <inheritdoc />
