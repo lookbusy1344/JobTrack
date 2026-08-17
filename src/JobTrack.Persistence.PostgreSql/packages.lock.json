@@ -236,8 +236,8 @@
       "jobtrack.application": {
         "type": "Project",
         "dependencies": {
-          "JobTrack.Abstractions": "[0.1.0, )",
-          "JobTrack.Domain": "[0.1.0, )",
+          "JobTrack.Abstractions": "[1.1.1, )",
+          "JobTrack.Domain": "[1.1.1, )",
           "Microsoft.Extensions.Identity.Core": "[10.0.11, )",
           "NodaTime": "[3.3.3, )"
         }
@@ -245,15 +245,15 @@
       "jobtrack.domain": {
         "type": "Project",
         "dependencies": {
-          "JobTrack.Abstractions": "[0.1.0, )",
+          "JobTrack.Abstractions": "[1.1.1, )",
           "NodaTime": "[3.3.3, )"
         }
       },
       "jobtrack.persistence.shared": {
         "type": "Project",
         "dependencies": {
-          "JobTrack.Abstractions": "[0.1.0, )",
-          "JobTrack.Application": "[0.1.0, )",
+          "JobTrack.Abstractions": "[1.1.1, )",
+          "JobTrack.Application": "[1.1.1, )",
           "Microsoft.EntityFrameworkCore": "[10.0.11, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.11, )",
           "NodaTime": "[3.3.3, )"

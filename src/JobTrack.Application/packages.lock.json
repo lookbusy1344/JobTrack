@@ -194,7 +194,7 @@
       "jobtrack.domain": {
         "type": "Project",
         "dependencies": {
-          "JobTrack.Abstractions": "[0.1.0, )",
+          "JobTrack.Abstractions": "[1.1.1, )",
           "NodaTime": "[3.3.3, )"
         }
       }
