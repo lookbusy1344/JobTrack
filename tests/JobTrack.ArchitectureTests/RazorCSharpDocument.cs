@@ -73,6 +73,34 @@ internal sealed class RazorCSharpDocument
 		}
 	}
 
+	public IEnumerable<int[]> OriginalLineGroups(IEnumerable<SyntaxToken> tokens)
+	{
+		var materializedTokens = tokens.ToArray();
+		foreach (var mapping in generated.SourceMappingsSortedByGenerated) {
+			var lines = new HashSet<int>();
+			foreach (var token in materializedTokens) {
+				var generatedSpan = mapping.GeneratedSpan;
+				var overlapStart = Math.Max(token.SpanStart, generatedSpan.AbsoluteIndex);
+				var overlapEnd = Math.Min(token.Span.End, generatedSpan.AbsoluteIndex + generatedSpan.Length);
+				if (overlapStart >= overlapEnd) {
+					continue;
+				}
+
+				var originalStart = mapping.OriginalSpan.AbsoluteIndex + overlapStart - generatedSpan.AbsoluteIndex;
+				var originalEnd = mapping.OriginalSpan.AbsoluteIndex + overlapEnd - generatedSpan.AbsoluteIndex - 1;
+				var firstLine = generated.CodeDocument.Source.Text.Lines.GetLineFromPosition(originalStart).LineNumber + 1;
+				var lastLine = generated.CodeDocument.Source.Text.Lines.GetLineFromPosition(originalEnd).LineNumber + 1;
+				foreach (var line in Enumerable.Range(firstLine, lastLine - firstLine + 1)) {
+					_ = lines.Add(line);
+				}
+			}
+
+			if (lines.Count > 0) {
+				yield return lines.Order().ToArray();
+			}
+		}
+	}
+
 	private int? OriginalLine(int generatedPosition)
 	{
 		foreach (var mapping in generated.SourceMappingsSortedByGenerated) {
