@@ -4,7 +4,6 @@ using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
-using Abstractions;
 using Application;
 using Identity;
 using Microsoft.AspNetCore.Authentication;

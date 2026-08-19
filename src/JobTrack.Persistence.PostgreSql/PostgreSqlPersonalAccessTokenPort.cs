@@ -33,7 +33,7 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 	{
 		this.managementDataSource = managementDataSource;
 		this.authenticationDataSource = authenticationDataSource;
-		this.clock = new MicrosecondTruncatingClock(clock);
+		this.clock = new(clock);
 	}
 
 	/// <inheritdoc />

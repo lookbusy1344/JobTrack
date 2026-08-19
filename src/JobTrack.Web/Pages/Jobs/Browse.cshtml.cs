@@ -4,7 +4,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Abstractions;
 using Application;
-using Domain.Costing;
 using Domain.Hierarchy;
 using Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -690,5 +689,4 @@ public sealed partial class BrowseModel(
 		["searchText"] = SearchText,
 		["showArchived"] = ShowArchived,
 	};
-
 }

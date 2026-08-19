@@ -378,6 +378,106 @@ internal static partial class JobTrackApi
 			DependentJobId = result.DependentJobId.Value,
 		};
 
+	private static void MapJobEndpoints(this RouteGroupBuilder api)
+	{
+		api.MapJobReadEndpoints();
+		api.MapJobWriteEndpoints();
+	}
+
+	private static void MapJobReadEndpoints(this RouteGroupBuilder api)
+	{
+		_ = api.MapGet("/jobs/root", GetRootJobNodeAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetRootJobNode")
+			   .WithSummary("Get the permanent root node's detail.")
+			   .Produces<JobNodeDetailResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized);
+
+		_ = api.MapGet("/jobs/search", SearchJobNodesAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("SearchJobNodes")
+			   .WithSummary("Search every node's description for a case-insensitive substring match, paged (offset/pageSize).")
+			   .Produces<PagedResponse<JobNodeSummaryResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized);
+
+		_ = api.MapGet("/jobs/{nodeId:long}", GetJobNodeAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobNode")
+			   .WithSummary("Get a node's full detail and root-first ancestor breadcrumb.")
+			   .Produces<JobNodeDetailResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapGet("/jobs/{nodeId:long}/children", GetJobChildrenAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobChildren")
+			   .WithSummary("Get a node's direct children, filtered by owner and archive scope, paged (offset/pageSize).")
+			   .Produces<PagedResponse<JobNodeSummaryResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapGet("/jobs/{nodeId:long}/readiness", GetReadinessAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobReadiness")
+			   .WithSummary("Get whether a node's prerequisites are satisfied, and the diagnostic set of blockers if not.")
+			   .Produces<ReadinessResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapGet("/jobs/{nodeId:long}/prerequisites", GetPrerequisitesAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetPrerequisites")
+			   .WithSummary("Get every prerequisite edge touching a node, in either direction, paged (offset/pageSize).")
+			   .Produces<PagedResponse<PrerequisiteEdgeResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapGet("/jobs/{nodeId:long}/subtree", GetJobSubtreeAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetJobSubtree")
+			   .WithSummary(
+				   "Get a bounded multi-level subtree rooted at a node (depth/breadth-capped, ADR 0039); " +
+				   "the cost roll-up is included only when the actor may view it (ADR 0040), never a whole-request denial.")
+			   .Produces<JobSubtreeResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+	}
+
+	private static void MapJobWriteEndpoints(this RouteGroupBuilder api)
+	{
+		_ = api.MapPost("/jobs/{nodeId:long}/pickup", PickUpJobNodeAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("PickUpJobNode")
+			   .WithSummary("Claim an unassigned node from the pickup pool, setting its direct owner to the acting user.")
+			   .Produces<JobNodeResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status409Conflict);
+
+		_ = api.MapPost("/jobs/{nodeId:long}/prerequisites", AddPrerequisiteAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "AddPrerequisite",
+				   "Add a prerequisite edge: the given job must reach Success before this node is ready.")
+			   .Produces(StatusCodes.Status204NoContent);
+
+		_ = api.MapDelete("/jobs/{nodeId:long}/prerequisites/{requiredJobId:long}", RemovePrerequisiteAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("RemovePrerequisite")
+			   .WithSummary("Remove a prerequisite edge.")
+			   .Produces(StatusCodes.Status204NoContent)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+	}
+
 	internal sealed class JobNodeDetailResponse
 	{
 		public required JobNodeResponse Node { get; init; }
@@ -556,105 +656,5 @@ internal static partial class JobTrackApi
 	internal sealed class AddPrerequisiteBody
 	{
 		public required long RequiredJobId { get; init; }
-	}
-
-	private static void MapJobEndpoints(this RouteGroupBuilder api)
-	{
-		api.MapJobReadEndpoints();
-		api.MapJobWriteEndpoints();
-	}
-
-	private static void MapJobReadEndpoints(this RouteGroupBuilder api)
-	{
-		_ = api.MapGet("/jobs/root", GetRootJobNodeAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			   .WithName("GetRootJobNode")
-			   .WithSummary("Get the permanent root node's detail.")
-			   .Produces<JobNodeDetailResponse>()
-			   .ProducesProblem(StatusCodes.Status401Unauthorized);
-
-		_ = api.MapGet("/jobs/search", SearchJobNodesAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			   .WithName("SearchJobNodes")
-			   .WithSummary("Search every node's description for a case-insensitive substring match, paged (offset/pageSize).")
-			   .Produces<PagedResponse<JobNodeSummaryResponse>>()
-			   .ProducesProblem(StatusCodes.Status400BadRequest)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized);
-
-		_ = api.MapGet("/jobs/{nodeId:long}", GetJobNodeAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			   .WithName("GetJobNode")
-			   .WithSummary("Get a node's full detail and root-first ancestor breadcrumb.")
-			   .Produces<JobNodeDetailResponse>()
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status404NotFound);
-
-		_ = api.MapGet("/jobs/{nodeId:long}/children", GetJobChildrenAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			   .WithName("GetJobChildren")
-			   .WithSummary("Get a node's direct children, filtered by owner and archive scope, paged (offset/pageSize).")
-			   .Produces<PagedResponse<JobNodeSummaryResponse>>()
-			   .ProducesProblem(StatusCodes.Status400BadRequest)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status404NotFound);
-
-		_ = api.MapGet("/jobs/{nodeId:long}/readiness", GetReadinessAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			   .WithName("GetJobReadiness")
-			   .WithSummary("Get whether a node's prerequisites are satisfied, and the diagnostic set of blockers if not.")
-			   .Produces<ReadinessResponse>()
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status404NotFound);
-
-		_ = api.MapGet("/jobs/{nodeId:long}/prerequisites", GetPrerequisitesAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			   .WithName("GetPrerequisites")
-			   .WithSummary("Get every prerequisite edge touching a node, in either direction, paged (offset/pageSize).")
-			   .Produces<PagedResponse<PrerequisiteEdgeResponse>>()
-			   .ProducesProblem(StatusCodes.Status400BadRequest)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status404NotFound);
-
-		_ = api.MapGet("/jobs/{nodeId:long}/subtree", GetJobSubtreeAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
-			   .WithName("GetJobSubtree")
-			   .WithSummary(
-				   "Get a bounded multi-level subtree rooted at a node (depth/breadth-capped, ADR 0039); " +
-				   "the cost roll-up is included only when the actor may view it (ADR 0040), never a whole-request denial.")
-			   .Produces<JobSubtreeResponse>()
-			   .ProducesProblem(StatusCodes.Status400BadRequest)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status404NotFound);
-	}
-
-	private static void MapJobWriteEndpoints(this RouteGroupBuilder api)
-	{
-		_ = api.MapPost("/jobs/{nodeId:long}/pickup", PickUpJobNodeAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			   .AddEndpointFilter<AntiforgeryValidationFilter>()
-			   .WithName("PickUpJobNode")
-			   .WithSummary("Claim an unassigned node from the pickup pool, setting its direct owner to the acting user.")
-			   .Produces<JobNodeResponse>()
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status403Forbidden)
-			   .ProducesProblem(StatusCodes.Status404NotFound)
-			   .ProducesProblem(StatusCodes.Status409Conflict);
-
-		_ = api.MapPost("/jobs/{nodeId:long}/prerequisites", AddPrerequisiteAsync)
-			   .WithStandardWriteContract(
-				   JobTrackPolicyNames.JobWorkflow,
-				   "AddPrerequisite",
-				   "Add a prerequisite edge: the given job must reach Success before this node is ready.")
-			   .Produces(StatusCodes.Status204NoContent);
-
-		_ = api.MapDelete("/jobs/{nodeId:long}/prerequisites/{requiredJobId:long}", RemovePrerequisiteAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
-			   .AddEndpointFilter<AntiforgeryValidationFilter>()
-			   .WithName("RemovePrerequisite")
-			   .WithSummary("Remove a prerequisite edge.")
-			   .Produces(StatusCodes.Status204NoContent)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status403Forbidden)
-			   .ProducesProblem(StatusCodes.Status404NotFound);
 	}
 }

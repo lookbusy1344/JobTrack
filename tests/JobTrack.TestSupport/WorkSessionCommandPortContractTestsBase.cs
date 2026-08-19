@@ -1,13 +1,9 @@
 namespace JobTrack.TestSupport;
 
-using System.Data.Common;
-using System.Globalization;
 using Abstractions;
-using Application;
 using Application.Ports;
 using AwesomeAssertions;
 using Database;
-using Microsoft.EntityFrameworkCore;
 using NodaTime;
 
 /// <summary>
@@ -1403,5 +1399,4 @@ public abstract partial class WorkSessionCommandPortContractTestsBase : IAsyncLi
 		stored.Should().ContainSingle().Which.IsActive.Should()
 			  .BeTrue("the rejected write-up change must roll the whole pause back");
 	}
-
 }

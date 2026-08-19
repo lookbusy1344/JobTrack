@@ -42,7 +42,7 @@ internal sealed class PostgreSqlCostQueryPort : ICostQueryPort
 	public PostgreSqlCostQueryPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
-		this.clock = new MicrosecondTruncatingClock(clock);
+		this.clock = new(clock);
 	}
 
 	/// <summary>Test-only seam for asserting bulk-query command and connection bounds.</summary>

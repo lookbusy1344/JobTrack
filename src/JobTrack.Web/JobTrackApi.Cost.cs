@@ -89,6 +89,31 @@ internal static partial class JobTrackApi
 			TzdbVersion = result.TzdbVersion,
 		};
 
+	private static void MapCostEndpoints(this RouteGroupBuilder api)
+	{
+		_ = api.MapGet("/jobs/{nodeId:long}/cost", GetCostDetailsAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
+			   .WithName("GetCostDetails")
+			   .WithSummary("Get one node's exact and displayed cost, with its rate-provenance segment trace (bounded; see plan §3.1).")
+			   .Produces<CostDetailsResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+		_ = api.MapGet("/jobs/{nodeId:long}/cost/hierarchy", GetHierarchyTotalsAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
+			   .WithName("GetHierarchyTotals")
+			   .WithSummary("Get reconciled cost totals for a node and its entire subtree (bounded; see plan §3.1).")
+			   .Produces<HierarchyTotalsResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+	}
+
 	internal sealed class CostDetailsResponse
 	{
 		public required long NodeId { get; init; }
@@ -147,30 +172,5 @@ internal static partial class JobTrackApi
 		public required decimal DisplayedCost { get; init; }
 
 		public required decimal AllocatedHours { get; init; }
-	}
-
-	private static void MapCostEndpoints(this RouteGroupBuilder api)
-	{
-		_ = api.MapGet("/jobs/{nodeId:long}/cost", GetCostDetailsAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
-			   .WithName("GetCostDetails")
-			   .WithSummary("Get one node's exact and displayed cost, with its rate-provenance segment trace (bounded; see plan §3.1).")
-			   .Produces<CostDetailsResponse>()
-			   .ProducesProblem(StatusCodes.Status400BadRequest)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status403Forbidden)
-			   .ProducesProblem(StatusCodes.Status404NotFound)
-			   .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
-		_ = api.MapGet("/jobs/{nodeId:long}/cost/hierarchy", GetHierarchyTotalsAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
-			   .WithName("GetHierarchyTotals")
-			   .WithSummary("Get reconciled cost totals for a node and its entire subtree (bounded; see plan §3.1).")
-			   .Produces<HierarchyTotalsResponse>()
-			   .ProducesProblem(StatusCodes.Status400BadRequest)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status403Forbidden)
-			   .ProducesProblem(StatusCodes.Status404NotFound)
-			   .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 	}
 }

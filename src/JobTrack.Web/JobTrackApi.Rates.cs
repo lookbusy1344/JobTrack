@@ -154,6 +154,43 @@ internal static partial class JobTrackApi
 			Version = result.Version,
 		};
 
+	private static void MapRateEndpoints(this RouteGroupBuilder api)
+	{
+		_ = api.MapGet("/employees/{userId:long}/rates", GetRatesAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
+			   .WithName("GetEmployeeRates")
+			   .WithSummary("Get one employee's user cost rates and node rate overrides (bounded; see plan §3.1).")
+			   .Produces<RatesResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates", AddUserCostRateAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite, "AddUserCostRate", "Add an effective-dated user cost rate for one employee.")
+			   .Produces<UserCostRateResponse>(StatusCodes.Status201Created);
+
+		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides", AddNodeRateOverrideAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite, "AddNodeRateOverride", "Add an effective-dated node rate override for one employee.")
+			   .Produces<NodeRateOverrideResponse>(StatusCodes.Status201Created);
+
+		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates/{rateId:long}/correct", CorrectUserCostRateAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite,
+				   "CorrectUserCostRate",
+				   "Correct a historical user cost rate's effective range and amount, with an audited reason.")
+			   .Produces<UserCostRateResponse>();
+
+		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides/{overrideId:long}/correct", CorrectNodeRateOverrideAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RateWrite,
+				   "CorrectNodeRateOverride",
+				   "Correct a historical node rate override's effective range and amount, with an audited reason.")
+			   .Produces<NodeRateOverrideResponse>();
+	}
+
 	internal sealed class RatesResponse
 	{
 		public required UserCostRateResponse[] UserCostRates { get; init; }
@@ -243,42 +280,5 @@ internal static partial class JobTrackApi
 		[Required] public required string Reason { get; init; }
 
 		public required long Version { get; init; }
-	}
-
-	private static void MapRateEndpoints(this RouteGroupBuilder api)
-	{
-		_ = api.MapGet("/employees/{userId:long}/rates", GetRatesAsync)
-			   .RequireAuthorization(JobTrackPolicyNames.RateRead)
-			   .WithName("GetEmployeeRates")
-			   .WithSummary("Get one employee's user cost rates and node rate overrides (bounded; see plan §3.1).")
-			   .Produces<RatesResponse>()
-			   .ProducesProblem(StatusCodes.Status400BadRequest)
-			   .ProducesProblem(StatusCodes.Status401Unauthorized)
-			   .ProducesProblem(StatusCodes.Status403Forbidden)
-			   .ProducesProblem(StatusCodes.Status404NotFound);
-
-		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates", AddUserCostRateAsync)
-			   .WithStandardWriteContract(
-				   JobTrackPolicyNames.RateWrite, "AddUserCostRate", "Add an effective-dated user cost rate for one employee.")
-			   .Produces<UserCostRateResponse>(StatusCodes.Status201Created);
-
-		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides", AddNodeRateOverrideAsync)
-			   .WithStandardWriteContract(
-				   JobTrackPolicyNames.RateWrite, "AddNodeRateOverride", "Add an effective-dated node rate override for one employee.")
-			   .Produces<NodeRateOverrideResponse>(StatusCodes.Status201Created);
-
-		_ = api.MapPost("/employees/{userId:long}/rates/user-cost-rates/{rateId:long}/correct", CorrectUserCostRateAsync)
-			   .WithStandardWriteContract(
-				   JobTrackPolicyNames.RateWrite,
-				   "CorrectUserCostRate",
-				   "Correct a historical user cost rate's effective range and amount, with an audited reason.")
-			   .Produces<UserCostRateResponse>();
-
-		_ = api.MapPost("/employees/{userId:long}/rates/node-rate-overrides/{overrideId:long}/correct", CorrectNodeRateOverrideAsync)
-			   .WithStandardWriteContract(
-				   JobTrackPolicyNames.RateWrite,
-				   "CorrectNodeRateOverride",
-				   "Correct a historical node rate override's effective range and amount, with an audited reason.")
-			   .Produces<NodeRateOverrideResponse>();
 	}
 }

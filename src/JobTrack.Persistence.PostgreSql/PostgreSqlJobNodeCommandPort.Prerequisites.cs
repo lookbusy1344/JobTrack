@@ -1,11 +1,8 @@
 namespace JobTrack.Persistence.PostgreSql;
 
 using System.Globalization;
-using System.Text.Json;
 using Abstractions;
 using Application;
-using Application.Ports;
-using Domain.Authorization;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Npgsql;

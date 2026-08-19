@@ -6,10 +6,6 @@ using System.Text.RegularExpressions;
 using Abstractions;
 using Application;
 using AwesomeAssertions;
-using Domain.Schedules;
-using Microsoft.Data.Sqlite;
-using NodaTime;
-using Persistence.Sqlite;
 using TestSupport;
 
 public sealed partial class LeafWorkTests

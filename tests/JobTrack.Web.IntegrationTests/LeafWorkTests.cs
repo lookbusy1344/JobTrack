@@ -1,6 +1,5 @@
 namespace JobTrack.Web.IntegrationTests;
 
-using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
@@ -1285,5 +1284,4 @@ public sealed partial class LeafWorkTests : IAsyncLifetime, IDisposable
 		body.Should().NotContain(">Mark unsuccessful</button>");
 		body.Should().Contain("A controlling owner, Job Manager, or Administrator can start work on this job.");
 	}
-
 }

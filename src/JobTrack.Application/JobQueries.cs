@@ -546,17 +546,6 @@ internal sealed partial class JobQueries : IJobQueries
 		}
 	}
 
-	private sealed record SubtreeCostTotals
-	{
-		public static SubtreeCostTotals Empty { get; } = new();
-
-		public Money? RootTotal { get; init; }
-		public AllocatedDuration? RootAllocatedDuration { get; init; }
-		public string? TzdbVersion { get; init; }
-		public EquatableDictionary<JobNodeId, Money>? DisplayedCosts { get; init; }
-		public EquatableDictionary<JobNodeId, AllocatedDuration>? AllocatedDurations { get; init; }
-	}
-
 	/// <summary>
 	///     Gated on <see cref="EmployeeRole.Administrator" /> rather than the baseline browse admission
 	///     every other job read uses: this is the preview of an irreversible administrator-only command
@@ -904,4 +893,15 @@ internal sealed partial class JobQueries : IJobQueries
 					NodeRateOverrides = result.NodeRateOverrides,
 				};
 			});
+
+	private sealed record SubtreeCostTotals
+	{
+		public static SubtreeCostTotals Empty { get; } = new();
+
+		public Money? RootTotal { get; init; }
+		public AllocatedDuration? RootAllocatedDuration { get; init; }
+		public string? TzdbVersion { get; init; }
+		public EquatableDictionary<JobNodeId, Money>? DisplayedCosts { get; init; }
+		public EquatableDictionary<JobNodeId, AllocatedDuration>? AllocatedDurations { get; init; }
+	}
 }

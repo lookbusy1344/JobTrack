@@ -745,6 +745,7 @@ public abstract class JobBrowseBrowserTestsBase
 				HasTextString = "Responsive active worker leaf",
 			}).First;
 		}
+
 		(await phoneRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
 		(await phoneActivePill.IsVisibleAsync()).Should().BeTrue();
 		(await phoneActivePill.GetAttributeAsync("title")).Should().Be($"{RequiredSimultaneousWorkerCount} active");

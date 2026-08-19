@@ -22,6 +22,6 @@ internal sealed class MicrosecondTruncatingClock(IClock inner) : IClock
 	public Instant GetCurrentInstant()
 	{
 		var ticks = inner.GetCurrentInstant().ToUnixTimeTicks();
-		return Instant.FromUnixTimeTicks(ticks - (ticks % TicksPerMicrosecond));
+		return Instant.FromUnixTimeTicks(ticks - ticks % TicksPerMicrosecond);
 	}
 }

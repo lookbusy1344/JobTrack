@@ -42,7 +42,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 	internal PostgreSqlAchievementCommandPort(NpgsqlDataSource dataSource, IClock clock, IReadOnlyList<IInterceptor> interceptors)
 	{
 		this.dataSource = dataSource;
-		this.clock = new MicrosecondTruncatingClock(clock);
+		this.clock = new(clock);
 		this.interceptors = interceptors;
 	}
 

@@ -1,19 +1,11 @@
 namespace JobTrack.Web.Pages.Jobs;
 
-using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Abstractions;
 using Application;
 using Domain.Costing;
 using Domain.Hierarchy;
-using Identity;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using NodaTime;
 
 public sealed partial class BrowseModel
 {

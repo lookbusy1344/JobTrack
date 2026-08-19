@@ -1,12 +1,10 @@
 namespace JobTrack.Application.Tests;
 
-using System.Diagnostics;
 using Abstractions;
 using AwesomeAssertions;
 using Domain.Costing;
 using Domain.Hierarchy;
 using NodaTime;
-using TestSupport;
 
 public sealed partial class JobQueriesTests
 {

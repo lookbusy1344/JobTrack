@@ -21,9 +21,9 @@ public sealed class CodeStyle_FileLength
 	{
 		var solutionRoot = RepositoryPaths.SolutionRoot();
 		var violations = RepositorySourceFiles.CSharpAndRazor()
-			.Select(file => FileLengthGuard.FindViolation(solutionRoot, file, FileLengthGuard.LineCount(file, File.ReadAllText(file))))
-			.Where(static violation => violation is not null)
-			.ToArray();
+											  .Select(file => FileLengthGuard.FindViolation(solutionRoot, file, FileLengthGuard.LineCount(file, File.ReadAllText(file))))
+											  .Where(static violation => violation is not null)
+											  .ToArray();
 
 		violations.Should().BeEmpty(
 			"overlong source files should be divided along cohesive type, capability, or scenario boundaries:{0}{1}",
@@ -35,17 +35,17 @@ public sealed class CodeStyle_FileLength
 	public void Blank_and_comment_lines_do_not_count_towards_a_CSharp_file()
 	{
 		var source = """
-			namespace Example;
+					 namespace Example;
 
-			/// <summary>
-			///     Documentation occupies no code line.
-			/// </summary>
-			internal sealed class Example
-			{
-				// Nor does an explanation.
-				public int Value => 1; /* nor a trailing block comment */
-			}
-			""";
+					 /// <summary>
+					 ///     Documentation occupies no code line.
+					 /// </summary>
+					 internal sealed class Example
+					 {
+					 	// Nor does an explanation.
+					 	public int Value => 1; /* nor a trailing block comment */
+					 }
+					 """;
 
 		FileLengthGuard.LineCount("Example.cs", source).Should().Be(5);
 	}
@@ -84,14 +84,14 @@ public sealed class CodeStyle_FileLength
 		var violation = FileLengthGuard.FindViolation("/repo", Path.Combine("/repo", relativePath), maximum + 1);
 
 		violation.Should().Contain(relativePath.Replace(Path.DirectorySeparatorChar, '/'))
-			.And.Contain($"{maximum + 1} lines")
-			.And.Contain($"maximum is {maximum}");
+				 .And.Contain($"{maximum + 1} lines")
+				 .And.Contain($"maximum is {maximum}");
 	}
 
 	[Fact]
 	public void Test_CSharp_file_carries_the_looser_test_ceiling() =>
 		FileLengthGuard.FindViolation("/repo", "/repo/tests/Example.cs", FileLengthGuard.MaxTestCSharpLineCount)
-			.Should().BeNull();
+					   .Should().BeNull();
 }
 
 internal static class FileLengthGuard
@@ -110,8 +110,8 @@ internal static class FileLengthGuard
 	public static string? FindViolation(string solutionRoot, string fileName, int lineCount)
 	{
 		var relativePath = Path.GetRelativePath(solutionRoot, fileName)
-			.Replace(Path.DirectorySeparatorChar, '/')
-			.Replace(Path.AltDirectorySeparatorChar, '/');
+							   .Replace(Path.DirectorySeparatorChar, '/')
+							   .Replace(Path.AltDirectorySeparatorChar, '/');
 		var maximum = MaximumFor(relativePath);
 
 		if (!maximum.HasValue || lineCount <= maximum.Value) {
@@ -151,12 +151,12 @@ internal static class FileLengthGuard
 	}
 
 	private static int CodeLineCount(string source) => CSharpSyntaxTree.ParseText(source)
-		.GetRoot()
-		.DescendantTokens()
-		.Where(static token => !token.IsKind(SyntaxKind.EndOfFileToken))
-		.SelectMany(static token => LinesOccupiedBy(token))
-		.Distinct()
-		.Count();
+																	   .GetRoot()
+																	   .DescendantTokens()
+																	   .Where(static token => !token.IsKind(SyntaxKind.EndOfFileToken))
+																	   .SelectMany(static token => LinesOccupiedBy(token))
+																	   .Distinct()
+																	   .Count();
 
 	private static IEnumerable<int> LinesOccupiedBy(SyntaxToken token)
 	{

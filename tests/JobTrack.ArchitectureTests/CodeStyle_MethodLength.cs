@@ -12,8 +12,8 @@ public sealed class CodeStyle_MethodLength
 	public void Repository_methods_do_not_exceed_the_line_count_guideline()
 	{
 		var violations = RepositorySourceFiles.CSharpAndRazor()
-			.SelectMany(static file => MethodLengthGuard.FindViolations(file, File.ReadAllText(file)))
-			.ToArray();
+											  .SelectMany(static file => MethodLengthGuard.FindViolations(file, File.ReadAllText(file)))
+											  .ToArray();
 
 		violations.Should().BeEmpty(
 			"a method over {0} executable lines should be decomposed or carry a reviewed " +
@@ -37,26 +37,26 @@ public sealed class CodeStyle_MethodLength
 		var source = MethodWithExecutableLines(MethodLengthGuard.MaxLineCount + 1);
 
 		MethodLengthGuard.FindViolations("Example.cs", source)
-			.Should().ContainSingle()
-			.Which.Should().Contain("Example.Method")
-			.And.Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
+						 .Should().ContainSingle()
+						 .Which.Should().Contain("Example.Method")
+						 .And.Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
 	}
 
 	[Fact]
 	public void Blank_and_comment_only_lines_do_not_count_as_executable_lines()
 	{
 		var source = """
-			internal sealed class Example
-			{
-				public void Method()
-				{
-					// This explanation does not add an executable line.
+					 internal sealed class Example
+					 {
+					 	public void Method()
+					 	{
+					 		// This explanation does not add an executable line.
 
-					_ = 1;
-					/* Nor does this one. */
-				}
-			}
-			""";
+					 		_ = 1;
+					 		/* Nor does this one. */
+					 	}
+					 }
+					 """;
 
 		MethodLengthGuard.ExecutableLineCount(source).Should().Be(1);
 	}
@@ -77,11 +77,11 @@ public sealed class CodeStyle_MethodLength
 	public void Method_carrying_imported_LongMethodAttribute_is_excluded_from_the_scan()
 	{
 		var source = MethodWithExecutableLines(MethodLengthGuard.MaxLineCount + 1)
-			.Replace(
-				"namespace Example;",
-				"namespace Example;\n\nusing JobTrack.Abstractions.CodeStyle;",
-				StringComparison.Ordinal)
-			.Replace("public void Method()", "[LongMethod(\"Reviewed fixture.\")]\n\tpublic void Method()", StringComparison.Ordinal);
+					 .Replace(
+						 "namespace Example;",
+						 "namespace Example;\n\nusing JobTrack.Abstractions.CodeStyle;",
+						 StringComparison.Ordinal)
+					 .Replace("public void Method()", "[LongMethod(\"Reviewed fixture.\")]\n\tpublic void Method()", StringComparison.Ordinal);
 
 		MethodLengthGuard.FindViolations("Example.cs", source).Should().BeEmpty();
 	}
@@ -93,9 +93,9 @@ public sealed class CodeStyle_MethodLength
 		var source = $"@functions {{{Environment.NewLine}{method}{Environment.NewLine}}}";
 
 		MethodLengthGuard.FindViolations("Example.cshtml", source)
-			.Should().ContainSingle()
-			.Which.Should().Contain("Method")
-			.And.Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
+						 .Should().ContainSingle()
+						 .Which.Should().Contain("Method")
+						 .And.Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
 	}
 
 	[Fact]
@@ -123,14 +123,14 @@ public sealed class CodeStyle_MethodLength
 			Environment.NewLine,
 			Enumerable.Range(1, MethodLengthGuard.MaxLineCount + 1).Select(static value => $"\t_ = {value};"));
 		var source = $$"""
-			@{
-			{{statements}}
-			}
-			""";
+					   @{
+					   {{statements}}
+					   }
+					   """;
 
 		MethodLengthGuard.FindViolations("Example.cshtml", source)
-			.Should().ContainSingle()
-			.Which.Should().Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
+						 .Should().ContainSingle()
+						 .Which.Should().Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
 	}
 
 	[Fact]
@@ -140,25 +140,25 @@ public sealed class CodeStyle_MethodLength
 			$",{Environment.NewLine}",
 			Enumerable.Range(1, MethodLengthGuard.MaxLineCount + 1));
 		var source = $$"""
-			internal class Base
-			{
-				protected Base(params int[] values)
-				{
-				}
-			}
+					   internal class Base
+					   {
+					   	protected Base(params int[] values)
+					   	{
+					   	}
+					   }
 
-			internal sealed class Example : Base
-			{
-				public Example() : base({{arguments}})
-				{
-				}
-			}
-			""";
+					   internal sealed class Example : Base
+					   {
+					   	public Example() : base({{arguments}})
+					   	{
+					   	}
+					   }
+					   """;
 
 		MethodLengthGuard.FindViolations("Example.cs", source)
-			.Should().ContainSingle()
-			.Which.Should().Contain("Example.Example")
-			.And.Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
+						 .Should().ContainSingle()
+						 .Which.Should().Contain("Example.Example")
+						 .And.Contain($"{MethodLengthGuard.MaxLineCount + 1} executable lines");
 	}
 
 	[Fact]
@@ -168,22 +168,22 @@ public sealed class CodeStyle_MethodLength
 			Environment.NewLine,
 			Enumerable.Range(1, MethodLengthGuard.MaxLineCount + 1).Select(static value => $"\t\t\t_ = {value};"));
 		var source = $$"""
-			internal sealed class Example
-			{
-				public void Method()
-				{
-					_ = 0;
-					void Local()
-					{
-			{{statements}}
-					}
-				}
-			}
-			""";
+					   internal sealed class Example
+					   {
+					   	public void Method()
+					   	{
+					   		_ = 0;
+					   		void Local()
+					   		{
+					   {{statements}}
+					   		}
+					   	}
+					   }
+					   """;
 
 		MethodLengthGuard.FindViolations("Example.cs", source)
-			.Should().ContainSingle()
-			.Which.Should().Contain("Example.Local");
+						 .Should().ContainSingle()
+						 .Which.Should().Contain("Example.Local");
 	}
 
 	[Fact]
@@ -198,11 +198,11 @@ public sealed class CodeStyle_MethodLength
 	public void Unrelated_LongMethodAttribute_does_not_exempt_a_method()
 	{
 		var source = MethodWithExecutableLines(MethodLengthGuard.MaxLineCount + 1)
-			.Replace(
-				"internal sealed class Example",
-				"internal sealed class LongMethodAttribute(string reason) : System.Attribute;\n\ninternal sealed class Example",
-				StringComparison.Ordinal)
-			.Replace("public void Method()", "[LongMethod(\"Not the reviewed attribute.\")]\n\tpublic void Method()", StringComparison.Ordinal);
+					 .Replace(
+						 "internal sealed class Example",
+						 "internal sealed class LongMethodAttribute(string reason) : System.Attribute;\n\ninternal sealed class Example",
+						 StringComparison.Ordinal)
+					 .Replace("public void Method()", "[LongMethod(\"Not the reviewed attribute.\")]\n\tpublic void Method()", StringComparison.Ordinal);
 
 		MethodLengthGuard.FindViolations("Example.cs", source).Should().ContainSingle();
 	}
@@ -234,24 +234,24 @@ public sealed class CodeStyle_MethodLength
 	{
 		var method = MethodDeclarationWithExecutableLines(lineCount);
 		return $$"""
-			namespace Example;
+				 namespace Example;
 
-			internal sealed class Example
-			{
-			{{method}}
-			}
-			""";
+				 internal sealed class Example
+				 {
+				 {{method}}
+				 }
+				 """;
 	}
 
 	private static string MethodDeclarationWithExecutableLines(int lineCount)
 	{
 		var statements = string.Join(Environment.NewLine, Enumerable.Range(1, lineCount).Select(static value => $"\t\t_ = {value};"));
 		return $$"""
-				public void Method()
-				{
-			{{statements}}
-				}
-			""";
+				 	public void Method()
+				 	{
+				 {{statements}}
+				 	}
+				 """;
 	}
 }
 
@@ -270,26 +270,26 @@ internal static class MethodLengthGuard
 		var root = tree.GetRoot();
 		var semanticModel = CreateSemanticModel(tree);
 		return root.DescendantNodes()
-			.Where(IsExecutableUnit)
-			.Where(declaration => !HasReviewedException(declaration, semanticModel))
-			.Where(static declaration => Body(declaration) is not null)
-			.Select(static declaration => (Declaration: declaration, LineCount: ExecutableLineCount(declaration)))
-			.Where(static unit => unit.LineCount > MaxLineCount)
-			.Select(unit => Describe(fileName, unit.Declaration, unit.LineCount))
-			.Order(StringComparer.Ordinal);
+				   .Where(IsExecutableUnit)
+				   .Where(declaration => !HasReviewedException(declaration, semanticModel))
+				   .Where(static declaration => Body(declaration) is not null)
+				   .Select(static declaration => (Declaration: declaration, LineCount: ExecutableLineCount(declaration)))
+				   .Where(static unit => unit.LineCount > MaxLineCount)
+				   .Select(unit => Describe(fileName, unit.Declaration, unit.LineCount))
+				   .Order(StringComparer.Ordinal);
 	}
 
 	private static IEnumerable<string> FindRazorViolations(string fileName, RazorCSharpDocument document)
 	{
 		var semanticModel = CreateSemanticModel(document.Root.SyntaxTree);
 		return document.Root.DescendantNodes()
-			.Where(IsExecutableUnit)
-			.Where(declaration => !HasReviewedException(declaration, semanticModel))
-			.Where(static declaration => Body(declaration) is not null)
-			.SelectMany(declaration => RazorExecutableUnits(document, declaration))
-			.Where(static unit => unit.LineCount > MaxLineCount)
-			.Select(unit => Describe(fileName, unit.Declaration, unit.LineCount, unit.Line))
-			.Order(StringComparer.Ordinal);
+					   .Where(IsExecutableUnit)
+					   .Where(declaration => !HasReviewedException(declaration, semanticModel))
+					   .Where(static declaration => Body(declaration) is not null)
+					   .SelectMany(declaration => RazorExecutableUnits(document, declaration))
+					   .Where(static unit => unit.LineCount > MaxLineCount)
+					   .Select(unit => Describe(fileName, unit.Declaration, unit.LineCount, unit.Line))
+					   .Order(StringComparer.Ordinal);
 	}
 
 	public static int ExecutableLineCount(string source)
@@ -330,9 +330,9 @@ internal static class MethodLengthGuard
 	};
 
 	private static int ExecutableLineCount(SyntaxNode declaration) => ExecutableTokens(declaration)
-		.SelectMany(static token => LinesOccupiedBy(token))
-		.Distinct()
-		.Count();
+																	  .SelectMany(static token => LinesOccupiedBy(token))
+																	  .Distinct()
+																	  .Count();
 
 	private static SyntaxToken[] ExecutableTokens(SyntaxNode declaration)
 	{
@@ -343,8 +343,8 @@ internal static class MethodLengthGuard
 			: [];
 
 		return bodyTokens.Concat(initializerTokens)
-		.Where(static token => !token.IsKind(SyntaxKind.OpenBraceToken) && !token.IsKind(SyntaxKind.CloseBraceToken))
-			.ToArray();
+						 .Where(static token => !token.IsKind(SyntaxKind.OpenBraceToken) && !token.IsKind(SyntaxKind.CloseBraceToken))
+						 .ToArray();
 	}
 
 	private static IEnumerable<int> LinesOccupiedBy(SyntaxToken token)
@@ -356,8 +356,8 @@ internal static class MethodLengthGuard
 	}
 
 	private static bool HasReviewedException(SyntaxNode declaration, SemanticModel semanticModel) => AttributeLists(declaration)
-		.SelectMany(static list => list.Attributes)
-		.Any(attribute => IsReviewedLongMethodAttribute(attribute, semanticModel));
+																									 .SelectMany(static list => list.Attributes)
+																									 .Any(attribute => IsReviewedLongMethodAttribute(attribute, semanticModel));
 
 	private static SyntaxList<AttributeListSyntax> AttributeLists(SyntaxNode declaration) => declaration switch {
 		BaseMethodDeclarationSyntax method => method.AttributeLists,
@@ -371,9 +371,9 @@ internal static class MethodLengthGuard
 		var constructor = semanticModel.GetSymbolInfo(attribute).Symbol as IMethodSymbol;
 		var expectedType = semanticModel.Compilation.GetTypeByMetadataName(typeof(LongMethodAttribute).FullName!);
 		if (constructor is null || expectedType is null
-			|| !SymbolEqualityComparer.Default.Equals(constructor.ContainingType, expectedType)
-			|| attribute.ArgumentList is not AttributeArgumentListSyntax arguments
-			|| arguments.Arguments.Count != 1) {
+								|| !SymbolEqualityComparer.Default.Equals(constructor.ContainingType, expectedType)
+								|| attribute.ArgumentList is not AttributeArgumentListSyntax arguments
+								|| arguments.Arguments.Count != 1) {
 			return false;
 		}
 
@@ -384,7 +384,7 @@ internal static class MethodLengthGuard
 	private static SemanticModel CreateSemanticModel(SyntaxTree tree)
 	{
 		var runtimeDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location)
-			?? throw new InvalidOperationException("The runtime assembly has no containing directory.");
+							   ?? throw new InvalidOperationException("The runtime assembly has no containing directory.");
 		var compilation = CSharpCompilation.Create(
 			nameof(MethodLengthGuard),
 			[tree],
@@ -393,7 +393,7 @@ internal static class MethodLengthGuard
 				MetadataReference.CreateFromFile(Path.Combine(runtimeDirectory, "System.Runtime.dll")),
 				MetadataReference.CreateFromFile(typeof(LongMethodAttribute).Assembly.Location),
 			],
-			new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+			new(OutputKind.DynamicallyLinkedLibrary));
 		return compilation.GetSemanticModel(tree);
 	}
 

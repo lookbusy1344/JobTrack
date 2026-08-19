@@ -37,7 +37,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 	public PostgreSqlJobRequestCommandPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
-		this.clock = new MicrosecondTruncatingClock(clock);
+		this.clock = new(clock);
 	}
 
 	/// <inheritdoc />

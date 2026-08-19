@@ -23,7 +23,7 @@ internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstr
 	public PostgreSqlInstallationBootstrapPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
-		this.clock = new MicrosecondTruncatingClock(clock);
+		this.clock = new(clock);
 	}
 
 	/// <inheritdoc />

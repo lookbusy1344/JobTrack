@@ -4,8 +4,6 @@ using System.Data;
 using System.Globalization;
 using Abstractions;
 using Application;
-using Application.Ports;
-using Domain.Authorization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;

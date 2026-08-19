@@ -5,7 +5,6 @@ using Domain.Authorization;
 using Domain.Costing;
 using Domain.Hierarchy;
 using NodaTime;
-using Ports;
 
 internal sealed partial class JobQueries
 {

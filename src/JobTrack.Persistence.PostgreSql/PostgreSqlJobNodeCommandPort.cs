@@ -50,7 +50,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	{
 		this.dataSource = dataSource;
 		this.historyDeletionDataSource = historyDeletionDataSource;
-		this.clock = new MicrosecondTruncatingClock(clock);
+		this.clock = new(clock);
 	}
 
 	/// <inheritdoc />
