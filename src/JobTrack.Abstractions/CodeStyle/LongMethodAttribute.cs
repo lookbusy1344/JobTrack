@@ -1,4 +1,4 @@
-namespace JobTrack.Abstractions;
+namespace JobTrack.Abstractions.CodeStyle;
 
 /// <summary>
 ///     Marks a method-like declaration as a reviewed exception to the executable-line guideline

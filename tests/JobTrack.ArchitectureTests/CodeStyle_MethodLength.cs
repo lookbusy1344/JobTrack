@@ -1,6 +1,6 @@
 namespace JobTrack.ArchitectureTests;
 
-using Abstractions;
+using Abstractions.CodeStyle;
 using AwesomeAssertions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -67,7 +67,7 @@ public sealed class CodeStyle_MethodLength
 		var method = MethodWithExecutableLines(MethodLengthGuard.MaxLineCount + 1);
 		var source = method.Replace(
 			"public void Method()",
-			"[JobTrack.Abstractions.LongMethod(\"Reviewed fixture.\")]\n\tpublic void Method()",
+			"[JobTrack.Abstractions.CodeStyle.LongMethod(\"Reviewed fixture.\")]\n\tpublic void Method()",
 			StringComparison.Ordinal);
 
 		MethodLengthGuard.FindViolations("Example.cs", source).Should().BeEmpty();

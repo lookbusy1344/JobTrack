@@ -2,6 +2,7 @@ namespace JobTrack.TestSupport;
 
 using System.Data.Common;
 using Abstractions;
+using Abstractions.CodeStyle;
 using Application;
 using Application.Ports;
 using AwesomeAssertions;

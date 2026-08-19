@@ -1,4 +1,4 @@
-namespace JobTrack.Abstractions;
+namespace JobTrack.Abstractions.CodeStyle;
 
 /// <summary>
 ///     Marks a struct/record struct as a reviewed exception to the house 24-byte size guideline

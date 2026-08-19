@@ -1,6 +1,6 @@
 namespace JobTrack.Domain.Intervals;
 
-using Abstractions;
+using Abstractions.CodeStyle;
 using NodaTime;
 
 /// <summary>

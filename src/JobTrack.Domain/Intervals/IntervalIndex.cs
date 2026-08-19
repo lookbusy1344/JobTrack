@@ -1,7 +1,7 @@
 namespace JobTrack.Domain.Intervals;
 
 using System.Collections;
-using Abstractions;
+using Abstractions.CodeStyle;
 
 /// <summary>
 ///     A search structure over a fixed set of <see cref="WorkInterval" />s, built once and queried many

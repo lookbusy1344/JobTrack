@@ -2,6 +2,7 @@ namespace JobTrack.Persistence.PostgreSql;
 
 using System.Data;
 using Abstractions;
+using Abstractions.CodeStyle;
 using Application;
 using Application.Ports;
 using Domain.Costing;

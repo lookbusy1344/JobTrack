@@ -1,6 +1,7 @@
 namespace JobTrack.Web.EndToEndTests;
 
 using Abstractions;
+using Abstractions.CodeStyle;
 using Application;
 using AwesomeAssertions;
 using Database;

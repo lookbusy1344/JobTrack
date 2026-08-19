@@ -7,7 +7,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
-using Abstractions;
+using Abstractions.CodeStyle;
 using AwesomeAssertions;
 using TestSupport;
 
@@ -29,7 +29,7 @@ using TestSupport;
 ///         an engineer can redesign. A struct authored on purpose above the ceiling — e.g.
 ///         <c>WorkInterval</c>, the
 ///         domain's core interval primitive, or a zero-allocation <c>foreach</c> enumerator — carries
-///         <see cref="LargeStructAttribute" /> (<c>JobTrack.Abstractions</c>) with its own reviewed
+///         <see cref="LargeStructAttribute" /> (<c>JobTrack.Abstractions.CodeStyle</c>) with its own reviewed
 ///         justification, the same "earns its place only by review" rule
 ///         <c>MutableConstantTableArchitectureTests</c> applies to its own allowlist, just attached to
 ///         the type instead of listed in this file.

@@ -3,6 +3,7 @@ namespace JobTrack.UatSeed;
 using System.Data.Common;
 using System.Globalization;
 using Abstractions;
+using Abstractions.CodeStyle;
 using Application;
 using Domain.Schedules;
 using NodaTime;

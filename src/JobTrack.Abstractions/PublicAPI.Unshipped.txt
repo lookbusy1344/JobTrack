@@ -1,7 +1,7 @@
 #nullable enable
-JobTrack.Abstractions.LargeStructAttribute
-JobTrack.Abstractions.LargeStructAttribute.LargeStructAttribute(string! reason) -> void
-JobTrack.Abstractions.LargeStructAttribute.Reason.get -> string!
-JobTrack.Abstractions.LongMethodAttribute
-JobTrack.Abstractions.LongMethodAttribute.LongMethodAttribute(string! reason) -> void
-JobTrack.Abstractions.LongMethodAttribute.Reason.get -> string!
+JobTrack.Abstractions.CodeStyle.LargeStructAttribute
+JobTrack.Abstractions.CodeStyle.LargeStructAttribute.LargeStructAttribute(string! reason) -> void
+JobTrack.Abstractions.CodeStyle.LargeStructAttribute.Reason.get -> string!
+JobTrack.Abstractions.CodeStyle.LongMethodAttribute
+JobTrack.Abstractions.CodeStyle.LongMethodAttribute.LongMethodAttribute(string! reason) -> void
+JobTrack.Abstractions.CodeStyle.LongMethodAttribute.Reason.get -> string!
