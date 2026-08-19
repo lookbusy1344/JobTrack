@@ -48,8 +48,33 @@ internal sealed class RazorCSharpDocument
 	}
 
 	public int? OriginalLine(SyntaxNode node)
+		=> OriginalLine(node.SpanStart);
+
+	public int? OriginalLine(SyntaxToken token)
+		=> OriginalLine(token.SpanStart);
+
+	public IEnumerable<int> OriginalLines(SyntaxToken token)
 	{
-		var generatedPosition = node.SpanStart;
+		foreach (var mapping in generated.SourceMappingsSortedByGenerated) {
+			var generatedSpan = mapping.GeneratedSpan;
+			var overlapStart = Math.Max(token.SpanStart, generatedSpan.AbsoluteIndex);
+			var overlapEnd = Math.Min(token.Span.End, generatedSpan.AbsoluteIndex + generatedSpan.Length);
+			if (overlapStart >= overlapEnd) {
+				continue;
+			}
+
+			var originalStart = mapping.OriginalSpan.AbsoluteIndex + overlapStart - generatedSpan.AbsoluteIndex;
+			var originalEnd = mapping.OriginalSpan.AbsoluteIndex + overlapEnd - generatedSpan.AbsoluteIndex - 1;
+			var firstLine = generated.CodeDocument.Source.Text.Lines.GetLineFromPosition(originalStart).LineNumber + 1;
+			var lastLine = generated.CodeDocument.Source.Text.Lines.GetLineFromPosition(originalEnd).LineNumber + 1;
+			foreach (var line in Enumerable.Range(firstLine, lastLine - firstLine + 1)) {
+				yield return line;
+			}
+		}
+	}
+
+	private int? OriginalLine(int generatedPosition)
+	{
 		foreach (var mapping in generated.SourceMappingsSortedByGenerated) {
 			var generatedSpan = mapping.GeneratedSpan;
 			if (generatedPosition < generatedSpan.AbsoluteIndex

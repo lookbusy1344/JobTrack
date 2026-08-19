@@ -289,6 +289,15 @@ internal static class CostQueryAssembly
 			var ratesByWorker = userCostRates.ToLookup(rate => rate.UserId);
 
 			foreach (var workerId in workerIds) {
+				workers.Add(BuildWorkerInputs(workerId));
+			}
+
+			// NodeOverrides is filled in below, once ExtendAncestryAsync has determined the final node
+			// set (2026-07-25 scalability-follow-up plan §2.5: an override on a node outside that set can
+			// never be consulted by RateResolver, which only walks a session's own node and its
+			// ancestors -- see NodeOverrides' own remarks).
+			WorkerCostInputs BuildWorkerInputs(AppUserId workerId)
+			{
 				var workerSessions = sessionsByWorker[workerId]
 									 .Select(s => new CostableSession(s.Id, s.LeafWorkId, new(s.StartedAt, SessionEndClipping.ClipEnd(s.FinishedAt, asOf))))
 									 .ToArray();
@@ -316,11 +325,7 @@ internal static class CostQueryAssembly
 										  .Select(r => new UserCostRate(r.Rate, r.EffectiveStart, r.EffectiveEnd))
 										  .ToArray();
 
-				// NodeOverrides is filled in below, once ExtendAncestryAsync has determined the final
-				// node set (2026-07-25 scalability-follow-up plan §2.5: an override on a node outside
-				// that set can never be consulted by RateResolver, which only walks a session's own node
-				// and its ancestors -- see NodeOverrides' own remarks).
-				workers.Add(new() {
+				return new() {
 					Sessions = EquatableArray.CopyOf(workerSessions),
 					EffectiveWorkingIntervals = EquatableArray.CopyOf(effectiveWorkingIntervals),
 					ScheduledWorkingIntervals = EquatableArray.CopyOf(normalizedScheduled),
@@ -328,7 +333,7 @@ internal static class CostQueryAssembly
 					NodeOverrides = [],
 					UserCostRates = EquatableArray.CopyOf(workerUserCostRates),
 					UserDefaultRate = appUsersById.TryGetValue(workerId, out var appUser) ? appUser.DefaultHourlyRate : null,
-				});
+				};
 			}
 		}
 

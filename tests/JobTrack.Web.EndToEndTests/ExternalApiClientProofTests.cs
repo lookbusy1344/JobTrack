@@ -50,6 +50,7 @@ public sealed class ExternalApiClientProofTests
 			factory, database, SchemaProvider.PostgreSql);
 	}
 
+	[LongMethod("The end-to-end client proof is one linear protocol so both providers exercise the identical externally observable workflow in order.")]
 	private static async Task RunProofAsync(
 		Func<IJobTrackClient> createSeedClient, TestWebApplicationFactory factory, IDisposableTestDatabase database, SchemaProvider provider)
 	{

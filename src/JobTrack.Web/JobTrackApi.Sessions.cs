@@ -434,4 +434,72 @@ internal static partial class JobTrackApi
 
 		public required WorkSessionResponse Session { get; init; }
 	}
+
+	private static void MapSessionEndpoints(this RouteGroupBuilder api)
+	{
+		_ = api.MapGet("/jobs/{nodeId:long}/sessions", GetLeafSessionsAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .WithName("GetLeafSessions")
+			   .WithSummary("Get one worker's sessions on a leaf, most recent first, paged (offset/pageSize).")
+			   .Produces<PagedResponse<WorkSessionResponse>>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapPost("/jobs/{nodeId:long}/sessions", StartSessionAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "StartSession",
+				   "Start a new work session on a leaf. Calling this again for an already-active worker/leaf pair is how a UI \"resume\" action is expressed.")
+			   .Produces<WorkSessionResponse>(StatusCodes.Status201Created);
+
+		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/finish", FinishSessionAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "FinishSession",
+				   "Finish the active session. \"Pause\" and \"stop\" are UI descriptions of this same operation.")
+			   .Produces<WorkSessionResponse>();
+
+		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/finish-and-update-write-up", FinishSessionAndUpdateWriteUpAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "FinishSessionAndUpdateWriteUp",
+				   "Atomic composite (remediation plan §2.1): finish the active session and, optionally, apply a write-up change to its leaf's node, in one commit. The plain finish endpoint above remains for a caller with no write-up to change.")
+			   .Produces<FinishSessionAndUpdateWriteUpResponse>();
+
+		_ = api.MapPost("/jobs/{nodeId:long}/sessions/{sessionId:long}/correct", CorrectSessionAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "CorrectSession",
+				   "Correct a historical session's start and/or finish instants, with an audited reason.")
+			   .Produces<WorkSessionResponse>();
+
+		_ = api.MapGet("/jobs/{nodeId:long}/achievement", GetLeafWorkAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.AnyEmployee)
+			   .WithName("GetLeafWork")
+			   .WithSummary("Get a leaf's current achievement state.")
+			   .Produces<LeafWorkResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapPut("/jobs/{nodeId:long}/achievement", SetAchievementAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow, "SetAchievement", "Transition a leaf's achievement state, with an audited reason.")
+			   .Produces<LeafWorkResponse>();
+
+		_ = api.MapPost("/jobs/{nodeId:long}/complete", CompleteLeafAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "CompleteLeaf",
+				   "Atomically finish the exact confirmed active-session set and record an achievement -- Success by default, or Cancelled/Unsuccessful (ADR 0045/0047). Composite of finish-session(s) and set-achievement.")
+			   .Produces<CompleteLeafResponse>();
+
+		_ = api.MapPost("/jobs/{nodeId:long}/reopen-and-start-session", ReopenAndStartWorkAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.JobWorkflow,
+				   "ReopenAndStartWork",
+				   "Atomically reopen a terminal leaf to Waiting, auto-advance to InProgress (ADR 0038), and start the target worker's session (ADR 0045).")
+			   .Produces<ReopenAndStartWorkResponse>(StatusCodes.Status201Created);
+	}
 }

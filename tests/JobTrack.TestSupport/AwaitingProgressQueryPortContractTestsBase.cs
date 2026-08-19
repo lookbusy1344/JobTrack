@@ -705,6 +705,7 @@ public abstract class AwaitingProgressQueryPortContractTestsBase : IAsyncLifetim
 	///     with no LeafWork attached, an archived Waiting leaf, and a required/dependent pair where the
 	///     required leaf has not succeeded (leaving the dependent blocked).
 	/// </summary>
+	[LongMethod("This shared contract fixture constructs one ordered tree scenario whose identities and relationships are consumed together by the provider-neutral assertions.")]
 	private async Task<SeededTree> SeedScenarioAsync()
 	{
 		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {

@@ -2,3 +2,6 @@
 JobTrack.Abstractions.LargeStructAttribute
 JobTrack.Abstractions.LargeStructAttribute.LargeStructAttribute(string! reason) -> void
 JobTrack.Abstractions.LargeStructAttribute.Reason.get -> string!
+JobTrack.Abstractions.LongMethodAttribute
+JobTrack.Abstractions.LongMethodAttribute.LongMethodAttribute(string! reason) -> void
+JobTrack.Abstractions.LongMethodAttribute.Reason.get -> string!

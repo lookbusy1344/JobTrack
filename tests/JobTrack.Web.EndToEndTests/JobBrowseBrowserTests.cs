@@ -731,15 +731,20 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var phoneContext = await fixture.NewContextAsync(SmallPhoneWidth, SmallPhoneHeight);
 		var phone = await phoneContext.NewPageAsync();
-		await BrowserTestSupport.SignInAdministratorAsync(phone, fixture.BaseAddress);
-		// This test's own branch rather than the shared fixture root, for the JobSubtreeLimits.BreadthCap
-		// reason given on the secondary-column reflow test above.
-		await phone.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
-
-		var phoneRow = phone.Locator("tbody tr", new() {
-			HasTextString = "Responsive active worker leaf",
-		}).First;
+		var phoneRow = await OpenBranchRowAsync(phone);
 		var phoneActivePill = phoneRow.Locator(".jt-col-active .status-pill-active.status-pill--icon");
+
+		// Signs in, opens Browse rooted at this test's own branch rather than the shared fixture root
+		// (for the JobSubtreeLimits.BreadthCap reason given on the secondary-column reflow test above),
+		// and returns the seeded leaf's row.
+		async Task<ILocator> OpenBranchRowAsync(IPage page)
+		{
+			await BrowserTestSupport.SignInAdministratorAsync(page, fixture.BaseAddress);
+			await page.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
+			return page.Locator("tbody tr", new() {
+				HasTextString = "Responsive active worker leaf",
+			}).First;
+		}
 		(await phoneRow.Locator(".jt-col-active").IsVisibleAsync()).Should().BeTrue();
 		(await phoneActivePill.IsVisibleAsync()).Should().BeTrue();
 		(await phoneActivePill.GetAttributeAsync("title")).Should().Be($"{RequiredSimultaneousWorkerCount} active");
@@ -752,11 +757,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var tabletContext = await fixture.NewContextAsync(TabletWidth, TabletHeight);
 		var tablet = await tabletContext.NewPageAsync();
-		await BrowserTestSupport.SignInAdministratorAsync(tablet, fixture.BaseAddress);
-		await tablet.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
-		var tabletRow = tablet.Locator("tbody tr", new() {
-			HasTextString = "Responsive active worker leaf",
-		}).First;
+		var tabletRow = await OpenBranchRowAsync(tablet);
 		(await tabletRow.Locator(".status-pill-active.status-pill--icon").IsVisibleAsync()).Should().BeTrue();
 		(await tabletRow.Locator(".status-pill-active.status-pill--compact").IsVisibleAsync()).Should().BeFalse();
 		var tabletDescriptionFontSize = await FontSizeAsync(tabletRow.Locator(".jt-description-link"));
@@ -768,11 +769,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var laptopContext = await fixture.NewContextAsync(LaptopWidth, LaptopHeight);
 		var laptop = await laptopContext.NewPageAsync();
-		await BrowserTestSupport.SignInAdministratorAsync(laptop, fixture.BaseAddress);
-		await laptop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
-		var laptopRow = laptop.Locator("tbody tr", new() {
-			HasTextString = "Responsive active worker leaf",
-		}).First;
+		var laptopRow = await OpenBranchRowAsync(laptop);
 		var laptopDescriptionFontSize = await FontSizeAsync(laptopRow.Locator(".jt-description-link"));
 		(await laptopRow.Locator(".status-pill-active.status-pill--compact").IsVisibleAsync()).Should().BeTrue();
 		var laptopTable = laptop.Locator(".jt-browse-children-table");
@@ -785,12 +782,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var desktopContext = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
 		var desktop = await desktopContext.NewPageAsync();
-		await BrowserTestSupport.SignInAdministratorAsync(desktop, fixture.BaseAddress);
-		await desktop.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
-
-		var desktopRow = desktop.Locator("tbody tr", new() {
-			HasTextString = "Responsive active worker leaf",
-		}).First;
+		var desktopRow = await OpenBranchRowAsync(desktop);
 		var desktopDescription = desktopRow.Locator(".jt-description-link");
 		var desktopDescriptionFontSize = await FontSizeAsync(desktopDescription);
 		var desktopDescriptionLineHeight = await LineHeightAsync(desktopDescription);
@@ -800,11 +792,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		await using var wideContext = await fixture.NewContextAsync(WideDesktopWidth, WideDesktopHeight);
 		var wide = await wideContext.NewPageAsync();
-		await BrowserTestSupport.SignInAdministratorAsync(wide, fixture.BaseAddress);
-		await wide.GotoAsync($"{fixture.BaseAddress}/Jobs/Browse?nodeId={branchId.Value}");
-		var wideRow = wide.Locator("tbody tr", new() {
-			HasTextString = "Responsive active worker leaf",
-		}).First;
+		var wideRow = await OpenBranchRowAsync(wide);
 		var wideDescription = wideRow.Locator(".jt-description-link");
 		var wideDescriptionFontSize = await FontSizeAsync(wideDescription);
 		var wideDescriptionLineHeight = await LineHeightAsync(wideDescription);

@@ -74,6 +74,14 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 
 		long oneBranchId = default;
 		foreach (var workerIndex in Enumerable.Range(1, WorkerCount)) {
+			var branchId = await SeedWorkerStaircaseAsync(workerIndex);
+			if (workerIndex == 1) {
+				oneBranchId = branchId;
+			}
+		}
+
+		async Task<long> SeedWorkerStaircaseAsync(int workerIndex)
+		{
 			var workerId = await InsertWorkerAsync(connection, $"Overlap worker {workerIndex}");
 			await GrantWorkerRoleAsync(connection, workerId);
 
@@ -84,9 +92,6 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 				OwnerUserId = workerId,
 				Priority = Priority.Medium,
 			});
-			if (workerIndex == 1) {
-				oneBranchId = branch.Id.Value;
-			}
 
 			_ = await schedulePort.AddScheduleExceptionAsync(new() {
 				Context = administratorContext,
@@ -130,6 +135,8 @@ public sealed class OverlappingCostScaleSqliteFunctionalTests : IAsyncLifetime
 					Version = session.Version,
 				});
 			}
+
+			return branch.Id.Value;
 		}
 
 		var costQueries = new CostQueries(new SqliteCostQueryPort(database.ConnectionString, SystemClock.Instance));

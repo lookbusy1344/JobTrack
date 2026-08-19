@@ -334,4 +334,45 @@ internal static partial class JobTrackApi
 
 		public required long Version { get; init; }
 	}
+
+	private static void MapScheduleEndpoints(this RouteGroupBuilder api)
+	{
+		_ = api.MapGet("/employees/{userId:long}/schedule", GetScheduleAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.ScheduleAdministration)
+			   .WithName("GetEmployeeSchedule")
+			   .WithSummary("Get one employee's schedule versions and exceptions (bounded; see plan §3.1).")
+			   .Produces<ScheduleResponse>()
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound);
+
+		_ = api.MapPost("/employees/{userId:long}/schedule/versions", AddScheduleVersionAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "AddScheduleVersion",
+				   "Add an effective-dated schedule version for one employee.")
+			   .Produces<ScheduleVersionResponse>(StatusCodes.Status201Created);
+
+		_ = api.MapPost("/employees/{userId:long}/schedule/exceptions", AddScheduleExceptionAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "AddScheduleException",
+				   "Add a dated schedule exception for one employee.")
+			   .Produces<ScheduleExceptionResponse>(StatusCodes.Status201Created);
+
+		_ = api.MapPost("/employees/{userId:long}/schedule/versions/{versionId:long}/correct", CorrectScheduleVersionAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "CorrectScheduleVersion",
+				   "Correct a historical schedule version's effective range, zone, and weekly intervals, with an audited reason.")
+			   .Produces<ScheduleVersionResponse>();
+
+		_ = api.MapPost("/employees/{userId:long}/schedule/exceptions/{exceptionId:long}/correct", CorrectScheduleExceptionAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.ScheduleAdministration,
+				   "CorrectScheduleException",
+				   "Correct a historical schedule exception's effect, interval, and rate override, with an audited reason.")
+			   .Produces<ScheduleExceptionResponse>();
+	}
 }

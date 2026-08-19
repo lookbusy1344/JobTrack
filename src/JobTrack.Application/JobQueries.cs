@@ -17,7 +17,7 @@ using Ports;
 ///     <see cref="ReadinessCalculator" /> directly over the port's materialized inputs, while browsing
 ///     queries pass straight through to <see cref="IJobBrowseQueryPort" />.
 /// </summary>
-internal sealed class JobQueries : IJobQueries
+internal sealed partial class JobQueries : IJobQueries
 {
 	// One employee's rate/schedule history is not offset/limit-paginated like a flat collection --
 	// both snapshots are always returned whole so a caller sees a complete, self-consistent picture
@@ -436,50 +436,23 @@ internal sealed class JobQueries : IJobQueries
 
 				var spans = JobSubtreeOrdinals.Compute(rows, request.RootId);
 
-				Money? rootTotal = null;
-				AllocatedDuration? rootAllocatedDuration = null;
-				string? tzdbVersion = null;
-				EquatableDictionary<JobNodeId, Money>? displayedCosts = null;
-				EquatableDictionary<JobNodeId, AllocatedDuration>? allocatedDurations = null;
-				try {
-					var totals = await _costQueries.GetHierarchyTotalsAsync(
-						new() {
-							Context = request.Context,
-							NodeId = request.RootId,
-							AsOf = request.AsOf,
-						},
-						cancellationToken).ConfigureAwait(false);
-					rootTotal = totals.DisplayedCosts.GetValueOrDefault(request.RootId);
-					rootAllocatedDuration = totals.AllocatedDurations.GetValueOrDefault(request.RootId);
-					tzdbVersion = totals.TzdbVersion;
-					displayedCosts = totals.DisplayedCosts;
-					allocatedDurations = totals.AllocatedDurations;
-				}
-				catch (AuthorizationDeniedException) {
-					// ADR 0039 decision 4 / ADR 0040: cost is an optional field on an otherwise
-					// universally browsable subtree, never a whole-request denial.
-				}
-				catch (ArgumentOutOfRangeException) {
-					// The structure fetch is depth/breadth-bounded, while the reused cost hierarchy
-					// query deliberately totals the whole subtree and can reject pathological size.
-					// Treat that the same as unavailable cost: omit the optional fields, keep Browse usable.
-				}
+				var totals = await LoadSubtreeCostTotalsAsync(request, cancellationToken).ConfigureAwait(false);
 
 				// ADR 0042: CanView's ownership carve-out admits the whole subtree at once, so each
 				// node's *individual* cost is filtered again here — a branch roll-up is an aggregate
 				// and stays, but another worker's leaf cost would expose their rate and is dropped.
-				var costRoles = displayedCosts is null
+				var costRoles = totals.DisplayedCosts is null
 					? []
 					: await GetCostFilterRolesAsync(request.Context.Actor, cancellationToken).ConfigureAwait(false);
 
 				Money? CostFor(bool hasChildren, AppUserId? ownerUserId, JobNodeId nodeId) =>
 					CostAccessPolicy.CanViewNodeCost(costRoles, hasChildren, ownerUserId, request.Context.Actor)
-						? displayedCosts?.GetValueOrDefault(nodeId)
+						? totals.DisplayedCosts?.GetValueOrDefault(nodeId)
 						: null;
 
 				AllocatedDuration? DurationFor(bool hasChildren, AppUserId? ownerUserId, JobNodeId nodeId) =>
 					CostAccessPolicy.CanViewNodeCost(costRoles, hasChildren, ownerUserId, request.Context.Actor)
-						? allocatedDurations?.GetValueOrDefault(nodeId)
+						? totals.AllocatedDurations?.GetValueOrDefault(nodeId)
 						: null;
 
 				// ADR 0043: one materialization of the readiness facts for every displayed row, then the
@@ -522,10 +495,10 @@ internal sealed class JobQueries : IJobQueries
 				// else must not reveal through RootTotal what the node list withholds.
 				var rootRow = rows.FirstOrDefault(row => row.Id == request.RootId);
 				var displayedRootTotal = rootRow is null
-					? rootTotal
+					? totals.RootTotal
 					: CostFor(rootRow.HasChildren, rootRow.OwnerUserId, rootRow.Id);
 				var displayedRootAllocatedDuration = rootRow is null
-					? rootAllocatedDuration
+					? totals.RootAllocatedDuration
 					: DurationFor(rootRow.HasChildren, rootRow.OwnerUserId, rootRow.Id);
 
 				return new JobSubtreeResult {
@@ -533,10 +506,56 @@ internal sealed class JobQueries : IJobQueries
 					RootAchievement = subtree.RootAchievement,
 					RootTotal = displayedRootTotal,
 					RootAllocatedDuration = displayedRootAllocatedDuration,
-					TzdbVersion = tzdbVersion,
+					TzdbVersion = totals.TzdbVersion,
 					Nodes = EquatableArray.CopyOf(nodes),
 				};
 			});
+
+	/// <summary>
+	///     Loads the subtree's cost roll-up as optional fields (ADR 0039 decision 4 / ADR 0040):
+	///     cost is one field on an otherwise universally browsable subtree, never a whole-request
+	///     denial. An authorization refusal or a pathological-size rejection from the whole-subtree
+	///     cost query yields the empty totals, keeping Browse usable.
+	/// </summary>
+	private async Task<SubtreeCostTotals> LoadSubtreeCostTotalsAsync(
+		GetJobSubtreeRequest request, CancellationToken cancellationToken)
+	{
+		try {
+			var totals = await _costQueries.GetHierarchyTotalsAsync(
+				new() {
+					Context = request.Context,
+					NodeId = request.RootId,
+					AsOf = request.AsOf,
+				},
+				cancellationToken).ConfigureAwait(false);
+			return new() {
+				RootTotal = totals.DisplayedCosts.GetValueOrDefault(request.RootId),
+				RootAllocatedDuration = totals.AllocatedDurations.GetValueOrDefault(request.RootId),
+				TzdbVersion = totals.TzdbVersion,
+				DisplayedCosts = totals.DisplayedCosts,
+				AllocatedDurations = totals.AllocatedDurations,
+			};
+		}
+		catch (AuthorizationDeniedException) {
+			return SubtreeCostTotals.Empty;
+		}
+		catch (ArgumentOutOfRangeException) {
+			// The structure fetch is depth/breadth-bounded, while the reused cost hierarchy query
+			// deliberately totals the whole subtree and can reject pathological size.
+			return SubtreeCostTotals.Empty;
+		}
+	}
+
+	private sealed record SubtreeCostTotals
+	{
+		public static SubtreeCostTotals Empty { get; } = new();
+
+		public Money? RootTotal { get; init; }
+		public AllocatedDuration? RootAllocatedDuration { get; init; }
+		public string? TzdbVersion { get; init; }
+		public EquatableDictionary<JobNodeId, Money>? DisplayedCosts { get; init; }
+		public EquatableDictionary<JobNodeId, AllocatedDuration>? AllocatedDurations { get; init; }
+	}
 
 	/// <summary>
 	///     Gated on <see cref="EmployeeRole.Administrator" /> rather than the baseline browse admission
@@ -645,128 +664,6 @@ internal sealed class JobQueries : IJobQueries
 					IsTruncated = sessions.IsTruncated,
 				};
 			});
-
-	private async Task<EquatableArray<JobNodeSummaryResult>> EnrichSummariesWithCostAsync(
-		CommandContext context, EquatableArray<JobNodeSummaryResult> summaries, CancellationToken cancellationToken)
-	{
-		if (summaries.Count == 0) {
-			return summaries;
-		}
-
-		var asOf = _clock.GetCurrentInstant();
-		// ADR 0042: another worker's individual leaf cost stays hidden even where the actor is
-		// admitted to the node; a branch's roll-up is an aggregate and remains visible.
-		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
-		var candidateIds = summaries
-						   .Where(summary => CostAccessPolicy.CanViewNodeCost(costRoles, summary.HasChildren, summary.OwnerUserId, context.Actor))
-						   .Select(summary => summary.Id)
-						   .ToArray();
-
-		// Fresh-eyes review §2.8: one bulk snapshot for the whole page, never one round trip per row.
-		var metrics = await GetBulkCostMetricsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
-
-		return [
-			.. summaries.Select(summary => summary with {
-				Cost = metrics.Costs.GetValueOrDefault(summary.Id), AllocatedDuration = metrics.Durations.GetValueOrDefault(summary.Id),
-			}),
-		];
-	}
-
-	private async Task<EquatableArray<AwaitingProgressEntry>> EnrichAwaitingProgressWithCostAsync(
-		CommandContext context, EquatableArray<AwaitingProgressEntry> entries, CancellationToken cancellationToken)
-	{
-		if (entries.Count == 0) {
-			return entries;
-		}
-
-		var asOf = _clock.GetCurrentInstant();
-		// Awaiting-progress entries are leaves by construction, so the branch-aggregate relief in
-		// CanViewNodeCost never applies here: it reduces to "your own or unassigned" (ADR 0042).
-		var costRoles = await GetCostFilterRolesAsync(context.Actor, cancellationToken).ConfigureAwait(false);
-		var candidateIds = entries
-						   .Where(entry => CostAccessPolicy.CanViewNodeCost(costRoles, false, entry.OwnerUserId, context.Actor))
-						   .Select(entry => entry.Id)
-						   .ToArray();
-
-		var metrics = await GetBulkCostMetricsAsync(context, candidateIds, asOf, cancellationToken).ConfigureAwait(false);
-
-		return [
-			.. entries.Select(entry => entry with {
-				Cost = metrics.Costs.GetValueOrDefault(entry.Id), AllocatedDuration = metrics.Durations.GetValueOrDefault(entry.Id),
-			}),
-		];
-	}
-
-	/// <summary>
-	///     Prices every candidate in one bulk call (fresh-eyes review §2.8) instead of one
-	///     <see cref="ICostQueries.GetHierarchyTotalsAsync" /> round trip per row. Cost is an optional
-	///     field on an otherwise universally browsable listing (ADR 0039 decision 4), so a failure here
-	///     degrades to "no costs shown" rather than failing the whole listing.
-	/// </summary>
-	private async Task<(
-		EquatableDictionary<JobNodeId, Money> Costs,
-		EquatableDictionary<JobNodeId, AllocatedDuration> Durations)> GetBulkCostMetricsAsync(
-		CommandContext context, JobNodeId[] candidateIds, Instant asOf, CancellationToken cancellationToken)
-	{
-		if (candidateIds.Length == 0) {
-			return (
-				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()),
-				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration>()));
-		}
-
-		try {
-			var displayed = new Dictionary<JobNodeId, Money>();
-			var durations = new Dictionary<JobNodeId, AllocatedDuration>();
-			// The bulk port rejects a candidate set wider than its cap. A listing page can legitimately
-			// exceed it (a caller-supplied id set via GetJobSummariesAsync is not page-bounded), so chunk
-			// to the cap and merge -- prices are per-node independent, so batching is exact. Overflowing
-			// the port in one call and swallowing the resulting ArgumentOutOfRangeException would blank
-			// every row's cost instead, which is why that is no longer caught below.
-			foreach (var batch in candidateIds.Chunk(CostQueries.MaxBulkNodeIdCount)) {
-				var result = await _costQueries.GetBulkNodeCostsAsync(
-					new() {
-						Context = context,
-						NodeIds = [.. batch],
-						AsOf = asOf,
-					}, cancellationToken).ConfigureAwait(false);
-				foreach (var (nodeId, cost) in result.DisplayedCosts) {
-					displayed[nodeId] = cost;
-				}
-
-				foreach (var (nodeId, duration) in result.AllocatedDurations) {
-					durations[nodeId] = duration;
-				}
-			}
-
-			return (EquatableDictionaryFactory.CopyOf(displayed), EquatableDictionaryFactory.CopyOf(durations));
-		}
-		catch (AuthorizationDeniedException) {
-			return (
-				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()),
-				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration>()));
-		}
-		catch (MissingRateException) {
-			return (
-				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, Money>()),
-				EquatableDictionaryFactory.CopyOf(new Dictionary<JobNodeId, AllocatedDuration>()));
-		}
-	}
-
-	/// <summary>
-	///     The actor's roles for the per-node cost filter (ADR 0042). Cost is an optional field on an
-	///     otherwise universally browsable listing, never a whole-request denial (ADR 0039 decision 4), so
-	///     an actor whose roles cannot be resolved yields no roles — the most restrictive answer — rather
-	///     than failing the listing outright.
-	/// </summary>
-	private async Task<EquatableArray<EmployeeRole>> GetCostFilterRolesAsync(AppUserId actor, CancellationToken cancellationToken)
-	{
-		try {
-			return await _employeeQueryPort.GetActorRolesAsync(actor, cancellationToken).ConfigureAwait(false);
-		}
-		catch (EntityNotFoundException) {
-			return [];
-		}
-	}
 
 	private Task<EquatableArray<WorkSessionResult>> GetLeafSessionsCoreAsync(GetLeafSessionsRequest request, CancellationToken cancellationToken) =>
 		JobTrackOperation.TraceAsync(

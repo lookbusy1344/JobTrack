@@ -315,4 +315,64 @@ internal static partial class JobTrackApi
 	{
 		public required long Version { get; init; }
 	}
+
+	private static void MapRequestEndpoints(this RouteGroupBuilder api)
+	{
+		_ = api.MapGet("/request-holding-areas", GetEligibleHoldingAreasAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
+			   .WithName("GetEligibleHoldingAreas")
+			   .WithSummary("Get the active holding areas the acting requester may currently submit a request into (ADR 0033).")
+			   .Produces<HoldingAreaResponse[]>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden);
+
+		_ = api.MapPost("/requests", SubmitRequestAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("SubmitRequest")
+			   .WithSummary("Submit a new request into a holding area the acting requester is eligible for (ADR 0033).")
+			   .Produces<RequestResponse>(StatusCodes.Status201Created)
+			   .ProducesProblem(StatusCodes.Status400BadRequest)
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+
+		_ = api.MapGet("/requests", GetMyRequestsAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.RequesterAccess)
+			   .WithName("GetMyRequests")
+			   .WithSummary("Get the acting requester's own submitted requests, most recent first (ADR 0033).")
+			   .Produces<RequestResponse[]>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden);
+
+		_ = api.MapGet("/requests/{jobNodeId:long}", GetRequestDetailAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.RequestDetailAccess)
+			   .WithName("GetRequestDetail")
+			   .WithSummary(
+				   "Get one permitted request's requester-safe detail: status, read-only subtree with allocated hours, and visible notes (ADR 0034/0054).")
+			   .Produces<RequestDetailResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status409Conflict);
+
+		_ = api.MapPost("/requests/{jobNodeId:long}/comments", AddRequestNoteAsync)
+			   .WithStandardWriteContract(
+				   JobTrackPolicyNames.RequestDetailAccess,
+				   "AddRequestNote",
+				   "Add a requester-visible note or clarification, posted by staff or by the request's own requester (ADR 0034).")
+			   .Produces<RequestNoteResponse>(StatusCodes.Status201Created);
+
+		_ = api.MapPost("/requests/{jobNodeId:long}/acknowledge", AcknowledgeRequestAsync)
+			   .RequireAuthorization(JobTrackPolicyNames.JobWorkflow)
+			   .AddEndpointFilter<AntiforgeryValidationFilter>()
+			   .WithName("AcknowledgeRequest")
+			   .WithSummary("Staff acknowledgement: sets the explicit Accepted signal a requester sees (ADR 0034).")
+			   .Produces<RequestResponse>()
+			   .ProducesProblem(StatusCodes.Status401Unauthorized)
+			   .ProducesProblem(StatusCodes.Status403Forbidden)
+			   .ProducesProblem(StatusCodes.Status404NotFound)
+			   .ProducesProblem(StatusCodes.Status409Conflict);
+	}
 }

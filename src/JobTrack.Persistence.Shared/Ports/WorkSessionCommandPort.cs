@@ -8,6 +8,7 @@ using Domain.Authorization;
 using Domain.Hierarchy;
 using Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
 
 /// <summary>
@@ -636,11 +637,39 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		};
 		_ = context.Add(session);
 
+		await PersistNewSessionAsync(context, transaction, session, request.Context, request.Version, request.JobNodeId, now, cancellationToken)
+			.ConfigureAwait(false);
+
+		return new() {
+			JobNodeId = request.JobNodeId,
+			Achievement = leafWork.Achievement,
+			ChangedAt = leafWork.ChangedAt,
+			Version = leafWork.RowVersion,
+			Session = ToResult(session),
+		};
+	}
+
+	/// <summary>
+	///     Persists the new session and its audit event, commits the transaction, and translates a driver
+	///     write conflict into the corresponding domain exception (schema version 0007 enforces
+	///     same-worker/same-leaf uniqueness, closed-leaf refusal, and range overlap; see
+	///     <see cref="IProviderWriteOperations.ClassifyWriteConflict" />).
+	/// </summary>
+	private async Task PersistNewSessionAsync(
+		DbContext context,
+		IDbContextTransaction transaction,
+		WorkSessionEntity session,
+		CommandContext commandContext,
+		long expectedVersion,
+		JobNodeId jobNodeId,
+		Instant now,
+		CancellationToken cancellationToken)
+	{
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
 			AuditEventWriter.Add(
-				context, request.Context.Actor, now, "start-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
+				context, commandContext.Actor, now, "start-work-session", "work_session", session.Id.Value, commandContext.CorrelationId,
 				null, null,
 				new Dictionary<string, string?> {
 					["leaf_work_id"] = session.LeafWorkId.Value.ToString(CultureInfo.InvariantCulture),
@@ -653,7 +682,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		}
 		catch (DbUpdateConcurrencyException ex) {
 			throw new ConcurrencyConflictException(
-				$"Expected version {request.Version} for job node {request.JobNodeId} did not match its current version.", ex);
+				$"Expected version {expectedVersion} for job node {jobNodeId} did not match its current version.", ex);
 		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
@@ -667,14 +696,6 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			throw new InvariantViolationException(
 				"work-session-overlap", "This session would overlap another session for the same worker and leaf.", ex);
 		}
-
-		return new() {
-			JobNodeId = request.JobNodeId,
-			Achievement = leafWork.Achievement,
-			ChangedAt = leafWork.ChangedAt,
-			Version = leafWork.RowVersion,
-			Session = ToResult(session),
-		};
 	}
 
 	/// <summary>

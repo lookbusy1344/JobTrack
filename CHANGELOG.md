@@ -4,6 +4,27 @@ All notable changes to JobTrack are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 `MAJOR.MINOR.PATCH` release numbers.
 
+## [1.1.2] — 2026-08-19
+
+### Changed
+
+- Tightened the method-length architecture guard from 100 to 75 executable
+  lines and added a hard file-length guard (1000 lines production/sample C#,
+  500 Razor, 2000 test C#, no exception mechanism). Decomposed the eleven
+  methods and nine files that exceeded the new ceilings — including
+  `Program.Main` and `MapJobTrackApi` — without behaviour change.
+- Updated NuGet dependencies (Roslynator.Analyzers, xunit.runner.visualstudio).
+
+### Fixed
+
+- PostgreSQL command ports now truncate written timestamps to microsecond
+  precision, so a re-read of an unchanged column can't disagree with the
+  in-memory value returned from the write that produced it.
+- Corrected culture handling and a missing connection string in the
+  `jobtrack_live` launch profile that caused startup failures.
+- Widened a browser-fixture readiness timeout and fixed fast-test failures
+  surfaced by CI running in a dedicated repository.
+
 ## [1.1.1] — 2026-08-16
 
 ### Changed

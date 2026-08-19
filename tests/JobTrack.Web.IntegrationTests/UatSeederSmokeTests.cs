@@ -107,6 +107,71 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 	{
 		await DeploySchemaAsync();
 		var client = JobTrackSqlite.Create(database.ConnectionString);
+		var (adminContext, jobManagerId, requesterId) = await CreateRequesterDemoActorsAsync(client);
+
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+		await using (var pragma = connection.CreateCommand()) {
+			pragma.CommandText = ConfigureSqliteConnectionSql;
+			_ = await pragma.ExecuteNonQueryAsync();
+		}
+
+		var summary = await UatSeeder.SeedRequesterDemoAsync(client, connection, jobManagerId, requesterId);
+
+		summary.RequestNodeIds.Should().HaveCount(ExpectedRequesterDemoRequestCount);
+		var requesterContext = new CommandContext {
+			Actor = requesterId,
+			CorrelationId = Guid.NewGuid(),
+		};
+		var requests = await client.Requests.GetMyRequestsAsync(requesterContext);
+		requests.Should().HaveCount(ExpectedRequesterDemoRequestCount);
+		var statuses = new List<RequesterStatus>();
+		foreach (var nodeId in summary.RequestNodeIds) {
+			var detail = await client.Requests.GetDetailAsync(new() {
+				Context = requesterContext with {
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = nodeId,
+			});
+			detail.RequesterUserId.Should().Be(requesterId);
+			var node = await client.Query.GetJobNodeAsync(new() {
+				Context = adminContext with {
+					CorrelationId = Guid.NewGuid(),
+				},
+				NodeId = nodeId,
+			});
+			node.Node.OwnerUserId.Should().Be(jobManagerId);
+			statuses.Add(detail.Status);
+		}
+
+		statuses.Should().BeEquivalentTo([
+			RequesterStatus.Submitted,
+			RequesterStatus.Accepted,
+			RequesterStatus.Waiting,
+			RequesterStatus.InProgress,
+			RequesterStatus.Completed,
+			RequesterStatus.Cancelled,
+		]);
+	}
+
+	private async Task DeploySchemaAsync()
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+		await using (var pragma = connection.CreateCommand()) {
+			pragma.CommandText = ConfigureSqliteConnectionSql;
+			_ = await pragma.ExecuteNonQueryAsync();
+		}
+
+		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
+		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
+			AppliedBy);
+		await deployer.DeployAsync(scripts, CancellationToken.None);
+	}
+
+	private static async Task<(CommandContext AdminContext, AppUserId JobManagerId, AppUserId RequesterId)>
+		CreateRequesterDemoActorsAsync(IJobTrackClient client)
+	{
 		var bootstrap = await client.Installation.BootstrapAdministratorAsync(new() {
 			DisplayName = "Bootstrap Administrator",
 			IanaTimeZone = "Etc/UTC",
@@ -144,63 +209,6 @@ public sealed class UatSeederSmokeTests : IAsyncLifetime
 			Role = EmployeeRole.Requester,
 		});
 
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = ConfigureSqliteConnectionSql;
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var summary = await UatSeeder.SeedRequesterDemoAsync(client, connection, jobManager.Id, requester.Id);
-
-		summary.RequestNodeIds.Should().HaveCount(ExpectedRequesterDemoRequestCount);
-		var requesterContext = new CommandContext {
-			Actor = requester.Id,
-			CorrelationId = Guid.NewGuid(),
-		};
-		var requests = await client.Requests.GetMyRequestsAsync(requesterContext);
-		requests.Should().HaveCount(ExpectedRequesterDemoRequestCount);
-		var statuses = new List<RequesterStatus>();
-		foreach (var nodeId in summary.RequestNodeIds) {
-			var detail = await client.Requests.GetDetailAsync(new() {
-				Context = requesterContext with {
-					CorrelationId = Guid.NewGuid(),
-				},
-				NodeId = nodeId,
-			});
-			detail.RequesterUserId.Should().Be(requester.Id);
-			var node = await client.Query.GetJobNodeAsync(new() {
-				Context = adminContext with {
-					CorrelationId = Guid.NewGuid(),
-				},
-				NodeId = nodeId,
-			});
-			node.Node.OwnerUserId.Should().Be(jobManager.Id);
-			statuses.Add(detail.Status);
-		}
-
-		statuses.Should().BeEquivalentTo([
-			RequesterStatus.Submitted,
-			RequesterStatus.Accepted,
-			RequesterStatus.Waiting,
-			RequesterStatus.InProgress,
-			RequesterStatus.Completed,
-			RequesterStatus.Cancelled,
-		]);
-	}
-
-	private async Task DeploySchemaAsync()
-	{
-		await using var connection = new SqliteConnection(database.ConnectionString);
-		await connection.OpenAsync();
-		await using (var pragma = connection.CreateCommand()) {
-			pragma.CommandText = ConfigureSqliteConnectionSql;
-			_ = await pragma.ExecuteNonQueryAsync();
-		}
-
-		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(SchemaProvider.Sqlite));
-		var deployer = new SchemaDeployer(connection, new SqliteSchemaVersionStore(), new SqliteDeploymentLockStrategy(), ApplicationVersion,
-			AppliedBy);
-		await deployer.DeployAsync(scripts, CancellationToken.None);
+		return (adminContext, jobManager.Id, requester.Id);
 	}
 }

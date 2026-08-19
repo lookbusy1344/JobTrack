@@ -110,39 +110,52 @@ public sealed partial class WebHostSecurityArchitectureTests
 	[Fact]
 	public void Every_mapped_api_route_requires_authorization()
 	{
-		var apiSource = File.ReadAllText(Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web", "JobTrackApi.cs"));
+		// The declarative catalogue lives across JobTrackApi.cs and its per-resource partial files
+		// (JobTrackApi.Rates.cs, .Jobs.cs, .Sessions.cs, .Cost.cs, .Schedules.cs, .Requests.cs) --
+		// every one is scanned, not just the composition-root file, since each resource maps its own
+		// endpoints in its own file. Only an actual HTTP-verb mapping call (api.MapGet/.../Delete)
+		// counts as a route statement -- a delegating `api.MapXxxEndpoints();` call is not itself a
+		// route and carries no authorization of its own to check.
+		var apiFiles = Directory.EnumerateFiles(
+			Path.Combine(RepositoryPaths.SolutionRoot(), "src", "JobTrack.Web"), "JobTrackApi*.cs");
 		var violations = new List<string>();
-		var statement = new StringBuilder();
-		var depth = 0;
-		foreach (var line in apiSource.Split('\n')) {
-			if (depth == 0 && line.Contains("api.Map", StringComparison.Ordinal)) {
-				statement.Clear();
-				statement.AppendLine(line);
-				depth += line.Count(c => c == '(') - line.Count(c => c == ')');
-				if (depth == 0 && line.Contains(';', StringComparison.Ordinal)) {
-					if (!statement.ToString().Contains("RequireAuthorization", StringComparison.Ordinal)) {
-						violations.Add(line.Trim());
+		foreach (var apiFile in apiFiles) {
+			var apiSource = File.ReadAllText(apiFile);
+			var statement = new StringBuilder();
+			var depth = 0;
+			foreach (var line in apiSource.Split('\n')) {
+				if (depth == 0 && ApiEndpointMapCallPattern().IsMatch(line)) {
+					statement.Clear();
+					statement.AppendLine(line);
+					depth += line.Count(c => c == '(') - line.Count(c => c == ')');
+					if (depth == 0 && line.Contains(';', StringComparison.Ordinal)) {
+						if (!statement.ToString().Contains("RequireAuthorization", StringComparison.Ordinal)) {
+							violations.Add(line.Trim());
+						}
 					}
+
+					continue;
 				}
 
-				continue;
-			}
+				if (depth > 0) {
+					statement.AppendLine(line);
+					depth += line.Count(c => c == '(') - line.Count(c => c == ')');
+					if (depth <= 0) {
+						if (!statement.ToString().Contains("RequireAuthorization", StringComparison.Ordinal)) {
+							violations.Add(statement.ToString().Split('\n').First().Trim());
+						}
 
-			if (depth > 0) {
-				statement.AppendLine(line);
-				depth += line.Count(c => c == '(') - line.Count(c => c == ')');
-				if (depth <= 0) {
-					if (!statement.ToString().Contains("RequireAuthorization", StringComparison.Ordinal)) {
-						violations.Add(statement.ToString().Split('\n').First().Trim());
+						depth = 0;
 					}
-
-					depth = 0;
 				}
 			}
 		}
 
 		violations.Should().BeEmpty("every /api/* endpoint must call RequireAuthorization");
 	}
+
+	[GeneratedRegex(@"api\.Map(Get|Post|Put|Delete)\(")]
+	private static partial Regex ApiEndpointMapCallPattern();
 
 	/// <summary>
 	///     Mirrors <see cref="Every_mapped_api_route_requires_authorization" />'s statement-scan shape,

@@ -4,6 +4,7 @@ using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using Abstractions;
 using Application;
 using Identity;
 using Microsoft.AspNetCore.Authentication;
@@ -191,11 +192,114 @@ public sealed class Program
 
 	private Program() { }
 
+	/// <summary>
+	///     Host composition root. Delegates each concern to its own named phase, in the exact order the
+	///     framework requires (a forwarded-header trust boundary before anything reading scheme/client
+	///     address, authentication before rate limiting, etc.) -- the phase methods below are ordered
+	///     dependents of the shared <see cref="WebApplicationBuilder" />/<see cref="WebApplication" />,
+	///     not independent units, so their call order here is load-bearing.
+	/// </summary>
 	public static void Main(string[] args)
 	{
 		var builder = WebApplication.CreateBuilder(args);
 
-		// Add services to the container.
+		ConfigureRazorPages(builder);
+
+		_ = builder.Services.AddScoped<IViewerTimeZoneResolver, ViewerTimeZoneResolver>();
+		_ = builder.Services.AddSingleton<IClock>(SystemClock.Instance);
+
+		// A newly issued personal access token's plaintext travels from the issuing POST to the
+		// redirected GET via PendingPatDeliveryCookie -- a short-lived, actor-bound, data-protected
+		// cookie (ADR 0066 Stage 4) -- rather than the old in-process PendingPatDeliveryStore, whose
+		// Dictionary meant the redirect had to land back on the same host.
+
+		// Remembered per-page filter selections (FilterMemory) are backed by
+		// CookieFilterMemoryStore -- a small, time-limited, data-protected, principal-bound cookie
+		// -- rather than ASP.NET Core session (ADR 0066 Stage 3): session's AddDistributedMemoryCache
+		// is process-local, so a filter set on one host silently appeared to reset on another.
+
+		var databaseProvider = ConfigureDatabaseAndIdentity(builder);
+		ConfigureAuthentication(builder);
+		ConfigureAuthorizationPolicies(builder);
+		ConfigureCookiePolicy(builder);
+		ConfigureSecurityStampValidation(builder);
+		ConfigureRateLimiting(builder, databaseProvider);
+
+		_ = builder.Services.AddSingleton(TimeProvider.System);
+		_ = builder.Services.AddSingleton<ApplicationReadinessState>();
+		_ = builder.Services.AddSingleton(sp => new ReadinessProbeGate(
+			sp.GetRequiredService<TimeProvider>(), TimeSpan.FromSeconds(ReadinessProbeCacheSeconds)));
+
+		ConfigureForwardedHeaders(builder);
+		var usePostgreSqlDataProtectionStore = ConfigureDataProtection(builder, databaseProvider);
+		ValidateAllowedHosts(builder);
+
+		_ = builder.Services.AddCors(options => options.AddPolicy(CorsPolicyName, policy => policy.WithOrigins()));
+
+		_ = builder.Services.AddRequestTimeouts(options =>
+			options.DefaultPolicy = new() {
+				Timeout = TimeSpan.FromSeconds(RequestTimeoutSeconds),
+			});
+
+		// Kestrel-level defense in depth; the enforced, testable limit is the middleware below --
+		// WebApplicationFactory's TestServer never exercises Kestrel's own body-size enforcement,
+		// so this line has no in-process test coverage (see docs/operations/web-host-security.md).
+		_ = builder.WebHost.ConfigureKestrel(options => {
+			options.Limits.MaxRequestBodySize = MaxRequestBodyBytes;
+			options.Limits.MinRequestBodyDataRate = new(
+				MinRequestBodyDataRateBytesPerSecond,
+				TimeSpan.FromSeconds(MinRequestBodyDataRateGracePeriodSeconds));
+		});
+
+		ValidateDeploymentTopology(builder, databaseProvider, usePostgreSqlDataProtectionStore);
+
+		var app = builder.Build();
+
+		// Stage 6: flip readiness to draining as soon as shutdown begins, not when the process
+		// actually exits -- ApplicationStopping fires before Kestrel stops accepting connections,
+		// giving an orchestrator a window to observe /health/ready failing and stop routing new
+		// requests here while in-flight ones finish.
+		var readinessState = app.Services.GetRequiredService<ApplicationReadinessState>();
+		_ = app.Lifetime.ApplicationStopping.Register(readinessState.BeginDraining);
+
+		// Forwarded-header trust boundary comes first: it must run before anything (HTTPS
+		// redirection, rate limiting by remote IP) that reads the scheme or client address.
+		_ = app.UseForwardedHeaders();
+
+		ConfigureExceptionHandling(app);
+
+		_ = app.UseHttpsRedirection();
+
+		UseSecurityHeaders(app);
+		UseRequestBodySizeLimit(app);
+
+		_ = app.UseRouting();
+
+		_ = app.UseCors(CorsPolicyName);
+
+		// Authentication must run before rate limiting: the external API's per-user partition key
+		// reads the authenticated principal's name, which does not exist yet if this runs first --
+		// every caller would otherwise fall back to the same remote-address partition regardless of
+		// which user they are.
+		_ = app.UseAuthentication();
+
+		UseApiRateLimiting(app);
+
+		_ = app.UseAuthorization();
+		_ = app.UseAntiforgery();
+		_ = app.UseRequestTimeouts();
+
+		MapHealthEndpoints(app, readinessState, databaseProvider);
+
+		_ = app.MapStaticAssets();
+		app.MapJobTrackApi();
+		_ = app.MapRazorPages()
+			   .WithStaticAssets();
+
+		app.Run();
+	}
+
+	private static void ConfigureRazorPages(WebApplicationBuilder builder) =>
 		_ = builder.Services.AddRazorPages(options => {
 			_ = options.Conventions.AddFolderApplicationModelConvention("/", model => {
 				model.Filters.Add(new RequiresPasswordChangePageFilter());
@@ -215,19 +319,8 @@ public sealed class Program
 			}
 		});
 
-		_ = builder.Services.AddScoped<IViewerTimeZoneResolver, ViewerTimeZoneResolver>();
-		_ = builder.Services.AddSingleton<IClock>(SystemClock.Instance);
-
-		// A newly issued personal access token's plaintext travels from the issuing POST to the
-		// redirected GET via PendingPatDeliveryCookie -- a short-lived, actor-bound, data-protected
-		// cookie (ADR 0066 Stage 4) -- rather than the old in-process PendingPatDeliveryStore, whose
-		// Dictionary meant the redirect had to land back on the same host.
-
-		// Remembered per-page filter selections (FilterMemory) are backed by
-		// CookieFilterMemoryStore -- a small, time-limited, data-protected, principal-bound cookie
-		// -- rather than ASP.NET Core session (ADR 0066 Stage 3): session's AddDistributedMemoryCache
-		// is process-local, so a filter set on one host silently appeared to reset on another.
-
+	private static string ConfigureDatabaseAndIdentity(WebApplicationBuilder builder)
+	{
 		var databaseProvider = builder.Configuration["Database:Provider"]
 							   ?? throw new InvalidOperationException("Database:Provider is not configured.");
 		var identityConnectionString = builder.Configuration.GetConnectionString("JobTrackIdentity")
@@ -309,6 +402,11 @@ public sealed class Program
 				throw new InvalidOperationException($"Unknown Database:Provider '{databaseProvider}'.");
 		}
 
+		return databaseProvider;
+	}
+
+	private static void ConfigureAuthentication(WebApplicationBuilder builder)
+	{
 		// Bearer requests (the external HTTP API's non-browser CLI consumer, ADR 0029) and cookie
 		// requests (the browser) share every /api/* route and its authorization policies -- a policy
 		// scheme forwards each request to whichever concrete scheme actually applies to it, rather
@@ -324,16 +422,9 @@ public sealed class Program
 		_ = authenticationBuilder.AddScheme<AuthenticationSchemeOptions, PersonalAccessTokenAuthenticationHandler>(
 			PersonalAccessTokenAuthenticationDefaults.AuthenticationScheme, _ => { });
 		_ = builder.Services.AddJobTrackApi();
-		var cookieSecurePolicy = builder.Configuration.GetValue<bool>(RequireSecureCookiesConfigKey)
-			? CookieSecurePolicy.Always
-			: CookieSecurePolicy.SameAsRequest;
-		_ = builder.Services.AddAntiforgery(options => {
-			options.HeaderName = JobTrackApi.AntiforgeryHeaderName;
-			options.Cookie.SecurePolicy = cookieSecurePolicy;
-		});
-		_ = builder.Services.Configure<CookieTempDataProviderOptions>(options =>
-			options.Cookie.SecurePolicy = cookieSecurePolicy);
+	}
 
+	private static void ConfigureAuthorizationPolicies(WebApplicationBuilder builder) =>
 		// Named, default-deny policies for the six baseline roles (plan §8.3). Coarse admission
 		// only -- the library reloads authoritative roles, ownership, and subtree scope itself
 		// inside each operation (plan §8.3, spec §7.1) rather than trusting these role claims alone.
@@ -395,6 +486,18 @@ public sealed class Program
 				   .AddPolicy(EmployeeRoleNames.CostViewer, policy => policy.RequireRole(EmployeeRoleNames.CostViewer))
 				   .AddPolicy(EmployeeRoleNames.Auditor, policy => policy.RequireRole(EmployeeRoleNames.Auditor));
 
+	private static void ConfigureCookiePolicy(WebApplicationBuilder builder)
+	{
+		var cookieSecurePolicy = builder.Configuration.GetValue<bool>(RequireSecureCookiesConfigKey)
+			? CookieSecurePolicy.Always
+			: CookieSecurePolicy.SameAsRequest;
+		_ = builder.Services.AddAntiforgery(options => {
+			options.HeaderName = JobTrackApi.AntiforgeryHeaderName;
+			options.Cookie.SecurePolicy = cookieSecurePolicy;
+		});
+		_ = builder.Services.Configure<CookieTempDataProviderOptions>(options =>
+			options.Cookie.SecurePolicy = cookieSecurePolicy);
+
 		_ = builder.Services.Configure<IdentityOptions>(options => {
 			options.Lockout.MaxFailedAccessAttempts = MaxFailedAccessAttempts;
 			options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(LockoutMinutes);
@@ -428,7 +531,10 @@ public sealed class Program
 				"Forbidden",
 				"/problems/authorization-denied");
 		});
+	}
 
+	private static void ConfigureSecurityStampValidation(WebApplicationBuilder builder)
+	{
 		// Prompt re-validation of the security stamp on every request (spec §7.1: session
 		// revocation on disablement/reset/password change must not wait for the default
 		// 30-minute validation interval).
@@ -460,7 +566,10 @@ public sealed class Program
 				}
 			};
 		});
+	}
 
+	private static void ConfigureRateLimiting(WebApplicationBuilder builder, string databaseProvider)
+	{
 		var loginRateLimitPermitLimit =
 			builder.Configuration.GetValue(LoginRateLimitPermitLimitConfigKey, LoginRateLimitPermitLimit);
 		var loginRateLimitWindowSeconds =
@@ -517,12 +626,10 @@ public sealed class Program
 			_ = builder.Services.AddSingleton<IApiRateLimitStore>(_ =>
 				new InProcessApiRateLimitStore(apiRateLimitPermitLimit, TimeSpan.FromSeconds(apiRateLimitWindowSeconds)));
 		}
+	}
 
-		_ = builder.Services.AddSingleton(TimeProvider.System);
-		_ = builder.Services.AddSingleton<ApplicationReadinessState>();
-		_ = builder.Services.AddSingleton(sp => new ReadinessProbeGate(
-			sp.GetRequiredService<TimeProvider>(), TimeSpan.FromSeconds(ReadinessProbeCacheSeconds)));
-
+	private static void ConfigureForwardedHeaders(WebApplicationBuilder builder)
+	{
 		var knownProxies = builder.Configuration.GetSection(ForwardedHeadersKnownProxiesConfigKey).Get<string[]>() ?? [];
 		var knownNetworks = builder.Configuration.GetSection(ForwardedHeadersKnownNetworksConfigKey).Get<string[]>() ?? [];
 		if (!builder.Environment.IsDevelopment() && knownProxies.Length == 0 && knownNetworks.Length == 0) {
@@ -542,7 +649,11 @@ public sealed class Program
 				options.KnownIPNetworks.Add(IPNetwork.Parse(network));
 			}
 		});
+	}
 
+	/// <summary>Returns whether the PostgreSQL-backed data-protection key store was selected, for <see cref="ValidateDeploymentTopology" />.</summary>
+	private static bool ConfigureDataProtection(WebApplicationBuilder builder, string databaseProvider)
+	{
 		var dataProtectionStore = builder.Configuration[DataProtectionStoreConfigKey];
 		if (dataProtectionStore is not null
 			&& dataProtectionStore != DataProtectionStoreFileSystem
@@ -597,6 +708,11 @@ public sealed class Program
 			}
 		}
 
+		return usePostgreSqlDataProtectionStore;
+	}
+
+	private static void ValidateAllowedHosts(WebApplicationBuilder builder)
+	{
 		var allowedHostEntries = (builder.Configuration[AllowedHostsConfigKey] ?? string.Empty)
 			.Split(AllowedHostsSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 		if (!builder.Environment.IsDevelopment()
@@ -604,24 +720,10 @@ public sealed class Program
 			throw new InvalidOperationException(
 				$"{AllowedHostsConfigKey} must list this deployment's own host names outside Development; '{AllowedHostsCatchAll}' disables host filtering entirely.");
 		}
+	}
 
-		_ = builder.Services.AddCors(options => options.AddPolicy(CorsPolicyName, policy => policy.WithOrigins()));
-
-		_ = builder.Services.AddRequestTimeouts(options =>
-			options.DefaultPolicy = new() {
-				Timeout = TimeSpan.FromSeconds(RequestTimeoutSeconds),
-			});
-
-		// Kestrel-level defense in depth; the enforced, testable limit is the middleware below --
-		// WebApplicationFactory's TestServer never exercises Kestrel's own body-size enforcement,
-		// so this line has no in-process test coverage (see docs/operations/web-host-security.md).
-		_ = builder.WebHost.ConfigureKestrel(options => {
-			options.Limits.MaxRequestBodySize = MaxRequestBodyBytes;
-			options.Limits.MinRequestBodyDataRate = new(
-				MinRequestBodyDataRateBytesPerSecond,
-				TimeSpan.FromSeconds(MinRequestBodyDataRateGracePeriodSeconds));
-		});
-
+	private static void ValidateDeploymentTopology(WebApplicationBuilder builder, string databaseProvider, bool usePostgreSqlDataProtectionStore)
+	{
 		var deploymentTopology = builder.Configuration[DeploymentTopologyConfigKey];
 		if (deploymentTopology is not null
 			&& deploymentTopology != DeploymentTopologySingleInstance
@@ -630,61 +732,56 @@ public sealed class Program
 				$"{DeploymentTopologyConfigKey} must be '{DeploymentTopologySingleInstance}' or '{DeploymentTopologyMultiInstance}' if set.");
 		}
 
-		if (deploymentTopology == DeploymentTopologyMultiInstance) {
-			if (databaseProvider != PostgreSqlProviderName) {
-				throw new InvalidOperationException(
-					$"{DeploymentTopologyConfigKey}={DeploymentTopologyMultiInstance} requires Database:Provider={PostgreSqlProviderName}.");
-			}
-
-			if (!usePostgreSqlDataProtectionStore) {
-				throw new InvalidOperationException(
-					$"{DeploymentTopologyConfigKey}={DeploymentTopologyMultiInstance} requires {DataProtectionStoreConfigKey}={DataProtectionStorePostgreSql}.");
-			}
-
-			if (!useSharedRateLimitStore) {
-				throw new InvalidOperationException(
-					$"{DeploymentTopologyConfigKey}={DeploymentTopologyMultiInstance} requires {RateLimitingStoreConfigKey}={RateLimitingStorePostgreSql}.");
-			}
+		if (deploymentTopology != DeploymentTopologyMultiInstance) {
+			return;
 		}
 
-		var app = builder.Build();
+		if (databaseProvider != PostgreSqlProviderName) {
+			throw new InvalidOperationException(
+				$"{DeploymentTopologyConfigKey}={DeploymentTopologyMultiInstance} requires Database:Provider={PostgreSqlProviderName}.");
+		}
 
-		// Stage 6: flip readiness to draining as soon as shutdown begins, not when the process
-		// actually exits -- ApplicationStopping fires before Kestrel stops accepting connections,
-		// giving an orchestrator a window to observe /health/ready failing and stop routing new
-		// requests here while in-flight ones finish.
-		var readinessState = app.Services.GetRequiredService<ApplicationReadinessState>();
-		_ = app.Lifetime.ApplicationStopping.Register(readinessState.BeginDraining);
+		if (!usePostgreSqlDataProtectionStore) {
+			throw new InvalidOperationException(
+				$"{DeploymentTopologyConfigKey}={DeploymentTopologyMultiInstance} requires {DataProtectionStoreConfigKey}={DataProtectionStorePostgreSql}.");
+		}
 
-		// Forwarded-header trust boundary comes first: it must run before anything (HTTPS
-		// redirection, rate limiting by remote IP) that reads the scheme or client address.
-		_ = app.UseForwardedHeaders();
+		var rateLimitingStore = builder.Configuration[RateLimitingStoreConfigKey];
+		if (rateLimitingStore != RateLimitingStorePostgreSql) {
+			throw new InvalidOperationException(
+				$"{DeploymentTopologyConfigKey}={DeploymentTopologyMultiInstance} requires {RateLimitingStoreConfigKey}={RateLimitingStorePostgreSql}.");
+		}
+	}
 
+	private static void ConfigureExceptionHandling(WebApplication app)
+	{
 		// Configure the HTTP request pipeline.
-		if (!app.Environment.IsDevelopment()) {
-			// StatusCodeSelector: without it, ExceptionHandlerMiddleware forces every unhandled
-			// exception -- including Kestrel's own BadHttpRequestException for a body exceeding
-			// MaxRequestBodySize mid-read -- to 500, misreporting a legitimate client-side rejection
-			// as a server fault. BadHttpRequestException carries the status code Kestrel itself would
-			// have used (400/413) had the exception not been intercepted here first. It surfaces one
-			// level down the chain, not as the top-level exception: antiforgery validation reads the
-			// request form to locate the token, so an oversized POST throws
-			// AntiforgeryValidationException with the BadHttpRequestException as its InnerException.
-			_ = app.UseExceptionHandler(new ExceptionHandlerOptions {
-				ExceptionHandlingPath = "/Error",
-				StatusCodeSelector = static exception => exception switch {
-					BadHttpRequestException badHttpRequestException => badHttpRequestException.StatusCode,
-															 { InnerException: BadHttpRequestException innerBadHttpRequestException } =>
-																 innerBadHttpRequestException.StatusCode,
-					_ => StatusCodes.Status500InternalServerError,
-				},
-			});
-			// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-			_ = app.UseHsts();
+		if (app.Environment.IsDevelopment()) {
+			return;
 		}
 
-		_ = app.UseHttpsRedirection();
+		// StatusCodeSelector: without it, ExceptionHandlerMiddleware forces every unhandled
+		// exception -- including Kestrel's own BadHttpRequestException for a body exceeding
+		// MaxRequestBodySize mid-read -- to 500, misreporting a legitimate client-side rejection
+		// as a server fault. BadHttpRequestException carries the status code Kestrel itself would
+		// have used (400/413) had the exception not been intercepted here first. It surfaces one
+		// level down the chain, not as the top-level exception: antiforgery validation reads the
+		// request form to locate the token, so an oversized POST throws
+		// AntiforgeryValidationException with the BadHttpRequestException as its InnerException.
+		_ = app.UseExceptionHandler(new ExceptionHandlerOptions {
+			ExceptionHandlingPath = "/Error",
+			StatusCodeSelector = static exception => exception switch {
+				BadHttpRequestException badHttpRequestException => badHttpRequestException.StatusCode,
+														 { InnerException: BadHttpRequestException innerBadHttpRequestException } =>
+															 innerBadHttpRequestException.StatusCode,
+				_ => StatusCodes.Status500InternalServerError,
+			},
+		});
+		// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+		_ = app.UseHsts();
+	}
 
+	private static void UseSecurityHeaders(WebApplication app) =>
 		_ = app.Use(async (context, next) => {
 			context.Response.Headers[ContentSecurityPolicyHeaderName] = ContentSecurityPolicy;
 			context.Response.Headers[ContentTypeOptionsHeaderName] = ContentTypeOptionsHeaderValue;
@@ -708,6 +805,7 @@ public sealed class Program
 			await next(context);
 		});
 
+	private static void UseRequestBodySizeLimit(WebApplication app) =>
 		_ = app.Use(async (context, next) => {
 			if (context.Request.ContentLength is long contentLength && contentLength > MaxRequestBodyBytes) {
 				context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
@@ -731,16 +829,7 @@ public sealed class Program
 			await next(context);
 		});
 
-		_ = app.UseRouting();
-
-		_ = app.UseCors(CorsPolicyName);
-
-		// Authentication must run before rate limiting: the external API's per-user partition key
-		// reads the authenticated principal's name, which does not exist yet if this runs first --
-		// every caller would otherwise fall back to the same remote-address partition regardless of
-		// which user they are.
-		_ = app.UseAuthentication();
-
+	private static void UseApiRateLimiting(WebApplication app) =>
 		// A plain middleware, not an endpoint filter (ADR 0066 Stage 5): an endpoint filter runs only
 		// after UseAuthorization() lets a request through to its endpoint, so it could never limit a
 		// caller authorization was always going to reject anyway -- this must sit exactly where the
@@ -773,10 +862,8 @@ public sealed class Program
 			}
 		});
 
-		_ = app.UseAuthorization();
-		_ = app.UseAntiforgery();
-		_ = app.UseRequestTimeouts();
-
+	private static void MapHealthEndpoints(WebApplication app, ApplicationReadinessState readinessState, string databaseProvider)
+	{
 		// Stage 6: process-only liveness -- no dependency check, so a database outage never makes
 		// Cloud Run kill and replace an otherwise-healthy instance. Anonymous and outside the
 		// /api-prefixed rate-limiting middleware above (structural exemption, not a per-route opt
@@ -821,13 +908,6 @@ public sealed class Program
 
 			return isReady ? Results.Ok() : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 		}).AllowAnonymous().ExcludeFromDescription();
-
-		_ = app.MapStaticAssets();
-		app.MapJobTrackApi();
-		_ = app.MapRazorPages()
-			   .WithStaticAssets();
-
-		app.Run();
 	}
 
 	private static async Task WriteRateLimitProblemAsync(HttpContext context, int statusCode, string title, string detail, string problemType)

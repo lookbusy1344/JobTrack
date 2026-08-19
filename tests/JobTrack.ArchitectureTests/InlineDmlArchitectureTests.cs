@@ -28,12 +28,12 @@ public sealed class InlineDmlArchitectureTests
 			"ExecuteSqlInterpolatedAsync",
 			"move_job_node"),
 		new(
-			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.cs"),
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.Prerequisites.cs"),
 			"AddPrerequisiteAsync",
 			"ExecuteSqlInterpolatedAsync",
 			"add_job_prerequisite"),
 		new(
-			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.cs"),
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.Prerequisites.cs"),
 			"AddPrerequisitesAsync",
 			"ExecuteSqlInterpolatedAsync",
 			"add_job_prerequisite"),

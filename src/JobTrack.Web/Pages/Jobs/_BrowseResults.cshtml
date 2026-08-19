@@ -1,0 +1,282 @@
+@using JobTrack.Abstractions
+@using JobTrack.Identity
+@using NodaTime
+@model BrowseModel
+@{
+	// Sprite symbol id and the spoken noun for a node's kind — the two halves of the tree row's
+	// leading glyph: the drawn icon (aria-hidden) and the screen-reader label that replaces it.
+	static string KindIconId(NodeKind kind) => kind switch {
+		                                           NodeKind.Root => "jt-icon-root",
+		                                           NodeKind.Branch => "jt-icon-branch",
+		                                           NodeKind.Leaf => "jt-icon-leaf",
+		                                           _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                           };
+
+	static string KindNoun(NodeKind kind) => kind switch {
+		                                         NodeKind.Root => "root",
+		                                         NodeKind.Branch => "branch",
+		                                         NodeKind.Leaf => "leaf",
+		                                         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+	                                         };
+}
+
+@if (Model.IsSearch) {
+	<h2>Matches</h2>
+	@if (Model.Children.Count == 0) {
+		<p class="jt-empty">No jobs to show.</p>
+	} else {
+		<div class="jt-table-block">
+			<table class="table jt-browse-children-table">
+				<thead>
+				<tr>
+					<th scope="col" class="col-8 col-md-4 col-lg-3">Description</th>
+					<th scope="col" class="col-2 col-md-1">Kind</th>
+					<th scope="col" class="jt-col-secondary jt-col-owner col-lg-1 d-none d-lg-table-cell">Owner</th>
+					@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
+					   workers' names (the preview list below the count pill) need more than a twelfth of the
+					   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
+					   the column, staying at its "at least 3 of 12" floor rather than the 4 it held before. *@
+					<th scope="col" class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">Active</th>
+					<th scope="col" class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
+					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">Archived</th>
+					<th scope="col" class="col-2 text-end">Actions</th>
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var child in Model.Children) {
+					var childActions = child.HasChildren
+						? null
+						: Model.WorkRowActionsFor(child.Id, "Start", "leafNodeId", child.Achievement, child.ArchivedAt is not null);
+					<tr>
+						<td class="col-8 col-md-4 col-lg-3">
+							<a class="jt-preserve-whitespace" asp-page="/Jobs/Browse"
+							   asp-route-nodeId="@child.Id.Value">@JobNodeDisplay.Title(child, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+							@if (child.HasChildren) {
+								<span class="jt-muted"> · has children</span>
+							}
+						</td>
+						<td class="col-2 col-md-1">
+							<partial name="_KindIcon" model="@(new KindIconModel {
+								                                 Kind = child.Kind, ShowLabel = false,
+							                                 })"/>
+						</td>
+						<td class="jt-col-secondary jt-col-owner col-lg-1 d-none d-lg-table-cell">
+							@if (child.OwnerUserId is AppUserId childOwnerUserId) {
+								@Model.DescribeOwner(childOwnerUserId)
+							} else {
+								<span class="d-inline-flex align-items-center gap-2">
+									<span>Unassigned</span>
+									<partial name="_PickUpButton"
+									         model="@(new PickUpButtonModel {
+										                NodeId = child.Id.Value, PageStateFields = Model.RowStateFields,
+									                })"/>
+								</span>
+							}
+						</td>
+						<td class="jt-col-active col-md-2 col-lg-2 d-none d-md-table-cell">
+							<partial name="_ActiveSincePill"
+							         model="@(new ActiveSessionSummaryModel {
+								                ActiveSessions = childActions?.ActiveSessions ?? [],
+								                ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+								                DescribeWorker = id => Model.DescribeOwner(id),
+								                ViewerZone = Model.ViewerZone,
+								                Now = Model.Now,
+								                Archived = child.ArchivedAt is not null,
+								                Achievement = child.Achievement,
+								                Paused = childActions?.IsPaused ?? false,
+							                })"/>
+						</td>
+						<td class="jt-col-cost col-md-3 col-lg-2 text-end d-none d-md-table-cell">
+							@if (child.Cost is Money cost && child.AllocatedDuration is not null) {
+								@CostDisplay.FormatCell(cost, child.AllocatedDuration)
+							}
+						</td>
+						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@(child.ArchivedAt is not null ? "yes" : "no")</td>
+						<td class="col-2">
+							@if (childActions is not null) {
+								<partial name="_WorkRowActions" model="childActions"/>
+							}
+						</td>
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+} else if (Model.Subtree is not null && Model.CurrentNode is { Node.HasChildren: true }) {
+	<h2>Subtree</h2>
+
+	@if (Model.SubtreeDescendants.Count == 0) {
+		<p class="jt-empty">No jobs to show.</p>
+	} else {
+		<div class="jt-table-block">
+			<table class="table jt-browse-children-table">
+				<thead>
+				<tr>
+					@* No Kind or Archived column: the row's leading glyph names root/branch/leaf, and an
+					   archived row is flagged in place beside its name. *@
+					<th scope="col" class="col-9 col-md-7 col-lg-5">Description</th>
+					@* col-lg-1 at every breakpoint it appears: the cell holds "d MMM" (or "HH:mm" when the
+					   deadline is today), so a twelfth is already more than its content needs and the
+					   heading word itself is what actually sets the floor. Description takes the rest.
+					   "Due", aria-labelled "Deadline", is the same abbreviation AwaitingProgress uses for
+					   this field — "Deadline" is wider than anything in the column below it. *@
+					<th scope="col" class="jt-col-secondary col-lg-1 d-none d-lg-table-cell" aria-label="Deadline">Due</th>
+					@* col-lg-2, not the col-lg-1 every other secondary column gets: two or more simultaneous
+					   workers' names (the preview list below the count pill) need more than a twelfth of the
+					   row at this breakpoint or they wrap to a ladder of one-word lines. Description gives up
+					   the column, staying at its "at least 3 of 12" floor rather than the 4 it held before. *@
+					@* A wrap before </th> puts a newline and tabs inside the heading, which
+					   BrowseWorkSessionTests' single-string assertion cannot read. *@
+					@* @formatter:off *@
+					<th scope="col" class="jt-col-active col-1 col-md-1 col-lg-2" aria-label="Active"><span class="d-none d-lg-inline">Active</span></th>
+					@* @formatter:on *@
+					<th scope="col" class="jt-col-cost col-md-2 col-lg-2 text-end d-none d-md-table-cell">Cost</th>
+					<th scope="col" class="col-2 text-end">Actions</th>
+				</tr>
+				</thead>
+				<tbody>
+				@foreach (var node in Model.SubtreeDescendants) {
+					var nodeActions = node.HasChildren
+						? null
+						: Model.WorkRowActionsFor(node.Id, "Start", "leafNodeId", node.Achievement, node.ArchivedAt is not null);
+					var activeSummary = new ActiveSessionSummaryModel {
+						ActiveSessions = nodeActions?.ActiveSessions ?? [],
+						ViewerId = Model.CurrentActorId ?? new AppUserId(0),
+						DescribeWorker = id => Model.DescribeOwner(id),
+						ViewerZone = Model.ViewerZone,
+						Now = Model.Now,
+						Archived = node.ArchivedAt is not null,
+						Achievement = node.Achievement,
+						BranchAchievement = node.BranchAchievement,
+						Paused = nodeActions?.IsPaused ?? false,
+						UnacknowledgedRequest = node.Kind is NodeKind.Leaf && node.HasUnacknowledgedRequest,
+						Unstarted = node.Kind is NodeKind.Leaf && !node.HasSessionHistory,
+					};
+					<tr>
+						<td class="jt-tree-cell col-9 col-md-7 col-lg-5" data-jt-depth="@node.Depth">
+							<span class="jt-tree-guide" aria-hidden="true">
+								@for (var railLevel = 1; railLevel < node.Depth; ++railLevel) {
+									<span class="jt-tree-rail"></span>
+								}
+								<span class="jt-tree-elbow"></span>
+							</span>
+							<span class="jt-tree-label">
+								@if (!node.IsReady) {
+									@* ADR 0043 decision 2: blocked rows are marked and ready rows are not — in a
+									   healthy tree a sign on every row would bury the few that matter. The same
+									   stop palm the readiness pill uses, so the two never read as different facts.
+									   Leads the row (beside the kind icon, ahead of the name) so it reads at a
+									   glance rather than after scanning past the name first. *@
+									<svg class="jt-tree-flag jt-tree-blocked jt-tree-flag--leading" viewBox="0 0 16 16" aria-hidden="true"
+									     focusable="false">
+										<use href="#jt-icon-stop"></use>
+									</svg>
+									<span class="visually-hidden">Blocked by a prerequisite.</span>
+								}
+								<svg class="jt-tree-icon jt-tree-icon--@KindNoun(node.Kind)" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<use href="#@KindIconId(node.Kind)"></use>
+								</svg>
+								<span class="jt-tree-text">
+									<span class="visually-hidden">Level @node.Depth, @KindNoun(node.Kind).</span>
+									<a class="jt-tree-name-link jt-preserve-whitespace jt-description-link" asp-page="/Jobs/Browse"
+									   asp-route-nodeId="@node.Id.Value">@JobNodeDisplay.Title(node, JobNodeDisplay.RowTitleMaxDescriptionLength)</a>
+									@if (node.HasUnexpandedChildren) {
+										@* The name already links here; this only says the container holds more
+										   than is drawn, so it is a marker, not a second link to the same page. *@
+										<span class="jt-tree-more" aria-hidden="true">&hellip;</span>
+										<span class="visually-hidden">More levels below.</span>
+									}
+									@if (node.ArchivedAt is not null) {
+										@* Replaces the Archived column: archived rows are the exception, so the
+										   fact belongs on the few rows that carry it, not in a column of "no". *@
+										<svg class="jt-tree-flag" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+											<use href="#jt-icon-archived"></use>
+										</svg>
+										<span class="visually-hidden">Archived.</span>
+									}
+								</span>
+							</span>
+						</td>
+						<td class="jt-col-secondary col-lg-1 d-none d-lg-table-cell">@{ var needed = node.NeededFinish ?? node.NeededStart; }
+							@if (needed is Instant neededInstant) {
+								<span
+									class="@(InstantDisplay.IsPast(neededInstant, Model.Now) && BrowseModel.SubtreeNodeIsOpen(node) ? "jt-overdue" : null)">@InstantDisplay.FormatCompact(neededInstant, Model.ViewerZone, Model.Now)</span>
+							}
+						</td>
+						<td class="jt-col-active col-1 col-md-1 col-lg-2">
+							<span class="d-lg-none">
+								<partial name="_ActiveStatusIcon" model="activeSummary"/>
+							</span>
+							<span class="d-none d-lg-inline">
+								<partial name="_ActiveSincePill" model="activeSummary"/>
+							</span>
+						</td>
+						<td class="jt-col-cost col-md-2 col-lg-2 text-end d-none d-md-table-cell">
+							@if (node.Cost is Money cost && node.AllocatedDuration is not null) {
+								@CostDisplay.FormatCell(cost, node.AllocatedDuration)
+							}
+						</td>
+						<td class="col-2">
+							@if (nodeActions is not null) {
+								<partial name="_WorkRowActions" model="nodeActions"/>
+							}
+						</td>
+					</tr>
+				}
+				</tbody>
+			</table>
+		</div>
+	}
+
+	@* The one filter that stayed on Browse rather than moving to Search: it genuinely scopes this
+	   subtree, unlike the owner/text fields that scope a whole-tree query. Below the list and
+	   right-aligned -- an occasional-use toggle, not something that should compete with the tree
+	   for attention. *@
+	<div class="d-flex justify-content-end mt-3">
+		<a class="btn btn-secondary btn-sm" asp-page="/Jobs/Browse" asp-route-nodeId="@Model.NodeId"
+		   asp-route-showArchived="@(!Model.ShowArchived)">@(Model.ShowArchived ? "Hide archived" : "Show archived")</a>
+	</div>
+} else if (Model.Panel is not null) {
+	<partial name="_LeafWorkSessions" model="Model.Panel"/>
+} else if (Model.CurrentNode is { Node.HasChildren: false, Node.HasLeafWork: false }) {
+	@* Neither branch above applies, so this node holds nothing yet -- and rendered nothing at all,
+	   leaving the page to end at the record card as though the rest had failed to load. Says instead
+	   what the two ways forward are, naming exactly the toolbar buttons above that offer them: a root
+	   can only take children, so it is not told to start a session it is never offered. Centred in the
+	   same white panel the subtree table and the sessions list occupy, so the empty case sits where the
+	   full one would rather than as an aside beside it -- a div rather than a p because the shared p
+	   rule caps prose at its reading measure, which would hold the panel short of that full width.
+	   Both halves act rather than describing an action to go and find: the child job is the link
+	   itself, and /Jobs/Create defaults the new node's owner to the viewer, so it already means "one
+	   of mine" without a route value saying so; the session is the same one-click POST the toolbar's
+	   own Start button makes (same handler, same hidden state), for the viewer, so it reads as a link
+	   while remaining a mutation. A root takes neither work nor a session, so it is offered only the
+	   child job -- never a control the command behind it would refuse. *@
+	var emptyNode = Model.CurrentNode.Node;
+	var emptyStartActions = emptyNode.Kind == NodeKind.Root
+		? null
+		: Model.WorkRowActionsFor(emptyNode.Id, "Start", "leafNodeId", Model.CurrentNodeAchievement, emptyNode.ArchivedAt is not null, true);
+	<div class="jt-card text-center">
+		@* One line, no line breaks between the sentence, the inline form, and the comma that follows it:
+		   the form is display:inline, so a newline on either side of it is rendered whitespace and showed
+		   as "session ," on the page -- the same trap as the deadline paren in the record card above.
+		   Only the noun is the control: "session" is what the button acts on, so the verb and article
+		   stay prose rather than swelling the click target to most of the sentence. fw-normal cancels
+		   .btn's 600 weight from the design language, which read heavier than the text around it; the
+		   utility wins on !important, so this stays a class rather than a CSS override. *@
+		@* @formatter:off *@
+		@if (emptyStartActions is not null && !emptyStartActions.IsStartClosed) {
+			<text>Start a work </text>
+			<form method="post" asp-page-handler="Start" class="d-inline">@foreach (var field in emptyStartActions.StartFields) {
+					<input type="hidden" name="@field.Key" value="@field.Value"/>
+				}
+				<button type="submit" class="btn btn-link p-0 align-baseline fw-normal">session</button>
+			</form><text>, or create a </text>
+		} else {
+			<text>Get started by creating a </text>
+		}
+		@* @formatter:on *@
+		<a asp-page="/Jobs/Create" asp-route-parentId="@emptyNode.Id.Value">child job</a>.
+	</div>
+}

@@ -33,6 +33,7 @@ public static class UatSeeder
 	///     department/holding-area rows described above; every other write goes through
 	///     <paramref name="client" />.
 	/// </summary>
+	[LongMethod("The synthetic UAT dataset is one ordered scenario whose later entities and transitions depend on state created earlier in the sequence.")]
 	public static async Task<UatSeedSummary> SeedAsync(
 		IJobTrackClient client, DbConnection connection, AppUserId administratorId, CancellationToken cancellationToken = default)
 	{

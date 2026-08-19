@@ -205,6 +205,7 @@ internal static class CostQueryAssembly
 	///     elevated read scope), that leaf's own path to the root -- <see cref="Domain.Rates.RateResolver" />
 	///     walks every session's own node upward looking for the nearest override.
 	/// </summary>
+	[LongMethod("The ordered cost-input materialization and ancestry extension form one query-planning operation whose data dependencies are clearer in execution order.")]
 	public static async Task<(WorkInterval Bounds, List<WorkerCostInputs> Workers)> LoadWorkersAndExtendAncestryAsync(
 		DbContext context, SubtreeLoad subtree, Instant asOf, CancellationToken cancellationToken)
 	{

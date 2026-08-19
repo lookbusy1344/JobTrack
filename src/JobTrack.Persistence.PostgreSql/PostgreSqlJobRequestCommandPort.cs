@@ -372,16 +372,12 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 								.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
 		var controlsAnchor = ancestorOwnerIds.Contains(request.Context.Actor.Value);
 
-		if (!RequesterAccessPolicy.CanView(
-				actorRoles,
-				new() {
-					ActorIsRequestOwner = jobRequest.RequesterUserId == request.Context.Actor,
-					IsDepartmentVisibilityEnabled = false,
-					ActorSharesRequestDepartment = false,
-					ActorControlsAnchorNode = controlsAnchor,
-				})) {
-			throw new AuthorizationDeniedException($"Actor {request.Context.Actor} may not view request {request.NodeId}.");
-		}
+		JobRequestPersistence.EnsureActorMayViewRequest(
+			actorRoles,
+			jobRequest.RequesterUserId == request.Context.Actor,
+			controlsAnchor,
+			request.Context.Actor,
+			request.NodeId);
 
 		var isStaffViewer = actorRoles.Contains(EmployeeRole.Administrator) || actorRoles.Contains(EmployeeRole.JobManager)
 																			|| actorRoles.Contains(EmployeeRole.Worker);

@@ -2,12 +2,36 @@ namespace JobTrack.Persistence.Shared;
 
 using Abstractions;
 using Application;
+using Domain.Authorization;
 using Domain.Hierarchy;
 using Entities;
 using Microsoft.EntityFrameworkCore;
 
 internal static class JobRequestPersistence
 {
+	/// <summary>
+	///     Applies <see cref="RequesterAccessPolicy" /> for a request-detail read, throwing when the
+	///     actor may not view it. Department-visibility facts are not yet wired, so both are false.
+	/// </summary>
+	public static void EnsureActorMayViewRequest(
+		EquatableArray<EmployeeRole> actorRoles,
+		bool actorIsRequestOwner,
+		bool controlsAnchor,
+		AppUserId actor,
+		JobNodeId nodeId)
+	{
+		if (!RequesterAccessPolicy.CanView(
+				actorRoles,
+				new() {
+					ActorIsRequestOwner = actorIsRequestOwner,
+					IsDepartmentVisibilityEnabled = false,
+					ActorSharesRequestDepartment = false,
+					ActorControlsAnchorNode = controlsAnchor,
+				})) {
+			throw new AuthorizationDeniedException($"Actor {actor} may not view request {nodeId}.");
+		}
+	}
+
 	public static async Task<IReadOnlyList<long>> RequireRequesterJobAsync(
 		DbContext context, JobNodeId nodeId, CancellationToken cancellationToken)
 	{

@@ -33,27 +33,7 @@ internal static class SubtreeImpactComputation
 		var nodeIds = rows.Select(r => new JobNodeId(r.Id)).ToList();
 		var leafWorkIds = rows.Where(r => r.HasLeafWork).Select(r => new JobNodeId(r.Id)).ToList();
 
-		var sessions = leafWorkIds.Count == 0
-			? []
-			: await context.Set<WorkSessionEntity>().AsNoTracking()
-						   .Where(s => leafWorkIds.Contains(s.LeafWorkId))
-						   .Select(s => new
-						   {
-							   s.LeafWorkId,
-							   s.StartedAt,
-							   s.FinishedAt,
-						   })
-						   .ToListAsync(cancellationToken).ConfigureAwait(false);
-
-		// An active session (no finish) has contributed no completed work yet, so it adds nothing to
-		// the total even though the row itself is still destroyed and counted.
-		var totalWorked = sessions.Aggregate(
-			Duration.Zero,
-			(running, s) => s.FinishedAt is Instant finishedAt ? running + (finishedAt - s.StartedAt) : running);
-
-		var sessionCountByLeaf = sessions
-								 .GroupBy(s => s.LeafWorkId)
-								 .ToDictionary(g => g.Key, g => g.Count());
+		var sessionImpact = await LoadSessionImpactAsync(context, leafWorkIds, cancellationToken).ConfigureAwait(false);
 
 		var edges = await context.Set<JobPrerequisiteEntity>().AsNoTracking()
 								 .Where(e => nodeIds.Contains(e.FromId) || nodeIds.Contains(e.ToId))
@@ -108,7 +88,7 @@ internal static class SubtreeImpactComputation
 						KindOf(r),
 						r.HasLeafWork ? (Achievement)r.AchievementId!.Value : null,
 						r.HasLeafWork,
-						sessionCountByLeaf.GetValueOrDefault(new(r.Id)),
+						sessionImpact.CountByLeaf.GetValueOrDefault(new(r.Id)),
 						r.IsArchived))
 					.ToList();
 
@@ -117,8 +97,8 @@ internal static class SubtreeImpactComputation
 			EquatableArray.CopyOf(nodes),
 			rows.Count,
 			rows.Count(r => r.HasLeafWork),
-			sessions.Count,
-			totalWorked,
+			sessionImpact.SessionCount,
+			sessionImpact.TotalWorked,
 			edges.Count - externalEdges.Count,
 			EquatableArray.CopyOf(externalEdges
 								  .Select(e => new SubtreeImpactPrerequisiteEdgeData(
@@ -130,6 +110,37 @@ internal static class SubtreeImpactComputation
 			jobRequestCount,
 			EquatableArray.CopyOf(holdingAreas),
 			root.ParentId is null);
+	}
+
+	/// <summary>
+	///     Sums the completed-session durations and per-leaf session counts a deletion would destroy.
+	///     An active session (no finish) has contributed no completed work yet, so it adds nothing to
+	///     the total even though the row itself is still destroyed and counted.
+	/// </summary>
+	private static async Task<(int SessionCount, Duration TotalWorked, IReadOnlyDictionary<JobNodeId, int> CountByLeaf)>
+		LoadSessionImpactAsync(DbContext context, List<JobNodeId> leafWorkIds, CancellationToken cancellationToken)
+	{
+		var sessions = leafWorkIds.Count == 0
+			? []
+			: await context.Set<WorkSessionEntity>().AsNoTracking()
+						   .Where(s => leafWorkIds.Contains(s.LeafWorkId))
+						   .Select(s => new
+						   {
+							   s.LeafWorkId,
+							   s.StartedAt,
+							   s.FinishedAt,
+						   })
+						   .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+		var totalWorked = sessions.Aggregate(
+			Duration.Zero,
+			(running, s) => s.FinishedAt is Instant finishedAt ? running + (finishedAt - s.StartedAt) : running);
+
+		var sessionCountByLeaf = sessions
+								 .GroupBy(s => s.LeafWorkId)
+								 .ToDictionary(g => g.Key, g => g.Count());
+
+		return (sessions.Count, totalWorked, sessionCountByLeaf);
 	}
 }
 

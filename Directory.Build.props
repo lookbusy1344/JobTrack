@@ -12,7 +12,7 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <Deterministic>true</Deterministic>
         <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-        <Version>1.1.1</Version>
+        <Version>1.1.2</Version>
         <Authors>lookbusy1344</Authors>
         <Copyright>Copyright (c) lookbusy1344</Copyright>
         <RepositoryUrl>https://github.com/lookbusy1344/JobTrack.git</RepositoryUrl>
