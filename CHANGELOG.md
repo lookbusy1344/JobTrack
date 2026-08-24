@@ -4,6 +4,27 @@ All notable changes to JobTrack are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 `MAJOR.MINOR.PATCH` release numbers.
 
+## [1.2.0] — 2026-08-24
+
+### Changed
+
+- **The Active column's "Unstarted" leaf status is merged into "Waiting"**
+  (ADR 0070). An open leaf yet to be worked now reads *Waiting* whether or not
+  a `leaf_work` record exists yet: starting one auto-attaches the record, so the
+  two states were indistinguishable to the user and the split only leaked an
+  internal detail. The unacknowledged-request status keeps its own distinct
+  pill, and the terminal, paused, closed and active states are unchanged.
+- Updated NuGet dependencies (Roslynator.Analyzers, AwesomeAssertions, FsCheck).
+
+### Documentation
+
+- Added an end-user **leaf status reference** — full name, short form, and
+  meaning for every Active-column status — to `docs/behaviour-overview.md`,
+  summarised as a quick table in the README.
+- Documented the **computed branch rollup** (Success once every leaf beneath a
+  branch has succeeded, Unfinished otherwise; derived at read time, never
+  stored) in the same two places.
+
 ## [1.1.2] — 2026-08-19
 
 ### Changed
@@ -12,7 +33,10 @@ All notable changes to JobTrack are recorded here. Format follows
   lines and added a hard file-length guard (1000 lines production/sample C#,
   500 Razor, 2000 test C#, no exception mechanism). Decomposed the eleven
   methods and nine files that exceeded the new ceilings — including
-  `Program.Main` and `MapJobTrackApi` — without behaviour change.
+  `Program.Main` and `MapJobTrackApi` — without behaviour change. The file
+  guard measures a C# file in code lines — lines carrying at least one token —
+  so comments and blank lines no longer consume the budget; Razor stays on
+  physical lines.
 - Updated NuGet dependencies (Roslynator.Analyzers, xunit.runner.visualstudio).
 
 ### Fixed

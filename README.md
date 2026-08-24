@@ -35,6 +35,33 @@ Two database backends are supported:
   every mitigation tied to a named test:
   [`docs/threat-model/web-authentication-threat-model.md`](docs/threat-model/web-authentication-threat-model.md).
 
+## Leaf statuses
+
+Every leaf shows one status. The short form appears where space is tight (a phone, a dense tree row);
+the full word appears elsewhere. Full reference: [`docs/behaviour-overview.md`](docs/behaviour-overview.md#leaf-status-reference).
+
+| Status | Short | Meaning |
+| --- | --- | --- |
+| Active | *(time)* / `N active` | Someone is working it right now |
+| Waiting | `Wait` | Open, not worked yet — Start begins the first session |
+| Paused | `Paused` | Started, nobody clocked on right now — Start resumes it |
+| Unack | `Unack` | A requester's submission staff have not accepted yet |
+| Success | `Succ` | Finished successfully (the only outcome that satisfies a prerequisite) |
+| Cancelled | `Cancel` | Withdrawn without completing |
+| Unsuccessful | `Unsucc` | Attempted but did not succeed |
+| Closed | `Closed` | Archived |
+
+A leaf whose prerequisites are unmet also carries a **blocked** marker over its status; work cannot
+start until they reach Success.
+
+Branches carry no leaf status of their own — their status is computed from the leaves beneath them
+(recursively) and collapses to two states:
+
+| Status | Meaning |
+| --- | --- |
+| Success | Every leaf in the branch has succeeded |
+| Unfinished | At least one leaf has not succeeded yet (the ordinary in-flight state) |
+
 ## Architecture
 
 More details: [`docs/architecture-overview.md`](docs/architecture-overview.md).
@@ -76,31 +103,36 @@ through `IJobTrackClient` — the dependency rules are asserted by the tests in
 ## Code size
 
 Lines of code as counted by [`tokei`](https://github.com/XAMPPRocky/tokei) (blank lines and comments
-excluded), as of 12 August 2026:
+excluded), as of 19 August 2026:
 
 | Area | Files | Lines of code |
 | --- | ---: | ---: |
-| Product — `src/` | 722 | 36,613 |
-| Tests — `tests/` | 432 | 66,852 |
-| Database schema — `database/` | 41 | 2,210 |
-| Sample API client — `samples/` | 19 | 1,079 |
+| Product — `src/` | 733 | 38,016 |
+| Tests — `tests/` | 445 | 72,854 |
+| Database schema — `database/` | 43 | 2,399 |
+| Sample API client — `samples/` | 19 | 1,171 |
 
-The 66k lines of test code are a consequence of *Test Driven Development*, with over 4,000 tests in the full suite. It takes up to 10 minutes to run, even on a fast Mac.
+The 72k lines of test code are a consequence of *Test Driven Development*, with over 4,000 tests in the full suite. It takes up to 10 minutes to run, even on a fast Mac.
+
+Files are held to hard size ceilings by an architecture guard: 1000 code lines for product and
+sample C#, 2000 for test C#, and 500 physical lines for Razor. A C# code line is one carrying at
+least one token, so comments and blank lines are free. Methods are capped at 75 executable lines.
 
 A short test script, aiming to complete in about 20 seconds, is used for pre-commit checks [`scripts/fast-test.sh`](scripts/fast-test.sh)
 
 ## Status
 
-**Current release: v1.1.1** (2026-08-16) — forbids node rate overrides on the root
-node (ADR 0069) and hardens architecture guards, over the accepted release gate
-below — no schema or contract changes.
+**Current release: v1.2.0** (2026-08-24) — merges the Active column's *Unstarted* leaf status into
+*Waiting* (ADR 0070), since starting an unstarted leaf auto-attaches its work record and the two read
+identically to a user, and adds an end-user leaf/branch status reference. No schema or contract
+changes. Full history: [CHANGELOG.md](CHANGELOG.md).
 
 **Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
 ([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),
 [0026](docs/decisions/0026-m6-library-gate-acceptance.md),
 [0027](docs/decisions/0027-m8-web-gate-acceptance.md),
 [0063](docs/decisions/0063-release-gate-acceptance-and-risk-acceptance.md)). The codebase was built
-test-first throughout (about 1.8 lines of test for every line of product code), passes its full
+test-first throughout (about 1.9 lines of test for every line of product code), passes its full
 solution and performance suites, and has been through three internal security audits, each fully
 remediated. Performance is enforced: measured budgets on a 200,000-node
 production-shape database run as regression ceilings on every performance-suite run.

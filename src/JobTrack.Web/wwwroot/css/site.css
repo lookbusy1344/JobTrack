@@ -1167,8 +1167,9 @@ fieldset legend {
     border-color: rgb(179 38 30 / 25%);
 }
 
-/* Waiting is a recorded, open outcome rather than the absence represented by Unstarted. Purple
-   keeps it visually distinct from every other Active-column state. */
+/* Waiting is every open leaf yet to be worked -- whether or not a leaf_work record exists yet, since
+   starting one auto-attaches it (ADR 0070). Purple keeps it distinct from every other Active-column
+   state. */
 .status-pill-waiting {
     background-color: var(--jt-purple-100);
     color: var(--jt-purple-700);
@@ -1186,16 +1187,8 @@ fieldset legend {
     border-color: rgb(138 86 6 / 35%);
 }
 
-/* Unstarted leaves are open work at rest and have not crossed into active work. Neutral slate keeps
-   them related to Paused without implying closure. */
-.status-pill-inactive {
-    background-color: var(--jt-slate-50);
-    color: var(--jt-slate-600);
-    border-color: rgb(71 88 106 / 25%);
-}
-
 /* Unacknowledged requester work remains open, but it needs to stand apart from an ordinary
-   Unstarted leaf at a glance. Blue is informational here: neither ready green nor blocked red. */
+   Waiting leaf at a glance. Blue is informational here: neither ready green nor blocked red. */
 .status-pill-unack {
     background-color: var(--jt-blue-100);
     color: var(--jt-blue-700);

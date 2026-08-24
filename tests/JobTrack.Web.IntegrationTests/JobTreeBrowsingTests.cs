@@ -274,11 +274,11 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task Subtree_leaf_rows_distinguish_unstarted_waiting_and_unacknowledged_open_work()
+	public async Task Subtree_leaf_rows_show_waiting_for_open_leaves_and_a_distinct_pill_for_unacknowledged_work()
 	{
 		var (adminId, workerId) = await BootstrapAndSeedWorkerAsync("browse.inactive-pills");
 		var rootId = bootstrappedRootId!.Value;
-		_ = await AddChildAsync(rootId, workerId, "No work attached");
+		var noWorkId = await AddChildAsync(rootId, workerId, "No work attached");
 		var waitingId = await AddChildAsync(rootId, workerId, "Waiting without sessions");
 		var pausedId = await AddChildAsync(rootId, workerId, "Previously worked");
 		var requestId = await AddChildAsync(rootId, workerId, "Unacknowledged request");
@@ -293,13 +293,15 @@ public sealed partial class JobTreeBrowsingTests : IAsyncLifetime, IDisposable
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
-		(body.Split("status-pill status-pill-inactive status-pill--compact\" title=\"Unstarted\">Unstrt</span>").Length - 1).Should()
-																															.Be(1, "only a leaf without a work record is Unstarted");
-		ExtractSubtreeRow(body, waitingId).Should()
-										  .Contain("status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>");
+		body.Should().NotContain("status-pill-inactive", "Unstarted is merged into Waiting -- a leaf without a work record reads Waiting too");
+		body.Should().NotContain(">Unstrt<");
+		var waitingPill = "status-pill-waiting status-pill--compact\" title=\"Waiting\">Wait</span>";
+		ExtractSubtreeRow(body, noWorkId).Should().Contain(waitingPill, "a leaf with no work record is Waiting");
+		ExtractSubtreeRow(body, waitingId).Should().Contain(waitingPill, "a leaf with a work record but no sessions is Waiting");
+		(body.Split(waitingPill).Length - 1).Should().Be(2, "both open leaves show the single merged Waiting pill");
 		(body.Split("status-pill status-pill-unack status-pill--compact\">Unack</span>").Length - 1).Should()
 																									.Be(1, "an unacknowledged request is the more specific open state");
-		body.Should().Contain("status-pill-unack", "the request state has its own blue-tinted pill rather than the neutral Unstarted treatment");
+		body.Should().Contain("status-pill-unack", "the request state keeps its own blue-tinted pill rather than the Waiting treatment");
 		(body.Split("status-pill status-pill-paused status-pill--compact").Length - 1).Should()
 																					  .Be(1, "a leaf with session history retains the existing paused state");
 	}

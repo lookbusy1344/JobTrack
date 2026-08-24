@@ -165,13 +165,14 @@ rendered a moment earlier.
 `/Jobs/Work?leafNodeId={id}` is the single interactive surface for a leaf's current status and its
 Sessions (ADR 0045). It shows one obvious primary action for the current state:
 
-- **Waiting or nothing recorded yet, no active session** — an **Unstarted** pill in Browse child
-  rows, and Start session (the same one-click `StartWorkAsync` composite described above; on an
+- **Waiting or nothing recorded yet, no active session** — a **Waiting** pill in Browse child
+  rows (ADR 0070: an open leaf yet to be worked reads Waiting whether or not a `leaf_work` record
+  exists yet), and Start session (the same one-click `StartWorkAsync` composite described above; on an
   unassigned node it also claims ownership, ADR 0048).
 - **An unacknowledged requester submission, no active session** — an **Unack** pill in Browse child
-  rows. Its informational blue tint distinguishes it from the neutral Unstarted and Paused states
+  rows. Its informational blue tint distinguishes it from the Waiting and Paused states
   while preserving that the request remains open; acknowledgement replaces it with the ordinary
-  Unstarted state until work begins.
+  Waiting state until work begins.
 - **In progress, no active session** — *paused*: work started and nobody is clocked on. A valid,
   ordinary state (ADR 0045 allows zero active sessions from `InProgress`) and exactly what Pause job
   produces, so it is named with a **Paused** pill wherever a leaf appears — `/Jobs/Work`, Browse's
@@ -204,6 +205,43 @@ authorized for, including reopening without starting a session — through the o
 
 `/Jobs/Achievement`, the page's now-retired predecessor, is a compatibility redirect to
 `/Jobs/Work#status`; nothing links to it directly any more.
+
+### Leaf status reference
+
+The Active column shows one status per leaf. In a tight space (a phone, a dense tree row) it shows the
+short form; everywhere else it shows the full word. On narrow rows a leaf being worked shows just a
+count and the workers' names.
+
+| Status | Short | What it means |
+| --- | --- | --- |
+| Active | *(time)* / `N active` | Someone is working it right now. One worker shows the start time; several show a count and names. |
+| Waiting | `Wait` | Open, nobody has worked it yet. Start begins the first session. |
+| Paused | `Paused` | Started, but nobody is clocked on right now. Start resumes it. |
+| Unack | `Unack` | A requester's submission that staff have not accepted yet. Becomes Waiting once acknowledged. |
+| Success | `Succ` | Finished, and it succeeded. The only outcome that satisfies a prerequisite. |
+| Cancelled | `Cancel` | Withdrawn without being carried to completion. |
+| Unsuccessful | `Unsucc` | Attempted, but it did not succeed. |
+| Closed | `Closed` | Archived. No work actions until it is restored. |
+
+Success, Cancelled and Unsuccessful are the three *terminal* outcomes. A leaf whose prerequisites are
+not yet met also carries a **blocked** stop marker over its status (ADR 0043): it stays in whatever
+status it is, but work cannot start until the prerequisites reach Success.
+
+#### Branches (and the root)
+
+A branch holds no work of its own, so it does not carry a leaf status. Instead its status is *computed*
+at read time from every leaf beneath it — recursively, through any nested branches — and collapses to
+just two states:
+
+| Status | What it means |
+| --- | --- |
+| Success | Every leaf in the branch's subtree has succeeded. |
+| Unfinished | At least one leaf has not succeeded yet. This is the ordinary in-flight state. |
+
+The six-value leaf vocabulary does not apply to a branch: a branch is never "Paused" or "Cancelled",
+only done (Success) or not (Unfinished). A Success branch shows the same **Succ** pill in the Active
+column as a succeeded leaf; an Unfinished branch shows nothing there. The rollup is never stored — it is
+recomputed whenever the tree is read, so restructuring the tree can never leave a stale branch status.
 
 ### Who can pause, complete, and resolve a paused leaf
 

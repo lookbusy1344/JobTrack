@@ -237,9 +237,9 @@ name through `md`; at `lg` and above the ordinary worded or counted pill returns
 
 Zero active workers has several meaningful states, and Browse subtree rows distinguish them. A
 recursively successful branch gets green `.status-pill-success` **Succ**, consuming the same
-request-cached branch result as the node detail; an unfinished branch renders no Active state. A
-leaf with no work record gets neutral `.status-pill-inactive` **Unstrt**; a recorded Waiting outcome
-gets the distinct purple `.status-pill-waiting` **Wait**. An unacknowledged requester submission gets
+request-cached branch result as the node detail; an unfinished branch renders no Active state. Any
+open leaf yet to be worked — whether or not a `leaf_work` record exists yet — gets the purple
+`.status-pill-waiting` **Wait** (ADR 0070 merged the old neutral **Unstrt** into it). An unacknowledged requester submission gets
 informational-blue `.status-pill-unack` **Unack**. A leaf
 that is `InProgress` with nobody clocked on is **paused** — `LeafActivity.IsPaused`, the one place
 that predicate lives — and gets `.status-pill-paused` via the `_PausedPill` partial, carrying the

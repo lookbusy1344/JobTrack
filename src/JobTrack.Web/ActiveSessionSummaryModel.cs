@@ -62,7 +62,11 @@ public sealed class ActiveSessionSummaryModel
 	/// <summary>Whether this open leaf anchors a requester submission not yet acknowledged by staff.</summary>
 	public bool UnacknowledgedRequest { get; init; }
 
-	/// <summary>Whether no work session has ever been recorded for this open leaf.</summary>
+	/// <summary>
+	///     Whether no work session has ever been recorded for this open leaf — surfaced as
+	///     <see cref="ActiveIdleStatus.Waiting" /> just like a leaf whose <c>leaf_work</c> sits at its
+	///     initial <see cref="Abstractions.Achievement.Waiting" /> (ADR 0070 merged the two).
+	/// </summary>
 	public bool Unstarted { get; init; }
 
 	/// <summary>The total number of active sessions on this leaf.</summary>
@@ -133,11 +137,11 @@ public sealed class ActiveSessionSummaryModel
 				return ActiveIdleStatus.Unacknowledged;
 			}
 
-			if (Achievement is Abstractions.Achievement.Waiting) {
-				return ActiveIdleStatus.Waiting;
-			}
-
-			return Unstarted ? ActiveIdleStatus.Unstarted : null;
+			// Waiting covers every open leaf yet to be worked, whether or not a leaf_work record exists:
+			// starting one auto-attaches leaf_work, so "no record" and "record at its initial Waiting
+			// achievement" are indistinguishable to the user (ADR 0070). Unstarted is the !HasSessionHistory
+			// input flag standing in for the no-record case.
+			return Achievement is Abstractions.Achievement.Waiting || Unstarted ? ActiveIdleStatus.Waiting : null;
 		}
 	}
 }
@@ -147,7 +151,6 @@ internal enum ActiveIdleStatus
 	Closed,
 	Paused,
 	Unacknowledged,
-	Unstarted,
 	Waiting,
 	Success,
 	Cancelled,
