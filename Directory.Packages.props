@@ -37,11 +37,11 @@
          (authenticator_key_protected, ADR 0037). A standalone NuGet package, not a
          FrameworkReference — available to JobTrack.Identity without the ASP.NET Core shared
          framework, consistent with ADR 0022's constraint. -->
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection" Version="10.0.12" />
     <!-- Microsoft.AspNetCore.DataProtection.EntityFrameworkCore: the multi-instance PostgreSQL key
          repository (ADR 0066 Stage 2, docs/plans/2026-07-26-multi-instance-web-deployment-plan.md
          §2.2). A standalone NuGet package like its non-EF sibling above. -->
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
   </ItemGroup>
   <ItemGroup Label="Database providers">
     <PackageVersion Include="Npgsql" Version="10.0.3" />
@@ -53,7 +53,7 @@
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>
   <ItemGroup Label="EF Core (impl plan §7.4, ADR 0010)">
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
