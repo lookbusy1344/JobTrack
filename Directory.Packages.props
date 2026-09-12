@@ -37,7 +37,7 @@
          (authenticator_key_protected, ADR 0037). A standalone NuGet package, not a
          FrameworkReference — available to JobTrack.Identity without the ASP.NET Core shared
          framework, consistent with ADR 0022's constraint. -->
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection" Version="10.0.12" />
     <!-- Microsoft.AspNetCore.DataProtection.EntityFrameworkCore: the multi-instance PostgreSQL key
          repository (ADR 0066 Stage 2, docs/plans/2026-07-26-multi-instance-web-deployment-plan.md
          §2.2). A standalone NuGet package like its non-EF sibling above. -->
