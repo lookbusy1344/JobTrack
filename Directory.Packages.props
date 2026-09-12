@@ -32,7 +32,7 @@
          IPasswordHasher<T> in the bootstrap command (ADR 0005) and as JobTrack.Identity's store
          abstractions (ADR 0022). JobTrack.Identity separately takes EF Core + provider
          PackageReferences (ADR 0022) without a FrameworkReference to Microsoft.AspNetCore.App. -->
-    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.12" />
     <!-- Microsoft.AspNetCore.DataProtection: encrypts the TOTP shared secret at rest
          (authenticator_key_protected, ADR 0037). A standalone NuGet package, not a
          FrameworkReference — available to JobTrack.Identity without the ASP.NET Core shared
