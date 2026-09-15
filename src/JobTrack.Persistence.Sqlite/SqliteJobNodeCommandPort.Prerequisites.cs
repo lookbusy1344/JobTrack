@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared;
 using Shared.Entities;
+using Shared.Ports;
 
 internal sealed partial class SqliteJobNodeCommandPort
 {
@@ -141,14 +142,15 @@ internal sealed partial class SqliteJobNodeCommandPort
 									  .OrderBy(assignee => assignee.UserId.Value)
 									  .ToList();
 		await IdentityUserWriteLock.AcquireManyAsync(
-			context, assignees.Select(assignee => assignee.UserId).Concat(request.HomeNodeUserIds), cancellationToken).ConfigureAwait(false);
+									   context, writeOperations, assignees.Select(assignee => assignee.UserId).Concat(request.HomeNodeUserIds), cancellationToken)
+								   .ConfigureAwait(false);
 		foreach (var assignee in assignees) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-				context, assignee.UserId, now, assignee.ConstraintId, cancellationToken).ConfigureAwait(false);
+				context, writeOperations, assignee.UserId, now, assignee.ConstraintId, cancellationToken).ConfigureAwait(false);
 		}
 
 		var created = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
-			transaction, ct => ImportSubtreeCoreAsync(context, request, now, ct), cancellationToken).ConfigureAwait(false);
+			transaction, ct => ImportSubtreeCoreAsync(context, writeOperations, request, now, ct), cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			Nodes = [
@@ -183,7 +185,8 @@ internal sealed partial class SqliteJobNodeCommandPort
 	///     whether an edge's endpoints are pre-existing nodes or ones this same call just created.
 	/// </summary>
 	private static async Task<List<(long LocalId, JobNodeEntity Entity)>> ImportSubtreeCoreAsync(
-		SqliteJobTrackDbContext context, ImportSubtreeRequest request, Instant now, CancellationToken cancellationToken)
+		SqliteJobTrackDbContext context, IProviderWriteOperations writeOperations, ImportSubtreeRequest request, Instant now,
+		CancellationToken cancellationToken)
 	{
 		var createdByLocalId = new Dictionary<long, JobNodeEntity>(request.Nodes.Count);
 		var created = new List<(long LocalId, JobNodeEntity Entity)>(request.Nodes.Count);
@@ -232,8 +235,8 @@ internal sealed partial class SqliteJobNodeCommandPort
 
 		if (request.HomeNodeLocalId is long homeNodeLocalId) {
 			await ImportHomeNodeAssignment.ApplyAsync(
-											  context, createdByLocalId[homeNodeLocalId].Id, request.HomeNodeUserIds, request.Context.Actor, now,
-											  request.Context.CorrelationId, cancellationToken)
+											  context, writeOperations, createdByLocalId[homeNodeLocalId].Id, request.HomeNodeUserIds,
+											  request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
 										  .ConfigureAwait(false);
 		}
 

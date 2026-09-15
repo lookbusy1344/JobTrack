@@ -151,11 +151,15 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 			// versions 0022-0023, ADR 0066 Stage 5) are the remaining exceptions: reached only through
 			// the SECURITY DEFINER rate_limit_try_consume function, never a direct table grant to any
 			// role. The explicit rate-limit privilege tests below pin that boundary.
+			// identity_user_passkey (schema version 0027, ADR 0071) is a credential-boundary table:
+			// jobtrack_domain has no grant on it at all -- WebAuthn credential material is reached only
+			// by jobtrack_identity and jobtrack_credential_administration, never by ordinary domain
+			// queries (spec §7.1). The_domain_role_has_no_access_to_identity_user_passkey below pins it.
 			command.CommandText =
 				"SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
 				"WHERE n.nspname = 'public' AND c.relkind = 'r' " +
 				"AND c.relname NOT IN " +
-				"('schema_version', 'identity_user', 'personal_access_token', 'data_protection_key', 'rate_limit_window', 'rate_limit_capacity_lock') " +
+				"('schema_version', 'identity_user', 'personal_access_token', 'data_protection_key', 'rate_limit_window', 'rate_limit_capacity_lock', 'identity_user_passkey') " +
 				"AND NOT has_table_privilege('jobtrack_domain', c.oid, 'SELECT') " +
 				"ORDER BY c.relname;";
 			await using var reader = await command.ExecuteReaderAsync();
@@ -220,10 +224,13 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		}
 
 		actual.Should().Equal(
+			"jobtrack_credential_administration:identity_user_touch_concurrency_stamp(p_app_user_id bigint)",
 			"jobtrack_credential_administration:pat_revoke_all(p_app_user_id bigint, p_now timestamp with time zone)",
+			"jobtrack_domain:identity_user_touch_concurrency_stamp(p_app_user_id bigint)",
 			"jobtrack_domain:pat_revoke_all(p_app_user_id bigint, p_now timestamp with time zone)",
 			"jobtrack_history_deletion:delete_subtree_history(p_root_id bigint, p_expected_version bigint, p_actor_user_id bigint, p_occurred_at timestamp with time zone, p_correlation_id uuid, p_reason text, p_before_data jsonb)",
 			"jobtrack_history_deletion:delete_worked_leaf_history(p_node_id bigint, p_expected_version bigint, p_actor_user_id bigint, p_occurred_at timestamp with time zone, p_correlation_id uuid, p_reason text, p_before_data jsonb)",
+			"jobtrack_history_deletion:identity_user_touch_concurrency_stamp(p_app_user_id bigint)",
 			"jobtrack_history_deletion:pat_revoke_all(p_app_user_id bigint, p_now timestamp with time zone)",
 			"jobtrack_identity:rate_limit_live_partition_count()",
 			"jobtrack_identity:rate_limit_try_consume(p_purpose text, p_partition_digest bytea, p_backstop_digest bytea, p_now timestamp with time zone, p_window_seconds integer, p_permit_limit integer, p_backstop_permit_limit integer, OUT out_allowed boolean, OUT out_rows_pruned integer)",
@@ -266,6 +273,31 @@ public sealed class PostgreSqlRoleGrantsTests : IAsyncLifetime
 		await selectAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		await insertAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 		await updateAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+	}
+
+	[Fact]
+	public async Task Only_credential_roles_can_read_identity_user_passkey()
+	{
+		await using var connection = await OpenDeployedConnectionAsync();
+		var (appUserId, _) = await SeedAppUserAsync(connection, "Alice Example");
+		_ = await InsertIdentityUserAsync(connection, appUserId);
+
+		var domainSelectAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_domain", "SELECT public_key FROM identity_user_passkey;");
+		var domainHandleAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_domain", "SELECT passkey_user_handle FROM identity_user;");
+		var readonlySelectAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_readonly", "SELECT public_key FROM identity_user_passkey;");
+		var readonlyHandleAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_readonly", "SELECT passkey_user_handle FROM identity_user;");
+		var emergencySelectAct = async () =>
+			await ExecuteAsRoleAsync(connection, "jobtrack_emergency_reset", "SELECT public_key FROM identity_user_passkey;");
+
+		await domainSelectAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await domainHandleAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await readonlySelectAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await readonlyHandleAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
+		await emergencySelectAct.Should().ThrowAsync<PostgresException>().Where(ex => ex.SqlState == "42501");
 	}
 
 	[Fact]

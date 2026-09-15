@@ -58,6 +58,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 			IsEnabled = true,
 			LockoutEnabled = true,
 			AccessFailedCount = 0,
+			PasskeyUserHandle = PasskeyUserHandleGenerator.Create(),
 		};
 		_ = context.Add(identityUser);
 
@@ -116,7 +117,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		if (request.Role == EmployeeRole.Requester) {
 			await WorkflowEmployeeEligibility.EnsureMayGrantRequesterRoleAsync(
-				context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
+				context, provider, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		}
 
 		_ = context.Add(new IdentityUserRoleEntity {
@@ -196,7 +197,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
-		_ = await IdentityUserWriteLock.AcquireAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, provider, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -275,7 +276,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
-		_ = await IdentityUserWriteLock.AcquireAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, provider, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -307,7 +308,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		var now = clock.GetCurrentInstant();
 		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
-		_ = await IdentityUserWriteLock.AcquireAsync(context, request.TargetUserId, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, provider, request.TargetUserId, cancellationToken).ConfigureAwait(false);
 		var target = await context.Set<IdentityUserEntity>()
 								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
 					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
@@ -329,6 +330,42 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		var roles = await GetRolesForIdentityUserAsync(context, target.Id, cancellationToken).ConfigureAwait(false);
 		return BuildAccountStateResult(request.TargetUserId, target, roles);
+	}
+
+	/// <inheritdoc />
+	public async Task<ResetEmployeePasskeysResult> ResetPasskeysAsync(
+		ResetEmployeePasskeysRequest request, CancellationToken cancellationToken = default)
+	{
+		await using var context = await provider.CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
+
+		var now = clock.GetCurrentInstant();
+		await AuthorizeAccountsOrThrowAsync(context, request.Context.Actor, now, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, provider, request.TargetUserId, cancellationToken).ConfigureAwait(false);
+		var target = await context.Set<IdentityUserEntity>()
+								  .FirstOrDefaultAsync(iu => iu.AppUserId == request.TargetUserId, cancellationToken).ConfigureAwait(false)
+					 ?? throw new EntityNotFoundException($"Employee {request.TargetUserId} does not exist.");
+
+		var removedCount = await context.Set<IdentityUserPasskeyEntity>()
+										.Where(p => p.IdentityUserId == target.Id)
+										.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+
+		target.SecurityStamp = Guid.NewGuid().ToString("N");
+		target.ConcurrencyStamp = Guid.NewGuid().ToString("N");
+
+		// No credential data in the audit payload (spec §16, ADR 0071 §9) -- a count only.
+		AuditEventWriter.Add(
+			context, request.Context.Actor, now, "reset-employee-passkeys", "identity_user", target.Id,
+			request.Context.CorrelationId, null, null, null);
+
+		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+		_ = await provider.RevokeAllTokensForUserAsync(context, request.TargetUserId, now, cancellationToken)
+						  .ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+		return new() {
+			RemovedCount = removedCount,
+		};
 	}
 
 	/// <inheritdoc />

@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared;
 using Shared.Entities;
+using Shared.Ports;
 
 /// <summary>
 ///     SQLite implementation of <see cref="IJobRequestCommandPort" /> (ADR 0033). One
@@ -35,12 +36,14 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 
 	private readonly IClock clock;
 	private readonly string connectionString;
+	private readonly IProviderWriteOperations writeOperations;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
 	public SqliteJobRequestCommandPort(string connectionString, IClock clock)
 	{
 		this.connectionString = connectionString;
 		this.clock = clock;
+		writeOperations = new SqliteWriteOperations(connectionString);
 	}
 
 	/// <inheritdoc />
@@ -73,7 +76,8 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		}
 
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, holdingArea.DefaultOwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+											 context, writeOperations, holdingArea.DefaultOwnerUserId, now, "job-node-owner-not-eligible", cancellationToken)
+										 .ConfigureAwait(false);
 
 		var node = new JobNodeEntity {
 			Id = default,

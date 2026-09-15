@@ -57,6 +57,11 @@ public sealed class InlineDmlArchitectureTests
 			"CreateOpenContextAsync",
 			"ExecuteSqlRawAsync",
 			"ConfigureConnectionSql"),
+		new(
+			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlIdentityUserFunctions.cs"),
+			"TouchConcurrencyStampAsync",
+			"ExecuteSqlInterpolatedAsync",
+			"identity_user_touch_concurrency_stamp"),
 	];
 
 	private static readonly FrozenSet<string> RawSqlMethods = FrozenSet.ToFrozenSet(

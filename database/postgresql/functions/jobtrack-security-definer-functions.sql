@@ -164,6 +164,25 @@ BEGIN
 END;
 $$;
 
+-- identity_user_touch_concurrency_stamp: the identity_user side of IdentityUserWriteLock's row lock
+-- (JobTrack.Persistence.Shared/IdentityUserWriteLock.cs). jobtrack_domain has only a column-restricted
+-- SELECT on identity_user (see ../roles/jobtrack-roles-and-grants.sql) -- deliberately no UPDATE, so a
+-- compromised domain credential cannot touch credential-equivalent state. The lock still needs to
+-- serialize a domain-side eligibility check against a concurrent credential-administration write (e.g.
+-- a passkey reset) on the same row, so the self-assignment runs here instead, through a narrow function
+-- signature that changes nothing but concurrency_stamp.
+CREATE OR REPLACE FUNCTION identity_user_touch_concurrency_stamp(p_app_user_id bigint) RETURNS void
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS
+$$
+UPDATE identity_user SET concurrency_stamp = concurrency_stamp WHERE app_user_id = p_app_user_id;
+$$;
+
+REVOKE ALL ON FUNCTION identity_user_touch_concurrency_stamp(bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION identity_user_touch_concurrency_stamp(bigint) TO jobtrack_domain;
+
 REVOKE ALL ON FUNCTION pat_issue(bigint, text, text, timestamptz, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION pat_try_authenticate(text, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION pat_list(bigint) FROM PUBLIC;

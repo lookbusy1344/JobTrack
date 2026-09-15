@@ -5,6 +5,28 @@ finish, and what the leaf work page does. This is the narrative walk-through;
 [`jobtrack_spec_codex.md`](jobtrack_spec_codex.md) is normative, [`ownership-model.md`](ownership-model.md)
 holds the full read/write matrix, and `decisions/*.md` are the ADRs cited throughout.
 
+## Signing in
+
+An account always has a password. Three sign-in paths exist (ADR 0071):
+
+- **Username and password.** The familiar form. If the account has TOTP two-factor enabled, sign-in
+  continues to a code prompt.
+- **A passkey alone.** A passkey (Face ID / Touch ID, Windows Hello, a phone, or a security key such
+  as a YubiKey) signs in on its own. Because the authenticator already verified the person locally,
+  JobTrack does **not** ask for a TOTP code afterwards, even on an account that has TOTP enabled.
+
+The login page keeps the password form and adds **Sign in with a passkey** beneath it; a discoverable
+passkey can also appear in the browser's autofill chooser without typing a username. When a browser
+has no passkey support, only the passkey option is hidden — the password form stays.
+
+An employee manages their own passkeys under **Sign-in & security** (formerly **Two-factor**): add a
+passkey with a memorable name (`Work MacBook`, `Blue YubiKey`), rename it, or remove it. Adding or
+removing a passkey re-confirms recent authentication first and signs other sessions out. TOTP and
+passkeys are independent: changing one never changes the other. There is no passkey-only account — the
+password always remains, and an administrator (or the `reset-passkeys` CLI) can clear inaccessible
+passkeys without touching the password or TOTP. Removing a passkey in JobTrack may leave a stale entry
+in the device's own passkey manager, which the employee clears there.
+
 ## Who can see and change what
 
 The short version: **anyone may look, only controllers may change** — with cost the one read that

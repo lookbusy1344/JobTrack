@@ -44,4 +44,11 @@ public sealed class JobTrackIdentityUser
 	public byte[]? AuthenticatorKeyProtected { get; set; }
 
 	public DateTimeOffset? TwoFactorEnabledAt { get; set; }
+
+	/// <summary>
+	///     Stable, random, non-PII WebAuthn user handle (32 random bytes, base64url text; ADR 0071).
+	///     Null until the account's first passkey enrolment. Never derived from username, display
+	///     name, email, or a hash of guessable PII.
+	/// </summary>
+	public string? PasskeyUserHandle { get; set; }
 }

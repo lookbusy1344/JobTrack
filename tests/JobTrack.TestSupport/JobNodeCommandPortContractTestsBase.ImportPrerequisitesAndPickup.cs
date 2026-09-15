@@ -1211,6 +1211,7 @@ public abstract partial class JobNodeCommandPortContractTestsBase
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
+			await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 
 			// PostgreSqlJobNodeCommandPort's worked-leaf/subtree deletion paths (ADR 0036/0061) call
 			// the command-shaped SECURITY DEFINER functions from the unversioned functions

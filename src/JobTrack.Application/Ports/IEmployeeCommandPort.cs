@@ -37,6 +37,10 @@ internal interface IEmployeeCommandPort
 	Task<AccountStateResult> ResetTwoFactorAsync(
 		ResetEmployeeTwoFactorRequest request, CancellationToken cancellationToken = default);
 
+	/// <inheritdoc cref="IEmployeeCommands.ResetPasskeysAsync" />
+	Task<ResetEmployeePasskeysResult> ResetPasskeysAsync(
+		ResetEmployeePasskeysRequest request, CancellationToken cancellationToken = default);
+
 	/// <inheritdoc cref="IEmployeeCommands.SetHomeNodeAsync" />
 	Task<EmployeeProfileResult> SetHomeNodeAsync(
 		SetHomeNodeRequest request, CancellationToken cancellationToken = default);

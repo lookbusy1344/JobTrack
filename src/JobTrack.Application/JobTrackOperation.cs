@@ -63,12 +63,9 @@ internal static class JobTrackOperation
 		}
 	}
 
-	private static Activity? Start(string operation, CommandContext? context, Func<Activity, Activity>? enrich)
-	{
-		return context is null
-			? Start(operation, null, Guid.Empty, enrich)
-			: Start(operation, context.Actor, context.CorrelationId, enrich);
-	}
+	private static Activity? Start(string operation, CommandContext? context, Func<Activity, Activity>? enrich) => context is null
+		? Start(operation, null, Guid.Empty, enrich)
+		: Start(operation, context.Actor, context.CorrelationId, enrich);
 
 	private static Activity? Start(
 		string operation, AppUserId? actorId, Guid correlationId, Func<Activity, Activity>? enrich)

@@ -4,6 +4,7 @@ using Abstractions;
 using Entities;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using Ports;
 
 /// <summary>
 ///     Revalidates an account at the write boundary before it is assigned technical ownership or
@@ -13,9 +14,9 @@ using NodaTime;
 internal static class WorkflowEmployeeEligibility
 {
 	public static async Task EnsureMayGrantRequesterRoleAsync(
-		DbContext context, AppUserId targetId, CancellationToken cancellationToken)
+		DbContext context, IProviderWriteOperations provider, AppUserId targetId, CancellationToken cancellationToken)
 	{
-		_ = await IdentityUserWriteLock.AcquireAsync(context, targetId, cancellationToken).ConfigureAwait(false);
+		_ = await IdentityUserWriteLock.AcquireAsync(context, provider, targetId, cancellationToken).ConfigureAwait(false);
 
 		var ownsJob = await context.Set<JobNodeEntity>().AsNoTracking()
 								   .AnyAsync(node => node.OwnerUserId == targetId, cancellationToken).ConfigureAwait(false);
@@ -30,13 +31,14 @@ internal static class WorkflowEmployeeEligibility
 	}
 
 	public static async Task EnsureMayBeAssignedWorkAsync(
-		DbContext context, AppUserId? targetId, Instant now, string constraintId, CancellationToken cancellationToken)
+		DbContext context, IProviderWriteOperations provider, AppUserId? targetId, Instant now, string constraintId,
+		CancellationToken cancellationToken)
 	{
 		if (!targetId.HasValue) {
 			return;
 		}
 
-		var identityUser = await IdentityUserWriteLock.AcquireAsync(context, targetId.Value, cancellationToken).ConfigureAwait(false);
+		var identityUser = await IdentityUserWriteLock.AcquireAsync(context, provider, targetId.Value, cancellationToken).ConfigureAwait(false);
 
 		var isLockedOut = identityUser.LockoutEnabled
 						  && identityUser.LockoutEnd is Instant lockoutEnd

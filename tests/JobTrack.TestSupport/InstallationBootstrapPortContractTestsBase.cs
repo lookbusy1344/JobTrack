@@ -43,6 +43,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 		result.AdministratorVersion.Should().Be(1);
 		result.RootJobNodeId.Value.Should().BePositive();
 		result.RootVersion.Should().Be(1);
+		(await ReadPasskeyUserHandleAsync(result.AdministratorId)).Should().HaveLength(PasskeyPolicy.UserHandleEncodedLength);
 	}
 
 	[Fact]
@@ -165,6 +166,7 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 		var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
+		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 	}
 
 	private async Task<string> ReadAppUserZoneIdAsync(AppUserId appUserId)
@@ -174,6 +176,15 @@ public abstract class InstallationBootstrapPortContractTestsBase : IAsyncLifetim
 		command.CommandText = "SELECT iana_time_zone FROM app_user WHERE id = @appUserId;";
 		command.AddParameter("@appUserId", appUserId.Value);
 
+		return (string)(await command.ExecuteScalarAsync())!;
+	}
+
+	private async Task<string> ReadPasskeyUserHandleAsync(AppUserId appUserId)
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT passkey_user_handle FROM identity_user WHERE app_user_id = @appUserId;";
+		command.AddParameter("@appUserId", appUserId.Value);
 		return (string)(await command.ExecuteScalarAsync())!;
 	}
 

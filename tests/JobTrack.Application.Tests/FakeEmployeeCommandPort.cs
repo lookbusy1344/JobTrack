@@ -130,6 +130,17 @@ internal sealed class FakeEmployeeCommandPort : IEmployeeCommandPort
 		return Task.FromResult(BuildAccountStateResult(request.TargetUserId, roles));
 	}
 
+	public Task<ResetEmployeePasskeysResult> ResetPasskeysAsync(
+		ResetEmployeePasskeysRequest request, CancellationToken cancellationToken = default)
+	{
+		AuthorizeAccountsOrThrow(request.Context.Actor);
+		_ = GetRolesOrThrow(request.TargetUserId);
+
+		return Task.FromResult(new ResetEmployeePasskeysResult {
+			RemovedCount = 0,
+		});
+	}
+
 	public Task<EmployeeProfileResult> SetHomeNodeAsync(
 		SetHomeNodeRequest request, CancellationToken cancellationToken = default)
 	{

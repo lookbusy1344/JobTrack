@@ -197,6 +197,26 @@ public sealed class JobTrackClientUsageExampleTests
 		public Task<ChangeOwnPasswordResult> ChangeOwnPasswordAsync(
 			ChangeOwnPasswordRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<EnsurePasskeyUserHandleResult> EnsurePasskeyUserHandleAsync(
+			EnsurePasskeyUserHandleRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<AddPasskeyResult> AddPasskeyAsync(
+			AddPasskeyRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<IReadOnlyList<PasskeySummary>> ListPasskeysAsync(
+			ListPasskeysRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<RenamePasskeyResult> RenamePasskeyAsync(
+			RenamePasskeyRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<RemovePasskeyResult> RemovePasskeyAsync(
+			RemovePasskeyRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
 	}
 
 	private sealed class FakeAuditQueries : IAuditQueries
@@ -317,6 +337,10 @@ public sealed class JobTrackClientUsageExampleTests
 
 		public Task<AccountStateResult> ResetTwoFactorAsync(
 			ResetEmployeeTwoFactorRequest request, CancellationToken cancellationToken = default) =>
+			throw new NotSupportedException("Not exercised by this usage example.");
+
+		public Task<ResetEmployeePasskeysResult> ResetPasskeysAsync(
+			ResetEmployeePasskeysRequest request, CancellationToken cancellationToken = default) =>
 			throw new NotSupportedException("Not exercised by this usage example.");
 
 		public Task<EmployeeProfileResult> SetHomeNodeAsync(

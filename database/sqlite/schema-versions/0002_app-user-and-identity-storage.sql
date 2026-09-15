@@ -14,6 +14,13 @@
 -- authentication (ADR 0037). authenticator_key_protected holds the Data-Protection-encrypted TOTP
 -- shared secret, never plaintext; two_factor_enabled_at uses the same tick encoding as lockout_end.
 --
+-- passkey_user_handle and identity_user_passkey: WebAuthn passkey credential
+-- storage (ADR 0071). SQLite is undeployed (ADR 0011), so this fresh schema
+-- is amended in place rather than in a forward migration. passkey_user_handle
+-- is a stable, random, non-PII WebAuthn user handle (32 random bytes,
+-- base64url text), nullable until first enrolment. created_at uses the same
+-- tick encoding as lockout_end.
+--
 -- Credential/account data is kept separate from the employee profile per
 -- spec §6.1: app_user never carries password hashes, stamps, or lockout
 -- state, and identity_user never carries employee-domain profile data.
@@ -44,8 +51,42 @@ CREATE TABLE identity_user
     two_factor_enabled        INTEGER NOT NULL DEFAULT 0 CHECK (two_factor_enabled IN (0, 1)),
     authenticator_key_protected BLOB,
     two_factor_enabled_at     INTEGER,
+    passkey_user_handle       TEXT UNIQUE CHECK (passkey_user_handle IS NULL OR length(passkey_user_handle) = 43),
     CHECK (two_factor_enabled = 0 OR authenticator_key_protected IS NOT NULL)
 ) STRICT;
+
+-- One row per enrolled WebAuthn credential (ADR 0071 §6.1). credential_id is
+-- globally unique (primary key), so one credential cannot attach to two
+-- accounts. normalized_name is derived once with invariant ToUpperInvariant
+-- in the application; the unique index compares that stored value exactly and
+-- never relies on NOCASE or SQLite locale. sign_count is an unsigned 32-bit
+-- logical range; is_user_verified rejects 0 (userVerification = required);
+-- aaguid is an optional fixed 16-byte authenticator identifier, never an
+-- authorization input. It remains NULL when ASP.NET Core's verified contract
+-- does not expose it.
+CREATE TABLE identity_user_passkey
+(
+    credential_id      BLOB    NOT NULL PRIMARY KEY CHECK (length(credential_id) BETWEEN 1 AND 1023),
+    identity_user_id   INTEGER NOT NULL REFERENCES identity_user (id) ON DELETE RESTRICT,
+    name               TEXT    NOT NULL CHECK (trim(name) <> '' AND length(name) BETWEEN 1 AND 100),
+    normalized_name    TEXT    NOT NULL CHECK (trim(normalized_name) <> ''),
+    public_key         BLOB    NOT NULL CHECK (length(public_key) BETWEEN 1 AND 4096),
+    created_at         INTEGER NOT NULL,
+    sign_count         INTEGER NOT NULL CHECK (sign_count BETWEEN 0 AND 4294967295),
+    transports         TEXT CHECK (transports IS NULL OR length(transports) <= 512),
+    is_user_verified   INTEGER NOT NULL CHECK (is_user_verified = 1),
+    is_backup_eligible INTEGER NOT NULL CHECK (is_backup_eligible IN (0, 1)),
+    is_backed_up       INTEGER NOT NULL CHECK (is_backed_up IN (0, 1)),
+    aaguid             BLOB    CHECK (aaguid IS NULL OR length(aaguid) = 16),
+    attestation_object BLOB    NOT NULL CHECK (length(attestation_object) BETWEEN 1 AND 16384),
+    client_data_json   BLOB    NOT NULL CHECK (length(client_data_json) BETWEEN 1 AND 4096),
+    row_version        INTEGER NOT NULL DEFAULT 1
+) STRICT;
+
+CREATE UNIQUE INDEX identity_user_passkey_user_normalized_name_idx
+    ON identity_user_passkey (identity_user_id, normalized_name);
+CREATE INDEX identity_user_passkey_identity_user_id_idx
+    ON identity_user_passkey (identity_user_id);
 
 -- Defense-in-depth alongside normalized_user_name's own UNIQUE constraint
 -- (PostgreSQL column-type remediation plan §3.4, mirrored here for

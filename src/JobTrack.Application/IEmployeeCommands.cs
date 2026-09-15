@@ -90,6 +90,16 @@ public interface IEmployeeCommands
 		ResetEmployeeTwoFactorRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	///     Removes every passkey from a target account after loss or suspected compromise (ADR 0071 §8),
+	///     rotating the security/concurrency stamps, revoking PATs and sessions, and auditing without
+	///     printing credential data. Does not reset the password or TOTP. Returns a count only.
+	/// </summary>
+	/// <exception cref="AuthorizationDeniedException">The actor does not hold <see cref="EmployeeRole.Administrator" />.</exception>
+	/// <exception cref="EntityNotFoundException">The target employee does not exist.</exception>
+	Task<ResetEmployeePasskeysResult> ResetPasskeysAsync(
+		ResetEmployeePasskeysRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	///     Sets the node the calling employee lands on after login instead of the tree root, or clears
 	///     it back to root when <see cref="SetHomeNodeRequest.NodeId" /> is <see langword="null" />. Acts
 	///     only on <see cref="CommandContext.Actor" />'s own account -- there is no administrator path to

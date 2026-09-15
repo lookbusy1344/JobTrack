@@ -11,6 +11,7 @@ using NodaTime;
 using Npgsql;
 using Shared;
 using Shared.Entities;
+using Shared.Ports;
 
 /// <summary>
 ///     PostgreSQL implementation of <see cref="IJobNodeCommandPort" /> (impl plan §7.3 slices 3-5:
@@ -39,6 +40,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
 	private readonly NpgsqlDataSource historyDeletionDataSource;
+	private readonly IProviderWriteOperations writeOperations;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobNodeCommandPort(NpgsqlDataSource dataSource, IClock clock)
@@ -51,6 +53,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		this.dataSource = dataSource;
 		this.historyDeletionDataSource = historyDeletionDataSource;
 		this.clock = new(clock);
+		writeOperations = new PostgreSqlWriteOperations(dataSource);
 	}
 
 	/// <inheritdoc />
@@ -69,7 +72,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		CheckVersionOrThrow(node.RowVersion, request.Version);
 		EnsureRootOwnerNotNulledOrThrow(node, request.OwnerUserId);
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+			context, writeOperations, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 
 		var before = SnapshotJobNode(node);
 
@@ -519,7 +522,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 										   .Distinct()
 										   .OrderBy(ownerUserId => ownerUserId!.Value.Value)) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-				context, ownerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+				context, writeOperations, ownerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 		}
 
 		var (existingWorkChild, newChildren) = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
@@ -659,10 +662,11 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.ParentId, now, cancellationToken).ConfigureAwait(false);
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+			context, writeOperations, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 		if (request.BeginWork is CreateJobNodeWorkSpec eligibilityCheck) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-												 context, eligibilityCheck.WorkedByUserId, now, "work-session-target-not-eligible", cancellationToken)
+												 context, writeOperations, eligibilityCheck.WorkedByUserId, now,
+												 "work-session-target-not-eligible", cancellationToken)
 											 .ConfigureAwait(false);
 		}
 

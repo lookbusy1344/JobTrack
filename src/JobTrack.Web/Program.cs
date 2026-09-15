@@ -17,6 +17,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Npgsql;
+using Passkeys;
 using Persistence.PostgreSql;
 using Persistence.Sqlite;
 using IPNetwork = System.Net.IPNetwork;
@@ -340,6 +341,11 @@ public sealed class Program
 			_ => throw new InvalidOperationException($"Unknown Database:Provider '{databaseProvider}'."),
 		};
 		_ = identityBuilder.AddSignInManager<JobTrackSignInManager>();
+
+		// ADR 0071: relying-party policy, ceremony-handler DI, and fail-closed validation of the RP ID
+		// and origin allowlist. Enabled without valid values fails startup; HTTPS origins are required
+		// outside Development.
+		PasskeyAuthenticationSetup.Configure(builder.Services, builder.Configuration, !builder.Environment.IsDevelopment());
 
 		switch (databaseProvider) {
 			case PostgreSqlProviderName:

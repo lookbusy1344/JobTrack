@@ -125,6 +125,21 @@ gcloud run deploy "$service" \
 
 url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
 
+# Passkeys (ADR 0071) need the exact RP ID and origin, which AllowedHosts above sidesteps with the
+# *.run.app suffix. WebAuthn permits neither a suffix nor a wildcard: the RP ID must equal the host
+# the browser navigates to, and the origin allowlist is matched byte-for-byte. The service URL is
+# only known once the first deploy returns, so enable the feature in a second update keyed off that
+# real URL rather than a hardcoded hostname that would silently break under a different project or
+# service name. The update makes a new revision at the same stable URL. Production env (Dockerfile),
+# so origins must be HTTPS -- which Cloud Run's URL always is.
+passkey_rp_id="${url#https://}"
+echo "==> enabling passkeys (RP ID $passkey_rp_id, origin $url)"
+gcloud run services update "$service" \
+  --project="$project" \
+  --region="$region" \
+  --update-env-vars="^@^Authentication__Passkeys__Enabled=true@Authentication__Passkeys__ServerDomain=$passkey_rp_id@Authentication__Passkeys__Origins__0=$url" \
+  --quiet
+
 # Newest-first, so tail keeps everything past revision_keep_count. gcloud refuses to delete a
 # revision carrying live traffic, so this never targets the one just deployed.
 echo "==> pruning old revisions, keeping the $revision_keep_count most recent"

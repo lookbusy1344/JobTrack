@@ -22,6 +22,8 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 	private const string AppliedBy = "test-runner";
 	private const string CurrentPassword = "current123";
 	private const string NewPassword = "replacement456";
+	private const byte FirstConcurrentCredentialId = 240;
+	private const byte SecondConcurrentCredentialId = 241;
 
 	private static readonly Instant OperationInstant = Instant.FromUtc(2026, 7, 23, 12, 0);
 	private static readonly PasswordHasher<EmployeeCredentialSubject> PasswordHasher = new();
@@ -90,6 +92,235 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 		(await ReadStateAsync(seeded.AppUserId)).Should().Be(
 			before,
 			"the identity update, stamp rotation, and independently issued PAT revocation share the failed audit transaction");
+	}
+
+	[Fact]
+	public async Task Adding_a_passkey_commits_the_row_rotates_stamps_revokes_pats_and_audits()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var before = await ReadStateAsync(seeded.AppUserId);
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+
+		var result = await sut.AddPasskeyAsync(CreateAddRequest(seeded, "Work MacBook", [1, 2, 3]));
+
+		var after = await ReadStateAsync(seeded.AppUserId);
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(1);
+		after.SecurityStamp.Should().NotBe(before.SecurityStamp);
+		after.ConcurrencyStamp.Should().NotBe(before.ConcurrencyStamp);
+		after.TokenIsRevoked.Should().BeTrue();
+		(await CountAuditAsync(seeded.IdentityUserId, "authentication.passkey-added")).Should().Be(1);
+		result.SecurityStamp.Should().Be(after.SecurityStamp);
+	}
+
+	[Fact]
+	public async Task Passkey_add_audit_failure_rolls_back_the_row_stamps_and_pat_revocation()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var before = await ReadStateAsync(seeded.AppUserId);
+		await InstallAuditFailureAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+
+		var act = () => sut.AddPasskeyAsync(CreateAddRequest(seeded, "Rollback key", [1, 2, 3]));
+
+		await act.Should().ThrowAsync<DbUpdateException>();
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(0);
+		(await ReadStateAsync(seeded.AppUserId)).Should().Be(before);
+	}
+
+	[Fact]
+	public async Task Adding_a_passkey_with_a_duplicate_normalized_name_is_rejected_case_insensitively()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		_ = await sut.AddPasskeyAsync(CreateAddRequest(seeded, "Work MacBook", [1]));
+
+		var act = () => sut.AddPasskeyAsync(CreateAddRequest(seeded, "work macbook", [2]));
+
+		var exception = await act.Should().ThrowAsync<InvariantViolationException>();
+		exception.Which.ConstraintId.Should().Be("passkey-name-duplicate");
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(1);
+	}
+
+	[Fact]
+	public async Task Concurrent_passkey_adds_with_the_same_normalized_name_allow_exactly_one_to_commit()
+	{
+		var seeded = await SeedCredentialStateAsync();
+
+		var outcomes = await RunSimultaneouslyAsync(
+			() => AddPasskeyCapturingFailureAsync(seeded, "Shared name", FirstConcurrentCredentialId),
+			() => AddPasskeyCapturingFailureAsync(seeded, "shared name", SecondConcurrentCredentialId));
+
+		outcomes.Count(outcome => outcome is null).Should().Be(1);
+		var failure = outcomes.OfType<InvariantViolationException>().Should().ContainSingle().Subject;
+		failure.ConstraintId.Should().Be("passkey-name-duplicate");
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(1);
+	}
+
+	[Fact]
+	public async Task Adding_beyond_the_maximum_count_is_rejected()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		for (var index = 0; index < PasskeyPolicy.MaxPasskeysPerAccount; ++index) {
+			_ = await sut.AddPasskeyAsync(CreateAddRequest(seeded, $"key {index}", [(byte)index]));
+		}
+
+		var act = () => sut.AddPasskeyAsync(CreateAddRequest(seeded, "one too many", [250]));
+
+		var exception = await act.Should().ThrowAsync<InvariantViolationException>();
+		exception.Which.ConstraintId.Should().Be("passkey-max-count");
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(PasskeyPolicy.MaxPasskeysPerAccount);
+	}
+
+	[Fact]
+	public async Task Concurrent_passkey_adds_competing_for_the_last_slot_allow_exactly_one_to_commit()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		for (var index = 0; index < PasskeyPolicy.MaxPasskeysPerAccount - 1; ++index) {
+			_ = await sut.AddPasskeyAsync(CreateAddRequest(seeded, $"existing key {index}", [(byte)index]));
+		}
+
+		var outcomes = await RunSimultaneouslyAsync(
+			() => AddPasskeyCapturingFailureAsync(seeded, "First contender", FirstConcurrentCredentialId),
+			() => AddPasskeyCapturingFailureAsync(seeded, "Second contender", SecondConcurrentCredentialId));
+
+		outcomes.Count(outcome => outcome is null).Should().Be(1);
+		var failure = outcomes.OfType<InvariantViolationException>().Should().ContainSingle().Subject;
+		failure.ConstraintId.Should().Be("passkey-max-count");
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(PasskeyPolicy.MaxPasskeysPerAccount);
+	}
+
+	[Fact]
+	public async Task Adding_a_passkey_for_an_identity_user_the_actor_does_not_own_is_denied()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var otherActor = await SeedExtraAppUserAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		var request = CreateAddRequest(seeded, "Work MacBook", [1]);
+		var foreign = new AddPasskeyRequest {
+			ActorUserId = otherActor,
+			IdentityUserId = seeded.IdentityUserId,
+			Name = request.Name,
+			Credential = request.Credential,
+			CorrelationId = request.CorrelationId,
+		};
+
+		var act = () => sut.AddPasskeyAsync(foreign);
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Listing_returns_owned_passkeys_most_recent_first()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var clock = new AdjustableClock(OperationInstant);
+		var sut = CreatePort(database.ConnectionString, clock);
+		_ = await sut.AddPasskeyAsync(CreateAddRequest(seeded, "Older", [1]));
+		clock.Current += Duration.FromMinutes(5);
+		_ = await sut.AddPasskeyAsync(CreateAddRequest(seeded, "Newer", [2]));
+
+		var summaries = await sut.ListPasskeysAsync(new() {
+			ActorUserId = seeded.AppUserId,
+			IdentityUserId = seeded.IdentityUserId,
+		});
+
+		summaries.Select(s => s.Name).Should().Equal("Newer", "Older");
+	}
+
+	[Fact]
+	public async Task Renaming_updates_the_name_without_rotating_stamps_or_revoking()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		var added = await sut.AddPasskeyAsync(CreateAddRequest(seeded, "Old name", [1]));
+		var before = await ReadStateAsync(seeded.AppUserId);
+
+		var result = await sut.RenamePasskeyAsync(new() {
+			ActorUserId = seeded.AppUserId,
+			IdentityUserId = seeded.IdentityUserId,
+			CredentialId = added.CredentialId,
+			NewName = "New name",
+			CorrelationId = Guid.NewGuid(),
+		});
+
+		var after = await ReadStateAsync(seeded.AppUserId);
+		result.Passkey.Name.Should().Be("New name");
+		after.SecurityStamp.Should().Be(before.SecurityStamp);
+		after.ConcurrencyStamp.Should().Be(before.ConcurrencyStamp);
+		(await CountAuditAsync(seeded.IdentityUserId, "authentication.passkey-renamed")).Should().Be(1);
+	}
+
+	[Fact]
+	public async Task Removing_a_passkey_rotates_stamps_revokes_pats_and_audits()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		var added = await sut.AddPasskeyAsync(CreateAddRequest(seeded, "To remove", [1]));
+		var before = await ReadStateAsync(seeded.AppUserId);
+
+		var result = await sut.RemovePasskeyAsync(new() {
+			ActorUserId = seeded.AppUserId,
+			IdentityUserId = seeded.IdentityUserId,
+			CredentialId = added.CredentialId,
+			CorrelationId = Guid.NewGuid(),
+		});
+
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(0);
+		result.SecurityStamp.Should().NotBe(before.SecurityStamp);
+		(await CountAuditAsync(seeded.IdentityUserId, "authentication.passkey-removed")).Should().Be(1);
+	}
+
+	[Fact]
+	public async Task Passkey_remove_audit_failure_rolls_back_the_row_stamps_and_pat_revocation()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		var added = await sut.AddPasskeyAsync(CreateAddRequest(seeded, "Rollback removal", [3, 2, 1]));
+		var before = await ReadStateAsync(seeded.AppUserId);
+		await InstallAuditFailureAsync();
+
+		var act = () => sut.RemovePasskeyAsync(new() {
+			ActorUserId = seeded.AppUserId,
+			IdentityUserId = seeded.IdentityUserId,
+			CredentialId = added.CredentialId,
+			CorrelationId = Guid.NewGuid(),
+		});
+
+		await act.Should().ThrowAsync<DbUpdateException>();
+		(await CountPasskeysAsync(seeded.IdentityUserId)).Should().Be(1);
+		(await ReadStateAsync(seeded.AppUserId)).Should().Be(before);
+	}
+
+	[Fact]
+	public async Task Removing_a_passkey_that_is_not_owned_is_not_found()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+
+		var act = () => sut.RemovePasskeyAsync(new() {
+			ActorUserId = seeded.AppUserId,
+			IdentityUserId = seeded.IdentityUserId,
+			CredentialId = Convert.ToBase64String([9, 9, 9]).TrimEnd('=').Replace('+', '-').Replace('/', '_'),
+			CorrelationId = Guid.NewGuid(),
+		});
+
+		await act.Should().ThrowAsync<EntityNotFoundException>();
+	}
+
+	[Fact]
+	public async Task Ensuring_the_user_handle_is_idempotent()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+
+		var first = await sut.EnsurePasskeyUserHandleAsync(CreateEnsureRequest(seeded));
+		var second = await sut.EnsurePasskeyUserHandleAsync(CreateEnsureRequest(seeded));
+
+		first.UserHandle.Should().NotBeNullOrWhiteSpace();
+		second.UserHandle.Should().Be(first.UserHandle);
 	}
 
 	protected abstract DbConnection CreateConnection(string connectionString);
@@ -197,9 +428,118 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 	}
 
+	private async Task InstallAuditFailureAsync()
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+		await AuditFailureInjection.InstallAsync(connection, Provider);
+	}
 
+	private async Task<Exception?> AddPasskeyCapturingFailureAsync(
+		SeededCredentialState seeded, string name, byte credentialId)
+	{
+		try {
+			var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+			_ = await sut.AddPasskeyAsync(CreateAddRequest(seeded, name, [credentialId]));
+			return null;
+		}
+		catch (Exception exception) {
+			return exception;
+		}
+	}
 
+	private static async Task<Exception?[]> RunSimultaneouslyAsync(
+		Func<Task<Exception?>> first, Func<Task<Exception?>> second)
+	{
+		using var gate = new Barrier(2);
+		return await Task.WhenAll(
+			Task.Run(() => {
+				gate.SignalAndWait();
+				return first();
+			}),
+			Task.Run(() => {
+				gate.SignalAndWait();
+				return second();
+			}));
+	}
 
+	private static AddPasskeyRequest CreateAddRequest(SeededCredentialState seeded, string name, byte[] credentialId) =>
+		new() {
+			ActorUserId = seeded.AppUserId,
+			IdentityUserId = seeded.IdentityUserId,
+			Name = name,
+			Credential = new() {
+				CredentialId = credentialId,
+				PublicKey = new byte[] {
+					10, 20, 30,
+				},
+				SignCount = 0,
+				IsUserVerified = true,
+				AttestationObject = new byte[] {
+					1,
+				},
+				ClientDataJson = new byte[] {
+					1,
+				},
+			},
+			CorrelationId = Guid.NewGuid(),
+		};
+
+	private static EnsurePasskeyUserHandleRequest CreateEnsureRequest(SeededCredentialState seeded) =>
+		new() {
+			ActorUserId = seeded.AppUserId,
+			IdentityUserId = seeded.IdentityUserId,
+			CorrelationId = Guid.NewGuid(),
+		};
+
+	private async Task<AppUserId> SeedExtraAppUserAsync()
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+
+		await using var appUserCommand = connection.CreateCommand();
+		appUserCommand.CommandText = """
+									 INSERT INTO app_user (display_name, iana_time_zone)
+									 VALUES ('Other Synthetic User', 'Europe/London')
+									 RETURNING id;
+									 """;
+		var appUserId = new AppUserId(Convert.ToInt64(await appUserCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
+
+		await using var identityCommand = connection.CreateCommand();
+		identityCommand.CommandText = """
+									  INSERT INTO identity_user
+									    (app_user_id, user_name, normalized_user_name, password_hash, security_stamp,
+									     concurrency_stamp, requires_password_change, is_enabled, lockout_enabled, access_failed_count)
+									  VALUES
+									    (@appUserId, 'other.user', 'OTHER.USER', @passwordHash, @securityStamp,
+									     @concurrencyStamp, true, true, true, 0);
+									  """;
+		identityCommand.AddParameter("@appUserId", appUserId.Value);
+		identityCommand.AddParameter("@passwordHash", PasswordHasher.HashPassword(CredentialSubject, CurrentPassword));
+		identityCommand.AddParameter("@securityStamp", Guid.NewGuid().ToString("N"));
+		identityCommand.AddParameter("@concurrencyStamp", Guid.NewGuid().ToString("N"));
+		_ = await identityCommand.ExecuteNonQueryAsync();
+
+		return appUserId;
+	}
+
+	private async Task<long> CountPasskeysAsync(long identityUserId)
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT COUNT(*) FROM identity_user_passkey WHERE identity_user_id = @id;";
+		command.AddParameter("@id", identityUserId);
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
+	private async Task<long> CountAuditAsync(long identityUserId, string operation)
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+		await using var command = connection.CreateCommand();
+		command.CommandText =
+			"SELECT COUNT(*) FROM audit_event WHERE operation = @operation AND entity_id = @id;";
+		command.AddParameter("@operation", operation);
+		command.AddParameter("@id", identityUserId);
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
 
 	private sealed record SeededCredentialState(AppUserId AppUserId, long IdentityUserId);
 

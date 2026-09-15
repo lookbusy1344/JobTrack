@@ -175,6 +175,41 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
+	[Fact]
+	public async Task Recording_a_passkey_sign_in_success_stores_the_operation_for_the_real_actor()
+	{
+		await DeploySchemaAsync();
+		var (actorId, identityUserId) = await SeedAppUserAsync("Grace Hopper");
+		var sut = CreatePort(database.ConnectionString);
+
+		await sut.RecordAsync(new() {
+			ActorUserId = actorId,
+			IdentityUserId = identityUserId,
+			Kind = AuthenticationAuditEventKind.PasskeySignInSuccess,
+			CorrelationId = Guid.NewGuid(),
+		});
+
+		var row = await SingleAuditRowAsync();
+		row.Operation.Should().Be("authentication.passkey-sign-in-success");
+		row.ActorUserId.Should().Be(actorId.Value);
+	}
+
+	[Fact]
+	public async Task Recording_an_unknown_passkey_sign_in_failure_stores_a_null_actor()
+	{
+		await DeploySchemaAsync();
+		var sut = CreatePort(database.ConnectionString);
+
+		await sut.RecordAsync(new() {
+			Kind = AuthenticationAuditEventKind.PasskeySignInFailed,
+			CorrelationId = Guid.NewGuid(),
+		});
+
+		var row = await SingleAuditRowAsync();
+		row.Operation.Should().Be("authentication.passkey-sign-in-failed");
+		row.ActorUserId.Should().BeNull();
+	}
+
 	private async Task<AuditRow> SingleAuditRowAsync()
 	{
 		var rows = await AllAuditRowsAsync();
@@ -185,7 +220,7 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 	{
 		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
 		await using var command = connection.CreateCommand();
-		command.CommandText = "SELECT actor_user_id, entity_type, entity_id, after_data FROM audit_event ORDER BY id;";
+		command.CommandText = "SELECT actor_user_id, entity_type, entity_id, after_data, operation FROM audit_event ORDER BY id;";
 
 		var rows = new List<AuditRow>();
 		await using var reader = await command.ExecuteReaderAsync();
@@ -194,15 +229,12 @@ public abstract class AuthenticationAuditPortContractTestsBase : IAsyncLifetime
 				reader.IsDBNull(0) ? null : Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
 				reader.GetString(1),
 				Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
-				reader.IsDBNull(3) ? null : reader.GetString(3)));
+				reader.IsDBNull(3) ? null : reader.GetString(3),
+				reader.GetString(4)));
 		}
 
 		return rows;
 	}
 
-
-
-
-
-	private sealed record AuditRow(long? ActorUserId, string EntityType, long EntityId, string? AfterData);
+	private sealed record AuditRow(long? ActorUserId, string EntityType, long EntityId, string? AfterData, string Operation);
 }

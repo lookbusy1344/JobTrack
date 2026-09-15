@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared;
 using Shared.Entities;
+using Shared.Ports;
 
 /// <summary>
 ///     SQLite implementation of <see cref="IJobNodeCommandPort" /> (impl plan §7.3 slices 3-5: create,
@@ -48,12 +49,14 @@ internal sealed partial class SqliteJobNodeCommandPort : IJobNodeCommandPort
 	private readonly IClock clock;
 
 	private readonly string connectionString;
+	private readonly IProviderWriteOperations writeOperations;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
 	public SqliteJobNodeCommandPort(string connectionString, IClock clock)
 	{
 		this.connectionString = connectionString;
 		this.clock = clock;
+		writeOperations = new SqliteWriteOperations(connectionString);
 	}
 
 	/// <inheritdoc />
@@ -73,7 +76,7 @@ internal sealed partial class SqliteJobNodeCommandPort : IJobNodeCommandPort
 		CheckVersionOrThrow(node.RowVersion, request.Version);
 		EnsureRootOwnerNotNulledOrThrow(node, request.OwnerUserId);
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+			context, writeOperations, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 
 		var before = SnapshotJobNode(node);
 
@@ -533,7 +536,7 @@ internal sealed partial class SqliteJobNodeCommandPort : IJobNodeCommandPort
 										   .Distinct()
 										   .OrderBy(ownerUserId => ownerUserId!.Value.Value)) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-				context, ownerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+				context, writeOperations, ownerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 		}
 
 		var (existingWorkChild, newChildren) = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
@@ -675,10 +678,11 @@ internal sealed partial class SqliteJobNodeCommandPort : IJobNodeCommandPort
 		var now = clock.GetCurrentInstant();
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.ParentId, now, cancellationToken).ConfigureAwait(false);
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+			context, writeOperations, request.OwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
 		if (request.BeginWork is CreateJobNodeWorkSpec eligibilityCheck) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-												 context, eligibilityCheck.WorkedByUserId, now, "work-session-target-not-eligible", cancellationToken)
+												 context, writeOperations, eligibilityCheck.WorkedByUserId, now,
+												 "work-session-target-not-eligible", cancellationToken)
 											 .ConfigureAwait(false);
 		}
 

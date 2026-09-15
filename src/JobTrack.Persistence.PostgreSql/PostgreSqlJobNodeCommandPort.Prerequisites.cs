@@ -8,6 +8,7 @@ using NodaTime;
 using Npgsql;
 using Shared;
 using Shared.Entities;
+using Shared.Ports;
 
 internal sealed partial class PostgreSqlJobNodeCommandPort
 {
@@ -173,14 +174,15 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 									  .OrderBy(assignee => assignee.UserId.Value)
 									  .ToList();
 		await IdentityUserWriteLock.AcquireManyAsync(
-			context, assignees.Select(assignee => assignee.UserId).Concat(request.HomeNodeUserIds), cancellationToken).ConfigureAwait(false);
+									   context, writeOperations, assignees.Select(assignee => assignee.UserId).Concat(request.HomeNodeUserIds), cancellationToken)
+								   .ConfigureAwait(false);
 		foreach (var assignee in assignees) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-				context, assignee.UserId, now, assignee.ConstraintId, cancellationToken).ConfigureAwait(false);
+				context, writeOperations, assignee.UserId, now, assignee.ConstraintId, cancellationToken).ConfigureAwait(false);
 		}
 
 		var created = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
-			transaction, ct => ImportSubtreeCoreAsync(context, request, now, ct), cancellationToken).ConfigureAwait(false);
+			transaction, ct => ImportSubtreeCoreAsync(context, writeOperations, request, now, ct), cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			Nodes = [
@@ -209,7 +211,8 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 	///     call just created.
 	/// </summary>
 	private static async Task<List<(long LocalId, JobNodeEntity Entity)>> ImportSubtreeCoreAsync(
-		PostgreSqlJobTrackDbContext context, ImportSubtreeRequest request, Instant now, CancellationToken cancellationToken)
+		PostgreSqlJobTrackDbContext context, IProviderWriteOperations writeOperations, ImportSubtreeRequest request, Instant now,
+		CancellationToken cancellationToken)
 	{
 		var createdByLocalId = new Dictionary<long, JobNodeEntity>(request.Nodes.Count);
 		var created = new List<(long LocalId, JobNodeEntity Entity)>(request.Nodes.Count);
@@ -258,8 +261,8 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 
 		if (request.HomeNodeLocalId is long homeNodeLocalId) {
 			await ImportHomeNodeAssignment.ApplyAsync(
-											  context, createdByLocalId[homeNodeLocalId].Id, request.HomeNodeUserIds, request.Context.Actor, now,
-											  request.Context.CorrelationId, cancellationToken)
+											  context, writeOperations, createdByLocalId[homeNodeLocalId].Id, request.HomeNodeUserIds,
+											  request.Context.Actor, now, request.Context.CorrelationId, cancellationToken)
 										  .ConfigureAwait(false);
 		}
 

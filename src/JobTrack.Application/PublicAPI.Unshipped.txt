@@ -1,1 +1,135 @@
 #nullable enable
+JobTrack.Application.AuthenticationAuditEventKind.PasskeySignInFailed = 9 -> JobTrack.Application.AuthenticationAuditEventKind
+JobTrack.Application.AuthenticationAuditEventKind.PasskeySignInSuccess = 8 -> JobTrack.Application.AuthenticationAuditEventKind
+JobTrack.Application.AddPasskeyRequest
+JobTrack.Application.AddPasskeyRequest.ActorUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.AddPasskeyRequest.ActorUserId.init -> void
+JobTrack.Application.AddPasskeyRequest.AddPasskeyRequest() -> void
+JobTrack.Application.AddPasskeyRequest.CorrelationId.get -> System.Guid
+JobTrack.Application.AddPasskeyRequest.CorrelationId.init -> void
+JobTrack.Application.AddPasskeyRequest.Credential.get -> JobTrack.Application.VerifiedPasskey!
+JobTrack.Application.AddPasskeyRequest.Credential.init -> void
+JobTrack.Application.AddPasskeyRequest.IdentityUserId.get -> long
+JobTrack.Application.AddPasskeyRequest.IdentityUserId.init -> void
+JobTrack.Application.AddPasskeyRequest.Name.get -> string!
+JobTrack.Application.AddPasskeyRequest.Name.init -> void
+JobTrack.Application.AddPasskeyResult
+JobTrack.Application.AddPasskeyResult.AddPasskeyResult() -> void
+JobTrack.Application.AddPasskeyResult.ConcurrencyStamp.get -> string!
+JobTrack.Application.AddPasskeyResult.ConcurrencyStamp.init -> void
+JobTrack.Application.AddPasskeyResult.CredentialId.get -> string!
+JobTrack.Application.AddPasskeyResult.CredentialId.init -> void
+JobTrack.Application.AddPasskeyResult.SecurityStamp.get -> string!
+JobTrack.Application.AddPasskeyResult.SecurityStamp.init -> void
+JobTrack.Application.EnsurePasskeyUserHandleRequest
+JobTrack.Application.EnsurePasskeyUserHandleRequest.ActorUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.EnsurePasskeyUserHandleRequest.ActorUserId.init -> void
+JobTrack.Application.EnsurePasskeyUserHandleRequest.CorrelationId.get -> System.Guid
+JobTrack.Application.EnsurePasskeyUserHandleRequest.CorrelationId.init -> void
+JobTrack.Application.EnsurePasskeyUserHandleRequest.EnsurePasskeyUserHandleRequest() -> void
+JobTrack.Application.EnsurePasskeyUserHandleRequest.IdentityUserId.get -> long
+JobTrack.Application.EnsurePasskeyUserHandleRequest.IdentityUserId.init -> void
+JobTrack.Application.EnsurePasskeyUserHandleResult
+JobTrack.Application.EnsurePasskeyUserHandleResult.EnsurePasskeyUserHandleResult() -> void
+JobTrack.Application.EnsurePasskeyUserHandleResult.UserHandle.get -> string!
+JobTrack.Application.EnsurePasskeyUserHandleResult.UserHandle.init -> void
+JobTrack.Application.IAccountCredentialCommands.AddPasskeyAsync(JobTrack.Application.AddPasskeyRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.AddPasskeyResult!>!
+JobTrack.Application.IAccountCredentialCommands.EnsurePasskeyUserHandleAsync(JobTrack.Application.EnsurePasskeyUserHandleRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.EnsurePasskeyUserHandleResult!>!
+JobTrack.Application.IAccountCredentialCommands.ListPasskeysAsync(JobTrack.Application.ListPasskeysRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<JobTrack.Application.PasskeySummary!>!>!
+JobTrack.Application.IAccountCredentialCommands.RemovePasskeyAsync(JobTrack.Application.RemovePasskeyRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.RemovePasskeyResult!>!
+JobTrack.Application.IAccountCredentialCommands.RenamePasskeyAsync(JobTrack.Application.RenamePasskeyRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.RenamePasskeyResult!>!
+JobTrack.Application.ListPasskeysRequest
+JobTrack.Application.ListPasskeysRequest.ActorUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.ListPasskeysRequest.ActorUserId.init -> void
+JobTrack.Application.ListPasskeysRequest.IdentityUserId.get -> long
+JobTrack.Application.ListPasskeysRequest.IdentityUserId.init -> void
+JobTrack.Application.ListPasskeysRequest.ListPasskeysRequest() -> void
+JobTrack.Application.PasskeySummary
+JobTrack.Application.PasskeySummary.CreatedAt.get -> System.DateTimeOffset
+JobTrack.Application.PasskeySummary.CreatedAt.init -> void
+JobTrack.Application.PasskeySummary.CredentialId.get -> string!
+JobTrack.Application.PasskeySummary.CredentialId.init -> void
+JobTrack.Application.PasskeySummary.IsBackedUp.get -> bool
+JobTrack.Application.PasskeySummary.IsBackedUp.init -> void
+JobTrack.Application.PasskeySummary.IsBackupEligible.get -> bool
+JobTrack.Application.PasskeySummary.IsBackupEligible.init -> void
+JobTrack.Application.PasskeySummary.Name.get -> string!
+JobTrack.Application.PasskeySummary.Name.init -> void
+JobTrack.Application.PasskeySummary.PasskeySummary() -> void
+JobTrack.Application.RemovePasskeyRequest
+JobTrack.Application.RemovePasskeyRequest.ActorUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.RemovePasskeyRequest.ActorUserId.init -> void
+JobTrack.Application.RemovePasskeyRequest.CorrelationId.get -> System.Guid
+JobTrack.Application.RemovePasskeyRequest.CorrelationId.init -> void
+JobTrack.Application.RemovePasskeyRequest.CredentialId.get -> string!
+JobTrack.Application.RemovePasskeyRequest.CredentialId.init -> void
+JobTrack.Application.RemovePasskeyRequest.IdentityUserId.get -> long
+JobTrack.Application.RemovePasskeyRequest.IdentityUserId.init -> void
+JobTrack.Application.RemovePasskeyRequest.RemovePasskeyRequest() -> void
+JobTrack.Application.RemovePasskeyResult
+JobTrack.Application.RemovePasskeyResult.ConcurrencyStamp.get -> string!
+JobTrack.Application.RemovePasskeyResult.ConcurrencyStamp.init -> void
+JobTrack.Application.RemovePasskeyResult.RemovePasskeyResult() -> void
+JobTrack.Application.RemovePasskeyResult.SecurityStamp.get -> string!
+JobTrack.Application.RemovePasskeyResult.SecurityStamp.init -> void
+JobTrack.Application.RenamePasskeyRequest
+JobTrack.Application.RenamePasskeyRequest.ActorUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.RenamePasskeyRequest.ActorUserId.init -> void
+JobTrack.Application.RenamePasskeyRequest.CorrelationId.get -> System.Guid
+JobTrack.Application.RenamePasskeyRequest.CorrelationId.init -> void
+JobTrack.Application.RenamePasskeyRequest.CredentialId.get -> string!
+JobTrack.Application.RenamePasskeyRequest.CredentialId.init -> void
+JobTrack.Application.RenamePasskeyRequest.IdentityUserId.get -> long
+JobTrack.Application.RenamePasskeyRequest.IdentityUserId.init -> void
+JobTrack.Application.RenamePasskeyRequest.NewName.get -> string!
+JobTrack.Application.RenamePasskeyRequest.NewName.init -> void
+JobTrack.Application.RenamePasskeyRequest.RenamePasskeyRequest() -> void
+JobTrack.Application.RenamePasskeyResult
+JobTrack.Application.RenamePasskeyResult.Passkey.get -> JobTrack.Application.PasskeySummary!
+JobTrack.Application.RenamePasskeyResult.Passkey.init -> void
+JobTrack.Application.RenamePasskeyResult.RenamePasskeyResult() -> void
+JobTrack.Application.VerifiedPasskey
+JobTrack.Application.VerifiedPasskey.AttestationObject.get -> System.ReadOnlyMemory<byte>
+JobTrack.Application.VerifiedPasskey.AttestationObject.init -> void
+JobTrack.Application.VerifiedPasskey.ClientDataJson.get -> System.ReadOnlyMemory<byte>
+JobTrack.Application.VerifiedPasskey.ClientDataJson.init -> void
+JobTrack.Application.VerifiedPasskey.CredentialId.get -> System.ReadOnlyMemory<byte>
+JobTrack.Application.VerifiedPasskey.CredentialId.init -> void
+JobTrack.Application.VerifiedPasskey.IsBackedUp.get -> bool
+JobTrack.Application.VerifiedPasskey.IsBackedUp.init -> void
+JobTrack.Application.VerifiedPasskey.IsBackupEligible.get -> bool
+JobTrack.Application.VerifiedPasskey.IsBackupEligible.init -> void
+JobTrack.Application.VerifiedPasskey.IsUserVerified.get -> bool
+JobTrack.Application.VerifiedPasskey.IsUserVerified.init -> void
+JobTrack.Application.VerifiedPasskey.PublicKey.get -> System.ReadOnlyMemory<byte>
+JobTrack.Application.VerifiedPasskey.PublicKey.init -> void
+JobTrack.Application.VerifiedPasskey.SignCount.get -> long
+JobTrack.Application.VerifiedPasskey.SignCount.init -> void
+JobTrack.Application.VerifiedPasskey.Transports.get -> string?
+JobTrack.Application.VerifiedPasskey.Transports.init -> void
+JobTrack.Application.VerifiedPasskey.VerifiedPasskey() -> void
+JobTrack.Application.IEmployeeCommands.ResetPasskeysAsync(JobTrack.Application.ResetEmployeePasskeysRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<JobTrack.Application.ResetEmployeePasskeysResult!>!
+JobTrack.Application.ResetEmployeePasskeysRequest
+JobTrack.Application.ResetEmployeePasskeysRequest.<Clone>$() -> JobTrack.Application.ResetEmployeePasskeysRequest!
+JobTrack.Application.ResetEmployeePasskeysRequest.Context.get -> JobTrack.Application.CommandContext!
+JobTrack.Application.ResetEmployeePasskeysRequest.Context.init -> void
+JobTrack.Application.ResetEmployeePasskeysRequest.Equals(JobTrack.Application.ResetEmployeePasskeysRequest? other) -> bool
+JobTrack.Application.ResetEmployeePasskeysRequest.ResetEmployeePasskeysRequest() -> void
+JobTrack.Application.ResetEmployeePasskeysRequest.TargetUserId.get -> JobTrack.Abstractions.AppUserId
+JobTrack.Application.ResetEmployeePasskeysRequest.TargetUserId.init -> void
+JobTrack.Application.ResetEmployeePasskeysResult
+JobTrack.Application.ResetEmployeePasskeysResult.<Clone>$() -> JobTrack.Application.ResetEmployeePasskeysResult!
+JobTrack.Application.ResetEmployeePasskeysResult.Equals(JobTrack.Application.ResetEmployeePasskeysResult? other) -> bool
+JobTrack.Application.ResetEmployeePasskeysResult.RemovedCount.get -> int
+JobTrack.Application.ResetEmployeePasskeysResult.RemovedCount.init -> void
+JobTrack.Application.ResetEmployeePasskeysResult.ResetEmployeePasskeysResult() -> void
+override JobTrack.Application.ResetEmployeePasskeysRequest.Equals(object? obj) -> bool
+override JobTrack.Application.ResetEmployeePasskeysRequest.GetHashCode() -> int
+override JobTrack.Application.ResetEmployeePasskeysRequest.ToString() -> string!
+override JobTrack.Application.ResetEmployeePasskeysResult.Equals(object? obj) -> bool
+override JobTrack.Application.ResetEmployeePasskeysResult.GetHashCode() -> int
+override JobTrack.Application.ResetEmployeePasskeysResult.ToString() -> string!
+static JobTrack.Application.ResetEmployeePasskeysRequest.operator !=(JobTrack.Application.ResetEmployeePasskeysRequest? left, JobTrack.Application.ResetEmployeePasskeysRequest? right) -> bool
+static JobTrack.Application.ResetEmployeePasskeysRequest.operator ==(JobTrack.Application.ResetEmployeePasskeysRequest? left, JobTrack.Application.ResetEmployeePasskeysRequest? right) -> bool
+static JobTrack.Application.ResetEmployeePasskeysResult.operator !=(JobTrack.Application.ResetEmployeePasskeysResult? left, JobTrack.Application.ResetEmployeePasskeysResult? right) -> bool
+static JobTrack.Application.ResetEmployeePasskeysResult.operator ==(JobTrack.Application.ResetEmployeePasskeysResult? left, JobTrack.Application.ResetEmployeePasskeysResult? right) -> bool

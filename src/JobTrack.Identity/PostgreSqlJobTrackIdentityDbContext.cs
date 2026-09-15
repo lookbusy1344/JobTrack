@@ -3,6 +3,8 @@ namespace JobTrack.Identity;
 using System.Reflection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using NodaTime;
 
 /// <summary>
 ///     PostgreSQL <see cref="JobTrackIdentityDbContext" />: <c>lockout_end</c> maps natively to
@@ -15,6 +17,13 @@ using Microsoft.EntityFrameworkCore;
 /// </summary>
 public sealed class PostgreSqlJobTrackIdentityDbContext : JobTrackIdentityDbContext, IDataProtectionKeyContext
 {
+	// created_at is a timestamptz written by JobTrack.Persistence.PostgreSql through NodaTime. This
+	// context does not enable the Npgsql NodaTime plugin (its other timestamps are DateTimeOffset), so
+	// Instant round-trips through Npgsql's native DateTimeOffset->timestamptz support, preserving the
+	// exact instant.
+	private static readonly ValueConverter<Instant, DateTimeOffset> InstantConverter =
+		new(instant => instant.ToDateTimeOffset(), dateTimeOffset => Instant.FromDateTimeOffset(dateTimeOffset));
+
 	public PostgreSqlJobTrackIdentityDbContext(DbContextOptions<PostgreSqlJobTrackIdentityDbContext> options)
 		: base(options) { }
 
@@ -45,6 +54,8 @@ public sealed class PostgreSqlJobTrackIdentityDbContext : JobTrackIdentityDbCont
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		base.OnModelCreating(modelBuilder);
+
+		_ = modelBuilder.Entity<JobTrackIdentityUserPasskey>().Property(e => e.CreatedAt).HasConversion(InstantConverter);
 
 		_ = modelBuilder.Entity<DataProtectionKey>(builder => {
 			_ = builder.ToTable("data_protection_key");

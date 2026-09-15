@@ -35,6 +35,15 @@ internal interface IProviderWriteOperations
 	Task<int> RevokeAllTokensForUserAsync(DbContext context, AppUserId userId, Instant now, CancellationToken cancellationToken);
 
 	/// <summary>
+	///     Takes <c>IdentityUserWriteLock</c>'s row lock on <paramref name="userId" />'s
+	///     <c>identity_user</c> row by reassigning its own <c>concurrency_stamp</c>. PostgreSQL calls its
+	///     source-controlled <c>identity_user_touch_concurrency_stamp</c> function, because
+	///     <c>jobtrack_domain</c> has no direct <c>UPDATE</c> grant on <c>identity_user</c>; SQLite uses
+	///     the shared EF implementation.
+	/// </summary>
+	Task TouchIdentityUserConcurrencyStampAsync(DbContext context, AppUserId userId, CancellationToken cancellationToken);
+
+	/// <summary>
 	///     Classifies what write conflict, if any, <paramref name="ex" />'s inner-exception chain
 	///     reports. PostgreSQL reads SQLSTATEs; SQLite reads extended error codes and, where its
 	///     triggers give no distinct code, the <c>RAISE(ABORT, ...)</c> message.

@@ -292,7 +292,9 @@ Authentication shall use secure server-side application behaviour and protected 
 - session revocation shall use the account security stamp or an equivalent server-validated credential version; and
 - generic login failure messages shall not reveal whether an employee account exists.
 
-MFA is not required in the initial release. The account and authentication design shall nevertheless reserve a clean extension point for passkeys. The initial release may include disabled passkey capability detection or schema-compatible credential storage, but shall not expose a non-functional enrolment flow or weaken password authentication in anticipation of it.
+MFA is not required in the initial release. TOTP two-factor is an optional second factor for password sign-in.
+
+Passkeys are an optional primary sign-in method alongside the retained password (ADR 0071). The complete authentication-choice model has exactly three paths: username and password; username, password, and TOTP when TOTP is enabled; or a passkey alone. A user-verified passkey is sufficient phishing-resistant authentication and is not followed by a JobTrack TOTP prompt; password sign-in still requires TOTP when enabled. There is no passkey-only account, no public registration, and no automated passkey recovery — password fallback plus administrator/CLI reset remains the recovery model. JobTrack adds no third-party WebAuthn library and stores public-key credential material only, never private keys or biometrics. Passkey fields shall never appear in ordinary employee queries, logs, traces, audit payloads, exports, error detail, or reporting-role grants. A configuration switch supports rollout and rollback; disabling it hides enrolment and sign-in while retaining stored credentials and leaving password and TOTP available.
 
 A client/end-user requester (§7.3's `Requester` role) is a role grant on this same administrator-provisioned employee-account model, not a separate identity boundary, authentication scheme, or public self-registration path (ADR 0033). Every rule in this section applies identically to a Requester account.
 

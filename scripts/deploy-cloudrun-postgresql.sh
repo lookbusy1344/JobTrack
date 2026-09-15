@@ -894,6 +894,14 @@ attest_image_for_release "$serve_image_by_digest"
 # a correctness requirement -- but Deployment__Topology=MultiInstance below still requires it, and
 # DataProtection__Store/RateLimiting__Store still fail startup closed if unset.
 #
+# Passkeys (ADR 0071) are enabled with the RP ID and origin fixed to alternate_service_host -- the
+# $service-$project_number.$region.run.app name, which is this deployment's permanent public host and
+# is known before the first candidate deploy. WebAuthn allows no wildcard or suffix, so RP ID equals
+# that exact host and the origin is https://<that host>. RP ID is a durable credential namespace:
+# once an employee enrols, changing it strands their passkeys, so it is pinned to the stable
+# project-number host, never the per-revision candidate tag or a legacy hash name. Production env, so
+# the origin must be HTTPS.
+#
 # A schema change and a Cloud Run traffic update cannot be one transaction. The deployment therefore
 # uses the expand/contract rolling-release contract: first prove the new digest can start with no
 # traffic, apply only backward-compatible schema changes while the old revision serves, exercise a
@@ -971,7 +979,7 @@ deploy_candidate() {
 		--clear-volumes \
 		--startup-probe="tcpSocket.port=8080,periodSeconds=10,failureThreshold=24,timeoutSeconds=5" \
 		--liveness-probe="" \
-		--set-env-vars="^@^ForwardedHeaders__KnownNetworks__0=0.0.0.0/0@AllowedHosts=$allowed_hosts@Deployment__Topology=MultiInstance@DataProtection__Store=PostgreSql@RateLimiting__Store=PostgreSql@Security__RequireSecureCookies=true" \
+		--set-env-vars="^@^ForwardedHeaders__KnownNetworks__0=0.0.0.0/0@AllowedHosts=$allowed_hosts@Deployment__Topology=MultiInstance@DataProtection__Store=PostgreSql@RateLimiting__Store=PostgreSql@Security__RequireSecureCookies=true@Authentication__Passkeys__Enabled=true@Authentication__Passkeys__ServerDomain=$alternate_service_host@Authentication__Passkeys__Origins__0=https://$alternate_service_host" \
 		--set-secrets="ConnectionStrings__JobTrackDomain=jobtrack-cs-domain:$cs_domain_version,ConnectionStrings__JobTrackHistoryDeletion=jobtrack-cs-history-deletion:$cs_history_deletion_version,ConnectionStrings__JobTrackCredentialAdministration=jobtrack-cs-credential-administration:$cs_credential_administration_version,ConnectionStrings__JobTrackIdentity=jobtrack-cs-identity:$cs_identity_version,ConnectionStrings__JobTrackPatManagement=jobtrack-cs-pat-management:$cs_pat_management_version,ConnectionStrings__JobTrackPatAuthentication=jobtrack-cs-pat-authentication:$cs_pat_authentication_version,$certificate_mount_path=jobtrack-data-protection-certificate:$data_protection_certificate_version,$certificate_password_mount_path=jobtrack-data-protection-certificate-password:$data_protection_certificate_password_version" \
 		--binary-authorization=default \
 		"${routing_flags[@]}" \

@@ -28,4 +28,14 @@ internal static class AuthenticationAudit
 				CorrelationId = Guid.NewGuid(),
 			},
 			cancellationToken);
+
+	public static Task RecordUnknownPasskeySignInFailedAsync(
+		IJobTrackClient jobTrackClient,
+		CancellationToken cancellationToken = default) =>
+		jobTrackClient.AuthenticationAudit.RecordAsync(
+			new() {
+				Kind = AuthenticationAuditEventKind.PasskeySignInFailed,
+				CorrelationId = Guid.NewGuid(),
+			},
+			cancellationToken);
 }

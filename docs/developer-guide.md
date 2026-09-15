@@ -394,6 +394,75 @@ It clears the account's two-factor enrolment (the employee can then sign in with
 alone and re-enrol if they choose), revokes every personal access token and session tied to that
 account, and audits the operation. See `src/JobTrack.AdminCli/EmergencyTwoFactorReset.cs`.
 
+### Resetting passkeys
+
+Passkeys (ADR 0071) are an optional primary sign-in method alongside the password. An employee adds,
+renames, and removes their own passkeys from **Sign-in & security** (`/Account/Security`). If every
+passkey becomes inaccessible, an administrator clears all of them from the Administrator-only account
+page, or `JobTrack.AdminCli`'s `reset-passkeys` command works when the web app isn't reachable:
+
+```bash
+# PostgreSQL
+dotnet run --project src/JobTrack.AdminCli -- reset-passkeys --provider postgresql --connection-string "Host=/tmp;Port=5432;Database=jobtrack_dev" --username <username>
+
+# SQLite
+dotnet run --project src/JobTrack.AdminCli -- reset-passkeys --provider sqlite --connection-string "Data Source=jobtrack-web-dev.db" --username <username>
+```
+
+It deletes every passkey on the account, rotates the security/concurrency stamps, revokes PATs and
+sessions, and audits without printing credential data. It does **not** reset password or TOTP;
+password reset does not remove passkeys. Removing a passkey server-side may leave a stale entry in
+the device's own passkey manager, which the employee clears there.
+
+**Configuration and deployment.** Passkeys are gated by `Authentication:Passkeys:Enabled` and require
+an explicit RP ID (`ServerDomain`) and exact HTTPS origin allowlist matching the canonical production
+host — production startup fails when the feature is enabled without valid values. RP ID is a durable
+credential namespace; changing it strands existing passkeys, so re-enable only with the same RP ID.
+Deploy the additive schema and grants first, deploy code with the feature disabled, verify host /
+`AllowedHosts` / forwarded headers / RP ID / origins / shared Data Protection keys, then enable for a
+synthetic canary before general enablement. Rolling back disables the feature and retains credential
+rows; password and TOTP keep working. The ceremony cookie uses ADR 0066's shared Data Protection key
+ring, so its two requests may land on different Cloud Run instances without affinity.
+
+`appsettings.json` ships with the feature off (`Enabled: false`, empty `ServerDomain`/`Origins`), so
+`/Account/Security` shows no **Add a passkey** action until it is configured. This is independent of
+TOTP: neither is a prerequisite for the other.
+
+**Enabling passkeys locally.** `appsettings.Development.json` turns the feature on for local runs,
+bound to `localhost`:
+
+```jsonc
+"Authentication": {
+  "Passkeys": {
+    "Enabled": true,
+    "ServerDomain": "localhost",           // RP ID — bare host, no scheme or port
+    "Origins": [ "https://localhost:7174" ] // exact origin the browser navigates to
+  }
+}
+```
+
+`localhost` is a WebAuthn-secure context, so this works over the `https (jobtrack_live)` profile
+(`scripts/run-web.sh`, port 7174) against either provider. The origin is matched exactly, so a run on
+a different port needs its own entry. In Development the HTTPS-origin requirement is relaxed; outside
+Development every origin must be HTTPS. Enrol with a platform authenticator (Touch ID, Windows Hello)
+or Chrome DevTools' virtual WebAuthn authenticator when the machine has none.
+
+**Enabling passkeys on the SQLite Cloud Run demo.** `scripts/deploy-cloudrun.sh` enables the feature
+automatically: after the first deploy returns the service URL, it runs a second
+`gcloud run services update` setting `ServerDomain` to that URL's host and `Origins` to the URL. The
+demo's stable URL is `https://jobtrack-web-zeb6shxnca-ew.a.run.app`, so the RP ID is
+`jobtrack-web-zeb6shxnca-ew.a.run.app`. Deriving both from the live URL keeps them aligned with
+whatever host that project/service is allocated. The baked SQLite schema already carries the passkey
+tables, so no extra provisioning step is needed.
+
+**The persistent PostgreSQL deployment** (`scripts/deploy-cloudrun-postgresql.sh`, `jobtrack-pg`)
+enables passkeys in `deploy_candidate`, with RP ID and origin fixed to `alternate_service_host` — the
+`$service-$project_number.$region.run.app` host, this deployment's permanent public name, known
+before the first candidate deploy. It is pinned to that stable host, never the per-revision candidate
+tag, because the RP ID is a durable namespace: changing it after employees enrol strands their
+passkeys. If this service is ever fronted by a custom domain, that domain becomes the host users hit
+and the RP ID must move to it before anyone enrols.
+
 ### Bulk-generating a tree of job nodes from JSON
 
 `JobTrack.AdminCli`'s `import-tree` command atomically creates a whole job-node subtree from a flat

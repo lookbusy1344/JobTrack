@@ -34,6 +34,8 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 
 	[BindProperty] public ResetTwoFactorInput ResetTwoFactor { get; set; } = new();
 
+	[BindProperty] public ResetPasskeysInput ResetPasskeys { get; set; } = new();
+
 	[BindProperty] public RevokeAllTokensInput RevokeAllTokens { get; set; } = new();
 
 	[TempData] public string? ErrorMessage { get; set; }
@@ -277,6 +279,54 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 	}
 
 	/// <summary>
+	///     ADR 0071 §8.4: removes every passkey from a target account after loss or suspected compromise.
+	///     Displays only a count, never credential data. Mirrors <see cref="OnPostResetTwoFactorAsync" />;
+	///     the atomic command rotates the security stamp, revokes tokens/sessions, and audits.
+	/// </summary>
+	/// <summary>ADR 0057 (§2.2): resetting another employee's passkeys requires recent authentication.</summary>
+	[RequiresRecentAuthentication]
+	public async Task<IActionResult> OnPostResetPasskeysAsync(CancellationToken cancellationToken)
+	{
+		ModelState.Clear();
+		if (!TryValidateModel(ResetPasskeys, nameof(ResetPasskeys))) {
+			await LoadTargetUserOptionsAsync(cancellationToken);
+			return Page();
+		}
+
+		var actor = await userManager.GetAppUserIdAsync(User);
+		if (actor is null) {
+			return Challenge();
+		}
+
+		await LoadTargetUserOptionsAsync(cancellationToken);
+		var targetUserId = new AppUserId(ResetPasskeys.TargetUserId);
+
+		try {
+			var result = await jobTrackClient.Employees.ResetPasskeysAsync(
+				new() {
+					Context = new() {
+						Actor = actor.Value,
+						CorrelationId = Guid.NewGuid(),
+					},
+					TargetUserId = targetUserId,
+				}, cancellationToken);
+
+			SuccessMessage =
+				$"Removed {result.RemovedCount} passkey{(result.RemovedCount == 1 ? string.Empty : "s")} from " +
+				$"{EmployeeDirectoryDisplay.Describe(_employeeDirectoryById, targetUserId.Value, "that employee")}. " +
+				"Their password and any two-factor enrolment are unchanged.";
+		}
+		catch (AuthorizationDeniedException) {
+			return Forbid();
+		}
+		catch (EntityNotFoundException) {
+			ErrorMessage = "That employee does not exist.";
+		}
+
+		return RedirectToPage();
+	}
+
+	/// <summary>
 	///     Incident-response revocation (remediation §2.2): an administrator can cut off every one of
 	///     another user's personal access tokens, but never mint one -- issuance stays strictly
 	///     self-service (<see cref="Domain.Authorization.PersonalAccessTokenAccessPolicy.CanIssue" />).
@@ -396,6 +446,13 @@ public sealed class ManageEmployeeAccountModel(IJobTrackClient jobTrackClient, U
 	}
 
 	public sealed class ResetTwoFactorInput
+	{
+		[Required]
+		[Display(Name = "Target user")]
+		public long TargetUserId { get; init; }
+	}
+
+	public sealed class ResetPasskeysInput
 	{
 		[Required]
 		[Display(Name = "Target user")]

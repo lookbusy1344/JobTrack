@@ -8,6 +8,7 @@ using Application.Ports;
 using AwesomeAssertions;
 using Database;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using NodaTime.TimeZones;
 
@@ -59,6 +60,7 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		result.IsEnabled.Should().BeTrue();
 		result.RequiresPasswordChange.Should().BeTrue();
 		result.Roles.Should().ContainSingle().Which.Should().Be(EmployeeRole.Worker);
+		(await GetPasskeyUserHandleAsync(result.Id)).Should().HaveLength(PasskeyPolicy.UserHandleEncodedLength);
 	}
 
 	[Fact]
@@ -580,6 +582,60 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task An_administrator_can_reset_passkeys_removing_all_and_rotating_the_stamp()
+	{
+		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();
+		await SeedPasskeyAsync(workerId, [1], "Key one");
+		await SeedPasskeyAsync(workerId, [2], "Key two");
+		var stampBefore = await GetSecurityStampAsync(workerId);
+		var sut = CreateSut();
+
+		var result = await sut.ResetPasskeysAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+		});
+
+		result.RemovedCount.Should().Be(2);
+		(await CountPasskeysAsync(workerId)).Should().Be(0);
+		(await GetSecurityStampAsync(workerId)).Should().NotBe(stampBefore);
+	}
+
+	[Fact]
+	public async Task Reset_passkeys_audit_failure_rolls_back_the_delete_and_stamp_rotation()
+	{
+		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();
+		await SeedPasskeyAsync(workerId, [1], "Rollback key");
+		var stampBefore = await GetSecurityStampAsync(workerId);
+		await using (var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync)) {
+			await AuditFailureInjection.InstallAsync(connection, Provider);
+		}
+		var sut = CreateSut();
+
+		var act = () => sut.ResetPasskeysAsync(new() {
+			Context = ContextFor(administratorId),
+			TargetUserId = workerId,
+		});
+
+		await act.Should().ThrowAsync<DbUpdateException>();
+		(await CountPasskeysAsync(workerId)).Should().Be(1);
+		(await GetSecurityStampAsync(workerId)).Should().Be(stampBefore);
+	}
+
+	[Fact]
+	public async Task A_worker_cannot_reset_passkeys()
+	{
+		var (_, workerId) = await SeedAdministratorAndWorkerAsync();
+		var sut = CreateSut();
+
+		var act = () => sut.ResetPasskeysAsync(new() {
+			Context = ContextFor(workerId),
+			TargetUserId = workerId,
+		});
+
+		await act.Should().ThrowAsync<AuthorizationDeniedException>();
+	}
+
+	[Fact]
 	public async Task Assigning_a_role_rotates_the_security_stamp()
 	{
 		var (administratorId, workerId) = await SeedAdministratorAndWorkerAsync();
@@ -799,6 +855,16 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		return (string)(await command.ExecuteScalarAsync())!;
 	}
 
+	private async Task<string> GetPasskeyUserHandleAsync(AppUserId appUserId)
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT passkey_user_handle FROM identity_user WHERE app_user_id = @appUserId;";
+		command.AddParameter("@appUserId", appUserId.Value);
+
+		return (string)(await command.ExecuteScalarAsync())!;
+	}
+
 	private async Task<decimal> GetDefaultHourlyRateAsync(AppUserId appUserId)
 	{
 		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
@@ -877,6 +943,49 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 		command.AddParameter("@appUserId", appUserId.Value);
 
 		return (string)(await command.ExecuteScalarAsync())!;
+	}
+
+	/// <summary>Seeds one passkey row directly via SQL (ADR 0071): the command port under test only removes them.</summary>
+	private async Task SeedPasskeyAsync(AppUserId appUserId, byte[] credentialId, string name)
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO identity_user_passkey
+							      (credential_id, identity_user_id, name, normalized_name, public_key, created_at, sign_count,
+							       is_user_verified, is_backup_eligible, is_backed_up, aaguid, attestation_object, client_data_json)
+							  SELECT @credentialId, iu.id, @name, @normalizedName, @publicKey, @createdAt, 0,
+							         @true, @false, @false, @aaguid, @attestation, @clientData
+							  FROM identity_user iu WHERE iu.app_user_id = @appUserId;
+							  """;
+		command.AddParameter("@credentialId", credentialId);
+		command.AddParameter("@name", name);
+		command.AddParameter("@normalizedName", name.ToUpperInvariant());
+		command.AddParameter("@publicKey", new byte[] {
+			10, 20, 30,
+		});
+		command.AddParameter("@createdAt", EncodeInstant(DateTimeOffset.UtcNow));
+		command.AddParameter("@true", true);
+		command.AddParameter("@false", false);
+		command.AddParameter("@aaguid", new byte[16]);
+		command.AddParameter("@attestation", new byte[] {
+			1,
+		});
+		command.AddParameter("@clientData", new byte[] {
+			1,
+		});
+		command.AddParameter("@appUserId", appUserId.Value);
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private async Task<long> CountPasskeysAsync(AppUserId appUserId)
+	{
+		await using var connection = await database.OpenExistingConnectionAsync(CreateConnection, PrepareConnectionAsync);
+		await using var command = connection.CreateCommand();
+		command.CommandText =
+			"SELECT COUNT(*) FROM identity_user_passkey p JOIN identity_user iu ON iu.id = p.identity_user_id WHERE iu.app_user_id = @appUserId;";
+		command.AddParameter("@appUserId", appUserId.Value);
+		return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 	}
 
 	/// <summary>

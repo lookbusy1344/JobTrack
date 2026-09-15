@@ -68,6 +68,8 @@ internal sealed class SqliteJobTrackDbContext : DbContext
 		_ = modelBuilder.Entity<IdentityUserEntity>().Property(e => e.LockoutEnd).HasConversion(NullableInstantConverter);
 		_ = modelBuilder.Entity<IdentityUserEntity>().Property(e => e.TwoFactorEnabledAt).HasConversion(NullableInstantConverter);
 
+		_ = modelBuilder.Entity<IdentityUserPasskeyEntity>().Property(e => e.CreatedAt).HasConversion(InstantConverter);
+
 		_ = modelBuilder.Entity<InitialisedMarkerEntity>().Property(e => e.InitialisedAt).HasConversion(InstantConverter);
 
 		_ = modelBuilder.Entity<JobNodeEntity>().Property(e => e.ExpectedDurationHours).HasConversion(NullableFixedPointConverter);

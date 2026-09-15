@@ -342,3 +342,36 @@ enough; **hierarchy-display reconciliation** (ADR 0002) instead:
 
 This reconciliation is a presentation-layer step over already-computed exact costs — it never
 changes what was earned or owed, only how a simultaneous multi-node display rounds.
+
+## Credential storage: `identity_user_passkey`
+
+Passkey credential material lives under the credential boundary, not the domain (ADR 0071, spec
+§7.1). `identity_user` gains a nullable `passkey_user_handle`: 32 cryptographically random bytes,
+base64url-encoded, unique, populated at new-account creation and lazily on an existing account's
+first enrolment. It is a stable, non-PII WebAuthn user handle — never derived from username, display
+name, email, or a hash of guessable PII.
+
+`identity_user_passkey` stores one row per enrolled credential:
+
+| Column | Contract |
+|---|---|
+| `credential_id` | Bounded binary WebAuthn credential ID; primary key. Globally unique, so one credential cannot attach to two accounts. |
+| `identity_user_id` | Required indexed FK to `identity_user(id)`. |
+| `name` | Required bounded friendly name (1–100 Unicode code points); unique per account case-insensitively. |
+| `normalized_name` | Required invariant-normalized (`ToUpperInvariant`) name; unique with `identity_user_id`. The database compares this stored value exactly, never via `lower`, `NOCASE`, or locale. |
+| `public_key` | Required COSE public-key bytes. |
+| `created_at` | Required `Instant` (`timestamptz` / SQLite ticks). |
+| `sign_count` | Required unsigned-32-bit logical range in a provider-neutral integer shape; never lowered below a non-zero value. |
+| `transports` | Bounded canonical framework transport strings (JSON/text). |
+| `is_user_verified` | Required Boolean; registration rejects `false`. |
+| `is_backup_eligible` | Required authenticator backup-eligibility flag. |
+| `is_backed_up` | Required flag, updated after assertions. |
+| `aaguid` | Optional fixed-length authenticator AAGUID; currently unknown because ASP.NET Core's verified passkey contract does not expose it; never an authorization input. |
+| `attestation_object` | Required bounded bytes for the framework credential record. |
+| `client_data_json` | Required bounded bytes for the framework credential record. |
+| `row_version` | Provider-specific optimistic concurrency token. |
+
+Each byte/text/count ceiling is named once in a credential policy type and mirrored by database
+checks. An account holds at most `MaxPasskeysPerAccount` (10) credentials. Reporting and emergency
+roles receive no access to this table; no passkey column appears in any ordinary employee query,
+log, audit payload, or export.

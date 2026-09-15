@@ -397,6 +397,97 @@ public sealed partial class AdminAccountManagementTests : IAsyncLifetime, IDispo
 		_ = workerId;
 	}
 
+	[Fact]
+	public async Task An_administrator_can_reset_passkeys()
+	{
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.reset-pk", EmployeeRole.Administrator);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-pk");
+		await IdentityTestSupport.SeedSqlitePasskeyAsync(database.ConnectionString, workerId, "Work MacBook", [1, 2, 3, 4]);
+		await IdentityTestSupport.SeedSqlitePasskeyAsync(database.ConnectionString, workerId, "Blue YubiKey", [5, 6, 7, 8]);
+		var adminAuthCookie = await client.SignInAsync("admin.reset-pk");
+
+		var resetResponse = await PostResetPasskeysAsync(adminAuthCookie, workerId);
+
+		resetResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		(await GetPasskeyCountAsync(workerId)).Should().Be(0);
+	}
+
+	/// <summary>
+	///     ADR 0071 §8.4: a passkey reset is a credential transition — it rotates the security stamp the
+	///     live cookie is validated against, ending any live session on its next request.
+	/// </summary>
+	[Fact]
+	public async Task An_administrator_resetting_passkeys_ends_the_employees_live_session_on_its_next_request()
+	{
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "admin.reset-pk-live", EmployeeRole.Administrator);
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-pk-live");
+		await IdentityTestSupport.SeedSqlitePasskeyAsync(database.ConnectionString, workerId, "Work MacBook", [1, 2, 3, 4]);
+		var workerAuthCookie = await client.SignInAsync("worker.reset-pk-live");
+		var adminAuthCookie = await client.SignInAsync("admin.reset-pk-live");
+
+		using var beforeRequest = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
+		beforeRequest.Headers.Add("Cookie", workerAuthCookie);
+		var beforeResponse = await client.SendAsync(beforeRequest);
+		beforeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+		var resetResponse = await PostResetPasskeysAsync(adminAuthCookie, workerId);
+		resetResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+		using var afterRequest = new HttpRequestMessage(HttpMethod.Get, "/Account/PersonalAccessTokens");
+		afterRequest.Headers.Add("Cookie", workerAuthCookie);
+		var afterResponse = await client.SendAsync(afterRequest);
+
+		afterResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		afterResponse.Headers.Location!.OriginalString.Should().Contain("/Account/Login");
+	}
+
+	[Fact]
+	public async Task A_non_administrator_cannot_reset_passkeys()
+	{
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-pk-denied");
+		var otherWorkerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "worker.reset-pk-target");
+		await IdentityTestSupport.SeedSqlitePasskeyAsync(database.ConnectionString, otherWorkerId, "Work MacBook", [1, 2, 3, 4]);
+		var workerAuthCookie = await client.SignInAsync("worker.reset-pk-denied");
+
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/ManageEmployeeAccount?handler=ResetPasskeys");
+		request.Headers.Add("Cookie", workerAuthCookie);
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["ResetPasskeys.TargetUserId"] = otherWorkerId.Value.ToString(CultureInfo.InvariantCulture),
+		});
+		var response = await client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+		response.Headers.Location!.OriginalString.Should().Contain("/Account/AccessDenied");
+		// The denied attempt left the target's passkey untouched.
+		(await GetPasskeyCountAsync(otherWorkerId)).Should().Be(1);
+		_ = workerId;
+	}
+
+	private async Task<HttpResponseMessage> PostResetPasskeysAsync(string authCookie, AppUserId targetId)
+	{
+		var (antiforgeryCookie, token) = await GetManageAccountFormAsync(authCookie);
+
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/ManageEmployeeAccount?handler=ResetPasskeys");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["ResetPasskeys.TargetUserId"] = targetId.Value.ToString(CultureInfo.InvariantCulture),
+			["__RequestVerificationToken"] = token,
+		});
+
+		return await client.SendAsync(request);
+	}
+
+	private async Task<int> GetPasskeyCountAsync(AppUserId appUserId)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText =
+			"SELECT count(*) FROM identity_user_passkey p JOIN identity_user u ON u.id = p.identity_user_id WHERE u.app_user_id = $appUserId;";
+		_ = command.Parameters.AddWithValue("$appUserId", appUserId.Value);
+		return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+	}
+
 	private async Task<HttpResponseMessage> PostCreateEmployeeAsync(
 		string authCookie,
 		string displayName,

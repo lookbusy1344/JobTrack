@@ -939,6 +939,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 		var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 		await deployer.DeployAsync(scripts, CancellationToken.None);
+		await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 	}
 
 	private async Task<(JobNodeId RootId, JobNodeId BranchId, SeededTree Tree)> SeedTreeAsync()

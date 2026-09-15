@@ -16,14 +16,15 @@ using NodaTime;
 ///     upper-invariant name normalization matching this project's mixed-case, space-containing
 ///     canonical names ("Job manager", not "JOB MANAGER").
 /// </summary>
-public sealed class JobTrackUserStore :
+public sealed partial class JobTrackUserStore :
 	IUserStore<JobTrackIdentityUser>,
 	IUserPasswordStore<JobTrackIdentityUser>,
 	IUserSecurityStampStore<JobTrackIdentityUser>,
 	IUserLockoutStore<JobTrackIdentityUser>,
 	IUserRoleStore<JobTrackIdentityUser>,
 	IUserTwoFactorStore<JobTrackIdentityUser>,
-	IUserAuthenticatorKeyStore<JobTrackIdentityUser>
+	IUserAuthenticatorKeyStore<JobTrackIdentityUser>,
+	IUserPasskeyStore<JobTrackIdentityUser>
 {
 	/// <summary>
 	///     Data Protection purpose string scoping the key used to encrypt/decrypt
@@ -189,8 +190,14 @@ public sealed class JobTrackUserStore :
 
 	public void Dispose() { }
 
+	/// <summary>
+	///     Returns the WebAuthn user handle once the account has one, so Identity's user-scoped passkey
+	///     assertions compare the same opaque value that the authenticator returns in <c>userHandle</c>.
+	///     Accounts without a passkey retain their numeric identity key. <see cref="FindByIdAsync" />
+	///     accepts both forms, preserving existing session resolution during that transition.
+	/// </summary>
 	public Task<string> GetUserIdAsync(JobTrackIdentityUser user, CancellationToken cancellationToken) =>
-		Task.FromResult(user.Id.ToString(CultureInfo.InvariantCulture));
+		Task.FromResult(user.PasskeyUserHandle ?? user.Id.ToString(CultureInfo.InvariantCulture));
 
 	public Task<string?> GetUserNameAsync(JobTrackIdentityUser user, CancellationToken cancellationToken) =>
 		Task.FromResult<string?>(user.UserName);
@@ -235,10 +242,21 @@ public sealed class JobTrackUserStore :
 		return IdentityResult.Success;
 	}
 
+	/// <summary>
+	///     Resolves a user by store key. The ASP.NET Core passkey ceremony framework round-trips a
+	///     <c>PasskeyUserEntity.Id</c> — JobTrack's random base64url WebAuthn user handle (ADR 0071 §5) —
+	///     back through this method, so a non-numeric argument is looked up against
+	///     <c>passkey_user_handle</c> instead of the numeric primary key. The two formats are disjoint
+	///     (a numeric id never contains base64url's letters or <c>-</c>/<c>_</c>), so neither lookup can
+	///     match the other's identifier.
+	/// </summary>
 	public Task<JobTrackIdentityUser?> FindByIdAsync(string userId, CancellationToken cancellationToken)
 	{
-		var id = long.Parse(userId, CultureInfo.InvariantCulture);
-		return dbContext.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+		if (long.TryParse(userId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) {
+			return dbContext.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+		}
+
+		return dbContext.Users.FirstOrDefaultAsync(u => u.PasskeyUserHandle == userId, cancellationToken);
 	}
 
 	public Task<JobTrackIdentityUser?> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken) =>

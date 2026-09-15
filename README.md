@@ -34,6 +34,9 @@ Two database backends are supported:
   administrative actions, two-factor authentication, and a maintained threat model with
   every mitigation tied to a named test:
   [`docs/threat-model/web-authentication-threat-model.md`](docs/threat-model/web-authentication-threat-model.md).
+- **Passkeys:** an employee can sign in with a passkey (Face ID, Touch ID, Windows Hello, or a
+  security key) instead of a username and password. The password stays on the account as a fallback,
+  and a user-verified passkey needs no separate two-factor step.
 
 ## Leaf statuses
 

@@ -64,6 +64,8 @@ internal sealed class SqliteModelTestDbContext : DbContext
 		modelBuilder.Entity<IdentityUserEntity>().Property(e => e.LockoutEnd).HasConversion(NullableInstantConverter);
 		modelBuilder.Entity<IdentityUserEntity>().Property(e => e.TwoFactorEnabledAt).HasConversion(NullableInstantConverter);
 
+		modelBuilder.Entity<IdentityUserPasskeyEntity>().Property(e => e.CreatedAt).HasConversion(InstantConverter);
+
 		modelBuilder.Entity<InitialisedMarkerEntity>().Property(e => e.InitialisedAt).HasConversion(InstantConverter);
 
 		modelBuilder.Entity<JobNodeEntity>().Property(e => e.ExpectedDurationHours).HasConversion(NullableFixedPointConverter);

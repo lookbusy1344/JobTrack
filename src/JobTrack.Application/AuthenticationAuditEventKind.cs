@@ -26,4 +26,10 @@ public enum AuthenticationAuditEventKind
 
 	/// <summary>A two-factor challenge failed.</summary>
 	TwoFactorFailed,
+
+	/// <summary>A passkey (WebAuthn) sign-in succeeded (ADR 0071 §9). No credential material is recorded.</summary>
+	PasskeySignInSuccess,
+
+	/// <summary>A passkey (WebAuthn) sign-in attempt failed (ADR 0071 §9). Recorded without a known actor for a username-less assertion.</summary>
+	PasskeySignInFailed,
 }

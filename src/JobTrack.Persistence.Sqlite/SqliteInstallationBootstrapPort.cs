@@ -7,6 +7,7 @@ using Application.Ports;
 using Domain.Schedules;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using Shared;
 using Shared.Entities;
 
 /// <summary>
@@ -73,6 +74,7 @@ internal sealed class SqliteInstallationBootstrapPort : IInstallationBootstrapPo
 			IsEnabled = true,
 			LockoutEnabled = true,
 			AccessFailedCount = 0,
+			PasskeyUserHandle = PasskeyUserHandleGenerator.Create(),
 		};
 		_ = context.Add(identityUser);
 

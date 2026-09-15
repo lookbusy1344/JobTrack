@@ -26,6 +26,7 @@ public sealed class JobTrackModelConfigurationTests
 	[InlineData(typeof(IdentityUserEntity), "identity_user")]
 	[InlineData(typeof(IdentityRoleEntity), "identity_role")]
 	[InlineData(typeof(IdentityUserRoleEntity), "identity_user_role")]
+	[InlineData(typeof(IdentityUserPasskeyEntity), "identity_user_passkey")]
 	[InlineData(typeof(InitialisedMarkerEntity), "initialised_marker")]
 	[InlineData(typeof(JobNodeEntity), "job_node")]
 	[InlineData(typeof(LeafWorkEntity), "leaf_work")]
@@ -75,6 +76,7 @@ public sealed class JobTrackModelConfigurationTests
 			"id", "app_user_id", "user_name", "normalized_user_name", "password_hash", "security_stamp",
 			"concurrency_stamp", "requires_password_change", "is_enabled", "lockout_enabled", "lockout_end",
 			"access_failed_count", "two_factor_enabled", "authenticator_key_protected", "two_factor_enabled_at",
+			"passkey_user_handle",
 		];
 
 		foreach (var context in BothProviders()) {
@@ -97,6 +99,45 @@ public sealed class JobTrackModelConfigurationTests
 					fk.PrincipalEntityType.ClrType == typeof(AppUserEntity));
 				foreignKey.Should().NotBeNull();
 				foreignKey!.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+			}
+		}
+	}
+
+	[Fact]
+	public void IdentityUserPasskeyEntity_maps_expected_columns_key_indexes_and_foreign_key_on_both_providers()
+	{
+		string[] expectedColumns = [
+			"credential_id", "identity_user_id", "name", "normalized_name", "public_key", "created_at",
+			"sign_count", "transports", "is_user_verified", "is_backup_eligible", "is_backed_up",
+			"attestation_object", "client_data_json", "row_version",
+		];
+
+		foreach (var context in BothProviders()) {
+			using (context) {
+				AssertColumnNames<IdentityUserPasskeyEntity>(context, expectedColumns);
+
+				var entity = context.Model.FindEntityType(typeof(IdentityUserPasskeyEntity))!;
+
+				entity.FindPrimaryKey()!.Properties.Select(p => p.Name).Should().Equal(
+					nameof(IdentityUserPasskeyEntity.CredentialId));
+
+				var rowVersion = GetProperty<IdentityUserPasskeyEntity>(context, nameof(IdentityUserPasskeyEntity.RowVersion));
+				rowVersion.IsConcurrencyToken.Should().BeTrue();
+
+				var normalizedNameIndex = entity.GetIndexes().SingleOrDefault(i =>
+					i.GetDatabaseName() == "identity_user_passkey_user_normalized_name_idx");
+				normalizedNameIndex.Should().NotBeNull();
+				normalizedNameIndex!.IsUnique.Should().BeTrue();
+				normalizedNameIndex.Properties.Select(p => p.Name).Should().Equal(
+					nameof(IdentityUserPasskeyEntity.IdentityUserId), nameof(IdentityUserPasskeyEntity.NormalizedName));
+
+				var userIndex = entity.GetIndexes().SingleOrDefault(i =>
+					i.GetDatabaseName() == "identity_user_passkey_identity_user_id_idx");
+				userIndex.Should().NotBeNull();
+
+				var foreignKey = entity.GetForeignKeys().Single();
+				foreignKey.PrincipalEntityType.ClrType.Should().Be<IdentityUserEntity>();
+				foreignKey.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
 			}
 		}
 	}

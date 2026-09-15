@@ -12,6 +12,7 @@ using NodaTime;
 using Npgsql;
 using Shared;
 using Shared.Entities;
+using Shared.Ports;
 
 /// <summary>
 ///     PostgreSQL implementation of <see cref="IJobRequestCommandPort" /> (ADR 0033). One
@@ -32,12 +33,14 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 
 	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
+	private readonly IProviderWriteOperations writeOperations;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobRequestCommandPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
 		this.clock = new(clock);
+		writeOperations = new PostgreSqlWriteOperations(dataSource);
 	}
 
 	/// <inheritdoc />
@@ -69,7 +72,8 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		}
 
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, holdingArea.DefaultOwnerUserId, now, "job-node-owner-not-eligible", cancellationToken).ConfigureAwait(false);
+											 context, writeOperations, holdingArea.DefaultOwnerUserId, now, "job-node-owner-not-eligible", cancellationToken)
+										 .ConfigureAwait(false);
 
 		var node = new JobNodeEntity {
 			Id = default,

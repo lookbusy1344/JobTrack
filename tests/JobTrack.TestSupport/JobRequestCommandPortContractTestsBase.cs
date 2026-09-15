@@ -903,6 +903,7 @@ public abstract class JobRequestCommandPortContractTestsBase : IAsyncLifetime
 			var scripts = SchemaVersionScriptLoader.Load(RepositoryPaths.SchemaVersionsDirectory(Provider));
 			var deployer = new SchemaDeployer(connection, CreateStore(), CreateLockStrategy(), ApplicationVersion, AppliedBy);
 			await deployer.DeployAsync(scripts, CancellationToken.None);
+			await PostgreSqlTestInfrastructure.EnsureSecurityDefinerFunctionsAsync(connection, Provider);
 		}
 
 		var bootstrapPort = CreateBootstrapPort(database.ConnectionString);

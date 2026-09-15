@@ -11,10 +11,10 @@
 
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
-	<form method="post" class="jt-form-card">
+	<form method="post" class="jt-form-card" data-password-form>
 		<div class="form-group">
 			<label asp-for="Input.UserName"></label>
-			<input asp-for="Input.UserName" class="form-control" autocomplete="username"/>
+			<input asp-for="Input.UserName" class="form-control" autocomplete="@(Model.PasskeysEnabled ? "username webauthn" : "username")"/>
 			<span asp-validation-for="Input.UserName" class="text-danger"></span>
 		</div>
 		<div class="form-group">
@@ -24,4 +24,19 @@
 		</div>
 		<button type="submit" class="btn btn-primary w-100">Sign in</button>
 	</form>
+
+	@if (Model.PasskeysEnabled) {
+		<div class="jt-auth-alt" data-passkey-login data-conditional="true"
+		     data-options-url="@Url.Page("/Account/Login", "PasskeyOptions")"
+		     data-signin-url="@Url.Page("/Account/Login", "PasskeySignIn")" hidden>
+			<button type="button" class="btn btn-outline-primary w-100" data-passkey-login-button>Sign in with a passkey</button>
+			<p class="text-danger" data-passkey-login-error hidden></p>
+		</div>
+	}
 </div>
+
+@section Scripts {
+	@if (Model.PasskeysEnabled) {
+		<script src="~/js/passkeys.js" asp-append-version="true"></script>
+	}
+}

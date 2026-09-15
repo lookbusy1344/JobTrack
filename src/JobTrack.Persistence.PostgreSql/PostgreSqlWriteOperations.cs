@@ -39,6 +39,9 @@ internal sealed class PostgreSqlWriteOperations(NpgsqlDataSource dataSource) : I
 		await PostgreSqlPersonalAccessTokenFunctions.RevokeAllForUserAsync(context, userId, now, cancellationToken)
 													.ConfigureAwait(false);
 
+	public async Task TouchIdentityUserConcurrencyStampAsync(DbContext context, AppUserId userId, CancellationToken cancellationToken) =>
+		await PostgreSqlIdentityUserFunctions.TouchConcurrencyStampAsync(context, userId, cancellationToken).ConfigureAwait(false);
+
 	/// <summary>Classifies a PostgreSQL write conflict from the SQLSTATEs in the exception chain.</summary>
 	/// <remarks>
 	///     A GiST exclusion constraint surfaces as <c>ExclusionViolation</c>, or as

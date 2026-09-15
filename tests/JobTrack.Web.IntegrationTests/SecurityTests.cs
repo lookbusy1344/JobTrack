@@ -14,11 +14,12 @@ using Persistence.Sqlite;
 using TestSupport;
 
 /// <summary>
-///     Self-service TOTP enrolment and disablement (ADR 0037), exercised over real HTTP against a
+///     The <c>/Account/Security</c> hub (ADR 0071 §1.1): self-service TOTP enrolment and disablement
+///     (ADR 0037) alongside the signed-in employee's passkey list, exercised over real HTTP against a
 ///     schema-deployed SQLite database — mirroring <see cref="AccountFlowTests" />'s direct-request
 ///     style. Reuses <see cref="TwoFactorLoginTests" />'s independent RFC 6238 code generator.
 /// </summary>
-public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
+public sealed partial class SecurityTests : IAsyncLifetime, IDisposable
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
@@ -110,9 +111,9 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var appUserId = await SeedUserAsync("concurrent.enrol");
 		var authCookie = await SignInAsync("concurrent.enrol");
 
-		using var requestA = new HttpRequestMessage(HttpMethod.Get, "/Account/ManageTwoFactor");
+		using var requestA = new HttpRequestMessage(HttpMethod.Get, "/Account/Security");
 		requestA.Headers.Add("Cookie", authCookie);
-		using var requestB = new HttpRequestMessage(HttpMethod.Get, "/Account/ManageTwoFactor");
+		using var requestB = new HttpRequestMessage(HttpMethod.Get, "/Account/Security");
 		requestB.Headers.Add("Cookie", authCookie);
 
 		var responseATask = client.SendAsync(requestA);
@@ -156,9 +157,9 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var authCookie = await SignInAsync("kat.disable");
 		await SeedTwoFactorEnabledAsync(appUserId);
 
-		var (antiforgeryCookie, token) = await GetFormAsync("/Account/ManageTwoFactor", authCookie);
+		var (antiforgeryCookie, token) = await GetFormAsync("/Account/Security", authCookie);
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/ManageTwoFactor?handler=Disable");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Security?handler=Disable");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
 			["Disable.CurrentPassword"] = KnownPassword,
@@ -190,9 +191,9 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 			ExpiresAt = SystemClock.Instance.GetCurrentInstant() + Duration.FromDays(1),
 		});
 
-		var (antiforgeryCookie, token) = await GetFormAsync("/Account/ManageTwoFactor", authCookie);
+		var (antiforgeryCookie, token) = await GetFormAsync("/Account/Security", authCookie);
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/ManageTwoFactor?handler=Disable");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Security?handler=Disable");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
 			["Disable.CurrentPassword"] = KnownPassword,
@@ -220,9 +221,9 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var authCookie = await SignInAsync("margaret.disable");
 		await SeedTwoFactorEnabledAsync(appUserId);
 
-		var (antiforgeryCookie, token) = await GetFormAsync("/Account/ManageTwoFactor", authCookie);
+		var (antiforgeryCookie, token) = await GetFormAsync("/Account/Security", authCookie);
 
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/ManageTwoFactor?handler=Disable");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Security?handler=Disable");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
 			["Disable.CurrentPassword"] = "wrong-password",
@@ -241,11 +242,43 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		var appUserId = await SeedUserAsync("rita.twofactor", EmployeeRole.Requester);
 		var authCookie = await SignInAsync("rita.twofactor");
 
-		var response = await GetFormAsync("/Account/ManageTwoFactor", authCookie);
+		var response = await GetFormAsync("/Account/Security", authCookie);
 
 		response.CookieHeader.Should().NotBeNullOrEmpty();
 		var (enabled, _) = await GetTwoFactorStateAsync(appUserId);
 		enabled.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task ManageTwoFactor_permanently_redirects_to_the_security_hub()
+	{
+		_ = await SeedUserAsync("redirect.compat");
+		var authCookie = await SignInAsync("redirect.compat");
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/ManageTwoFactor");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+
+		response.StatusCode.Should().Be(HttpStatusCode.MovedPermanently);
+		response.Headers.Location!.OriginalString.Should().Contain("/Account/Security");
+	}
+
+	[Fact]
+	public async Task The_security_page_lists_a_passkey_by_name_without_revealing_credential_material()
+	{
+		var appUserId = await SeedUserAsync("ada.passkeys");
+		var authCookie = await SignInAsync("ada.passkeys");
+		await SeedPasskeyAsync(appUserId, "Work MacBook", [1, 2, 3, 4]);
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/Security");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("Work MacBook");
+		// The opaque credential id (base64url of the bytes) must never reach the page.
+		body.Should().NotContain(Convert.ToBase64String([1, 2, 3, 4]).TrimEnd('=').Replace('+', '-').Replace('/', '_'));
 	}
 
 	private async Task<string> SignInAsync(string userName)
@@ -267,7 +300,7 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 
 	private async Task<(string Secret, string AuthCookie, string AntiforgeryCookie, string Token)> GetEnrolmentFormAsync(string authCookie)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/ManageTwoFactor");
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/Security");
 		request.Headers.Add("Cookie", authCookie);
 		var response = await client.SendAsync(request);
 		var body = await response.Content.ReadAsStringAsync();
@@ -288,7 +321,7 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 
 	private async Task<HttpResponseMessage> PostConfirmAsync(string authCookie, string antiforgeryCookie, string token, string code)
 	{
-		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/ManageTwoFactor?handler=Confirm");
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Security?handler=Confirm");
 		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
 		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
 			["Confirm.Code"] = code,
@@ -443,6 +476,35 @@ public sealed partial class ManageTwoFactorTests : IAsyncLifetime, IDisposable
 		_ = await insertRole.ExecuteNonQueryAsync();
 
 		return appUserId;
+	}
+
+	private async Task SeedPasskeyAsync(long appUserId, string name, byte[] credentialId)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO identity_user_passkey
+							  	(credential_id, identity_user_id, name, normalized_name, public_key, created_at, sign_count,
+							  	 is_user_verified, is_backup_eligible, is_backed_up, aaguid, attestation_object, client_data_json, row_version)
+							  SELECT $credentialId, id, $name, $normalizedName, $publicKey, 0, 0, 1, 0, 0, $aaguid, $attestation, $clientData, 1
+							  FROM identity_user WHERE app_user_id = $appUserId;
+							  """;
+		_ = command.Parameters.AddWithValue("$credentialId", credentialId);
+		_ = command.Parameters.AddWithValue("$name", name);
+		_ = command.Parameters.AddWithValue("$normalizedName", name.ToUpperInvariant());
+		_ = command.Parameters.AddWithValue("$publicKey", new byte[] {
+			9,
+		});
+		_ = command.Parameters.AddWithValue("$aaguid", new byte[16]);
+		_ = command.Parameters.AddWithValue("$attestation", new byte[] {
+			8,
+		});
+		_ = command.Parameters.AddWithValue("$clientData", new byte[] {
+			7,
+		});
+		_ = command.Parameters.AddWithValue("$appUserId", appUserId);
+		_ = await command.ExecuteNonQueryAsync();
 	}
 
 	private async Task SeedTwoFactorEnabledAsync(long appUserId)

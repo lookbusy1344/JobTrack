@@ -6,12 +6,15 @@ using Microsoft.Playwright;
 
 internal static class BrowserTestSupport
 {
-	public static async Task SignInAdministratorAsync(IPage page, string baseAddress)
+	public static Task SignInAdministratorAsync(IPage page, string baseAddress) =>
+		SignInAsync(page, baseAddress, BrowserFixture.AdministratorUserName, BrowserFixture.AdministratorPassword);
+
+	public static async Task SignInAsync(IPage page, string baseAddress, string userName, string password)
 	{
 		await page.GotoAsync($"{baseAddress}/Account/Login");
-		await page.Locator("#Input_UserName").FillAsync(BrowserFixture.AdministratorUserName);
-		await page.Locator("#Input_Password").FillAsync(BrowserFixture.AdministratorPassword);
-		await page.Locator("button[type=submit]").ClickAsync();
+		await page.Locator("#Input_UserName").FillAsync(userName);
+		await page.Locator("#Input_Password").FillAsync(password);
+		await page.Locator("[data-password-form] button[type=submit]").ClickAsync();
 		await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
 	}
 

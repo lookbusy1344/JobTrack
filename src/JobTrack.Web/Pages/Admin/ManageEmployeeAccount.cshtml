@@ -103,6 +103,18 @@
 		<button type="submit" class="btn btn-outline-danger">Reset two-factor</button>
 	</form>
 
+	<h2>Reset passkeys</h2>
+	<p>Use this after a lost or compromised device to remove all of an employee's passkeys. Their
+		password and any two-factor enrolment are unchanged.</p>
+	<form method="post" asp-page-handler="ResetPasskeys" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="ResetPasskeys.TargetUserId"></label>
+			<select asp-for="ResetPasskeys.TargetUserId" class="form-select" asp-items="Model.TargetUserOptions"></select>
+			<span asp-validation-for="ResetPasskeys.TargetUserId" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-outline-danger">Reset passkeys</button>
+	</form>
+
 	<h2>Revoke personal access tokens</h2>
 	<form method="post" asp-page-handler="RevokeAllTokens" class="jt-form-card">
 		<div class="form-group">

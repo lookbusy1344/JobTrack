@@ -45,6 +45,7 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 		"IRequestCommands.GetDetailAsync",
 		"ITokenCommands.ListAsync",
 		"ITokenCommands.TryAuthenticateAsync",
+		"IAccountCredentialCommands.ListPasskeysAsync",
 	], StringComparer.Ordinal);
 
 	/// <summary>

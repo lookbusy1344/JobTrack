@@ -208,6 +208,33 @@ GRANT SELECT ON identity_user_role TO jobtrack_domain;
 GRANT SELECT, INSERT, DELETE ON identity_user_role TO jobtrack_credential_administration;
 GRANT SELECT ON identity_user_role TO jobtrack_identity;
 
+-- identity_user_passkey (schema version 0027, ADR 0071): WebAuthn credential
+-- material lives under the credential boundary. Reporting (jobtrack_readonly)
+-- and the ordinary domain role receive NO access at all -- passkey columns
+-- never appear in reporting-role grants or ordinary employee queries (spec
+-- §7.1, ADR 0071). Two roles touch the table:
+--   jobtrack_identity                  -- ASP.NET Core Identity's own
+--                                         IUserPasskeyStore path: resolve owner
+--                                         on sign-in, add/update on ceremony
+--                                         completion, monotonic assertion
+--                                         counter/backup-state updates.
+--   jobtrack_credential_administration -- the atomic enrol/remove/rename/reset
+--                                         transitions in JobTrack.Persistence.Shared.
+-- jobtrack_emergency_reset gets the narrow reset-passkeys capability: delete
+-- all of a target's credentials and use the affected-row count, but read no
+-- credential material. passkey_user_handle
+-- on identity_user is reached through those same two roles' existing table-level
+-- identity_user grants; it is deliberately absent from jobtrack_domain's and
+-- jobtrack_readonly's column-restricted grants above.
+-- GRANT SELECT ON ALL TABLES above swept in identity_user_passkey; reporting
+-- gets no passkey access, so revoke it explicitly (defense in depth against
+-- the blanket grant re-running on a later deployment).
+REVOKE ALL ON identity_user_passkey FROM jobtrack_readonly;
+GRANT SELECT, INSERT, UPDATE, DELETE ON identity_user_passkey
+    TO jobtrack_identity, jobtrack_credential_administration;
+REVOKE ALL ON identity_user_passkey FROM jobtrack_emergency_reset;
+GRANT DELETE ON identity_user_passkey TO jobtrack_emergency_reset;
+
 -- PAT management authenticates and authorizes the actor against current Identity state before
 -- calling the narrow lifecycle functions, then appends the matching audit row in the same
 -- transaction. It may read Identity state/roles but cannot change either. The bearer-authentication

@@ -5,6 +5,7 @@ using Abstractions;
 using Entities;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
+using Ports;
 
 /// <summary>
 ///     Remediation plan §3.3: an import that establishes a home node writes those assignments inside
@@ -34,8 +35,8 @@ internal static class ImportHomeNodeAssignment
 	/// </exception>
 	/// <exception cref="EntityNotFoundException">One of <paramref name="userIds" /> does not exist.</exception>
 	public static async Task ApplyAsync(
-		DbContext context, JobNodeId homeNodeId, IReadOnlyList<AppUserId> userIds, AppUserId actorId, Instant now,
-		Guid correlationId, CancellationToken cancellationToken)
+		DbContext context, IProviderWriteOperations provider, JobNodeId homeNodeId, IReadOnlyList<AppUserId> userIds, AppUserId actorId,
+		Instant now, Guid correlationId, CancellationToken cancellationToken)
 	{
 		// An imported node always has a parent, so "childless" is exactly "leaf" here -- the Root case
 		// JobNodeStructuralResults.DeriveKind also handles cannot arise inside an imported subtree.
@@ -47,7 +48,7 @@ internal static class ImportHomeNodeAssignment
 
 		var users = new List<AppUserEntity>(userIds.Count);
 		foreach (var userId in userIds.OrderBy(id => id.Value)) {
-			var identityUser = await IdentityUserWriteLock.AcquireAsync(context, userId, cancellationToken).ConfigureAwait(false);
+			var identityUser = await IdentityUserWriteLock.AcquireAsync(context, provider, userId, cancellationToken).ConfigureAwait(false);
 			var isLockedOut = identityUser.LockoutEnabled
 							  && identityUser.LockoutEnd is Instant lockoutEnd
 							  && lockoutEnd > now;

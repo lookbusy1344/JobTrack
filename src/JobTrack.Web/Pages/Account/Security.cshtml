@@ -1,0 +1,149 @@
+@page
+@using JobTrack.Application
+@using JobTrack.Identity
+@using NodaTime
+@model SecurityModel
+@{
+	ViewData["Title"] = "Sign-in & security";
+}
+
+<div class="jt-page-head">
+	<h1>Sign-in &amp; security</h1>
+</div>
+
+@if (User.IsInRole(EmployeeRoleNames.Requester)) {
+	<p><a asp-page="/Requests/Index">&larr; Back to your requests</a></p>
+} else {
+	<p><a asp-page="/Jobs/Browse">&larr; Back to Browse</a></p>
+}
+
+<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
+
+<partial name="_SuccessAlert" model="Model.SuccessMessage"/>
+
+<h2>Passkeys</h2>
+<p>
+	A passkey signs you in with your device's fingerprint, face, PIN, or a security key instead of your
+	password. Your password stays on the account as a fallback, and an administrator can reset your
+	passkeys if you lose access to every device.
+</p>
+
+@if (Model.PasskeysEnabled) {
+	<form method="post" asp-page-handler="BeginAddPasskey" class="jt-form-card" data-passkey-add-form>
+		<div class="form-group">
+			<label asp-for="Add.Name"></label>
+			<input asp-for="Add.Name" class="form-control" autocomplete="off" placeholder="e.g. Personal iPhone, Office PC, Blue YubiKey"/>
+			<span asp-validation-for="Add.Name" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Add a passkey</button>
+		<p class="jt-value-aside" data-passkey-unsupported hidden>This browser cannot create passkeys.</p>
+		<p class="text-danger" data-passkey-error hidden></p>
+	</form>
+
+	@if (Model.PendingCreationOptionsJson is not null) {
+		<div data-passkey-ceremony data-creation-options="@Model.PendingCreationOptionsJson"
+		     data-complete-url="@Url.Page("/Account/Security", "CompleteAddPasskey")" hidden></div>
+	}
+}
+
+@if (Model.Passkeys.Count == 0) {
+	<p>You have no passkeys.</p>
+} else {
+	<div class="jt-table-block">
+		<table class="table">
+			<thead>
+			@* Reflow policy (docs/design-language.md): a phone keeps what the row is (Name) and its type;
+			   the creation timestamp returns at md. Credential ID, AAGUID, key, and counter are never shown. *@
+			<tr>
+				<th class="col-8 col-md-4">Name</th>
+				<th class="jt-col-secondary col-md-3 d-none d-md-table-cell">Added</th>
+				<th class="jt-col-secondary col-md-2 d-none d-md-table-cell">Type</th>
+				<th class="col-4 col-md-3">Actions</th>
+			</tr>
+			</thead>
+			<tbody>
+			@foreach (var passkey in Model.Passkeys) {
+				<tr>
+					<td class="col-8 col-md-4">@passkey.Name</td>
+					<td class="jt-col-secondary col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(Instant.FromDateTimeOffset(passkey.CreatedAt), Model.ViewerZone)</td>
+					<td class="jt-col-secondary col-md-2 d-none d-md-table-cell">@PasskeyTypeHint(passkey)</td>
+					<td class="col-4 col-md-3">
+						<form method="post" asp-page-handler="RenamePasskey" class="inline-form">
+							<input type="hidden" name="credentialRef" value="@Model.ProtectCredentialRef(passkey.CredentialId)"/>
+							<input type="text" name="newName" value="@passkey.Name" class="form-control" aria-label="New name for @passkey.Name"
+							       maxlength="100"/>
+							<button type="submit" class="btn btn-outline-secondary btn-sm">Rename</button>
+						</form>
+						<form method="post" asp-page-handler="RemovePasskey" class="inline-form">
+							<input type="hidden" name="credentialRef" value="@Model.ProtectCredentialRef(passkey.CredentialId)"/>
+							<button type="submit" class="jt-icon-button jt-icon-button--danger" title="Remove passkey">
+								<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<use href="#jt-icon-remove"></use>
+								</svg>
+								<span class="visually-hidden">Remove passkey @passkey.Name</span>
+							</button>
+						</form>
+					</td>
+				</tr>
+			}
+			</tbody>
+		</table>
+	</div>
+}
+
+<h2>Two-factor authentication</h2>
+@if (Model.TwoFactorEnabled) {
+	<p>Two-factor authentication is <strong>enabled</strong> on your account. Signing in with your
+		password also requires a code from your authenticator app. A passkey sign-in does not — the
+		passkey already proves it is you.</p>
+
+	<h3>Disable two-factor authentication</h3>
+	<p>If you lose access to your authenticator app, an administrator can also disable this for you.</p>
+	<form method="post" asp-page-handler="Disable" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Disable.CurrentPassword"></label>
+			<input asp-for="Disable.CurrentPassword" type="password" class="form-control" autocomplete="current-password"/>
+			<span asp-validation-for="Disable.CurrentPassword" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-outline-danger">Disable</button>
+	</form>
+} else {
+	<p>Two-factor authentication is not enabled. Scan the QR code below with an authenticator app
+		(Google Authenticator, Microsoft Authenticator, Authy, or similar), then enter the 6-digit
+		code it generates to confirm setup. It protects password sign-in; enabling or disabling it
+		does not change your passkeys.</p>
+
+	<div class="jt-form-card">
+		@if (Model.QrCodeDataUri is not null) {
+			<img src="@Model.QrCodeDataUri" alt="Two-factor authenticator QR code" width="200" height="200"/>
+		}
+		@if (Model.AuthenticatorKey is not null) {
+			<p>Can't scan the code? Enter this key manually: <code>@Model.AuthenticatorKey</code></p>
+		}
+	</div>
+
+	<h3>Confirm setup</h3>
+	<form method="post" asp-page-handler="Confirm" class="jt-form-card">
+		<div class="form-group">
+			<label asp-for="Confirm.Code"></label>
+			<input asp-for="Confirm.Code" class="form-control" inputmode="numeric" autocomplete="one-time-code"/>
+			<span asp-validation-for="Confirm.Code" class="text-danger"></span>
+		</div>
+		<button type="submit" class="btn btn-primary">Enable</button>
+	</form>
+}
+
+@functions {
+	private static string PasskeyTypeHint(PasskeySummary passkey)
+	{
+		if (passkey.IsBackedUp) {
+			return "Synced";
+		}
+
+		return passkey.IsBackupEligible ? "Single device" : "Device-bound";
+	}
+}
+
+@section Scripts {
+	<script src="~/js/passkeys.js" asp-append-version="true"></script>
+}

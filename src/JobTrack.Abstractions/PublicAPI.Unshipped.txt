@@ -5,3 +5,20 @@ JobTrack.Abstractions.CodeStyle.LargeStructAttribute.Reason.get -> string!
 JobTrack.Abstractions.CodeStyle.LongMethodAttribute
 JobTrack.Abstractions.CodeStyle.LongMethodAttribute.LongMethodAttribute(string! reason) -> void
 JobTrack.Abstractions.CodeStyle.LongMethodAttribute.Reason.get -> string!
+JobTrack.Abstractions.PasskeyPolicy
+const JobTrack.Abstractions.PasskeyPolicy.MaxPasskeysPerAccount = 10 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MaximumAttestationObjectByteLength = 16384 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MaximumClientDataJsonByteLength = 4096 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MaximumCredentialIdByteLength = 1023 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MaximumCredentialJsonByteLength = 32768 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MaximumPublicKeyByteLength = 4096 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MaximumTransportsLength = 512 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MinimumNameLength = 1 -> int
+const JobTrack.Abstractions.PasskeyPolicy.MaximumNameLength = 100 -> int
+const JobTrack.Abstractions.PasskeyPolicy.UserHandleByteLength = 32 -> int
+const JobTrack.Abstractions.PasskeyPolicy.UserHandleEncodedLength = 43 -> int
+static JobTrack.Abstractions.PasskeyPolicy.IsNameAcceptable(string? name) -> bool
+static JobTrack.Abstractions.PasskeyPolicy.Normalize(string! name) -> string!
+JobTrack.Abstractions.PasskeyTransports
+static JobTrack.Abstractions.PasskeyTransports.Serialize(System.Collections.Generic.IReadOnlyList<string!>? transports) -> string?
+static JobTrack.Abstractions.PasskeyTransports.Parse(string? stored) -> string![]!

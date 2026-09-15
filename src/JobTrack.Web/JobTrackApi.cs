@@ -319,16 +319,13 @@ internal static partial class JobTrackApi
 	///     whether another page exists, without a separate count query.
 	/// </summary>
 	private static PagedResponse<TResponse> ToPagedResponse<TResult, TResponse>(
-		IReadOnlyCollection<TResult> results, int offset, int pageSize, string orderedBy, Func<TResult, TResponse> map)
-	{
-		return new() {
+		IReadOnlyCollection<TResult> results, int offset, int pageSize, string orderedBy, Func<TResult, TResponse> map) => new() {
 			Items = [.. results.Take(pageSize).Select(map)],
 			Offset = offset,
 			PageSize = pageSize,
 			HasMore = results.Count > pageSize,
 			OrderedBy = orderedBy,
 		};
-	}
 
 	// Minimal API endpoints get no built-in `[ValidateAntiForgeryToken]` equivalent -- that filter
 	// exists only for MVC/Razor Pages -- so state-changing `/api/*` writes validate explicitly via

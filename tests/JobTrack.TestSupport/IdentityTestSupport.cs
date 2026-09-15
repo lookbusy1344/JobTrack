@@ -69,6 +69,50 @@ public static class IdentityTestSupport
 		return new(appUserId);
 	}
 
+	/// <summary>
+	///     Inserts a minimal verified passkey row for an account so fixtures that need a passkey to exist
+	///     -- step-up rendering, user-scoped option generation, admin/CLI reset -- do not depend on a real
+	///     WebAuthn ceremony. The credential material is synthetic and never asserted against; only its
+	///     presence and ownership matter.
+	/// </summary>
+	public static async Task SeedSqlitePasskeyAsync(
+		string connectionString,
+		AppUserId appUserId,
+		string name = "Test passkey",
+		byte[]? credentialId = null)
+	{
+		credentialId ??= Guid.NewGuid().ToByteArray();
+
+		await using var connection = new SqliteConnection(connectionString);
+		await connection.OpenAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = """
+							  INSERT INTO identity_user_passkey
+							  	(credential_id, identity_user_id, name, normalized_name, public_key, created_at,
+							  	 sign_count, transports, is_user_verified, is_backup_eligible, is_backed_up,
+							  	 aaguid, attestation_object, client_data_json, row_version)
+							  SELECT $credentialId, id, $name, $normalizedName, $publicKey, 0,
+							  	 0, NULL, 1, 0, 0, $aaguid, $attestationObject, $clientDataJson, 1
+							  FROM identity_user WHERE app_user_id = $appUserId;
+							  """;
+		_ = command.Parameters.AddWithValue("$credentialId", credentialId);
+		_ = command.Parameters.AddWithValue("$name", name);
+		_ = command.Parameters.AddWithValue("$normalizedName", name.Trim().ToUpperInvariant());
+		_ = command.Parameters.AddWithValue("$publicKey", new byte[] {
+			1, 2, 3, 4,
+		});
+		_ = command.Parameters.AddWithValue("$aaguid", new byte[16]);
+		_ = command.Parameters.AddWithValue("$attestationObject", new byte[] {
+			1,
+		});
+		_ = command.Parameters.AddWithValue("$clientDataJson", new byte[] {
+			1,
+		});
+		_ = command.Parameters.AddWithValue("$appUserId", appUserId.Value);
+		_ = await command.ExecuteNonQueryAsync();
+	}
+
 	public static async Task ClearRequiresPasswordChangeAsync(SchemaProvider provider, string connectionString)
 	{
 		switch (provider) {

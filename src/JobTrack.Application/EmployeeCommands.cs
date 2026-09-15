@@ -133,6 +133,17 @@ internal sealed class EmployeeCommands : IEmployeeCommands
 	}
 
 	/// <inheritdoc />
+	public Task<ResetEmployeePasskeysResult> ResetPasskeysAsync(
+		ResetEmployeePasskeysRequest request, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		return JobTrackOperation.TraceAsync(
+			"employees.reset-passkeys", request.Context, JobTrackOperation.WithUserId(request.TargetUserId),
+			() => _port.ResetPasskeysAsync(request, cancellationToken));
+	}
+
+	/// <inheritdoc />
 	public Task<EmployeeProfileResult> SetHomeNodeAsync(
 		SetHomeNodeRequest request, CancellationToken cancellationToken = default)
 	{

@@ -52,7 +52,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await AutoClaimUnassignedNodeAsync(context, request.Context, request.LeafWorkId, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, request.WorkedByUserId, now, cancellationToken)
+		await EnsureTargetWorkerEligibleAsync(context, provider, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 
 		if (await LeafSessionClosure.IsClosedAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
@@ -132,7 +132,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await AutoClaimUnassignedNodeAsync(context, request.Context, request.JobNodeId, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, request.WorkedByUserId, now, cancellationToken)
+		await EnsureTargetWorkerEligibleAsync(context, provider, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 
 		var leafWork = await context.Set<LeafWorkEntity>()
@@ -590,7 +590,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			.ConfigureAwait(false);
 		await AuthorizeReopenAndStartOrThrowAsync(
 			context, request.Context.Actor, request.JobNodeId, request.WorkedByUserId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, request.WorkedByUserId, now, cancellationToken)
+		await EnsureTargetWorkerEligibleAsync(context, provider, request.WorkedByUserId, now, cancellationToken)
 			.ConfigureAwait(false);
 
 		if (!await provider.IsLeafReadyAsync(context, request.JobNodeId, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
@@ -905,10 +905,10 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	///     combined with a workflow role, while actor authorization evaluates the actor's authority.
 	/// </summary>
 	private static async Task EnsureTargetWorkerEligibleAsync(
-		DbContext context, AppUserId targetId, Instant now, CancellationToken cancellationToken)
+		DbContext context, IProviderWriteOperations provider, AppUserId targetId, Instant now, CancellationToken cancellationToken)
 	{
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, targetId, now, "work-session-target-not-eligible", cancellationToken).ConfigureAwait(false);
+			context, provider, targetId, now, "work-session-target-not-eligible", cancellationToken).ConfigureAwait(false);
 	}
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)

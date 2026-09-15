@@ -66,6 +66,13 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 	// would add runtime without adding signal.
 	protected virtual BrowserEngine Engine => BrowserEngine.Chromium;
 
+	// Passkey tests bind the host name "localhost" (a valid WebAuthn RP ID and secure context) rather
+	// than the "127.0.0.1" the other fixtures use -- WebAuthn forbids a bare IP address as an RP ID.
+	// The self-signed certificate's CN is already "localhost".
+	protected virtual bool EnablePasskeys => false;
+
+	protected virtual string LoopbackHost => EnablePasskeys ? "localhost" : "127.0.0.1";
+
 	public IBrowser Browser { get; private set; } = null!;
 
 	public string BaseAddress { get; private set; } = string.Empty;
@@ -92,7 +99,7 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		await ClearRequiresPasswordChangeAsync();
 
 		var port = GetFreeLoopbackPort();
-		BaseAddress = $"https://127.0.0.1:{port}";
+		BaseAddress = $"https://{LoopbackHost}:{port}";
 		certificatePath = WriteSelfSignedCertificate();
 		StartWebProcess(port, certificatePath);
 		await WaitForReadinessAsync();
@@ -145,6 +152,48 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		}
 
 		certificatePath = null;
+	}
+
+	/// <summary>
+	///     Enables TOTP two-factor on the administrator account directly, for the Stage 7 proof that a
+	///     passkey sign-in bypasses TOTP while a password sign-in would not. The protected key value is
+	///     arbitrary: the passkey path never verifies a code, and the negative (password requires TOTP) is
+	///     already proven by the integration suite.
+	/// </summary>
+	public async Task EnableTwoFactorAsync(AppUserId appUserId)
+	{
+		switch (Provider) {
+			case SchemaProvider.Sqlite:
+				await using (var connection = new SqliteConnection(database.ConnectionString)) {
+					await connection.OpenAsync();
+					await using var command = connection.CreateCommand();
+					command.CommandText =
+						"UPDATE identity_user SET two_factor_enabled = 1, authenticator_key_protected = $key WHERE app_user_id = $id;";
+					_ = command.Parameters.AddWithValue("$key", new byte[] {
+						1, 2, 3,
+					});
+					_ = command.Parameters.AddWithValue("$id", appUserId.Value);
+					_ = await command.ExecuteNonQueryAsync();
+				}
+
+				break;
+			case SchemaProvider.PostgreSql:
+				await using (var connection = new NpgsqlConnection(database.ConnectionString)) {
+					await connection.OpenAsync();
+					await using var command = connection.CreateCommand();
+					command.CommandText =
+						"UPDATE identity_user SET two_factor_enabled = true, authenticator_key_protected = @key WHERE app_user_id = @id;";
+					command.Parameters.AddWithValue("key", new byte[] {
+						1, 2, 3,
+					});
+					command.Parameters.AddWithValue("id", appUserId.Value);
+					_ = await command.ExecuteNonQueryAsync();
+				}
+
+				break;
+			default:
+				throw new InvalidOperationException($"Unsupported provider: {Provider}.");
+		}
 	}
 
 	public Task<IBrowserContext> NewContextAsync(int width, int height, bool javaScriptEnabled = true) =>
@@ -574,6 +623,14 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = certPath;
 		startInfo.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = CertificatePassword;
 
+		if (EnablePasskeys) {
+			// The RP ID is the bound host ("localhost") and the one allowed origin is this exact
+			// scheme://host:port, so the native ceremony validates against the address the browser uses.
+			startInfo.EnvironmentVariables["Authentication__Passkeys__Enabled"] = "true";
+			startInfo.EnvironmentVariables["Authentication__Passkeys__ServerDomain"] = LoopbackHost;
+			startInfo.EnvironmentVariables["Authentication__Passkeys__Origins__0"] = BaseAddress;
+		}
+
 		// One process is shared across an entire browser-test class (many sequential
 		// /Account/Login GET+POST pairs via SignInAsync), which exceeds the unconfigured
 		// production login-rate-limit budget within its 60s window. Raised for this child
@@ -746,6 +803,22 @@ public sealed class WebKitBrowserFixture() : BrowserFixture(new SqliteDatabaseFi
 	protected override SchemaProvider Provider => SchemaProvider.Sqlite;
 
 	protected override BrowserEngine Engine => BrowserEngine.WebKit;
+}
+
+/// <summary>Passkey-enabled SQLite fixture (ADR 0071 Stage 7): the app runs with the WebAuthn feature on, bound to the "localhost" RP ID.</summary>
+public sealed class PasskeySqliteBrowserFixture() : BrowserFixture(new SqliteDatabaseFixture())
+{
+	protected override SchemaProvider Provider => SchemaProvider.Sqlite;
+
+	protected override bool EnablePasskeys => true;
+}
+
+/// <summary>Passkey-enabled PostgreSQL fixture (ADR 0071 Stage 7).</summary>
+public sealed class PasskeyPostgreSqlBrowserFixture() : BrowserFixture(new PostgreSqlDatabaseFixture())
+{
+	protected override SchemaProvider Provider => SchemaProvider.PostgreSql;
+
+	protected override bool EnablePasskeys => true;
 }
 
 /// <summary>The Playwright-supported rendering engines this project samples cross-browser compatibility against.</summary>

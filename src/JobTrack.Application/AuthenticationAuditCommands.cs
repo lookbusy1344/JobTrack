@@ -27,8 +27,9 @@ internal sealed class AuthenticationAuditCommands : IAuthenticationAuditCommands
 			throw new ArgumentException("Known authentication audit events must include both actor and identity user identifiers.", nameof(request));
 		}
 
-		if (!hasKnownActor && request.Kind is not AuthenticationAuditEventKind.LoginFailed) {
-			throw new ArgumentException("Only failed password login events may be recorded without a known actor.", nameof(request));
+		if (!hasKnownActor && request.Kind is not (AuthenticationAuditEventKind.LoginFailed or AuthenticationAuditEventKind.PasskeySignInFailed)) {
+			throw new ArgumentException(
+				"Only failed password or passkey login events may be recorded without a known actor.", nameof(request));
 		}
 
 		return request.ActorUserId.HasValue

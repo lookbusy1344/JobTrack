@@ -21,6 +21,8 @@ public static class Program
 		"(--connection-string <connection-string> | --connection-string-file <path>) --username <username>\n" +
 		"       JobTrack.AdminCli reset-2fa --provider <postgresql|sqlite> " +
 		"(--connection-string <connection-string> | --connection-string-file <path>) --username <username>\n" +
+		"       JobTrack.AdminCli reset-passkeys --provider <postgresql|sqlite> " +
+		"(--connection-string <connection-string> | --connection-string-file <path>) --username <username>\n" +
 		"       JobTrack.AdminCli import-tree --provider <postgresql|sqlite> " +
 		"(--connection-string <connection-string> | --connection-string-file <path>) --username <username> " +
 		"--file <path-to-json> [--parent-id <job-node-id>] [--home-node-for <username[,username...]>]\n" +
@@ -50,6 +52,7 @@ public static class Program
 				"bootstrap" => await RunBootstrapAsync(BootstrapCommandOptions.Parse(pico), io),
 				"reset-password" => await RunResetPasswordAsync(ResetPasswordCommandOptions.Parse(pico), io),
 				"reset-2fa" => await RunResetTwoFactorAsync(ResetTwoFactorCommandOptions.Parse(pico), io),
+				"reset-passkeys" => await RunResetPasskeysAsync(ResetPasskeysCommandOptions.Parse(pico), io),
 				"import-tree" => await RunImportTreeAsync(JobTreeImportCommandOptions.Parse(pico), io),
 				"set-home-node" => await RunSetHomeNodeAsync(SetHomeNodeCommandOptions.Parse(pico), io),
 				"create-employee" => await RunCreateEmployeeAsync(CreateEmployeeCommandOptions.Parse(pico), io),
@@ -144,6 +147,28 @@ public static class Program
 		var identityContext = scope.ServiceProvider.GetRequiredService<JobTrackIdentityDbContext>();
 
 		return await EmergencyTwoFactorReset.RunAsync(
+			io, userManager, identityContext, options.Provider, options.Username, SystemClock.Instance, CancellationToken.None);
+	}
+
+	private static async Task<int> RunResetPasskeysAsync(ResetPasskeysCommandOptions options, SystemConsoleIO io)
+	{
+		ValidateTransportSecurity(options.Provider, options.ConnectionString);
+
+		var services = new ServiceCollection();
+		_ = services.AddLogging();
+		_ = services.AddSingleton<IClock>(SystemClock.Instance);
+		_ = options.Provider switch {
+			AdminCliProvider.PostgreSql => services.AddJobTrackIdentityPostgreSql(options.ConnectionString),
+			AdminCliProvider.Sqlite => services.AddJobTrackIdentitySqlite(options.ConnectionString),
+			_ => throw new AdminCliUsageException($"Unknown provider '{options.Provider}'."),
+		};
+
+		await using var provider = services.BuildServiceProvider();
+		using var scope = provider.CreateScope();
+		var userManager = scope.ServiceProvider.GetRequiredService<UserManager<JobTrackIdentityUser>>();
+		var identityContext = scope.ServiceProvider.GetRequiredService<JobTrackIdentityDbContext>();
+
+		return await EmergencyPasskeyReset.RunAsync(
 			io, userManager, identityContext, options.Provider, options.Username, SystemClock.Instance, CancellationToken.None);
 	}
 

@@ -76,6 +76,7 @@ internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstr
 			IsEnabled = true,
 			LockoutEnabled = true,
 			AccessFailedCount = 0,
+			PasskeyUserHandle = PasskeyUserHandleGenerator.Create(),
 		};
 		_ = context.Add(identityUser);
 

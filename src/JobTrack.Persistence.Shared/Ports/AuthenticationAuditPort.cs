@@ -58,6 +58,8 @@ internal sealed class AuthenticationAuditPort(IProviderWriteOperations provider,
 			AuthenticationAuditEventKind.TwoFactorEnabled => "authentication.two-factor-enabled",
 			AuthenticationAuditEventKind.TwoFactorDisabled => "authentication.two-factor-disabled",
 			AuthenticationAuditEventKind.TwoFactorFailed => "authentication.two-factor-failed",
+			AuthenticationAuditEventKind.PasskeySignInSuccess => "authentication.passkey-sign-in-success",
+			AuthenticationAuditEventKind.PasskeySignInFailed => "authentication.passkey-sign-in-failed",
 			_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown authentication audit event kind."),
 		};
 }

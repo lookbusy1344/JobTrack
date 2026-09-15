@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
 using Shared;
+using Shared.Entities;
 using Shared.Ports;
 
 /// <summary>
@@ -50,6 +51,15 @@ internal sealed class SqliteWriteOperations(string connectionString) : IProvider
 	public async Task<int> RevokeAllTokensForUserAsync(
 		DbContext context, AppUserId userId, Instant now, CancellationToken cancellationToken) =>
 		await PersonalAccessTokenRevocation.RevokeAllForUserAsync(context, userId, now, cancellationToken).ConfigureAwait(false);
+
+	/// <summary>SQLite has no role grants to work around, so the shared EF self-assignment runs directly.</summary>
+	public async Task TouchIdentityUserConcurrencyStampAsync(DbContext context, AppUserId userId, CancellationToken cancellationToken) =>
+		_ = await context.Set<IdentityUserEntity>()
+						 .Where(identityUser => identityUser.AppUserId == userId)
+						 .ExecuteUpdateAsync(
+							 setters => setters.SetProperty(identityUser => identityUser.ConcurrencyStamp, identityUser => identityUser.ConcurrencyStamp),
+							 cancellationToken)
+						 .ConfigureAwait(false);
 
 	/// <summary>Classifies a SQLite write conflict from the error codes and trigger messages in the chain.</summary>
 	/// <remarks>

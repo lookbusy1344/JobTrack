@@ -1,5 +1,6 @@
 namespace JobTrack.Persistence.Shared;
 
+using Abstractions;
 using Converters;
 using Entities;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,7 @@ internal static class JobTrackModelConfiguration
 		ConfigureIdentityUser(modelBuilder);
 		ConfigureIdentityRole(modelBuilder);
 		ConfigureIdentityUserRole(modelBuilder);
+		ConfigureIdentityUserPasskey(modelBuilder);
 		ConfigureInitialisedMarker(modelBuilder);
 		ConfigureJobNode(modelBuilder);
 		ConfigureLeafWork(modelBuilder);
@@ -80,9 +82,11 @@ internal static class JobTrackModelConfiguration
 			_ = builder.Property(e => e.TwoFactorEnabled).HasColumnName("two_factor_enabled");
 			_ = builder.Property(e => e.AuthenticatorKeyProtected).HasColumnName("authenticator_key_protected");
 			_ = builder.Property(e => e.TwoFactorEnabledAt).HasColumnName("two_factor_enabled_at");
+			_ = builder.Property(e => e.PasskeyUserHandle).HasColumnName("passkey_user_handle").HasMaxLength(PasskeyPolicy.UserHandleEncodedLength);
 
 			_ = builder.HasIndex(e => e.AppUserId).IsUnique();
 			_ = builder.HasIndex(e => e.NormalizedUserName).IsUnique();
+			_ = builder.HasIndex(e => e.PasskeyUserHandle).IsUnique();
 
 			_ = builder.HasOne<AppUserEntity>().WithMany().HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Restrict);
 		});
@@ -118,6 +122,38 @@ internal static class JobTrackModelConfiguration
 
 			_ = builder.HasOne<IdentityUserEntity>().WithMany().HasForeignKey(e => e.IdentityUserId).OnDelete(DeleteBehavior.Restrict);
 			_ = builder.HasOne<IdentityRoleEntity>().WithMany().HasForeignKey(e => e.IdentityRoleId).OnDelete(DeleteBehavior.Restrict);
+		});
+	}
+
+	private static void ConfigureIdentityUserPasskey(ModelBuilder modelBuilder)
+	{
+		_ = modelBuilder.Entity<IdentityUserPasskeyEntity>(builder => {
+			_ = builder.ToTable("identity_user_passkey");
+			_ = builder.HasKey(e => e.CredentialId);
+
+			_ = builder.Property(e => e.CredentialId).HasColumnName("credential_id").HasMaxLength(PasskeyPolicy.MaximumCredentialIdByteLength);
+			_ = builder.Property(e => e.IdentityUserId).HasColumnName("identity_user_id");
+			_ = builder.Property(e => e.Name).HasColumnName("name").IsRequired();
+			_ = builder.Property(e => e.NormalizedName).HasColumnName("normalized_name").IsRequired();
+			_ = builder.Property(e => e.PublicKey).HasColumnName("public_key").HasMaxLength(PasskeyPolicy.MaximumPublicKeyByteLength).IsRequired();
+			_ = builder.Property(e => e.CreatedAt).HasColumnName("created_at").IsRequired();
+			_ = builder.Property(e => e.SignCount).HasColumnName("sign_count");
+			_ = builder.Property(e => e.Transports).HasColumnName("transports").HasMaxLength(PasskeyPolicy.MaximumTransportsLength);
+			_ = builder.Property(e => e.IsUserVerified).HasColumnName("is_user_verified");
+			_ = builder.Property(e => e.IsBackupEligible).HasColumnName("is_backup_eligible");
+			_ = builder.Property(e => e.IsBackedUp).HasColumnName("is_backed_up");
+			_ = builder.Property(e => e.AttestationObject).HasColumnName("attestation_object").HasMaxLength(PasskeyPolicy.MaximumAttestationObjectByteLength).IsRequired();
+			_ = builder.Property(e => e.ClientDataJson).HasColumnName("client_data_json").HasMaxLength(PasskeyPolicy.MaximumClientDataJsonByteLength).IsRequired();
+			_ = builder.Property(e => e.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
+
+			_ = builder.HasIndex(e => new
+			{
+				e.IdentityUserId,
+				e.NormalizedName,
+			}, "identity_user_passkey_user_normalized_name_idx").IsUnique();
+			_ = builder.HasIndex(e => e.IdentityUserId, "identity_user_passkey_identity_user_id_idx");
+
+			_ = builder.HasOne<IdentityUserEntity>().WithMany().HasForeignKey(e => e.IdentityUserId).OnDelete(DeleteBehavior.Restrict);
 		});
 	}
 

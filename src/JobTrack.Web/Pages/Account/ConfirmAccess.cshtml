@@ -14,7 +14,7 @@
 
 	<partial name="_ErrorAlert" model="Model.ErrorMessage"/>
 
-	<form method="post" class="jt-form-card" asp-route-returnUrl="@Model.ReturnUrl">
+	<form method="post" class="jt-form-card" asp-route-returnUrl="@Model.ReturnUrl" data-password-form>
 		<div class="form-group">
 			<label asp-for="Input.CurrentPassword"></label>
 			<input asp-for="Input.CurrentPassword" type="password" class="form-control" autocomplete="current-password"/>
@@ -29,4 +29,21 @@
 		}
 		<button type="submit" class="btn btn-primary">Confirm</button>
 	</form>
+
+	@if (Model.PasskeyStepUpAvailable) {
+		<div class="jt-auth-alt" data-passkey-login
+		     data-options-url="@Url.Page("/Account/ConfirmAccess", "PasskeyOptions")"
+		     data-signin-url="@Url.Page("/Account/ConfirmAccess", "PasskeyConfirm", new {
+			                      returnUrl = Model.ReturnUrl,
+})" hidden>
+			<button type="button" class="btn btn-outline-primary" data-passkey-login-button>Use a passkey</button>
+			<p class="text-danger" data-passkey-login-error hidden></p>
+		</div>
+	}
 </div>
+
+@section Scripts {
+	@if (Model.PasskeyStepUpAvailable) {
+		<script src="~/js/passkeys.js" asp-append-version="true"></script>
+	}
+}

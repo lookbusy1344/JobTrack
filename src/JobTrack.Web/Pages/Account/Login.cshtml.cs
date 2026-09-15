@@ -8,6 +8,10 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Passkeys;
+using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 
 /// <summary>
 ///     §8.5 slice 1: sign-in. The failure message is identical for an unknown username, a wrong
@@ -20,11 +24,17 @@ public sealed class LoginModel(
 	UserManager<JobTrackIdentityUser> userManager,
 	ILoginAttemptRateLimiter loginAttemptRateLimiter,
 	IJobTrackClient jobTrackClient,
-	IAntiforgery antiforgery) : PageModel
+	IAntiforgery antiforgery,
+	IOptions<PasskeyFeatureOptions> passkeyFeature) : PageModel
 {
 	private const string GenericFailureMessage = "The username or password is incorrect.";
+	private const string GenericPasskeyFailureMessage = "That passkey could not be used to sign in. Try again.";
+	private const string PasskeyExpiredMessage = "Passkey sign-in expired; try again.";
 	private const string RateLimitedMessage = "Too many sign-in attempts. Retry after the current window elapses.";
 	private const string SessionExpiredMessage = "Your session expired before sign-in completed. Please try again.";
+
+	/// <summary>Whether passkey sign-in is enabled, so the page renders the progressive enhancement and the handlers accept requests.</summary>
+	public bool PasskeysEnabled => passkeyFeature.Value.Enabled;
 
 	[BindProperty] public LoginInput Input { get; set; } = new();
 
@@ -111,20 +121,166 @@ public sealed class LoginModel(
 			return Page();
 		}
 
-		if (user is not null) {
-			await AuthenticationAudit.RecordKnownAsync(jobTrackClient, user, AuthenticationAuditEventKind.LoginSuccess);
+		if (user is null) {
+			// PasswordSignInAsync succeeded, so the account exists; a null lookup here is not expected.
+			// Reset principal-bound state and send them into the app without a success audit or a
+			// forced-change gate we cannot evaluate.
+			PrincipalBoundSessionState.Reset(HttpContext);
+			return RedirectToApp(returnUrl);
 		}
 
-		// §2.5 of the 2026-07-28 fresh-eyes review: this is final authentication (no two-factor step
-		// follows), so any filter memory left by a previous principal on this browser must not survive
-		// into this one -- reset before any further redirect, including the forced-password-change one.
-		PrincipalBoundSessionState.Reset(HttpContext);
+		// The one shared final-authentication tail (audit, principal-bound-session reset before any
+		// redirect including the forced-password-change one, and the forced-change gate); password and
+		// passkey sign-in both route through it.
+		var target = await AuthenticationCompletion.FinishAsync(
+			this, jobTrackClient, user, AuthenticationAuditEventKind.LoginSuccess, returnUrl, HttpContext.RequestAborted);
+		return LocalRedirect(target);
+	}
 
-		if (user is { RequiresPasswordChange: true }) {
-			return RedirectToPage("ChangePassword");
+	/// <summary>
+	///     Generates username-less WebAuthn request options for both conditional autofill and the
+	///     explicit button (ADR 0071 §8.2). Antiforgery-protected and rate-limited before generation;
+	///     never reveals whether any account has passkeys.
+	/// </summary>
+	public async Task<IActionResult> OnPostPasskeyOptionsAsync()
+	{
+		if (!PasskeysEnabled) {
+			return NotFound();
 		}
 
-		return RedirectToApp(returnUrl);
+		if (!await antiforgery.IsRequestValidAsync(HttpContext)) {
+			return new JsonResult(new
+			{
+				error = PasskeyExpiredMessage,
+			});
+		}
+
+		var limited = await ConsumePasskeyLimitAsync("passkey-options");
+		if (limited is not null) {
+			return limited;
+		}
+
+		// Username-less: a null user yields an empty allowCredentials list, so the browser's own chooser
+		// can offer any discoverable passkey without JobTrack disclosing which accounts have one.
+		var optionsJson = await signInManager.MakePasskeyRequestOptionsAsync(null);
+		return Content(optionsJson, "application/json");
+	}
+
+	/// <summary>
+	///     Verifies a WebAuthn assertion and, on success, completes sign-in through the shared final-login
+	///     tail (ADR 0071 §8.2). A user-verified passkey is sufficient — no TOTP follows. The authenticated
+	///     user is resolved only after success, by decoding the credential ID from the same assertion JSON
+	///     and looking it up; a pre-verification credential ID is never trusted. Returns JSON for
+	///     <c>passkeys.js</c>.
+	/// </summary>
+	public async Task<IActionResult> OnPostPasskeySignInAsync(string? returnUrl = null)
+	{
+		if (!PasskeysEnabled) {
+			return NotFound();
+		}
+
+		if (!await antiforgery.IsRequestValidAsync(HttpContext)) {
+			return new JsonResult(new
+			{
+				error = PasskeyExpiredMessage,
+			});
+		}
+
+		var limited = await ConsumePasskeyLimitAsync("passkey-assertion");
+		if (limited is not null) {
+			return limited;
+		}
+
+		var credentialJson = await PasskeyCredentialJson.ReadAsync(Request, HttpContext.RequestAborted);
+		if (credentialJson is null) {
+			return new JsonResult(new
+			{
+				error = GenericPasskeyFailureMessage,
+			});
+		}
+
+		SignInResult result;
+		try {
+			result = await signInManager.PasskeySignInAsync(credentialJson);
+		}
+		catch (InvalidOperationException) {
+			// Some .NET 10 servicing builds throw rather than returning Failed when the protected
+			// assertion state is absent (an expected browser condition, e.g. an expired ceremony).
+			// Translate only this ceremony call's exception into the generic expiry response.
+			return new JsonResult(new
+			{
+				error = PasskeyExpiredMessage,
+			});
+		}
+		catch (DbUpdateConcurrencyException) {
+			// A reset/removal committed after assertion verification. The store refuses to recreate
+			// that credential; expose the same generic authentication failure as any invalid assertion.
+			return new JsonResult(new
+			{
+				error = GenericPasskeyFailureMessage,
+			});
+		}
+
+		if (!result.Succeeded) {
+			await AuthenticationAudit.RecordUnknownPasskeySignInFailedAsync(jobTrackClient);
+			return new JsonResult(new
+			{
+				error = GenericPasskeyFailureMessage,
+			});
+		}
+
+		// Resolve the authenticated user only now, from the verified assertion (§7.2).
+		if (!PasskeyAssertionCredential.TryReadCredentialId(credentialJson, out var credentialId)) {
+			await signInManager.SignOutAsync();
+			return new JsonResult(new
+			{
+				error = GenericPasskeyFailureMessage,
+			});
+		}
+
+		var user = await userManager.FindByPasskeyIdAsync(credentialId);
+		if (user is null) {
+			// A concurrent reset removed the credential between verification and lookup: revoke the
+			// just-issued cookie and fail closed rather than complete a session we cannot attribute.
+			await signInManager.SignOutAsync();
+			return new JsonResult(new
+			{
+				error = GenericPasskeyFailureMessage,
+			});
+		}
+
+		var target = await AuthenticationCompletion.FinishAsync(
+			this, jobTrackClient, user, AuthenticationAuditEventKind.PasskeySignInSuccess, returnUrl, HttpContext.RequestAborted);
+		return new JsonResult(new
+		{
+			redirect = target,
+		});
+	}
+
+	private async Task<IActionResult?> ConsumePasskeyLimitAsync(string purpose)
+	{
+		var remoteAddress = GetRemoteAddress();
+		var outcome = await loginAttemptRateLimiter.TryAcquireAsync(
+			$"{purpose}:{remoteAddress}", purpose, HttpContext.RequestAborted);
+		return outcome switch {
+			RateLimitOutcome.Allowed => null,
+			RateLimitOutcome.Denied => StatusJson(StatusCodes.Status429TooManyRequests, RateLimitedMessage),
+			// Fail closed without disclosing the store is down: a generic failure, no ceremony attempted.
+			RateLimitOutcome.StoreUnavailable => new(new
+			{
+				error = GenericPasskeyFailureMessage,
+			}),
+			_ => throw new UnreachableException($"Unknown rate-limit outcome: {outcome}."),
+		};
+	}
+
+	private JsonResult StatusJson(int statusCode, string error)
+	{
+		Response.StatusCode = statusCode;
+		return new(new
+		{
+			error,
+		});
 	}
 
 	private IActionResult RedirectToApp(string? returnUrl) =>

@@ -997,6 +997,20 @@ fieldset legend {
     box-shadow: var(--jt-shadow-sm);
 }
 
+/* Bootstrap compiles .btn-outline-secondary's colour to the literal #6c757d (the same build-time
+   flattening documented for .btn-primary), which on the warm page ground is only 3.99:1 -- below
+   WCAG AA for the btn-sm text. Re-skin it onto the Console ink/line tokens, matching .btn-secondary. */
+.btn-outline-secondary {
+    --bs-btn-color: var(--jt-ink-soft);
+    --bs-btn-border-color: var(--jt-line-strong);
+    --bs-btn-hover-color: var(--jt-orange-700);
+    --bs-btn-hover-bg: var(--jt-orange-50);
+    --bs-btn-hover-border-color: var(--jt-orange-200);
+    --bs-btn-active-color: var(--jt-orange-700);
+    --bs-btn-active-bg: var(--jt-orange-100);
+    --bs-btn-active-border-color: var(--jt-orange-200);
+}
+
 /* ---- Alerts ------------------------------------------------------------------------------- */
 
 /* Layout (icon-beside-message) comes from Bootstrap's d-flex align-items-start gap-2 on each
