@@ -4,6 +4,37 @@ All notable changes to JobTrack are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 `MAJOR.MINOR.PATCH` release numbers.
 
+## [1.3.0] — 2026-09-15
+
+### Added
+
+- **Passkey sign-in** (ADR 0071). An employee can sign in with a passkey — Face
+  ID, Touch ID, Windows Hello, or a security key — as an optional primary
+  credential. Built on ASP.NET Core Identity 10's native WebAuthn support, no
+  third-party library. The authentication model has three paths: username and
+  password; username, password, and TOTP; or a passkey alone. A user-verified
+  passkey needs no separate TOTP step.
+- **Passkey management on `/Account/Security`** — a hub listing an employee's
+  passkeys and TOTP state, with enrolment, rename, and remove ceremonies. The
+  raw credential ID is never exposed.
+- **Username-less passkey sign-in** on the login page, with progressive
+  enhancement so the password form still works where WebAuthn is unavailable.
+- **Passkey step-up** on `/Account/ConfirmAccess` for re-authentication.
+- **Administrator passkey reset** on `/Admin/ManageEmployeeAccount` and an
+  AdminCli `reset-passkeys` emergency command. Password fallback plus
+  administrator reset is the whole recovery model — no passkey-only accounts, no
+  public registration, no automated recovery.
+- **Passkey-sign-in audit kinds**, and logging of enrolment failure reasons.
+
+Every account keeps a password. Disabling the feature flag hides enrolment and
+sign-in but retains stored credentials and leaves password and TOTP working.
+
+### Changed
+
+- Shortened the top-bar nav labels to **Security** and **API**.
+- Gave `btn-outline-secondary` an accessible Console skin.
+- Updated NuGet dependencies.
+
 ## [1.2.0] — 2026-08-24
 
 ### Changed

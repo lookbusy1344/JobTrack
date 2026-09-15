@@ -87,7 +87,7 @@ clients above them are siblings, each calling `IJobTrackClient` in-process — t
 4. **Web client** — mobile-friendly as a first principle. Server-rendered Razor Pages rather than an SPA, to maximise compatibility: it
    works without client-side state on legacy browsers, and is intentionally conservative.
 5. **Admin CLI** — uses the same library, to bootstrap the first administrator, create employees, emergency
-   password and 2FA resets, and job-tree import.
+   password, 2FA, and passkey resets, and job-tree import.
 
 The HTTP API and the web client share the one `JobTrack.Web` process; the admin CLI is its own
 executable. Each process picks a database provider at startup and then reaches the database only
@@ -125,10 +125,10 @@ A short test script, aiming to complete in about 20 seconds, is used for pre-com
 
 ## Status
 
-**Current release: v1.2.0** (2026-08-24) — merges the Active column's *Unstarted* leaf status into
-*Waiting* (ADR 0070), since starting an unstarted leaf auto-attaches its work record and the two read
-identically to a user, and adds an end-user leaf/branch status reference. No schema or contract
-changes. Full history: [CHANGELOG.md](CHANGELOG.md).
+**Current release: v1.3.0** (2026-09-15) — adds passkey sign-in (ADR 0071) as an optional primary
+credential alongside the retained password: Face ID, Touch ID, Windows Hello, or a security key, with
+enrolment and management on `/Account/Security`, username-less login, step-up, and administrator /
+AdminCli reset. Adds an `identity_user_passkey` table. Full history: [CHANGELOG.md](CHANGELOG.md).
 
 **Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
 ([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),
