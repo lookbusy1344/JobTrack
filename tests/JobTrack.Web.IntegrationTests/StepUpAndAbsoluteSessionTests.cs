@@ -5,6 +5,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using Abstractions;
+using Application;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
@@ -29,7 +30,7 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	private const string AppliedBy = "test-runner";
 	private const string AuthenticatorKeyProtectionPurpose = "JobTrack.Identity.AuthenticatorKey.v1";
 	private const string KnownPassword = "Correct-Horse-Battery-42!";
-	private const int LoginRateLimitPermitLimit = 2;
+	private const int LoginRateLimitPermitLimit = 10;
 	private readonly MutableClock clock = new(Instant.FromUtc(2026, 8, 1, 9, 0, 0));
 
 	private readonly SqliteDatabaseFixture database = new();
@@ -177,13 +178,55 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 		var authCookie = await SignInAsync("stepup.2fa");
 		await EnableTwoFactorAsync(userId, "JBSWY3DPEHPK3PXP");
 
-		var first = await ConfirmAccessAsync(authCookie, KnownPassword, "/Account/PersonalAccessTokens", "000000");
-		var second = await ConfirmAccessAsync(authCookie, KnownPassword, "/Account/PersonalAccessTokens", "000000");
+		var attempts = new List<HttpResponseMessage>();
+		for (var attempt = 0; attempt < LoginRateLimitPermitLimit; ++attempt) {
+			attempts.Add(await ConfirmAccessAsync(authCookie, KnownPassword, "/Account/PersonalAccessTokens", "000000"));
+		}
+
 		var limited = await ConfirmAccessAsync(authCookie, KnownPassword, "/Account/PersonalAccessTokens", "000000");
 
-		first.StatusCode.Should().Be(HttpStatusCode.OK);
-		second.StatusCode.Should().Be(HttpStatusCode.OK);
+		attempts.Should().AllSatisfy(response => response.StatusCode.Should().Be(HttpStatusCode.OK));
 		limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+	}
+
+	[Fact]
+	public async Task Repeated_wrong_two_factor_codes_lock_the_account_before_the_request_limit()
+	{
+		var userId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.lockout");
+		var authCookie = await SignInAsync("stepup.lockout");
+		const string authenticatorSecret = "JBSWY3DPEHPK3PXP";
+		await EnableTwoFactorAsync(userId, authenticatorSecret);
+
+		for (var attempt = 0; attempt < AccountLockoutPolicy.MaxFailedAccessAttempts; ++attempt) {
+			var failed = await ConfirmAccessAsync(authCookie, KnownPassword, "/Account/PersonalAccessTokens", "000000");
+			failed.StatusCode.Should().Be(HttpStatusCode.OK);
+		}
+
+		var auditOperations = await GetAuthenticationAuditOperationsAsync(userId);
+		var locked = await ConfirmAccessAsync(authCookie, KnownPassword, "/Account/PersonalAccessTokens", "123456");
+		var body = await locked.Content.ReadAsStringAsync();
+
+		auditOperations.Should().ContainInOrder(
+			Enumerable.Repeat("authentication.two-factor-failed", AccountLockoutPolicy.MaxFailedAccessAttempts - 1)
+					  .Append("authentication.lockout"));
+		locked.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("temporarily locked out");
+	}
+
+	[Fact]
+	public async Task Repeated_wrong_step_up_passwords_audit_the_resulting_lockout()
+	{
+		var userId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.password-lockout");
+		var authCookie = await SignInAsync("stepup.password-lockout");
+
+		for (var attempt = 0; attempt < AccountLockoutPolicy.MaxFailedAccessAttempts; ++attempt) {
+			var failed = await ConfirmAccessAsync(authCookie, "wrong-password", "/Account/PersonalAccessTokens");
+			failed.StatusCode.Should().Be(HttpStatusCode.OK);
+		}
+
+		var auditOperations = await GetAuthenticationAuditOperationsAsync(userId);
+
+		auditOperations.Should().ContainSingle(operation => operation == "authentication.lockout");
 	}
 
 	private async Task<HttpResponseMessage> GetPersonalAccessTokensPageAsync(string authCookie)
@@ -305,6 +348,22 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 		_ = command.Parameters.AddWithValue("$key", protectedKey);
 		_ = command.Parameters.AddWithValue("$appUserId", appUserId.Value);
 		_ = await command.ExecuteNonQueryAsync();
+	}
+
+	private async Task<IReadOnlyList<string>> GetAuthenticationAuditOperationsAsync(AppUserId appUserId)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT operation FROM audit_event WHERE actor_user_id = $appUserId ORDER BY id;";
+		_ = command.Parameters.AddWithValue("$appUserId", appUserId.Value);
+		await using var reader = await command.ExecuteReaderAsync();
+		var operations = new List<string>();
+		while (await reader.ReadAsync()) {
+			operations.Add(reader.GetString(0));
+		}
+
+		return operations;
 	}
 
 	/// <summary>Test-only <see cref="IClock" /> the factory substitutes for the app's <c>SystemClock.Instance</c> registration.</summary>

@@ -49,6 +49,7 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 
 	private readonly IDisposableTestDatabase database;
 	private readonly StringBuilder processOutput = new();
+	private readonly Lock processOutputLock = new();
 	private string? certificatePath;
 	private IPlaywright playwright = null!;
 	private NpgsqlDataSource? postgreSqlDataSource;
@@ -644,14 +645,14 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 		};
 		webProcess.OutputDataReceived += (_, args) => {
 			if (args.Data is not null) {
-				lock (processOutput) {
+				lock (processOutputLock) {
 					_ = processOutput.AppendLine(args.Data);
 				}
 			}
 		};
 		webProcess.ErrorDataReceived += (_, args) => {
 			if (args.Data is not null) {
-				lock (processOutput) {
+				lock (processOutputLock) {
 					_ = processOutput.AppendLine(args.Data);
 				}
 			}
@@ -672,7 +673,7 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 
 		while (DateTime.UtcNow < deadline) {
 			if (webProcess is { HasExited: true }) {
-				throw new InvalidOperationException($"The JobTrack.Web process exited early (code {webProcess.ExitCode}). Output:\n{processOutput}");
+				throw new InvalidOperationException($"The JobTrack.Web process exited early (code {webProcess.ExitCode}). Output:\n{ReadProcessOutput()}");
 			}
 
 			try {
@@ -688,7 +689,14 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 			await Task.Delay(ReadinessPollInterval);
 		}
 
-		throw new TimeoutException($"JobTrack.Web did not become ready within {ReadinessTimeout}. Output so far:\n{processOutput}");
+		throw new TimeoutException($"JobTrack.Web did not become ready within {ReadinessTimeout}. Output so far:\n{ReadProcessOutput()}");
+	}
+
+	private string ReadProcessOutput()
+	{
+		lock (processOutputLock) {
+			return processOutput.ToString();
+		}
 	}
 
 	private static int GetFreeLoopbackPort()

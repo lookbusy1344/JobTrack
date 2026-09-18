@@ -3,6 +3,7 @@ namespace JobTrack.Web.IntegrationTests;
 using System.Net;
 using System.Text.RegularExpressions;
 using Abstractions;
+using Application;
 using AwesomeAssertions;
 using Identity;
 using Microsoft.AspNetCore.Identity;
@@ -243,6 +244,38 @@ public sealed partial class ChangePasswordTests : IAsyncLifetime, IDisposable
 
 		var oldPasswordCookie = await SignInAsync("wilma", KnownPassword);
 		oldPasswordCookie.Should().NotBeNullOrEmpty();
+	}
+
+	[Fact]
+	public async Task Repeated_incorrect_current_passwords_lock_the_account_and_refuse_the_correct_password()
+	{
+		await SeedUserAsync("wilma.lockout", KnownPassword);
+		var authCookie = await SignInAsync("wilma.lockout", KnownPassword);
+
+		for (var attempt = 0; attempt < AccountLockoutPolicy.MaxFailedAccessAttempts; ++attempt) {
+			var failed = await PostChangePasswordAsync(authCookie, "wrong-password");
+			failed.StatusCode.Should().Be(HttpStatusCode.OK);
+		}
+
+		var locked = await PostChangePasswordAsync(authCookie, KnownPassword);
+		var body = await locked.Content.ReadAsStringAsync();
+
+		locked.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("temporarily locked out");
+	}
+
+	private async Task<HttpResponseMessage> PostChangePasswordAsync(string authCookie, string currentPassword)
+	{
+		var (antiforgeryCookie, token) = await GetChangePasswordFormAsync(authCookie);
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.CurrentPassword"] = currentPassword,
+			["Input.NewPassword"] = NewPassword,
+			["Input.ConfirmNewPassword"] = NewPassword,
+			["__RequestVerificationToken"] = token,
+		});
+		return await client.SendAsync(request);
 	}
 
 	[Fact]

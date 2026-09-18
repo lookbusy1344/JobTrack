@@ -342,10 +342,14 @@ misconfigured revision never serves. The deploy script also asserts session affi
 provisioning job refuses to proceed if the database reports fewer connections than the pool budget
 assumes.
 
-The limiter admits at most `RateLimiting:MaxPartitionCount` live partitions per purpose (4096 by
-default). `rate_limit_capacity_lock` serializes only new-partition admission; callers consume
-existing partitions concurrently. Neither limiter table is granted directly to an application role:
-the EF-mapped SECURITY DEFINER function is the sole write boundary.
+The limiter retains at most `RateLimiting:MaxPartitionCount` live primary partitions and the same
+number of live backstop partitions per purpose (4096 per pool by default).
+`rate_limit_capacity_lock` serializes only new-partition admission; callers consume existing
+partitions concurrently. At capacity, a deterministic row in the pressured pool is evicted, so
+storage pressure cannot reject every unseen caller and rotating login usernames cannot evict the
+origin backstop. Alert on `jobtrack.ratelimit.rows_evicted`; sustained growth means the configured
+pool is undersized or callers are rotating partition identities. Neither limiter table is granted
+directly to an application role: the EF-mapped SECURITY DEFINER function is the sole write boundary.
 
 Service-level `--min=0` remains the default: scale to zero costs nothing and a cold start loses only a
 few seconds.

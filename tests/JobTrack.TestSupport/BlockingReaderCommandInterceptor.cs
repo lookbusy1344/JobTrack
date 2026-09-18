@@ -13,6 +13,7 @@ public sealed class BlockingReaderCommandInterceptor(Func<string, bool> shouldBl
 		new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 	private readonly List<DbTransaction?> _transactions = [];
+	private readonly Lock _transactionsLock = new();
 	private int _hasBlocked;
 
 	/// <summary>Completes when the matching command has reached the interceptor.</summary>
@@ -23,7 +24,7 @@ public sealed class BlockingReaderCommandInterceptor(Func<string, bool> shouldBl
 	{
 		get
 		{
-			lock (_transactions) {
+			lock (_transactionsLock) {
 				return [.. _transactions];
 			}
 		}
@@ -38,7 +39,7 @@ public sealed class BlockingReaderCommandInterceptor(Func<string, bool> shouldBl
 		InterceptionResult<DbDataReader> result,
 		CancellationToken cancellationToken = default)
 	{
-		lock (_transactions) {
+		lock (_transactionsLock) {
 			_transactions.Add(command.Transaction);
 		}
 

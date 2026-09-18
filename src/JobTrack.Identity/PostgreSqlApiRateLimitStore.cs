@@ -40,6 +40,7 @@ public sealed class PostgreSqlApiRateLimitStore(
 							   .ConfigureAwait(false);
 
 			metrics.RecordRowsPruned(Purpose, result.OutRowsPruned);
+			metrics.RecordRowsEvicted(Purpose, result.OutRowsEvicted);
 			var outcome = result.OutAllowed ? RateLimitOutcome.Allowed : RateLimitOutcome.Denied;
 			metrics.RecordOutcome(Purpose, outcome);
 			return outcome;

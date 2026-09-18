@@ -1,6 +1,5 @@
 namespace JobTrack.Web;
 
-using System.Collections.Concurrent;
 using Identity;
 
 /// <summary>
@@ -20,6 +19,7 @@ public sealed class LoginAttemptRateLimiter : IDisposable, ILoginAttemptRateLimi
 	private const int DefaultMaxPartitionCount = 4096;
 	private readonly int backstopPermitLimit;
 	private readonly BoundedWindowCache backstopWindows;
+	private readonly Lock gate = new();
 	private readonly BoundedWindowCache partitionWindows;
 	private readonly int permitLimit;
 	private readonly TimeProvider timeProvider;
@@ -50,8 +50,10 @@ public sealed class LoginAttemptRateLimiter : IDisposable, ILoginAttemptRateLimi
 
 	public void Dispose()
 	{
-		partitionWindows.Clear();
-		backstopWindows.Clear();
+		lock (gate) {
+			partitionWindows.Clear();
+			backstopWindows.Clear();
+		}
 	}
 
 	/// <summary>Never returns <see cref="RateLimitOutcome.StoreUnavailable" /> -- an in-process cache cannot itself be unavailable.</summary>
@@ -64,34 +66,35 @@ public sealed class LoginAttemptRateLimiter : IDisposable, ILoginAttemptRateLimi
 		ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
 		ArgumentException.ThrowIfNullOrWhiteSpace(backstopKey);
 
-		var now = timeProvider.GetUtcNow();
-		var backstopState = GetOrCreateWindow(backstopWindows, backstopKey);
-		var partitionState = GetOrCreateWindow(partitionWindows, partitionKey);
-		return TryAcquire(backstopState, backstopPermitLimit, partitionState, permitLimit, now);
-	}
-
-	private bool TryAcquire(WindowState firstState, int firstLimit, WindowState secondState, int secondLimit, DateTimeOffset now)
-	{
-		lock (firstState.Gate) {
-			lock (secondState.Gate) {
-				ResetIfExpired(firstState, now);
-				ResetIfExpired(secondState, now);
-				if (firstState.PermitsUsed >= firstLimit || secondState.PermitsUsed >= secondLimit) {
-					return false;
-				}
-
-				++firstState.PermitsUsed;
-				++secondState.PermitsUsed;
-				return true;
+		lock (gate) {
+			var now = timeProvider.GetUtcNow();
+			var backstopExists = backstopWindows.TryGet(backstopKey, out var backstopState);
+			backstopState ??= new();
+			ResetIfExpired(backstopState, now);
+			if (backstopState.PermitsUsed >= backstopPermitLimit) {
+				return false;
 			}
+
+			var partitionExists = partitionWindows.TryGet(partitionKey, out var partitionState);
+			partitionState ??= new();
+			ResetIfExpired(partitionState, now);
+			if (partitionState.PermitsUsed >= permitLimit) {
+				return false;
+			}
+
+			if (!backstopExists) {
+				backstopWindows.Add(backstopKey, backstopState);
+			}
+
+			if (!partitionExists) {
+				partitionWindows.Add(partitionKey, partitionState);
+			}
+
+			++backstopState.PermitsUsed;
+			++partitionState.PermitsUsed;
+			return true;
 		}
 	}
-
-	/// <summary>
-	///     Atomically returns one state for a key. Capacity pressure evicts the oldest retained key;
-	///     it never returns a newly created state merely because the cache refused to store it.
-	/// </summary>
-	private static WindowState GetOrCreateWindow(BoundedWindowCache cache, string key) => cache.GetOrAdd(key);
 
 	private void ResetIfExpired(WindowState state, DateTimeOffset now)
 	{
@@ -105,8 +108,6 @@ public sealed class LoginAttemptRateLimiter : IDisposable, ILoginAttemptRateLimi
 
 	private sealed class WindowState
 	{
-		public object Gate { get; } = new();
-
 		public DateTimeOffset WindowStartedAt { get; set; } = DateTimeOffset.UnixEpoch;
 
 		public int PermitsUsed { get; set; }
@@ -114,36 +115,25 @@ public sealed class LoginAttemptRateLimiter : IDisposable, ILoginAttemptRateLimi
 
 	private sealed class BoundedWindowCache(int capacity)
 	{
-		private readonly ConcurrentQueue<(string Key, WindowState State)> insertionOrder = new();
-		private readonly ConcurrentDictionary<string, WindowState> windows = new(StringComparer.Ordinal);
+		private readonly Queue<string> insertionOrder = new();
+		private readonly Dictionary<string, WindowState> windows = new(StringComparer.Ordinal);
 
-		public WindowState GetOrAdd(string key)
+		public void Add(string key, WindowState state)
 		{
-			var state = windows.GetOrAdd(
-				key,
-				static (newKey, queue) => {
-					var created = new WindowState();
-					queue.Enqueue((newKey, created));
-					return created;
-				},
-				insertionOrder);
-			TrimToCapacity();
-			return state;
+			while (windows.Count >= capacity) {
+				_ = windows.Remove(insertionOrder.Dequeue());
+			}
+
+			windows.Add(key, state);
+			insertionOrder.Enqueue(key);
 		}
+
+		public bool TryGet(string key, out WindowState? state) => windows.TryGetValue(key, out state);
 
 		public void Clear()
 		{
 			windows.Clear();
 			insertionOrder.Clear();
-		}
-
-		private void TrimToCapacity()
-		{
-			while (windows.Count > capacity && insertionOrder.TryDequeue(out var candidate)) {
-				if (windows.TryGetValue(candidate.Key, out var current) && ReferenceEquals(current, candidate.State)) {
-					_ = windows.TryRemove(candidate.Key, out _);
-				}
-			}
 		}
 	}
 }

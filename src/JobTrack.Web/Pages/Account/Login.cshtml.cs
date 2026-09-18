@@ -261,7 +261,9 @@ public sealed class LoginModel(
 	{
 		var remoteAddress = GetRemoteAddress();
 		var outcome = await loginAttemptRateLimiter.TryAcquireAsync(
-			$"{purpose}:{remoteAddress}", purpose, HttpContext.RequestAborted);
+			GetPasskeyPartitionKey(purpose, remoteAddress),
+			GetPasskeyBackstopKey(purpose, remoteAddress),
+			HttpContext.RequestAborted);
 		return outcome switch {
 			RateLimitOutcome.Allowed => null,
 			RateLimitOutcome.Denied => StatusJson(StatusCodes.Status429TooManyRequests, RateLimitedMessage),
@@ -293,6 +295,10 @@ public sealed class LoginModel(
 	}
 
 	private static string GetPasswordBackstopKey(string remoteAddress) => $"password:{remoteAddress}";
+
+	private static string GetPasskeyPartitionKey(string purpose, string remoteAddress) => $"{purpose}:request:{remoteAddress}";
+
+	private static string GetPasskeyBackstopKey(string purpose, string remoteAddress) => $"{purpose}:origin:{remoteAddress}";
 
 	private string GetRemoteAddress() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
 

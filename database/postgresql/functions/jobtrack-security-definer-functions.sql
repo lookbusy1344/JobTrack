@@ -330,13 +330,17 @@ GRANT EXECUTE ON FUNCTION delete_subtree_history(bigint, bigint, bigint, timesta
 -- partition) in a single decision -- two independent increments would let a caller succeed on one
 -- counter and fail the other, leaving a partial, unrecoverable decision. Rows are keyed by a
 -- caller-supplied purpose plus a digest of the raw partition key (never the raw username/IP/PAT
--- identity itself). Both potential rows are locked in a fixed digest order regardless of which is
--- "primary" vs "backstop" for this call, so two concurrent calls naming the same pair of partitions
--- in opposite roles can never deadlock against each other. Expired rows for the calling purpose are
+-- identity itself). Primary and backstop rows occupy separate bounded pools: capacity pressure
+-- evicts within the pressured pool rather than denying an unseen caller, so rotating primary keys
+-- cannot evict or reset their coarse backstop. Existing backstop rows are locked before primary
+-- rows, and new admission is serialized by purpose. Expired rows for the calling purpose are
 -- pruned via the window_start index on every call, bounding the table without a scheduled job or a
 -- full scan; out_rows_pruned reports that call's count so RateLimitMetrics (JobTrack.Identity) can expose
 -- it without a second round trip. p_backstop_digest/p_backstop_permit_limit are NULL for a caller
 -- with no backstop partition (the external API limiter).
+DROP FUNCTION IF EXISTS rate_limit_try_consume(text, bytea, bytea, timestamptz, integer, integer, integer);
+DROP FUNCTION IF EXISTS rate_limit_try_consume(text, bytea, bytea, timestamptz, integer, integer, integer, integer);
+
 CREATE OR REPLACE FUNCTION rate_limit_try_consume(
     p_purpose text,
     p_partition_digest bytea,
@@ -347,7 +351,8 @@ CREATE OR REPLACE FUNCTION rate_limit_try_consume(
     p_backstop_permit_limit integer,
     p_max_partition_count integer,
     OUT out_allowed boolean,
-    OUT out_rows_pruned integer
+    OUT out_rows_pruned integer,
+    OUT out_rows_evicted integer
 )
     LANGUAGE plpgsql
     SECURITY DEFINER
@@ -363,10 +368,12 @@ DECLARE
     v_window_start   timestamptz;
     v_primary_count  integer := 0;
     v_backstop_count integer := 0;
-    v_live_count     integer;
-    v_missing_count  integer;
+    c_primary_kind                  constant smallint := 0;
+    c_backstop_kind                 constant smallint := 1;
+    v_primary_found  boolean := false;
+    v_backstop_found boolean := false;
     v_pruned_count   integer;
-    v_row            record;
+    v_evicted_count  integer;
 BEGIN
     IF p_purpose NOT IN (c_api_purpose, c_login_purpose) THEN
         RAISE EXCEPTION 'unknown rate-limit purpose';
@@ -395,6 +402,7 @@ BEGIN
 
     v_window_start := to_timestamp(floor(extract(epoch FROM p_now) / p_window_seconds) * p_window_seconds);
     out_rows_pruned := 0;
+    out_rows_evicted := 0;
 
     -- Prune before any denial path. In particular, an exhausted backstop must not bypass cleanup
     -- while a caller varies primary keys indefinitely.
@@ -404,19 +412,39 @@ BEGIN
       AND window_start <= v_window_start - make_interval(secs => p_window_seconds);
     GET DIAGNOSTICS out_rows_pruned = ROW_COUNT;
 
-    SELECT count(*)::integer
-    INTO v_missing_count
-    FROM (SELECT DISTINCT digest
-          FROM unnest(ARRAY[p_partition_digest, p_backstop_digest]) AS requested(digest)
-          WHERE digest IS NOT NULL) AS requested
-    WHERE NOT EXISTS (
-        SELECT 1
+    IF p_backstop_digest IS NOT NULL THEN
+        SELECT permit_count
+        INTO v_backstop_count
         FROM rate_limit_window
         WHERE purpose = p_purpose
-          AND partition_digest = requested.digest
-          AND window_start = v_window_start);
+          AND partition_kind = c_backstop_kind
+          AND partition_digest = p_backstop_digest
+          AND window_start = v_window_start
+        FOR UPDATE;
+        v_backstop_found := FOUND;
 
-    IF v_missing_count > 0 THEN
+        IF v_backstop_found AND v_backstop_count >= p_backstop_permit_limit THEN
+            out_allowed := false;
+            RETURN;
+        END IF;
+    END IF;
+
+    SELECT permit_count
+    INTO v_primary_count
+    FROM rate_limit_window
+    WHERE purpose = p_purpose
+      AND partition_kind = c_primary_kind
+      AND partition_digest = p_partition_digest
+      AND window_start = v_window_start
+    FOR UPDATE;
+    v_primary_found := FOUND;
+
+    IF v_primary_found AND v_primary_count >= p_permit_limit THEN
+        out_allowed := false;
+        RETURN;
+    END IF;
+
+    IF NOT v_primary_found OR (p_backstop_digest IS NOT NULL AND NOT v_backstop_found) THEN
         INSERT INTO rate_limit_capacity_lock (purpose)
         VALUES (p_purpose)
         ON CONFLICT (purpose) DO NOTHING;
@@ -435,52 +463,78 @@ BEGIN
         GET DIAGNOSTICS v_pruned_count = ROW_COUNT;
         out_rows_pruned := out_rows_pruned + v_pruned_count;
 
-        SELECT count(*)::integer
-        INTO v_missing_count
-        FROM (SELECT DISTINCT digest
-              FROM unnest(ARRAY[p_partition_digest, p_backstop_digest]) AS requested(digest)
-              WHERE digest IS NOT NULL) AS requested
-        WHERE NOT EXISTS (
-            SELECT 1
+        IF p_backstop_digest IS NOT NULL THEN
+            SELECT permit_count
+            INTO v_backstop_count
             FROM rate_limit_window
             WHERE purpose = p_purpose
-              AND partition_digest = requested.digest
-              AND window_start = v_window_start);
+              AND partition_kind = c_backstop_kind
+              AND partition_digest = p_backstop_digest
+              AND window_start = v_window_start
+            FOR UPDATE;
+            v_backstop_found := FOUND;
 
-        SELECT count(*)::integer
-        INTO v_live_count
+            IF v_backstop_found AND v_backstop_count >= p_backstop_permit_limit THEN
+                out_allowed := false;
+                RETURN;
+            END IF;
+
+            IF NOT v_backstop_found THEN
+                WITH eviction AS (
+                    SELECT ctid
+                    FROM rate_limit_window
+                    WHERE purpose = p_purpose
+                      AND partition_kind = c_backstop_kind
+                    ORDER BY window_start, partition_digest
+                    OFFSET p_max_partition_count - 1
+                    LIMIT 1
+                )
+                DELETE FROM rate_limit_window
+                WHERE ctid IN (SELECT ctid FROM eviction);
+                GET DIAGNOSTICS v_evicted_count = ROW_COUNT;
+                out_rows_evicted := out_rows_evicted + v_evicted_count;
+
+                INSERT INTO rate_limit_window (purpose, partition_kind, partition_digest, window_start, permit_count)
+                VALUES (p_purpose, c_backstop_kind, p_backstop_digest, v_window_start, 0);
+                v_backstop_count := 0;
+            END IF;
+        END IF;
+
+        SELECT permit_count
+        INTO v_primary_count
         FROM rate_limit_window
-        WHERE purpose = p_purpose;
+        WHERE purpose = p_purpose
+          AND partition_kind = c_primary_kind
+          AND window_start = v_window_start
+          AND partition_digest = p_partition_digest
+        FOR UPDATE;
+        v_primary_found := FOUND;
 
-        IF v_live_count + v_missing_count > p_max_partition_count THEN
+        IF v_primary_found AND v_primary_count >= p_permit_limit THEN
             out_allowed := false;
             RETURN;
         END IF;
 
-        INSERT INTO rate_limit_window (purpose, partition_digest, window_start, permit_count)
-        SELECT p_purpose, digest, v_window_start, 0
-        FROM (SELECT DISTINCT digest
-              FROM unnest(ARRAY[p_partition_digest, p_backstop_digest]) AS requested(digest)
-              WHERE digest IS NOT NULL) AS requested
-        ORDER BY digest
-        ON CONFLICT (purpose, partition_digest, window_start) DO NOTHING;
-    END IF;
+        IF NOT v_primary_found THEN
+            WITH eviction AS (
+                SELECT ctid
+                FROM rate_limit_window
+                WHERE purpose = p_purpose
+                  AND partition_kind = c_primary_kind
+                ORDER BY window_start, partition_digest
+                OFFSET p_max_partition_count - 1
+                LIMIT 1
+            )
+            DELETE FROM rate_limit_window
+            WHERE ctid IN (SELECT ctid FROM eviction);
+            GET DIAGNOSTICS v_evicted_count = ROW_COUNT;
+            out_rows_evicted := out_rows_evicted + v_evicted_count;
 
-    FOR v_row IN
-        SELECT partition_digest, permit_count
-        FROM rate_limit_window
-        WHERE purpose = p_purpose
-          AND window_start = v_window_start
-          AND partition_digest IN (p_partition_digest, p_backstop_digest)
-        ORDER BY partition_digest
-            FOR UPDATE
-        LOOP
-            IF v_row.partition_digest = p_partition_digest THEN
-                v_primary_count := v_row.permit_count;
-            ELSE
-                v_backstop_count := v_row.permit_count;
-            END IF;
-        END LOOP;
+            INSERT INTO rate_limit_window (purpose, partition_kind, partition_digest, window_start, permit_count)
+            VALUES (p_purpose, c_primary_kind, p_partition_digest, v_window_start, 0);
+            v_primary_count := 0;
+        END IF;
+    END IF;
 
     IF v_primary_count >= p_permit_limit
         OR (p_backstop_digest IS NOT NULL AND v_backstop_count >= p_backstop_permit_limit) THEN
@@ -491,6 +545,7 @@ BEGIN
     UPDATE rate_limit_window
     SET permit_count = permit_count + 1
     WHERE purpose = p_purpose
+      AND partition_kind = c_primary_kind
       AND partition_digest = p_partition_digest
       AND window_start = v_window_start;
 
@@ -498,6 +553,7 @@ BEGIN
         UPDATE rate_limit_window
         SET permit_count = permit_count + 1
         WHERE purpose = p_purpose
+          AND partition_kind = c_backstop_kind
           AND partition_digest = p_backstop_digest
           AND window_start = v_window_start;
     END IF;
@@ -528,14 +584,15 @@ CREATE OR REPLACE FUNCTION rate_limit_try_consume(
     p_permit_limit integer,
     p_backstop_permit_limit integer,
     OUT out_allowed boolean,
-    OUT out_rows_pruned integer
+    OUT out_rows_pruned integer,
+    OUT out_rows_evicted integer
 )
     LANGUAGE sql
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS
 $$
-SELECT out_allowed, out_rows_pruned
+SELECT out_allowed, out_rows_pruned, out_rows_evicted
 FROM rate_limit_try_consume(
     p_purpose, p_partition_digest, p_backstop_digest, p_now, p_window_seconds,
     p_permit_limit, p_backstop_permit_limit, rate_limit_default_max_partition_count());

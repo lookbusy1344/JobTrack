@@ -158,6 +158,34 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Repeated_incorrect_totp_codes_lock_the_account()
+	{
+		// Mirrors Program.MaxFailedAccessAttempts: the run of wrong codes must reach the same lockout
+		// threshold the password step feeds, so a stolen password cannot be paired with an unbounded
+		// offline-style guess of the six-digit code under the interactive rate limit.
+		const int maxFailedAccessAttempts = 5;
+		const string secret = "JBSWY3DPEHPK3PXP";
+		var appUserId = await SeedUserWithTwoFactorAsync("marie.2fa", secret);
+
+		var loginResponse = await PostLoginAsync("marie.2fa", KnownPassword);
+		var twoFactorUserIdCookie = WebTestHttp.ExtractCookiePair(
+			WebTestHttp.FindSetCookie(loginResponse, "TwoFactorUserId") ?? throw new InvalidOperationException("No two-factor user id cookie set."));
+
+		HttpResponseMessage? lastResponse = null;
+		for (var attempt = 0; attempt < maxFailedAccessAttempts; ++attempt) {
+			lastResponse?.Dispose();
+			lastResponse = await PostTwoFactorCodeAsync(twoFactorUserIdCookie, "000000");
+		}
+
+		var auditOperation = await GetLatestAuditOperationAsync(appUserId);
+		var lockoutEndTicks = await GetLockoutEndTicksAsync(appUserId);
+		lastResponse!.Dispose();
+
+		auditOperation.Should().Be("authentication.lockout", "the final failed code must trip the account lockout the password step also feeds");
+		lockoutEndTicks.Should().NotBeNull("a locked-out account carries a lockout expiry");
+	}
+
+	[Fact]
 	public async Task Loading_the_login_form_does_not_spend_the_credential_attempt_rate_limit_before_two_factor()
 	{
 		ReplaceHost(1);
@@ -316,6 +344,19 @@ public sealed partial class TwoFactorLoginTests : IAsyncLifetime, IDisposable
 		_ = command.Parameters.AddWithValue("$actorUserId", actorUserId.Value);
 
 		return (string)(await command.ExecuteScalarAsync())!;
+	}
+
+	private async Task<long?> GetLockoutEndTicksAsync(AppUserId appUserId)
+	{
+		await using var connection = new SqliteConnection(database.ConnectionString);
+		await connection.OpenAsync();
+
+		await using var command = connection.CreateCommand();
+		command.CommandText = "SELECT lockout_end FROM identity_user WHERE app_user_id = $appUserId;";
+		_ = command.Parameters.AddWithValue("$appUserId", appUserId.Value);
+
+		var value = await command.ExecuteScalarAsync();
+		return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 	}
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]

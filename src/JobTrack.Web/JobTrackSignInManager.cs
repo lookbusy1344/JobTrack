@@ -12,9 +12,10 @@ using NodaTime;
 ///     row 3 (session theft: a former employee's disabled account must not admit a new session).
 ///     <see cref="SignInManager{TUser}.PasswordSignInAsync(TUser, string, bool, bool)" /> checks
 ///     <see cref="CanSignInAsync" /> in its <c>PreSignInCheck</c> before verifying the password, so a
-///     disabled account's login attempt returns <see cref="SignInResult.NotAllowed" /> — the Login page
-///     already renders the same generic failure message for every non-success result, so this needs no
-///     page changes and keeps the no-enumeration guarantee (threat-model row 2) for disabled accounts too.
+///     disabled account's login attempt returns <see cref="SignInResult.NotAllowed" />. The username
+///     overload also equalizes unknown, disabled, and locked outcomes with one dummy-hash verification,
+///     while the Login page renders the same generic failure for every non-success result
+///     (threat-model row 2).
 ///     Lives in <c>JobTrack.Web</c>, not <c>JobTrack.Identity</c>, because <see cref="SignInManager{TUser}" />
 ///     needs the ASP.NET Core shared framework that project deliberately does not reference (ADR 0022).
 /// </summary>
@@ -26,9 +27,35 @@ public sealed class JobTrackSignInManager(
 	ILogger<SignInManager<JobTrackIdentityUser>> logger,
 	IAuthenticationSchemeProvider schemes,
 	IUserConfirmation<JobTrackIdentityUser> confirmation,
-	IClock clock) :
+	IClock clock,
+	LoginPasswordWorkEqualizer passwordWorkEqualizer,
+	IPasswordHasher<JobTrackIdentityUser> passwordHasher) :
 	SignInManager<JobTrackIdentityUser>(userManager, contextAccessor, claimsFactory, optionsAccessor, logger, schemes, confirmation)
 {
+	public override async Task<SignInResult> PasswordSignInAsync(
+		string userName,
+		string password,
+		bool isPersistent,
+		bool lockoutOnFailure)
+	{
+		var user = await UserManager.FindByNameAsync(userName);
+		if (user is null) {
+			passwordWorkEqualizer.Verify(passwordHasher, password);
+			return SignInResult.Failed;
+		}
+
+		// A LockedOut result has two shapes: an account already locked at entry (PreSignInCheck
+		// short-circuits before hashing) needs the dummy verification, whereas an attempt that trips
+		// the lockout on this call has already hashed a real password and must not verify twice.
+		var wasLockedOut = await UserManager.IsLockedOutAsync(user);
+		var result = await base.PasswordSignInAsync(user, password, isPersistent, lockoutOnFailure);
+		if (result.IsNotAllowed || result.IsLockedOut && wasLockedOut) {
+			passwordWorkEqualizer.Verify(passwordHasher, password);
+		}
+
+		return result;
+	}
+
 	public override async Task<bool> CanSignInAsync(JobTrackIdentityUser user) =>
 		user.IsEnabled && await base.CanSignInAsync(user);
 

@@ -14,12 +14,13 @@ public sealed class ApplicationPublicSurfaceTests
 {
 	/// <summary>
 	///     Public application types intentionally not reachable from an <see cref="IJobTrackClient" />
-	///     member: consumer paging limits, diagnostics integration, and password-hasher marker types
-	///     used by the two providers' public factory signatures.
+	///     member: consumer paging limits, diagnostics integration, shared authentication policy, and
+	///     password-hasher marker types used by the two providers' public factory signatures.
 	/// </summary>
 	private static readonly FrozenSet<Type> ApprovedSupportingTypes = FrozenSet.ToFrozenSet([
 		typeof(AuditSearchPaging),
 		typeof(AwaitingProgressPaging),
+		typeof(AccountLockoutPolicy),
 		typeof(ConcurrentWorkLimits),
 		typeof(BootstrapCredentialSubject),
 		typeof(EmployeeCredentialSubject),

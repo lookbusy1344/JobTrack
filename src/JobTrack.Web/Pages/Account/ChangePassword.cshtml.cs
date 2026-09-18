@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 public sealed class ChangePasswordModel(
 	SignInManager<JobTrackIdentityUser> signInManager,
 	UserManager<JobTrackIdentityUser> userManager,
+	CurrentCredentialVerifier credentialVerifier,
 	IJobTrackClient jobTrackClient) : PageModel
 {
 	[BindProperty] public ChangePasswordInput Input { get; set; } = new();
@@ -36,6 +37,20 @@ public sealed class ChangePasswordModel(
 		var user = await userManager.GetUserAsync(User);
 		if (user is null) {
 			return Challenge();
+		}
+
+		var remoteAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
+		var rateLimitOutcome = await credentialVerifier.TryAcquireAsync(
+			"password-change", user, remoteAddress, HttpContext.RequestAborted);
+		if (rateLimitOutcome != RateLimitOutcome.Allowed) {
+			if (rateLimitOutcome == RateLimitOutcome.Denied) {
+				Response.StatusCode = StatusCodes.Status429TooManyRequests;
+			}
+
+			ErrorMessage = rateLimitOutcome == RateLimitOutcome.Denied
+				? "Too many authentication attempts. Retry after the current window elapses."
+				: "The current password is incorrect.";
+			return Page();
 		}
 
 		try {
@@ -56,6 +71,10 @@ public sealed class ChangePasswordModel(
 		}
 		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-current-password-incorrect") {
 			ErrorMessage = "The current password is incorrect.";
+			return Page();
+		}
+		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-locked-out") {
+			ErrorMessage = "This account is temporarily locked out after too many failed attempts.";
 			return Page();
 		}
 		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-new-password-policy") {

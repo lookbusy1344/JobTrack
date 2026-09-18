@@ -67,8 +67,13 @@ rebuilt from scratch.
   instead of invoking the handler.
 - **`/Account/ConfirmAccess`** re-collects the current password (and, if the account has two-factor
   enabled, a TOTP code) for the already-signed-in user. Every submission consumes the shared login
-  limiter's per-account-and-origin and per-origin budgets before either credential is checked, so a
-  valid password cannot be used to make unbounded TOTP guesses. A successful check then calls `RefreshSignInAsync` — which, via the
+  limiter's request-and-account budget before either credential is checked; the account component
+  deliberately excludes the remote address. Wrong passwords and TOTP codes increment the same
+  five-attempt account lockout counter used by login. A correct password does not reset that counter
+  before the accompanying TOTP succeeds, and the complete successful check resets it. Password
+  change and TOTP disablement use the same limiter/account-failure policy; password change performs
+  its comparison, failure update or replacement in the credential port's one transaction. A
+  successful check then calls `RefreshSignInAsync` — which, via the
   `JobTrackSignInManager` override above, refreshes `recent` while leaving `origin` untouched — and
   redirects back to `returnUrl` (validated with `Url.IsLocalUrl`, matching every other post-login
   redirect in this codebase).
@@ -84,7 +89,8 @@ rebuilt from scratch.
   activity.
 - A stolen cookie alone cannot mint a PAT, enable/disable two-factor, or perform the listed
   administrator actions — it must additionally reproduce the current password (and TOTP, once
-  enrolled).
+  enrolled). Reusable current-credential guesses stop at the account lockout ceiling even when the
+  caller rotates source addresses.
 - `docs/threat-model/web-authentication-threat-model.md` row 3 is updated to describe idle, renewal,
   and absolute timeouts separately, and to note the step-up bar on the listed sensitive operations.
 - No claims-based design is attempted again for this purpose; a future contributor who needs

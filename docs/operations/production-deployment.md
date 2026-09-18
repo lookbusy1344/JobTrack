@@ -351,7 +351,7 @@ of them keeps behaving exactly as this runbook describes.
 | `DataProtection:Store` | `FileSystem` (or unset) | `PostgreSql` |
 | `DataProtection:KeyPath` | required outside Development | ignored; unnecessary |
 | `RateLimiting:Store` | `InProcess` (or unset) | `PostgreSql` |
-| `RateLimiting:MaxPartitionCount` | unused by the in-process store | 4096 by default, per purpose |
+| `RateLimiting:MaxPartitionCount` | unused by the in-process store | 4096 by default, per purpose and primary/backstop pool; pressure evicts and increments `jobtrack.ratelimit.rows_evicted` |
 | Session affinity | irrelevant | must stay **off** |
 
 Under `MultiInstance` the last three are not advisory: startup throws unless the provider and both

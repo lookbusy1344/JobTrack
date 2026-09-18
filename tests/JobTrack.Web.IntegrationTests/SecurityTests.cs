@@ -5,6 +5,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Abstractions;
+using Application;
 using AwesomeAssertions;
 using Identity;
 using Microsoft.AspNetCore.Identity;
@@ -237,6 +238,28 @@ public sealed partial class SecurityTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
+	public async Task Repeated_incorrect_passwords_lock_the_account_and_prevent_two_factor_disablement()
+	{
+		var appUserId = await SeedUserAsync("margaret.lockout");
+		var authCookie = await SignInAsync("margaret.lockout");
+		await SeedTwoFactorEnabledAsync(appUserId);
+		var (antiforgeryCookie, token) = await GetFormAsync("/Account/Security", authCookie);
+
+		for (var attempt = 0; attempt < AccountLockoutPolicy.MaxFailedAccessAttempts; ++attempt) {
+			var failed = await PostDisableAsync(authCookie, antiforgeryCookie, token, "wrong-password");
+			failed.StatusCode.Should().Be(HttpStatusCode.OK);
+		}
+
+		var locked = await PostDisableAsync(authCookie, antiforgeryCookie, token, KnownPassword);
+		var body = await locked.Content.ReadAsStringAsync();
+		var (enabled, _) = await GetTwoFactorStateAsync(appUserId);
+
+		locked.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("temporarily locked out");
+		enabled.Should().BeTrue();
+	}
+
+	[Fact]
 	public async Task A_requester_can_manage_their_two_factor_settings()
 	{
 		var appUserId = await SeedUserAsync("rita.twofactor", EmployeeRole.Requester);
@@ -328,6 +351,27 @@ public sealed partial class SecurityTests : IAsyncLifetime, IDisposable
 			["__RequestVerificationToken"] = token,
 		});
 
+		return await client.SendAsync(request);
+	}
+
+	private async Task<HttpResponseMessage> PostDisableAsync(string authCookie, string password)
+	{
+		var (antiforgeryCookie, token) = await GetFormAsync("/Account/Security", authCookie);
+		return await PostDisableAsync(authCookie, antiforgeryCookie, token, password);
+	}
+
+	private async Task<HttpResponseMessage> PostDisableAsync(
+		string authCookie,
+		string antiforgeryCookie,
+		string token,
+		string password)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Security?handler=Disable");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Disable.CurrentPassword"] = password,
+			["__RequestVerificationToken"] = token,
+		});
 		return await client.SendAsync(request);
 	}
 

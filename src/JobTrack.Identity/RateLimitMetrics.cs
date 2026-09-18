@@ -23,6 +23,7 @@ public sealed class RateLimitMetrics : IDisposable
 
 	private readonly Meter meter = new(MeterName);
 	private readonly Counter<long> rejections;
+	private readonly Counter<long> rowsEvicted;
 	private readonly Counter<long> rowsPruned;
 	private readonly IServiceScopeFactory scopeFactory;
 	private readonly Counter<long> storeFailures;
@@ -40,6 +41,8 @@ public sealed class RateLimitMetrics : IDisposable
 			description: "Rate-limit checks that failed closed because the shared counter store was unavailable.");
 		rowsPruned = meter.CreateCounter<long>("jobtrack.ratelimit.rows_pruned",
 			description: "Expired rate_limit_window rows removed by the consuming call itself.");
+		rowsEvicted = meter.CreateCounter<long>("jobtrack.ratelimit.rows_evicted",
+			description: "Live rate_limit_window rows evicted to admit a new partition under capacity pressure.");
 		_ = meter.CreateObservableGauge(
 			"jobtrack.ratelimit.live_partitions",
 			ReadLivePartitionCount,
@@ -74,6 +77,13 @@ public sealed class RateLimitMetrics : IDisposable
 	{
 		if (count > 0) {
 			rowsPruned.Add(count, new KeyValuePair<string, object?>("purpose", purpose));
+		}
+	}
+
+	public void RecordRowsEvicted(string purpose, int count)
+	{
+		if (count > 0) {
+			rowsEvicted.Add(count, new KeyValuePair<string, object?>("purpose", purpose));
 		}
 	}
 

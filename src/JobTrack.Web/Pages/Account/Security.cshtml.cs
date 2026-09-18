@@ -33,6 +33,7 @@ public sealed partial class SecurityModel(
 	IViewerTimeZoneResolver viewerTimeZoneResolver,
 	IDataProtectionProvider dataProtectionProvider,
 	IOptions<PasskeyFeatureOptions> passkeyFeature,
+	CurrentCredentialVerifier credentialVerifier,
 	ILogger<SecurityModel> logger) : PageModel
 {
 	private const string Issuer = "JobTrack";
@@ -130,16 +131,36 @@ public sealed partial class SecurityModel(
 			return Challenge();
 		}
 
+		var rateLimitOutcome = await credentialVerifier.TryAcquireAsync(
+			"two-factor-disable", user, GetRemoteAddress(), cancellationToken);
+		if (rateLimitOutcome != RateLimitOutcome.Allowed) {
+			if (rateLimitOutcome == RateLimitOutcome.Denied) {
+				Response.StatusCode = StatusCodes.Status429TooManyRequests;
+			}
+
+			ErrorMessage = rateLimitOutcome == RateLimitOutcome.Denied
+				? "Too many authentication attempts. Retry after the current window elapses."
+				: "That password is incorrect.";
+			await LoadStateAsync(user, cancellationToken);
+			return Page();
+		}
+
 		ModelState.Clear();
 		if (!TryValidateModel(Disable, nameof(Disable))) {
 			await LoadStateAsync(user, cancellationToken);
 			return Page();
 		}
 
-		var passwordIsValid = await userManager.CheckPasswordAsync(user, Disable.CurrentPassword);
-		if (!passwordIsValid) {
-			ErrorMessage = "That password is incorrect.";
-			await LoadStateAsync(user, cancellationToken);
+		var passwordCheck = await credentialVerifier.CheckPasswordAsync(user, Disable.CurrentPassword, true);
+		if (!passwordCheck.Succeeded) {
+			ErrorMessage = passwordCheck.IsLockedOut
+				? "This account is temporarily locked out after too many failed attempts."
+				: "That password is incorrect.";
+			if (passwordCheck.IsLockedOut) {
+				TwoFactorEnabled = await userManager.GetTwoFactorEnabledAsync(user);
+			} else {
+				await LoadStateAsync(user, cancellationToken);
+			}
 			return Page();
 		}
 
@@ -156,6 +177,8 @@ public sealed partial class SecurityModel(
 		SuccessMessage = "Two-factor authentication has been disabled on your account.";
 		return RedirectToPage();
 	}
+
+	private string GetRemoteAddress() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
 
 	/// <summary>
 	///     Step 1 of enrolment (ADR 0071 §8.1): validates the friendly name, ensures the account's user

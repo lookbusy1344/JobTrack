@@ -163,6 +163,26 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 	}
 
 	[Fact]
+	public async Task Current_password_failures_across_hosts_share_the_account_lockout_ceiling()
+	{
+		_ = await CreateEmployeeAsync("credential-lockout.crosshost");
+		var authCookie = await SignInAsync(clientA, "credential-lockout.crosshost");
+		var (antiforgeryCookie, token) = await GetFormAsync(clientA, "/Account/ChangePassword", authCookie);
+
+		for (var attempt = 0; attempt < AccountLockoutPolicy.MaxFailedAccessAttempts; ++attempt) {
+			var client = attempt % 2 == 0 ? clientA : clientB;
+			var failed = await PostChangePasswordAsync(client, authCookie, antiforgeryCookie, token, "wrong-password");
+			failed.StatusCode.Should().Be(HttpStatusCode.OK);
+		}
+
+		var locked = await PostChangePasswordAsync(clientB, authCookie, antiforgeryCookie, token, KnownPassword);
+		var body = await locked.Content.ReadAsStringAsync();
+
+		locked.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().Contain("temporarily locked out");
+	}
+
+	[Fact]
 	public async Task Passkey_assertion_state_generated_by_host_A_is_accepted_by_host_B()
 	{
 		var (antiforgeryCookie, token) = await GetLoginFormAsync(clientA);
@@ -592,6 +612,24 @@ public sealed partial class TwoHostPostgreSqlAcceptanceTests : IAsyncLifetime, I
 						 throw new InvalidOperationException("Sign-in did not set the authentication cookie.");
 
 		return WebTestHttp.ExtractCookiePair(authCookie);
+	}
+
+	private static async Task<HttpResponseMessage> PostChangePasswordAsync(
+		HttpClient client,
+		string authCookie,
+		string antiforgeryCookie,
+		string token,
+		string currentPassword)
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/ChangePassword");
+		request.Headers.Add("Cookie", $"{authCookie}; {antiforgeryCookie}");
+		request.Content = new FormUrlEncodedContent(new Dictionary<string, string> {
+			["Input.CurrentPassword"] = currentPassword,
+			["Input.NewPassword"] = "Different-Horse-Battery-88!",
+			["Input.ConfirmNewPassword"] = "Different-Horse-Battery-88!",
+			["__RequestVerificationToken"] = token,
+		});
+		return await client.SendAsync(request);
 	}
 
 	private static async Task<HttpResponseMessage> PostLoginAsync(HttpClient client, string userName, string password)

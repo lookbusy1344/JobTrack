@@ -71,10 +71,6 @@ public sealed class Program
 	private const string RateLimitedProblemType = "/problems/rate-limited";
 	private const string RateLimitStoreUnavailableProblemType = "/problems/rate-limit-store-unavailable";
 
-	private const int MaxFailedAccessAttempts = 5;
-
-	private const int LockoutMinutes = 15;
-
 	// ADR 0057 (§2.3): doubles as the absolute session ceiling, not only the sliding-renewal window --
 	// SlidingExpiration renews the cookie for another window this long every time it passes the
 	// halfway mark, but OnValidatePrincipal below rejects the session outright once it has run this
@@ -254,6 +250,7 @@ public sealed class Program
 		ValidateDeploymentTopology(builder, databaseProvider, usePostgreSqlDataProtectionStore);
 
 		var app = builder.Build();
+		_ = app.Services.GetRequiredService<LoginPasswordWorkEqualizer>();
 
 		// Stage 6: flip readiness to draining as soon as shutdown begins, not when the process
 		// actually exits -- ApplicationStopping fires before Kestrel stops accepting connections,
@@ -340,6 +337,8 @@ public sealed class Program
 			SqliteProviderName => builder.Services.AddJobTrackIdentitySqlite(identityConnectionString),
 			_ => throw new InvalidOperationException($"Unknown Database:Provider '{databaseProvider}'."),
 		};
+		_ = builder.Services.AddSingleton<LoginPasswordWorkEqualizer>();
+		_ = builder.Services.AddScoped<CurrentCredentialVerifier>();
 		_ = identityBuilder.AddSignInManager<JobTrackSignInManager>();
 
 		// ADR 0071: relying-party policy, ceremony-handler DI, and fail-closed validation of the RP ID
@@ -504,8 +503,8 @@ public sealed class Program
 			options.Cookie.SecurePolicy = cookieSecurePolicy);
 
 		_ = builder.Services.Configure<IdentityOptions>(options => {
-			options.Lockout.MaxFailedAccessAttempts = MaxFailedAccessAttempts;
-			options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(LockoutMinutes);
+			options.Lockout.MaxFailedAccessAttempts = AccountLockoutPolicy.MaxFailedAccessAttempts;
+			options.Lockout.DefaultLockoutTimeSpan = AccountLockoutPolicy.LockoutDuration.ToTimeSpan();
 			options.Lockout.AllowedForNewUsers = true;
 		});
 

@@ -35,7 +35,7 @@
 		     data-options-url="@Url.Page("/Account/ConfirmAccess", "PasskeyOptions")"
 		     data-signin-url="@Url.Page("/Account/ConfirmAccess", "PasskeyConfirm", new {
 			                      returnUrl = Model.ReturnUrl,
-})" hidden>
+		                      })" hidden>
 			<button type="button" class="btn btn-outline-primary" data-passkey-login-button>Use a passkey</button>
 			<p class="text-danger" data-passkey-login-error hidden></p>
 		</div>

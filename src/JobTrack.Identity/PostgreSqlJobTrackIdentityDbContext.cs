@@ -70,6 +70,7 @@ public sealed class PostgreSqlJobTrackIdentityDbContext : JobTrackIdentityDbCont
 			_ = builder.HasNoKey();
 			_ = builder.Property(result => result.OutAllowed).HasColumnName("out_allowed");
 			_ = builder.Property(result => result.OutRowsPruned).HasColumnName("out_rows_pruned");
+			_ = builder.Property(result => result.OutRowsEvicted).HasColumnName("out_rows_evicted");
 		});
 
 		var rateLimitTryConsume = typeof(PostgreSqlJobTrackIdentityDbContext).GetMethod(

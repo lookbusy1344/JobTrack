@@ -40,7 +40,7 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 	public Task DisposeAsync() => database.DisposeAsync();
 
 	[Fact]
-	public async Task Incorrect_current_password_rejects_before_any_persistent_state_changes()
+	public async Task Incorrect_current_password_commits_only_the_failed_attempt_state()
 	{
 		var seeded = await SeedCredentialStateAsync();
 		var before = await ReadStateAsync(seeded.AppUserId);
@@ -50,7 +50,65 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 
 		await act.Should().ThrowAsync<InvariantViolationException>()
 				 .WithMessage("*current password is incorrect*");
-		(await ReadStateAsync(seeded.AppUserId)).Should().Be(before);
+		var after = await ReadStateAsync(seeded.AppUserId);
+		after.PasswordHash.Should().Be(before.PasswordHash);
+		after.RequiresPasswordChange.Should().Be(before.RequiresPasswordChange);
+		after.SecurityStamp.Should().Be(before.SecurityStamp);
+		after.ConcurrencyStamp.Should().NotBe(before.ConcurrencyStamp);
+		after.AccessFailedCount.Should().Be(1);
+		after.IsLockedOut.Should().BeFalse();
+		after.TokenIsRevoked.Should().BeFalse();
+		after.PasswordChangeAuditCount.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task Repeated_incorrect_current_passwords_lock_the_account_and_refuse_a_correct_password()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var before = await ReadStateAsync(seeded.AppUserId);
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+
+		for (var attempt = 0; attempt < AccountLockoutPolicy.MaxFailedAccessAttempts; ++attempt) {
+			var rejected = () => sut.ChangeOwnPasswordAsync(CreateRequest(seeded, "incorrect-password"));
+			await rejected.Should().ThrowAsync<InvariantViolationException>();
+		}
+
+		var locked = await ReadStateAsync(seeded.AppUserId);
+		locked.PasswordHash.Should().Be(before.PasswordHash);
+		locked.RequiresPasswordChange.Should().Be(before.RequiresPasswordChange);
+		locked.SecurityStamp.Should().Be(before.SecurityStamp);
+		locked.ConcurrencyStamp.Should().NotBe(before.ConcurrencyStamp);
+		locked.AccessFailedCount.Should().Be(0);
+		locked.IsLockedOut.Should().BeTrue();
+		locked.TokenIsRevoked.Should().BeFalse();
+		locked.PasswordChangeAuditCount.Should().Be(0);
+		(await CountAuditAsync(seeded.IdentityUserId, "authentication.lockout")).Should().Be(1);
+
+		var correctPassword = () => sut.ChangeOwnPasswordAsync(CreateRequest(seeded, CurrentPassword));
+		var exception = await correctPassword.Should().ThrowAsync<InvariantViolationException>();
+		exception.Which.ConstraintId.Should().Be("account-locked-out");
+		(await ReadStateAsync(seeded.AppUserId)).Should().Be(locked);
+	}
+
+	[Fact]
+	public async Task Lockout_audit_failure_rolls_back_the_threshold_attempt()
+	{
+		var seeded = await SeedCredentialStateAsync();
+		var sut = CreatePort(database.ConnectionString, new AdjustableClock(OperationInstant));
+		for (var attempt = 1; attempt < AccountLockoutPolicy.MaxFailedAccessAttempts; ++attempt) {
+			var rejected = () => sut.ChangeOwnPasswordAsync(CreateRequest(seeded, "incorrect-password"));
+			await rejected.Should().ThrowAsync<InvariantViolationException>();
+		}
+
+		var beforeThreshold = await ReadStateAsync(seeded.AppUserId);
+		await InstallAuditFailureAsync();
+
+		var act = () => sut.ChangeOwnPasswordAsync(CreateRequest(seeded, "incorrect-password"));
+
+		await act.Should().ThrowAsync<DbUpdateException>();
+		(await ReadStateAsync(seeded.AppUserId)).Should().Be(
+			beforeThreshold,
+			"the threshold failure and its required lockout audit event share one transaction");
 	}
 
 	[Fact]
@@ -398,6 +456,8 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 							         iu.requires_password_change,
 							         iu.security_stamp,
 							         iu.concurrency_stamp,
+							         iu.access_failed_count,
+							         CASE WHEN iu.lockout_end IS NULL THEN 0 ELSE 1 END,
 							         CASE WHEN pat.revoked_at IS NULL THEN 0 ELSE 1 END,
 							         (SELECT COUNT(*) FROM audit_event ae
 							          WHERE ae.operation = 'authentication.password-change'
@@ -415,8 +475,10 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 			reader.GetBoolean(1),
 			reader.GetString(2),
 			reader.GetString(3),
-			Convert.ToBoolean(reader.GetValue(4), CultureInfo.InvariantCulture),
-			Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture));
+			Convert.ToInt32(reader.GetValue(4), CultureInfo.InvariantCulture),
+			Convert.ToBoolean(reader.GetValue(5), CultureInfo.InvariantCulture),
+			Convert.ToBoolean(reader.GetValue(6), CultureInfo.InvariantCulture),
+			Convert.ToInt64(reader.GetValue(7), CultureInfo.InvariantCulture));
 	}
 
 	private async Task DeploySchemaAsync()
@@ -548,6 +610,8 @@ public abstract class AccountCredentialPortContractTestsBase : IAsyncLifetime
 		bool RequiresPasswordChange,
 		string SecurityStamp,
 		string ConcurrencyStamp,
+		int AccessFailedCount,
+		bool IsLockedOut,
 		bool TokenIsRevoked,
 		long PasswordChangeAuditCount);
 }

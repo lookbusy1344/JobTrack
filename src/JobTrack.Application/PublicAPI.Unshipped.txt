@@ -133,3 +133,6 @@ static JobTrack.Application.ResetEmployeePasskeysRequest.operator !=(JobTrack.Ap
 static JobTrack.Application.ResetEmployeePasskeysRequest.operator ==(JobTrack.Application.ResetEmployeePasskeysRequest? left, JobTrack.Application.ResetEmployeePasskeysRequest? right) -> bool
 static JobTrack.Application.ResetEmployeePasskeysResult.operator !=(JobTrack.Application.ResetEmployeePasskeysResult? left, JobTrack.Application.ResetEmployeePasskeysResult? right) -> bool
 static JobTrack.Application.ResetEmployeePasskeysResult.operator ==(JobTrack.Application.ResetEmployeePasskeysResult? left, JobTrack.Application.ResetEmployeePasskeysResult? right) -> bool
+JobTrack.Application.AccountLockoutPolicy
+static JobTrack.Application.AccountLockoutPolicy.LockoutDuration.get -> NodaTime.Duration
+const JobTrack.Application.AccountLockoutPolicy.MaxFailedAccessAttempts = 5 -> int

@@ -32,6 +32,7 @@ using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 public sealed class ConfirmAccessModel(
 	SignInManager<JobTrackIdentityUser> signInManager,
 	UserManager<JobTrackIdentityUser> userManager,
+	CurrentCredentialVerifier credentialVerifier,
 	ILoginAttemptRateLimiter loginAttemptRateLimiter,
 	IJobTrackClient jobTrackClient,
 	IOptions<PasskeyFeatureOptions> passkeyFeature) : PageModel
@@ -75,8 +76,8 @@ public sealed class ConfirmAccessModel(
 		ReturnUrl = returnUrl;
 		await LoadStateAsync(user);
 		var remoteAddress = GetRemoteAddress();
-		var rateLimitOutcome = await loginAttemptRateLimiter.TryAcquireAsync(
-			GetPartitionKey(remoteAddress, user), GetBackstopKey(remoteAddress), HttpContext.RequestAborted);
+		var rateLimitOutcome = await credentialVerifier.TryAcquireAsync(
+			"confirm-access", user, remoteAddress, HttpContext.RequestAborted);
 		switch (rateLimitOutcome) {
 			case RateLimitOutcome.Denied:
 				Response.StatusCode = StatusCodes.Status429TooManyRequests;
@@ -98,7 +99,7 @@ public sealed class ConfirmAccessModel(
 			return Page();
 		}
 
-		var passwordCheck = await signInManager.CheckPasswordSignInAsync(user, Input.CurrentPassword, true);
+		var passwordCheck = await credentialVerifier.CheckPasswordAsync(user, Input.CurrentPassword, !RequiresTwoFactorCode);
 		if (!passwordCheck.Succeeded) {
 			ErrorMessage = passwordCheck.IsLockedOut
 				? "This account is temporarily locked out after too many failed attempts."
@@ -106,10 +107,14 @@ public sealed class ConfirmAccessModel(
 			return Page();
 		}
 
-		if (RequiresTwoFactorCode
-			&& !await userManager.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultAuthenticatorProvider, Input.TwoFactorCode ?? string.Empty)) {
-			ErrorMessage = "That verification code is incorrect.";
-			return Page();
+		if (RequiresTwoFactorCode) {
+			var twoFactorCheck = await credentialVerifier.CheckTwoFactorAsync(user, Input.TwoFactorCode ?? string.Empty);
+			if (!twoFactorCheck.Succeeded) {
+				ErrorMessage = twoFactorCheck.IsLockedOut
+					? "This account is temporarily locked out after too many failed attempts."
+					: "That verification code is incorrect.";
+				return Page();
+			}
 		}
 
 		await signInManager.RefreshSignInAsync(user);
@@ -278,16 +283,6 @@ public sealed class ConfirmAccessModel(
 
 	private IActionResult RedirectToReturnUrl(string? returnUrl) =>
 		returnUrl is not null && Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl) : RedirectToPage("/Index");
-
-	private static string GetPartitionKey(string remoteAddress, JobTrackIdentityUser user)
-	{
-		var normalizedUserName = user.NormalizedUserName
-								 ?? user.UserName?.Trim().ToUpperInvariant()
-								 ?? user.Id.ToString(CultureInfo.InvariantCulture);
-		return $"confirm-access:{remoteAddress}:{normalizedUserName}";
-	}
-
-	private static string GetBackstopKey(string remoteAddress) => $"confirm-access:{remoteAddress}";
 
 	private string GetRemoteAddress() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
 

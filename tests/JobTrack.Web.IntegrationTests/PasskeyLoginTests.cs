@@ -1,10 +1,12 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using Abstractions;
 using AwesomeAssertions;
+using Identity;
 using TestSupport;
 
 /// <summary>
@@ -19,6 +21,8 @@ public sealed partial class PasskeyLoginTests : IAsyncLifetime, IDisposable
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
+	private const string FirstOrigin = "192.0.2.10";
+	private const string SecondOrigin = "198.51.100.20";
 
 	private readonly SqliteDatabaseFixture database = new();
 	private HttpClient client = null!;
@@ -98,6 +102,52 @@ public sealed partial class PasskeyLoginTests : IAsyncLifetime, IDisposable
 		body.Should().Contain("localhost", "the configured RP ID is echoed in the request options");
 		// A username-less request must not enumerate any account's credentials.
 		body.Should().NotContain("\"allowCredentials\":[{");
+	}
+
+	[Fact]
+	public async Task Exhausting_one_origins_passkey_options_budget_does_not_consume_another_origins_budget()
+	{
+		using var limitedFactory = new TestWebApplicationFactory(database.ConnectionString, true, new OnePermitBackstopRateLimiter());
+		using var limitedClient = CreateClient(limitedFactory);
+		var (antiforgeryCookie, token) = await GetLoginAntiforgeryWithAsync(limitedClient);
+
+		var first = await PostPasskeyOptionsAsync(limitedClient, antiforgeryCookie, token, FirstOrigin);
+		var exhausted = await PostPasskeyOptionsAsync(limitedClient, antiforgeryCookie, token, FirstOrigin);
+		var unrelated = await PostPasskeyOptionsAsync(limitedClient, antiforgeryCookie, token, SecondOrigin);
+
+		first.StatusCode.Should().Be(HttpStatusCode.OK);
+		exhausted.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+		unrelated.StatusCode.Should().Be(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	public async Task Passkey_options_and_assertions_have_separate_origin_budgets()
+	{
+		using var limitedFactory = new TestWebApplicationFactory(database.ConnectionString, true, new OnePermitBackstopRateLimiter());
+		using var limitedClient = CreateClient(limitedFactory);
+		var (antiforgeryCookie, token) = await GetLoginAntiforgeryWithAsync(limitedClient);
+
+		var options = await PostPasskeyOptionsAsync(limitedClient, antiforgeryCookie, token, FirstOrigin);
+		var assertion = await PostPasskeyAssertionAsync(limitedClient, antiforgeryCookie, token, FirstOrigin);
+
+		options.StatusCode.Should().Be(HttpStatusCode.OK);
+		assertion.StatusCode.Should().Be(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	public async Task Exhausting_one_origins_passkey_assertion_budget_does_not_consume_another_origins_budget()
+	{
+		using var limitedFactory = new TestWebApplicationFactory(database.ConnectionString, true, new OnePermitBackstopRateLimiter());
+		using var limitedClient = CreateClient(limitedFactory);
+		var (antiforgeryCookie, token) = await GetLoginAntiforgeryWithAsync(limitedClient);
+
+		var first = await PostPasskeyAssertionAsync(limitedClient, antiforgeryCookie, token, FirstOrigin);
+		var exhausted = await PostPasskeyAssertionAsync(limitedClient, antiforgeryCookie, token, FirstOrigin);
+		var unrelated = await PostPasskeyAssertionAsync(limitedClient, antiforgeryCookie, token, SecondOrigin);
+
+		first.StatusCode.Should().Be(HttpStatusCode.OK);
+		exhausted.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+		unrelated.StatusCode.Should().Be(HttpStatusCode.OK);
 	}
 
 	[Fact]
@@ -194,6 +244,47 @@ public sealed partial class PasskeyLoginTests : IAsyncLifetime, IDisposable
 
 	private Task<(string CookieHeader, string Token)> GetLoginAntiforgeryAsync() => GetLoginAntiforgeryWithAsync(client);
 
+	private static HttpClient CreateClient(TestWebApplicationFactory webApplicationFactory) =>
+		webApplicationFactory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
+
+	private static async Task<HttpResponseMessage> PostPasskeyOptionsAsync(
+		HttpClient httpClient,
+		string antiforgeryCookie,
+		string token,
+		string remoteAddress)
+	{
+		using var request = CreatePasskeyRequest(HttpMethod.Post, "/Account/Login?handler=PasskeyOptions", antiforgeryCookie, token, remoteAddress);
+		return await httpClient.SendAsync(request);
+	}
+
+	private static async Task<HttpResponseMessage> PostPasskeyAssertionAsync(
+		HttpClient httpClient,
+		string antiforgeryCookie,
+		string token,
+		string remoteAddress)
+	{
+		using var request = CreatePasskeyRequest(HttpMethod.Post, "/Account/Login?handler=PasskeySignIn", antiforgeryCookie, token, remoteAddress);
+		request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+		return await httpClient.SendAsync(request);
+	}
+
+	private static HttpRequestMessage CreatePasskeyRequest(
+		HttpMethod method,
+		string path,
+		string antiforgeryCookie,
+		string token,
+		string remoteAddress)
+	{
+		var request = new HttpRequestMessage(method, path);
+		request.Headers.Add("Cookie", antiforgeryCookie);
+		request.Headers.Add("X-CSRF-TOKEN", token);
+		request.Headers.Add("X-Forwarded-For", remoteAddress);
+		return request;
+	}
+
 	private static async Task<(string CookieHeader, string Token)> GetLoginAntiforgeryWithAsync(HttpClient httpClient)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/Login");
@@ -208,4 +299,26 @@ public sealed partial class PasskeyLoginTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"")]
 	private static partial Regex AntiforgeryTokenPattern();
+
+	private sealed class OnePermitBackstopRateLimiter : ILoginAttemptRateLimiter
+	{
+		private readonly ConcurrentDictionary<string, byte> consumedBackstops = new(StringComparer.Ordinal);
+
+		public ValueTask<RateLimitOutcome> TryAcquireAsync(
+			string partitionKey,
+			string backstopKey,
+			CancellationToken cancellationToken)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var expectedBackstopKey = partitionKey.Replace(":request:", ":origin:", StringComparison.Ordinal);
+			if (expectedBackstopKey == partitionKey || backstopKey != expectedBackstopKey) {
+				throw new InvalidOperationException("Passkey request and origin limiter keys must use distinct, paired namespaces.");
+			}
+
+			var outcome = consumedBackstops.TryAdd(backstopKey, 0)
+				? RateLimitOutcome.Allowed
+				: RateLimitOutcome.Denied;
+			return ValueTask.FromResult(outcome);
+		}
+	}
 }

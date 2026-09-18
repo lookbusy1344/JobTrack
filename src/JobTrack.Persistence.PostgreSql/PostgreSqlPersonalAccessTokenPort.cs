@@ -143,11 +143,11 @@ internal sealed class PostgreSqlPersonalAccessTokenPort : IPersonalAccessTokenPo
 
 	/// <inheritdoc />
 	/// <remarks>
-	///     <c>pat_try_authenticate</c> touches <c>last_used_at</c> as soon as the token itself is
-	///     unrevoked and unexpired, before this method's separate owner-enabled/lockout check --
-	///     unchanged from the pre-§2.6 behaviour in spirit (the token row and the owner row were
-	///     always two separate reads), but a token whose owner is currently disabled/locked out now
-	///     still records the attempt as a "use" even though authentication still fails overall.
+	///     <c>pat_try_authenticate</c> stamps <c>last_used_at</c> and enforces the owner's
+	///     <c>is_enabled</c> and lockout state in one <c>UPDATE … WHERE</c>: the stamp is written only
+	///     when the token is unrevoked and unexpired and the owner is enabled and not locked out, so a
+	///     returned row and an updated <c>last_used_at</c> together mean authentication succeeded. A
+	///     disabled or locked-out owner's token is neither marked used nor returned.
 	/// </remarks>
 	public async Task<AuthenticatedPersonalAccessTokenResult?> TryAuthenticateAsync(
 		string tokenHash, CancellationToken cancellationToken = default)

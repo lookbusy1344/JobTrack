@@ -7,6 +7,7 @@ using Application.Ports;
 using Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
 
 internal sealed class AccountCredentialPort(
@@ -81,12 +82,18 @@ internal sealed class AccountCredentialPort(
 				$"Actor {request.ActorUserId} may not change credentials for identity user {request.IdentityUserId}.");
 		}
 
+		var now = clock.GetCurrentInstant();
+		EnsureCredentialCheckAllowed(identityUser, now);
+
 		var verification = passwordHasher.VerifyHashedPassword(CredentialSubject, identityUser.PasswordHash, request.CurrentPassword);
 		if (verification == PasswordVerificationResult.Failed) {
+			await RecordPasswordFailureAndCommitAsync(
+				context, transaction, identityUser, now, request.CorrelationId, cancellationToken).ConfigureAwait(false);
 			throw new InvariantViolationException("account-current-password-incorrect", "The current password is incorrect.");
 		}
 
-		var now = clock.GetCurrentInstant();
+		identityUser.AccessFailedCount = 0;
+		identityUser.LockoutEnd = null;
 		identityUser.PasswordHash = passwordHasher.HashPassword(CredentialSubject, request.NewPassword);
 		identityUser.RequiresPasswordChange = false;
 		identityUser.SecurityStamp = Guid.NewGuid().ToString("N");
@@ -299,6 +306,47 @@ internal sealed class AccountCredentialPort(
 			SecurityStamp = identityUser.SecurityStamp,
 			ConcurrencyStamp = identityUser.ConcurrencyStamp,
 		};
+	}
+
+	private static void EnsureCredentialCheckAllowed(IdentityUserEntity identityUser, Instant now)
+	{
+		if (!identityUser.IsEnabled) {
+			throw new InvariantViolationException("account-disabled", "The account is disabled.");
+		}
+
+		if (identityUser.LockoutEnabled && identityUser.LockoutEnd is Instant lockoutEnd && lockoutEnd > now) {
+			throw new InvariantViolationException("account-locked-out", "The account is temporarily locked out.");
+		}
+	}
+
+	private static async Task RecordPasswordFailureAndCommitAsync(
+		DbContext context,
+		IDbContextTransaction transaction,
+		IdentityUserEntity identityUser,
+		Instant now,
+		Guid correlationId,
+		CancellationToken cancellationToken)
+	{
+		++identityUser.AccessFailedCount;
+		if (identityUser.LockoutEnabled && identityUser.AccessFailedCount >= AccountLockoutPolicy.MaxFailedAccessAttempts) {
+			identityUser.AccessFailedCount = 0;
+			identityUser.LockoutEnd = now + AccountLockoutPolicy.LockoutDuration;
+			AuditEventWriter.Add(
+				context,
+				identityUser.AppUserId,
+				now,
+				"authentication.lockout",
+				"identity_user",
+				identityUser.Id,
+				correlationId,
+				null,
+				null,
+				null);
+		}
+
+		identityUser.ConcurrencyStamp = Guid.NewGuid().ToString("N");
+		_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+		await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	private static void RotateStamps(IdentityUserEntity identityUser)

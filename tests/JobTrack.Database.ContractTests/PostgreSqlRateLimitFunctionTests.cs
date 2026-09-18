@@ -21,8 +21,10 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 {
 	private const string ApplicationVersion = "1.2.3";
 	private const string AppliedBy = "test-runner";
+	private const string FirstOrigin = "192.0.2.10";
 	private const string LoginPurpose = "login";
 	private const int MaxPartitionCount = 3;
+	private const string SecondOrigin = "198.51.100.20";
 
 	private readonly PostgreSqlDatabaseFixture database = new();
 
@@ -79,6 +81,74 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		var denied = await TryConsumeAsync(context, primaryDigest, backstopDigest, now, 60, 10, 1);
 
 		denied.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task Rotating_primary_keys_cannot_evict_or_reset_their_exhausted_backstop()
+	{
+		const int BackstopPermitLimit = 2;
+		const int PrimaryPermitLimit = 10;
+		const int WindowSeconds = 60;
+		var backstopDigest = Digest("password:192.0.2.10");
+		var deniedPrimaryDigest = Digest("password:192.0.2.10:THREE");
+		var now = DateTimeOffset.UtcNow;
+
+		await using var context = CreateContext();
+		var first = await TryConsumeBoundedAsync(
+			context, Digest("password:192.0.2.10:ONE"), backstopDigest, now,
+			WindowSeconds, PrimaryPermitLimit, BackstopPermitLimit, MaxPartitionCount);
+		var second = await TryConsumeBoundedAsync(
+			context, Digest("password:192.0.2.10:TWO"), backstopDigest, now,
+			WindowSeconds, PrimaryPermitLimit, BackstopPermitLimit, MaxPartitionCount);
+		var denied = await TryConsumeBoundedAsync(
+			context, deniedPrimaryDigest, backstopDigest, now,
+			WindowSeconds, PrimaryPermitLimit, BackstopPermitLimit, MaxPartitionCount);
+
+		first.OutAllowed.Should().BeTrue();
+		second.OutAllowed.Should().BeTrue();
+		denied.OutAllowed.Should().BeFalse();
+		var deniedPrimaryCount = await CountPartitionAsync(context, 0, deniedPrimaryDigest);
+		deniedPrimaryCount.Should().Be(0, "backstop denial precedes primary-pool admission");
+	}
+
+	[Theory]
+	[InlineData("passkey-options")]
+	[InlineData("passkey-assertion")]
+	public async Task Passkey_origin_backstops_are_independent(string purpose)
+	{
+		const int PermitLimit = 1;
+		const int WindowSeconds = 60;
+		var now = DateTimeOffset.UtcNow;
+
+		await using var context = CreateContext();
+		var first = await TryConsumeAsync(
+			context,
+			Digest($"{purpose}:request:{FirstOrigin}"),
+			Digest($"{purpose}:origin:{FirstOrigin}"),
+			now,
+			WindowSeconds,
+			PermitLimit,
+			PermitLimit);
+		var exhausted = await TryConsumeAsync(
+			context,
+			Digest($"{purpose}:request:{FirstOrigin}"),
+			Digest($"{purpose}:origin:{FirstOrigin}"),
+			now,
+			WindowSeconds,
+			PermitLimit,
+			PermitLimit);
+		var unrelated = await TryConsumeAsync(
+			context,
+			Digest($"{purpose}:request:{SecondOrigin}"),
+			Digest($"{purpose}:origin:{SecondOrigin}"),
+			now,
+			WindowSeconds,
+			PermitLimit,
+			PermitLimit);
+
+		first.Should().BeTrue();
+		exhausted.Should().BeFalse();
+		unrelated.Should().BeTrue();
 	}
 
 	[Fact]
@@ -155,18 +225,19 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task Unique_partitions_cannot_grow_the_live_table_past_the_configured_bound()
+	public async Task Capacity_pressure_admits_a_new_partition_by_evicting_an_existing_partition()
 	{
 		var now = DateTimeOffset.UtcNow;
 
 		await using var context = CreateContext();
-		var outcomes = new List<bool>();
+		var outcomes = new List<RateLimitConsumeResult>();
 		for (var i = 0; i < MaxPartitionCount + 1; ++i) {
 			var result = await TryConsumeBoundedAsync(context, Digest($"partition-{i}"), null, now, 60, 1, 0, MaxPartitionCount);
-			outcomes.Add(result.OutAllowed);
+			outcomes.Add(result);
 		}
 
-		outcomes.Should().Equal(true, true, true, false);
+		outcomes.Should().OnlyContain(result => result.OutAllowed, "capacity is a storage bound, not a denial policy");
+		outcomes.Sum(result => result.OutRowsEvicted).Should().Be(1, "the fourth partition replaces one retained primary row");
 		var livePartitionCount = await context.Database
 											  .SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
 											  .SingleAsync();
@@ -181,16 +252,18 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 
 		await using var context = CreateContext();
 		_ = await TryConsumeBoundedAsync(context, Digest("first-primary"), backstopDigest, now, 60, 10, 1, MaxPartitionCount);
+		var deniedPrimaryDigest = Digest("denied-primary");
 		for (var i = 0; i < MaxPartitionCount + 1; ++i) {
 			var result = await TryConsumeBoundedAsync(
-				context, Digest($"denied-primary-{i}"), backstopDigest, now, 60, 10, 1, MaxPartitionCount);
+				context, deniedPrimaryDigest, backstopDigest, now, 60, 10, 1, MaxPartitionCount);
 			result.OutAllowed.Should().BeFalse();
 		}
 
-		var livePartitionCount = await context.Database
-											  .SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
+		var deniedPrimaryCount = await context.Database
+											  .SqlQuery<int>(
+												  $"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose} AND partition_kind = 0 AND partition_digest = {deniedPrimaryDigest}")
 											  .SingleAsync();
-		livePartitionCount.Should().BeLessThanOrEqualTo(MaxPartitionCount);
+		deniedPrimaryCount.Should().Be(0, "a denied backstop must be checked before a missing primary is admitted");
 	}
 
 	[Fact]
@@ -205,7 +278,7 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 				context, Digest($"concurrent-unique-{i}"), null, now, 60, 1, 0, MaxPartitionCount);
 		}));
 
-		results.Count(result => result.OutAllowed).Should().Be(MaxPartitionCount);
+		results.Should().OnlyContain(result => result.OutAllowed, "new callers remain available while the pool evicts under pressure");
 		await using var verificationContext = CreateContext();
 		var livePartitionCount = await verificationContext.Database
 														  .SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose}")
@@ -227,7 +300,7 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		await context.Database
 					 .SqlQuery<RateLimitConsumeResult>(
 						 $"""
-						  SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned"
+						  SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned", out_rows_evicted AS "OutRowsEvicted"
 						  FROM rate_limit_try_consume(
 						      {LoginPurpose}, {partitionDigest}, {backstopDigest}, {now}, {windowSeconds}, {permitLimit}, {backstopPermitLimit})
 						  """)
@@ -239,13 +312,22 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		await context.Database
 					 .SqlQuery<RateLimitConsumeResult>(
 						 $"""
-						  SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned"
+						  SELECT out_allowed AS "OutAllowed", out_rows_pruned AS "OutRowsPruned", out_rows_evicted AS "OutRowsEvicted"
 						  FROM rate_limit_try_consume(
 						      {LoginPurpose}, {partitionDigest}, {backstopDigest}, {now}, {windowSeconds}, {permitLimit}, {backstopPermitLimit}, {maxPartitionCount})
 						  """)
 					 .SingleAsync();
 
 	private static byte[] Digest(string rawKey) => SHA256.HashData(Encoding.UTF8.GetBytes(rawKey));
+
+	private static async Task<int> CountPartitionAsync(
+		PostgreSqlJobTrackIdentityDbContext context,
+		short partitionKind,
+		byte[] partitionDigest) =>
+		await context.Database
+					 .SqlQuery<int>(
+						 $"SELECT count(*)::integer AS \"Value\" FROM rate_limit_window WHERE purpose = {LoginPurpose} AND partition_kind = {partitionKind} AND partition_digest = {partitionDigest}")
+					 .SingleAsync();
 
 	private PostgreSqlJobTrackIdentityDbContext CreateContext()
 	{
@@ -266,5 +348,5 @@ public sealed class PostgreSqlRateLimitFunctionTests : IAsyncLifetime
 		await PostgreSqlRolesAndGrants.ApplyAsync(connection, RepositoryPaths.PostgreSqlFunctionsScriptPath(), CancellationToken.None);
 	}
 
-	private sealed record RateLimitConsumeResult(bool OutAllowed, int OutRowsPruned);
+	private sealed record RateLimitConsumeResult(bool OutAllowed, int OutRowsPruned, int OutRowsEvicted);
 }

@@ -108,6 +108,29 @@ public sealed partial class WebHostSecurityArchitectureTests
 	}
 
 	[Fact]
+	public void Reusable_credentials_are_only_verified_by_the_reviewed_shared_boundary()
+	{
+		var directPasswordVerifiers = EnumeratePageModels()
+									  .SelectMany(entry => entry.Content.Split('\n')
+																.Where(line => (line.Contains("CheckPasswordAsync(", StringComparison.Ordinal)
+																				|| line.Contains("VerifyHashedPassword(", StringComparison.Ordinal))
+																			   && !line.Contains("credentialVerifier.CheckPasswordAsync(", StringComparison.Ordinal))
+																.Select(_ => entry.RelativePath))
+									  .ToList();
+		var directTokenVerifiers = EnumeratePageModels()
+								   .SelectMany(entry => entry.Content.Split('\n')
+															 .Where(line => line.Contains("VerifyTwoFactorTokenAsync(", StringComparison.Ordinal))
+															 .Select(_ => entry.RelativePath))
+								   .ToList();
+
+		directPasswordVerifiers.Should().BeEmpty(
+			"reusable current passwords must pass through CurrentCredentialVerifier or the transactional credential port");
+		directTokenVerifiers.Should().ContainSingle(
+			"the sole direct token verification enrols a new factor and is not a reusable current-credential check");
+		directTokenVerifiers[0].Should().Be("Account/Security.cshtml.cs");
+	}
+
+	[Fact]
 	public void Every_mapped_api_route_requires_authorization()
 	{
 		// The declarative catalogue lives across JobTrackApi.cs and its per-resource partial files
