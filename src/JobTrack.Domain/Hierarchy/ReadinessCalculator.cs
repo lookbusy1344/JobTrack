@@ -19,32 +19,6 @@ public static class ReadinessCalculator
 	public static ReadinessResult IsReady(
 		JobNodeId nodeId,
 		IReadOnlyDictionary<JobNodeId, HierarchyNode> nodesById,
-		IReadOnlyCollection<PrerequisiteEdge> prerequisites)
-	{
-		var edgesByDependent = prerequisites
-							   .GroupBy(edge => edge.DependentJobId)
-							   .ToDictionary(group => group.Key, group => group.ToList());
-		var achievedCache = new Dictionary<JobNodeId, bool>();
-		var blockers = new List<UnsatisfiedPrerequisite>();
-
-		JobNodeId? currentId = nodeId;
-		while (currentId is JobNodeId id) {
-			if (edgesByDependent.TryGetValue(id, out var edges)) {
-				foreach (var edge in edges) {
-					if (!achievedCache.TryGetValue(edge.RequiredJobId, out var achieved)) {
-						achieved = AchievementCalculator.IsAchieved(edge.RequiredJobId, nodesById);
-						achievedCache[edge.RequiredJobId] = achieved;
-					}
-
-					if (!achieved) {
-						blockers.Add(new(edge.RequiredJobId, id));
-					}
-				}
-			}
-
-			currentId = HierarchyNodeLookup.GetRequired(nodesById, id).ParentId;
-		}
-
-		return new(blockers.Count == 0, [.. blockers]);
-	}
+		IReadOnlyCollection<PrerequisiteEdge> prerequisites) =>
+		ReadinessIndex.Build(nodesById, prerequisites).IsReady(nodeId);
 }

@@ -97,7 +97,7 @@ public sealed partial class DeleteModel(
 			ErrorMessage = "That job node no longer exists.";
 			return Page();
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "job-node-delete-worked-leaf-reason-required") {
+		catch (InvariantViolationException ex) when (ex.ConstraintId == ConstraintIds.JobNodeDeleteWorkedLeafReasonRequired) {
 			ErrorMessage = "This node has worked session history; deleting it requires a reason (below).";
 			return Page();
 		}

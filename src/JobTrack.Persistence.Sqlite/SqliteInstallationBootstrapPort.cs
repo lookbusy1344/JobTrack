@@ -41,7 +41,7 @@ internal sealed class SqliteInstallationBootstrapPort : IInstallationBootstrapPo
 
 		if (await context.Set<InitialisedMarkerEntity>().AnyAsync(cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"installation-already-initialised", "The installation has already been bootstrapped (ADR 0015).");
+				ConstraintIds.InstallationAlreadyInitialised, "The installation has already been bootstrapped (ADR 0015).");
 		}
 
 		var now = clock.GetCurrentInstant();

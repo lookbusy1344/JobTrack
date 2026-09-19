@@ -30,13 +30,6 @@ public sealed class CreateModel(
 		"This job's prerequisites are not satisfied, so work cannot begin on it yet. Create it without a worker "
 		+ "and start the session once it is ready.";
 
-	/// <summary>
-	///     The structural rejection <c>IJobCommands.AddChildAsync</c> reports for a parent that already
-	///     holds leaf work; every other constraint it can raise is about the chosen owner or worker, and
-	///     <see cref="WorkSessionFailureDisplay" /> already has the sentence for those.
-	/// </summary>
-	private const string WriteRejectedConstraintId = "job-node-write-rejected";
-
 	private IReadOnlyDictionary<AppUserId, EmployeeDirectoryEntry> _employeeDirectoryById =
 		new Dictionary<AppUserId, EmployeeDirectoryEntry>();
 
@@ -139,7 +132,7 @@ public sealed class CreateModel(
 			return Page();
 		}
 		catch (InvariantViolationException ex) {
-			ErrorMessage = ex.ConstraintId == WriteRejectedConstraintId
+			ErrorMessage = ex.ConstraintId == ConstraintIds.JobNodeWriteRejected
 				? ParentHasLeafWorkMessage
 				: WorkSessionFailureDisplay.Describe(ex);
 			await LoadParentAsync(context.Actor, cancellationToken);

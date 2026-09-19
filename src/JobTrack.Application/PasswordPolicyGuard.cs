@@ -12,7 +12,7 @@ using Abstractions;
 internal static class PasswordPolicyGuard
 {
 	/// <summary>The shared <see cref="InvariantViolationException.ConstraintId" /> for every rejection this guard raises.</summary>
-	public const string ConstraintId = "account-new-password-policy";
+	public const string ConstraintId = ConstraintIds.AccountNewPasswordPolicy;
 
 	/// <summary>
 	///     Throws <see cref="InvariantViolationException" /> (<see cref="ConstraintId" />) unless

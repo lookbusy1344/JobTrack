@@ -16,20 +16,20 @@ public static class NodeClassifier
 	public static NodeKind Classify(HierarchyNode node)
 	{
 		if (node.ParentId == node.Id) {
-			throw new InvariantViolationException("hierarchy.self-parent", $"Node {node.Id.Value} cannot be its own parent.");
+			throw new InvariantViolationException(ConstraintIds.HierarchySelfParent, $"Node {node.Id.Value} cannot be its own parent.");
 		}
 
 		if (node.ParentId is null) {
 			return node.LeafAchievement is null
 				? NodeKind.Root
-				: throw new InvariantViolationException("hierarchy.root-has-leaf-work", $"Root node {node.Id.Value} cannot own LeafWork.");
+				: throw new InvariantViolationException(ConstraintIds.HierarchyRootHasLeafWork, $"Root node {node.Id.Value} cannot own LeafWork.");
 		}
 
 		if (node.ChildIds.Count > 0) {
 			return node.LeafAchievement is null
 				? NodeKind.Branch
 				: throw new InvariantViolationException(
-					"hierarchy.node-has-both-children-and-leaf-work",
+					ConstraintIds.HierarchyNodeHasBothChildrenAndLeafWork,
 					$"Node {node.Id.Value} cannot have both children and LeafWork.");
 		}
 

@@ -44,7 +44,7 @@ internal static class JobRequestPersistence
 		var isRequesterJob = await context.Set<JobRequestEntity>().AsNoTracking()
 										  .AnyAsync(request => request.JobNodeId == nodeId, cancellationToken).ConfigureAwait(false);
 		if (!isRequesterJob) {
-			throw new InvariantViolationException("requester-job-required", $"Job node {nodeId} has no associated job_request row.");
+			throw new InvariantViolationException(ConstraintIds.RequesterJobRequired, $"Job node {nodeId} has no associated job_request row.");
 		}
 
 		return await JobNodeHierarchyQueries.GetAncestorOwnerIdsAsync(context, nodeId.Value, cancellationToken).ConfigureAwait(false);

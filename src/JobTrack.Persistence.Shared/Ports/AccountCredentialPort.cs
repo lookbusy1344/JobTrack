@@ -33,7 +33,7 @@ internal sealed class AccountCredentialPort(
 		}
 
 		if (request.Enabled && identityUser.AuthenticatorKeyProtected is null) {
-			throw new InvariantViolationException("two-factor-key-missing",
+			throw new InvariantViolationException(ConstraintIds.TwoFactorKeyMissing,
 				"Two-factor authentication cannot be enabled without an authenticator key.");
 		}
 
@@ -89,7 +89,7 @@ internal sealed class AccountCredentialPort(
 		if (verification == PasswordVerificationResult.Failed) {
 			await RecordPasswordFailureAndCommitAsync(
 				context, transaction, identityUser, now, request.CorrelationId, cancellationToken).ConfigureAwait(false);
-			throw new InvariantViolationException("account-current-password-incorrect", "The current password is incorrect.");
+			throw new InvariantViolationException(ConstraintIds.AccountCurrentPasswordIncorrect, "The current password is incorrect.");
 		}
 
 		identityUser.AccessFailedCount = 0;
@@ -148,7 +148,7 @@ internal sealed class AccountCredentialPort(
 		var passkeys = context.Set<IdentityUserPasskeyEntity>();
 		var currentCount = await passkeys.CountAsync(p => p.IdentityUserId == identityUser.Id, cancellationToken).ConfigureAwait(false);
 		if (currentCount >= PasskeyPolicy.MaxPasskeysPerAccount) {
-			throw new InvariantViolationException("passkey-max-count",
+			throw new InvariantViolationException(ConstraintIds.PasskeyMaxCount,
 				$"An account may hold at most {PasskeyPolicy.MaxPasskeysPerAccount} passkeys.");
 		}
 
@@ -157,7 +157,7 @@ internal sealed class AccountCredentialPort(
 							  .AnyAsync(p => p.IdentityUserId == identityUser.Id && p.NormalizedName == normalizedName, cancellationToken)
 							  .ConfigureAwait(false);
 		if (nameTaken) {
-			throw new InvariantViolationException("passkey-name-duplicate", "A passkey with that name already exists on this account.");
+			throw new InvariantViolationException(ConstraintIds.PasskeyNameDuplicate, "A passkey with that name already exists on this account.");
 		}
 
 		var now = clock.GetCurrentInstant();
@@ -187,6 +187,9 @@ internal sealed class AccountCredentialPort(
 
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
 		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.UniquenessViolation) {
 			throw new ConcurrencyConflictException("A conflicting passkey was enrolled concurrently; retry.", ex);
@@ -250,7 +253,7 @@ internal sealed class AccountCredentialPort(
 										 cancellationToken)
 									 .ConfigureAwait(false);
 		if (nameTaken) {
-			throw new InvariantViolationException("passkey-name-duplicate", "A passkey with that name already exists on this account.");
+			throw new InvariantViolationException(ConstraintIds.PasskeyNameDuplicate, "A passkey with that name already exists on this account.");
 		}
 
 		var now = clock.GetCurrentInstant();
@@ -263,6 +266,9 @@ internal sealed class AccountCredentialPort(
 
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
 		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.UniquenessViolation) {
 			throw new ConcurrencyConflictException("A conflicting passkey name was set concurrently; retry.", ex);
@@ -311,11 +317,11 @@ internal sealed class AccountCredentialPort(
 	private static void EnsureCredentialCheckAllowed(IdentityUserEntity identityUser, Instant now)
 	{
 		if (!identityUser.IsEnabled) {
-			throw new InvariantViolationException("account-disabled", "The account is disabled.");
+			throw new InvariantViolationException(ConstraintIds.AccountDisabled, "The account is disabled.");
 		}
 
 		if (identityUser.LockoutEnabled && identityUser.LockoutEnd is Instant lockoutEnd && lockoutEnd > now) {
-			throw new InvariantViolationException("account-locked-out", "The account is temporarily locked out.");
+			throw new InvariantViolationException(ConstraintIds.AccountLockedOut, "The account is temporarily locked out.");
 		}
 	}
 

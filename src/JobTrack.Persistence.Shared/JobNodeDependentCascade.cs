@@ -38,7 +38,7 @@ internal static class JobNodeDependentCascade
 
 		if (anchoredAreas.Count > 0) {
 			throw new InvariantViolationException(
-				"job-node-holding-area-anchored",
+				ConstraintIds.JobNodeHoldingAreaAnchored,
 				"A request holding area is anchored at this job node; re-anchor or deactivate it first: " +
 				string.Join(", ", anchoredAreas));
 		}

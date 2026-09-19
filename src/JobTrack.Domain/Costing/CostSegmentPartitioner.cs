@@ -288,7 +288,7 @@ public static class CostSegmentPartitioner
 			var session = ordered[index];
 			if (previous.NodeId == session.NodeId && IntervalAlgebra.Overlaps(previous.Interval, session.Interval)) {
 				throw new InvariantViolationException(
-					"work-session.same-user-leaf-overlap",
+					ConstraintIds.WorkSessionSameUserLeafOverlap,
 					$"Sessions {previous.SessionId.Value} and {session.SessionId.Value} overlap on leaf {session.NodeId.Value}.");
 			}
 		}

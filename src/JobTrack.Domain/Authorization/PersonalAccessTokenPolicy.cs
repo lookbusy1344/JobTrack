@@ -27,12 +27,12 @@ public static class PersonalAccessTokenPolicy
 	{
 		if (expiresAt <= now) {
 			throw new InvariantViolationException(
-				"personal-access-token-expiry-not-in-future", "A personal access token's expiry must be in the future.");
+				ConstraintIds.PersonalAccessTokenExpiryNotInFuture, "A personal access token's expiry must be in the future.");
 		}
 
 		if (expiresAt - now > MaxLifetime) {
 			throw new InvariantViolationException(
-				"personal-access-token-expiry-too-long",
+				ConstraintIds.PersonalAccessTokenExpiryTooLong,
 				$"A personal access token's lifetime may not exceed {MaxLifetime.Days} days.");
 		}
 	}

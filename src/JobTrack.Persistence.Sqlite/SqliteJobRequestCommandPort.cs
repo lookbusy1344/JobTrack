@@ -12,7 +12,6 @@ using Microsoft.EntityFrameworkCore;
 using NodaTime;
 using Shared;
 using Shared.Entities;
-using Shared.Ports;
 
 /// <summary>
 ///     SQLite implementation of <see cref="IJobRequestCommandPort" /> (ADR 0033). One
@@ -36,14 +35,14 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 
 	private readonly IClock clock;
 	private readonly string connectionString;
-	private readonly IProviderWriteOperations writeOperations;
+	private readonly SqliteWriteOperations writeOperations;
 
 	/// <summary>Creates the port over the given SQLite connection string.</summary>
 	public SqliteJobRequestCommandPort(string connectionString, IClock clock)
 	{
 		this.connectionString = connectionString;
 		this.clock = clock;
-		writeOperations = new SqliteWriteOperations(connectionString);
+		writeOperations = new(connectionString);
 	}
 
 	/// <inheritdoc />
@@ -93,7 +92,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		_ = context.Add(node);
 
 		JobRequestEntity? jobRequest = null;
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken, ct => {
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken, ct => {
 			jobRequest = new() {
 				JobNodeId = node.Id,
 				RequesterUserId = request.Context.Actor,
@@ -153,16 +152,19 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		}
 		catch (SqliteException ex) when (ex.Message.Contains(PrerequisiteEdgeAfterMoveMessage, StringComparison.Ordinal)) {
 			throw new InvariantViolationException(
-				"job-node-move-would-invalidate-prerequisite",
+				ConstraintIds.JobNodeMoveWouldInvalidatePrerequisite,
 				"Moving this node would leave a prerequisite edge connecting an ancestor and a descendant; remove the edge first.",
 				ex);
 		}
 		catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintErrorCode) {
 			throw new InvariantViolationException(
-				"job-node-move-would-cycle", "Moving this node under the requested parent would create a cycle.", ex);
+				ConstraintIds.JobNodeMoveWouldCycle, "Moving this node under the requested parent would create a cycle.", ex);
 		}
-		catch (SqliteException ex) {
-			throw new InvariantViolationException("job-node-move-invalid", "This move violates a job-node structural invariant.", ex);
+		catch (SqliteException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (SqliteException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
+			throw new InvariantViolationException(ConstraintIds.JobNodeMoveInvalid, "This move violates a job-node structural invariant.", ex);
 		}
 
 		if (affected == 0) {
@@ -280,7 +282,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 
 		if (jobRequest.AcknowledgedAt is not null) {
 			throw new InvariantViolationException(
-				"request-already-acknowledged",
+				ConstraintIds.RequestAlreadyAcknowledged,
 				$"Job request {request.NodeId} has already been acknowledged.");
 		}
 
@@ -295,7 +297,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 				["acknowledged_by_user_id"] = request.Context.Actor.Value.ToString(CultureInfo.InvariantCulture),
 			});
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken).ConfigureAwait(false);
 
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
 								.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
@@ -348,7 +350,7 @@ internal sealed class SqliteJobRequestCommandPort : IJobRequestCommandPort
 		};
 		_ = context.Add(note);
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken, ct => {
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken, ct => {
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "add-request-note", "job_request_note", note.Id.Value,
 				request.Context.CorrelationId, null, null,

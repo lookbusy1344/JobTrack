@@ -63,7 +63,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 
 		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, request.NewAchievement)) {
 			throw new InvariantViolationException(
-				"achievement-transition-not-permitted",
+				ConstraintIds.AchievementTransitionNotPermitted,
 				$"Cannot transition from {leafWork.Achievement} to {request.NewAchievement}.");
 		}
 
@@ -84,7 +84,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 
 			if (await LeafSessionClosure.HasActiveSessionAsync(context, request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
 				throw new InvariantViolationException(
-					"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.");
+					ConstraintIds.LeafClosureActiveSessions, "This leaf cannot transition to a terminal achievement while a session is active.");
 			}
 		}
 
@@ -103,7 +103,7 @@ internal sealed class PostgreSqlAchievementCommandPort : IAchievementCommandPort
 		}
 		catch (Exception ex) when (FindActiveSessionsViolation(ex) is not null) {
 			throw new InvariantViolationException(
-				"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.", ex);
+				ConstraintIds.LeafClosureActiveSessions, "This leaf cannot transition to a terminal achievement while a session is active.", ex);
 		}
 
 		return ToResult(leafWork);

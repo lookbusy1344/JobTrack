@@ -155,6 +155,24 @@ public sealed partial class StepUpAndAbsoluteSessionTests : IAsyncLifetime, IDis
 	}
 
 	[Fact]
+	public async Task Confirm_access_does_not_reflect_a_non_local_return_url_into_the_page()
+	{
+		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.openredirect");
+		var authCookie = await SignInAsync("stepup.openredirect");
+
+		const string hostileReturnUrl = "https://evil.example/steal";
+		using var request = new HttpRequestMessage(
+			HttpMethod.Get, $"/Account/ConfirmAccess?returnUrl={Uri.EscapeDataString(hostileReturnUrl)}");
+		request.Headers.Add("Cookie", authCookie);
+
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		body.Should().NotContain("evil.example");
+	}
+
+	[Fact]
 	public async Task Confirming_access_with_the_wrong_password_does_not_refresh_recent_authentication()
 	{
 		_ = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "stepup.wrong");

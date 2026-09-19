@@ -30,6 +30,15 @@ internal sealed class SqliteWriteOperations(string connectionString) : IProvider
 	/// </summary>
 	private const int UniqueConstraintErrorCode = 2067;
 
+	/// <summary><c>SQLITE_CONSTRAINT_FOREIGNKEY</c> (sqlite3.h): a foreign-key failure, an integrity violation rather than a range overlap (2.2).</summary>
+	private const int ForeignKeyConstraintErrorCode = 787;
+
+	/// <summary><c>SQLITE_BUSY</c> (sqlite3.h): the database file is locked by another connection -- a transient condition worth a retry (2.2).</summary>
+	private const int BusyErrorCode = 5;
+
+	/// <summary><c>SQLITE_LOCKED</c> (sqlite3.h): a table in the database is locked -- likewise transient (2.2).</summary>
+	private const int LockedErrorCode = 6;
+
 	/// <summary>Schema version 0007's leaf-not-closed triggers raise this message (ADR 0044).</summary>
 	private const string LeafClosedMessage = "work-session-leaf-closed";
 
@@ -45,8 +54,18 @@ internal sealed class SqliteWriteOperations(string connectionString) : IProvider
 	///     <c>BEGIN IMMEDIATE</c> transaction that serializes concurrent writers through SQLite's
 	///     single-writer model.
 	/// </remarks>
-	public async Task<IDbContextTransaction> BeginWriteTransactionAsync(DbContext context, CancellationToken cancellationToken) =>
-		await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+	public async Task<IDbContextTransaction> BeginWriteTransactionAsync(DbContext context, CancellationToken cancellationToken)
+	{
+		try {
+			return await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken).ConfigureAwait(false);
+		}
+		catch (SqliteException ex) when (ex.SqliteErrorCode is BusyErrorCode or LockedErrorCode) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (SqliteException ex) {
+			throw new PersistenceException(ex);
+		}
+	}
 
 	public async Task<int> RevokeAllTokensForUserAsync(
 		DbContext context, AppUserId userId, Instant now, CancellationToken cancellationToken) =>
@@ -92,9 +111,11 @@ internal sealed class SqliteWriteOperations(string connectionString) : IProvider
 			}
 
 			var candidate = sqlite switch {
+				_ when sqlite.SqliteErrorCode is BusyErrorCode or LockedErrorCode => WriteConflictKind.Transient,
 				_ when sqlite.Message.Contains(LeafClosedMessage, StringComparison.Ordinal) => WriteConflictKind.LeafClosed,
 				_ when sqlite.Message.Contains(ActiveSessionsMessage, StringComparison.Ordinal) => WriteConflictKind.ActiveSessions,
 				_ when sqlite.SqliteExtendedErrorCode == UniqueConstraintErrorCode => WriteConflictKind.UniquenessViolation,
+				_ when sqlite.SqliteExtendedErrorCode == ForeignKeyConstraintErrorCode => WriteConflictKind.None,
 				_ when sqlite.SqliteErrorCode == ConstraintErrorCode => WriteConflictKind.RangeOverlap,
 				_ => WriteConflictKind.None,
 			};
@@ -107,5 +128,22 @@ internal sealed class SqliteWriteOperations(string connectionString) : IProvider
 		}
 
 		return kind;
+	}
+
+	public PersistenceFailure ClassifyWriteFailure(Exception? ex)
+	{
+		for (var current = ex; current is not null; current = current.InnerException) {
+			if (current is not SqliteException sqlite) {
+				continue;
+			}
+
+			return sqlite.SqliteErrorCode switch {
+				BusyErrorCode or LockedErrorCode => PersistenceFailure.Transient,
+				ConstraintErrorCode => PersistenceFailure.Integrity,
+				_ => PersistenceFailure.Unknown,
+			};
+		}
+
+		return PersistenceFailure.Unknown;
 	}
 }

@@ -1,6 +1,5 @@
 namespace JobTrack.Persistence.Shared.Ports;
 
-using System.Data.Common;
 using System.Globalization;
 using Abstractions;
 using Application;
@@ -65,9 +64,12 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 		}
-		catch (Exception ex) when (ex is DbUpdateException or DbException) {
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
 			throw new InvariantViolationException(
-				"employee-username-already-taken", $"Username '{request.UserName}' is already taken.", ex);
+				ConstraintIds.EmployeeUsernameAlreadyTaken, $"Username '{request.UserName}' is already taken.", ex);
 		}
 
 		_ = context.Add(new IdentityUserRoleEntity {
@@ -410,7 +412,7 @@ internal sealed class EmployeeCommandPort(IProviderWriteOperations provider, ICl
 
 		if (JobNodeStructuralResults.DeriveKind(node.ParentId, hasChildren) == NodeKind.Leaf) {
 			throw new InvariantViolationException(
-				"home-node-must-not-be-leaf", $"Job node {nodeId} is a leaf and cannot be set as a home node.");
+				ConstraintIds.HomeNodeMustNotBeLeaf, $"Job node {nodeId} is a leaf and cannot be set as a home node.");
 		}
 	}
 

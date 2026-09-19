@@ -76,9 +76,12 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"schedule-version-overlap", "This schedule version's effective range overlaps another for this employee.", ex);
+				ConstraintIds.ScheduleVersionOverlap, "This schedule version's effective range overlaps another for this employee.", ex);
 		}
 
 		return new() {
@@ -132,9 +135,12 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"schedule-exception-priced-additive-overlap",
+				ConstraintIds.ScheduleExceptionPricedAdditiveOverlap,
 				"This priced additive exception overlaps another for this employee.", ex);
 		}
 
@@ -212,9 +218,12 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for schedule version {request.VersionId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"schedule-version-overlap", "This schedule version's effective range overlaps another for this employee.", ex);
+				ConstraintIds.ScheduleVersionOverlap, "This schedule version's effective range overlaps another for this employee.", ex);
 		}
 
 		return new() {
@@ -274,9 +283,12 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for schedule exception {request.ExceptionId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"schedule-exception-priced-additive-overlap",
+				ConstraintIds.ScheduleExceptionPricedAdditiveOverlap,
 				"This priced additive exception overlaps another for this employee.", ex);
 		}
 
@@ -326,7 +338,7 @@ internal sealed class ScheduleCommandPort(IProviderWriteOperations provider, ICl
 											   cancellationToken).ConfigureAwait(false);
 		if (duplicateExists) {
 			throw new InvariantViolationException(
-				"schedule-exception-already-exists",
+				ConstraintIds.ScheduleExceptionAlreadyExists,
 				"This schedule exception already exists for this employee.");
 		}
 	}

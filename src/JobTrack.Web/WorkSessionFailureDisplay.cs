@@ -16,14 +16,14 @@ public static class WorkSessionFailureDisplay
 		ArgumentNullException.ThrowIfNull(exception);
 
 		return exception.ConstraintId switch {
-			"work-session-already-active" => "This worker already has an active session for this leaf.",
-			"work-session-start-in-future" or "work-session-finish-in-future" => "That time is in the future — enter a past time.",
-			"work-session-overlap" => "That time overlaps another session for this leaf.",
-			"work-session-invalid-interval" => "The finish time must be after the start time.",
-			"work-session-leaf-closed" =>
+			ConstraintIds.WorkSessionAlreadyActive => "This worker already has an active session for this leaf.",
+			ConstraintIds.WorkSessionStartInFuture or ConstraintIds.WorkSessionFinishInFuture => "That time is in the future — enter a past time.",
+			ConstraintIds.WorkSessionOverlap => "That time overlaps another session for this leaf.",
+			ConstraintIds.WorkSessionInvalidInterval => "The finish time must be after the start time.",
+			ConstraintIds.WorkSessionLeafClosed =>
 				"This leaf is closed to new sessions. Reopen it and/or restore it before starting another session.",
-			"leaf-closure-active-sessions" => "This leaf cannot be closed while a session is still active. Finish it first.",
-			"work-session-target-not-eligible" => "That worker is disabled or no longer eligible. Choose another worker.",
+			ConstraintIds.LeafClosureActiveSessions => "This leaf cannot be closed while a session is still active. Finish it first.",
+			ConstraintIds.WorkSessionTargetNotEligible => "That worker is disabled or no longer eligible. Choose another worker.",
 			_ => exception.Message,
 		};
 	}

@@ -1,1 +1,4 @@
 #nullable enable
+JobTrack.Domain.Hierarchy.ReadinessIndex
+JobTrack.Domain.Hierarchy.ReadinessIndex.IsReady(JobTrack.Abstractions.JobNodeId nodeId) -> JobTrack.Domain.Hierarchy.ReadinessResult!
+static JobTrack.Domain.Hierarchy.ReadinessIndex.Build(System.Collections.Generic.IReadOnlyDictionary<JobTrack.Abstractions.JobNodeId, JobTrack.Domain.Hierarchy.HierarchyNode!>! nodesById, System.Collections.Generic.IReadOnlyCollection<JobTrack.Domain.Hierarchy.PrerequisiteEdge!>! prerequisites) -> JobTrack.Domain.Hierarchy.ReadinessIndex!

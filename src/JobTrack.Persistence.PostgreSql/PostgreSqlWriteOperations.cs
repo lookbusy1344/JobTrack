@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using NodaTime;
 using Npgsql;
+using Shared;
 using Shared.Ports;
 
 /// <summary>
@@ -44,11 +45,12 @@ internal sealed class PostgreSqlWriteOperations(NpgsqlDataSource dataSource) : I
 
 	/// <summary>Classifies a PostgreSQL write conflict from the SQLSTATEs in the exception chain.</summary>
 	/// <remarks>
-	///     A GiST exclusion constraint surfaces as <c>ExclusionViolation</c>, or as
-	///     <c>DeadlockDetected</c> under genuine concurrent interleaving; EF's Npgsql execution strategy
-	///     re-wraps either in an outer <see cref="InvalidOperationException" /> even on a single,
-	///     non-retried attempt, hence walking the whole chain. The two deferred constraint triggers
-	///     carry distinct SQLSTATEs precisely so they never get confused with the overlap constraints.
+	///     A GiST exclusion constraint surfaces as <c>ExclusionViolation</c> (a range overlap); a
+	///     deadlock (40P01) or serialization failure (40001) between unrelated writers is a transient
+	///     rollback (2.2), not an overlap. EF's Npgsql execution strategy re-wraps either in an outer
+	///     <see cref="InvalidOperationException" /> even on a single, non-retried attempt, hence walking
+	///     the whole chain. The two deferred constraint triggers carry distinct SQLSTATEs precisely so
+	///     they never get confused with the overlap constraints.
 	/// </remarks>
 	/// <inheritdoc />
 	public async Task<bool> IsLeafReadyAsync(
@@ -70,7 +72,8 @@ internal sealed class PostgreSqlWriteOperations(NpgsqlDataSource dataSource) : I
 				LeafClosedSqlState => WriteConflictKind.LeafClosed,
 				ActiveSessionsSqlState => WriteConflictKind.ActiveSessions,
 				PostgresErrorCodes.UniqueViolation => WriteConflictKind.UniquenessViolation,
-				PostgresErrorCodes.ExclusionViolation or PostgresErrorCodes.DeadlockDetected => WriteConflictKind.RangeOverlap,
+				PostgresErrorCodes.ExclusionViolation => WriteConflictKind.RangeOverlap,
+				PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected => WriteConflictKind.Transient,
 				_ => WriteConflictKind.None,
 			};
 
@@ -83,4 +86,7 @@ internal sealed class PostgreSqlWriteOperations(NpgsqlDataSource dataSource) : I
 
 		return kind;
 	}
+
+	public PersistenceFailure ClassifyWriteFailure(Exception? ex) =>
+		ex is null ? PersistenceFailure.Unknown : PersistenceFailureClassifier.ClassifyWriteFailure(ex);
 }

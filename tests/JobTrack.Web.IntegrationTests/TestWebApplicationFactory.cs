@@ -1,5 +1,6 @@
 namespace JobTrack.Web.IntegrationTests;
 
+using Application;
 using Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -13,7 +14,8 @@ internal sealed class TestWebApplicationFactory(
 	string identityConnectionString,
 	bool enablePasskeys = false,
 	ILoginAttemptRateLimiter? loginAttemptRateLimiter = null,
-	IPasswordHasher<JobTrackIdentityUser>? passwordHasher = null) : WebApplicationFactory<Program>
+	IPasswordHasher<JobTrackIdentityUser>? passwordHasher = null,
+	IJobTrackClient? jobTrackClient = null) : WebApplicationFactory<Program>
 {
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
@@ -40,6 +42,13 @@ internal sealed class TestWebApplicationFactory(
 			_ = builder.ConfigureTestServices(services => {
 				services.RemoveAll<IPasswordHasher<JobTrackIdentityUser>>();
 				_ = services.AddSingleton(passwordHasher);
+			});
+		}
+
+		if (jobTrackClient is not null) {
+			_ = builder.ConfigureTestServices(services => {
+				services.RemoveAll<IJobTrackClient>();
+				_ = services.AddSingleton(jobTrackClient);
 			});
 		}
 	}

@@ -61,7 +61,7 @@ public sealed class ConfirmAccessModel(
 			return Challenge();
 		}
 
-		ReturnUrl = returnUrl;
+		ReturnUrl = LocalReturnUrlOrNull(returnUrl);
 		await LoadStateAsync(user);
 		return Page();
 	}
@@ -73,7 +73,7 @@ public sealed class ConfirmAccessModel(
 			return Challenge();
 		}
 
-		ReturnUrl = returnUrl;
+		ReturnUrl = LocalReturnUrlOrNull(returnUrl);
 		await LoadStateAsync(user);
 		var remoteAddress = GetRemoteAddress();
 		var rateLimitOutcome = await credentialVerifier.TryAcquireAsync(
@@ -119,7 +119,7 @@ public sealed class ConfirmAccessModel(
 
 		await signInManager.RefreshSignInAsync(user);
 
-		return RedirectToReturnUrl(returnUrl);
+		return RedirectToReturnUrl(ReturnUrl);
 	}
 
 	/// <summary>
@@ -232,7 +232,7 @@ public sealed class ConfirmAccessModel(
 			});
 		}
 
-		var target = returnUrl is not null && Url.IsLocalUrl(returnUrl) ? returnUrl : Url.Page("/Index");
+		var target = LocalReturnUrlOrNull(returnUrl) ?? Url.Page("/Index");
 		return new JsonResult(new
 		{
 			redirect = target,
@@ -283,6 +283,12 @@ public sealed class ConfirmAccessModel(
 
 	private IActionResult RedirectToReturnUrl(string? returnUrl) =>
 		returnUrl is not null && Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl) : RedirectToPage("/Index");
+
+	// A returnUrl arrives from the query string, so it is untrusted. Only a local URL is stored,
+	// reflected into the page (the form action and passkey URLs), or redirected to; anything
+	// off-origin collapses to null, closing both the open-redirect and the reflected-XSS finding.
+	private string? LocalReturnUrlOrNull(string? returnUrl) =>
+		returnUrl is not null && Url.IsLocalUrl(returnUrl) ? returnUrl : null;
 
 	private string GetRemoteAddress() => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-ip";
 

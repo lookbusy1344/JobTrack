@@ -125,10 +125,13 @@ A short test script, aiming to complete in about 20 seconds, is used for pre-com
 
 ## Status
 
-**Current release: v1.3.0** (2026-09-15) — adds passkey sign-in (ADR 0071) as an optional primary
-credential alongside the retained password: Face ID, Touch ID, Windows Hello, or a security key, with
-enrolment and management on `/Account/Security`, username-less login, step-up, and administrator /
-AdminCli reset. Adds an `identity_user_passkey` table. Full history: [CHANGELOG.md](CHANGELOG.md).
+**Current release: v1.3.1** (2026-09-19) — a security-review remediation: closes a rate-limit
+origin-scoping gap and a partition-eviction gap on passkey requests, equalizes password-login
+verification work to remove a timing side-channel, enforces lockout consistently on password
+changes, and fixes a reflected-XSS/open-redirect exposure on `/Account/ConfirmAccess`. Also
+classifies provider write failures as integrity/transient/unknown so a deadlock or busy database
+surfaces as a 503 instead of a false invariant violation, and fixes a work-session start race and a
+future-dated correction bug. Full history: [CHANGELOG.md](CHANGELOG.md).
 
 **Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
 ([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),

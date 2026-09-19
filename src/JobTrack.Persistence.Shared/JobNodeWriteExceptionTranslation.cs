@@ -4,6 +4,7 @@ using System.Data.Common;
 using Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Ports;
 
 /// <summary>
 ///     Translates the exceptions a tracked-entity <c>job_node</c> write can raise (impl plan §7.4:
@@ -32,7 +33,7 @@ internal static class JobNodeWriteExceptionTranslation
 	///     <c>SaveChangesAsync</c> to persist it, all inside this same try/catch and transaction.
 	/// </summary>
 	public static async Task SaveChangesAndCommitAsync(
-		DbContext context, IDbContextTransaction transaction, CancellationToken cancellationToken,
+		DbContext context, IDbContextTransaction transaction, IProviderWriteOperations provider, CancellationToken cancellationToken,
 		Func<CancellationToken, Task>? afterSave = null)
 	{
 		try {
@@ -49,9 +50,12 @@ internal static class JobNodeWriteExceptionTranslation
 			throw new ConcurrencyConflictException(
 				"The job node was modified concurrently; re-read its current state and retry.", ex);
 		}
-		catch (Exception ex) when (ex is DbUpdateException or DbException) {
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
 			throw new InvariantViolationException(
-				"job-node-write-rejected", "This write violates a job-node structural invariant.", ex);
+				ConstraintIds.JobNodeWriteRejected, "This write violates a job-node structural invariant.", ex);
 		}
 	}
 
@@ -63,7 +67,7 @@ internal static class JobNodeWriteExceptionTranslation
 	///     "not deletable" invariant spec §4.6 defines for planning-node deletion.
 	/// </summary>
 	public static async Task SaveChangesAndCommitForDeleteAsync(
-		DbContext context, IDbContextTransaction transaction, CancellationToken cancellationToken)
+		DbContext context, IDbContextTransaction transaction, IProviderWriteOperations provider, CancellationToken cancellationToken)
 	{
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -73,9 +77,12 @@ internal static class JobNodeWriteExceptionTranslation
 			throw new ConcurrencyConflictException(
 				"The job node was modified concurrently; re-read its current state and retry.", ex);
 		}
-		catch (Exception ex) when (ex is DbUpdateException or DbException) {
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
 			throw new InvariantViolationException(
-				"job-node-not-deletable", "This job node cannot be deleted because it has dependent data.", ex);
+				ConstraintIds.JobNodeNotDeletable, "This job node cannot be deleted because it has dependent data.", ex);
 		}
 	}
 
@@ -89,7 +96,7 @@ internal static class JobNodeWriteExceptionTranslation
 	///     category").
 	/// </summary>
 	public static async Task SaveChangesAndCommitForLeafWorkAttachAsync(
-		DbContext context, IDbContextTransaction transaction, CancellationToken cancellationToken)
+		DbContext context, IDbContextTransaction transaction, IProviderWriteOperations provider, CancellationToken cancellationToken)
 	{
 		try {
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -99,8 +106,11 @@ internal static class JobNodeWriteExceptionTranslation
 			throw new ConcurrencyConflictException(
 				"The job node was modified concurrently; re-read its current state and retry.", ex);
 		}
-		catch (Exception ex) when (ex is DbUpdateException or DbException) {
-			throw new InvariantViolationException("leaf-work-already-attached", "This node already has LeafWork attached.", ex);
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
+			throw new InvariantViolationException(ConstraintIds.LeafWorkAlreadyAttached, "This node already has LeafWork attached.", ex);
 		}
 	}
 
@@ -114,7 +124,7 @@ internal static class JobNodeWriteExceptionTranslation
 	///     committed the deletion of) just as easily as on the last one.
 	/// </summary>
 	public static async Task<T> RunAndCommitAsync<T>(
-		IDbContextTransaction transaction, Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
+		IDbContextTransaction transaction, IProviderWriteOperations provider, Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
 	{
 		try {
 			var result = await operation(cancellationToken).ConfigureAwait(false);
@@ -125,9 +135,12 @@ internal static class JobNodeWriteExceptionTranslation
 			throw new ConcurrencyConflictException(
 				"The job node was modified concurrently; re-read its current state and retry.", ex);
 		}
-		catch (Exception ex) when (ex is DbUpdateException or DbException) {
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (Exception ex) when (provider.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
 			throw new InvariantViolationException(
-				"job-node-write-rejected", "This write violates a job-node structural invariant.", ex);
+				ConstraintIds.JobNodeWriteRejected, "This write violates a job-node structural invariant.", ex);
 		}
 	}
 }

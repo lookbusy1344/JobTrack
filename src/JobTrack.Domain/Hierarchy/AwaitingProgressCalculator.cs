@@ -79,6 +79,7 @@ public static class AwaitingProgressCalculator
 		IReadOnlyDictionary<JobNodeId, AwaitingProgressNodeFacts> factsById,
 		IReadOnlyCollection<PrerequisiteEdge> prerequisites)
 	{
+		var readinessIndex = ReadinessIndex.Build(nodesById, prerequisites);
 		var entries = candidates
 					  .Select(node => (Node: node, Facts: factsById[node.Id]))
 					  .Where(candidate => candidate.Facts.ArchivedAt is null)
@@ -93,7 +94,7 @@ public static class AwaitingProgressCalculator
 						  null,
 						  candidate.Facts.NeededStart,
 						  candidate.Facts.NeededFinish,
-						  ReadinessCalculator.IsReady(candidate.Node.Id, nodesById, prerequisites).IsReady));
+						  readinessIndex.IsReady(candidate.Node.Id).IsReady));
 
 		var ordered = entries
 					  .OrderByDescending(entry => entry.IsReady)

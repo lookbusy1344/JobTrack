@@ -69,15 +69,15 @@ public sealed class ChangePasswordModel(
 			user.RequiresPasswordChange = false;
 			await signInManager.RefreshSignInAsync(user);
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-current-password-incorrect") {
+		catch (InvariantViolationException ex) when (ex.ConstraintId == ConstraintIds.AccountCurrentPasswordIncorrect) {
 			ErrorMessage = "The current password is incorrect.";
 			return Page();
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-locked-out") {
+		catch (InvariantViolationException ex) when (ex.ConstraintId == ConstraintIds.AccountLockedOut) {
 			ErrorMessage = "This account is temporarily locked out after too many failed attempts.";
 			return Page();
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "account-new-password-policy") {
+		catch (InvariantViolationException ex) when (ex.ConstraintId == ConstraintIds.AccountNewPasswordPolicy) {
 			ErrorMessage = ex.Message;
 			return Page();
 		}

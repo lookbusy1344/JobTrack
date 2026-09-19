@@ -23,7 +23,7 @@ public static class ScheduleExceptionValidator
 			for (var j = i + 1; j < priced.Count; ++j) {
 				if (IntervalAlgebra.Overlaps(priced[i].Interval, priced[j].Interval)) {
 					throw new InvariantViolationException(
-						"schedule-exception.priced-additive-overlap",
+						ConstraintIds.ScheduleExceptionPricedAdditiveOverlap,
 						"Two explicitly priced additive schedule exceptions for the same user cannot overlap.");
 				}
 			}

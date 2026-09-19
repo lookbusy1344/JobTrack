@@ -12,6 +12,6 @@ internal static class HierarchyNodeLookup
 		nodesById.TryGetValue(nodeId, out var node)
 			? node
 			: throw new InvariantViolationException(
-				"hierarchy.missing-node",
+				ConstraintIds.HierarchyMissingNode,
 				$"Job node {nodeId} is missing from the hierarchy inputs.");
 }

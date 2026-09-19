@@ -44,6 +44,24 @@ unique index vs. the exclusion constraint) it reports for a given statement, so 
 pre-check is the only way to keep the two outcomes reliably distinct for the common, non-concurrent
 case; the database constraints remain the backstop for genuine concurrent races.
 
+## Amendment (2026-09-19)
+
+The 2026-09-18 fresh-eyes remediation plan (finding 2.10) identified a dead end this decision left
+open: `CorrectSessionAsync` was deliberately left free to set a future `StartedAt` (see above), but
+a session corrected into the future then fails every ending command — `EnsureFinishInstantValid`
+rejects a finish at or before the start, and a finish cannot exceed `now`. The leaf shows as active
+and cannot be paused or completed until someone corrects it back, and nothing explains why.
+
+`CorrectSessionAsync` now rejects `StartedAt > now` with `InvariantViolationException`
+(`ConstraintId` `"work-session-start-in-future"`), the same constraint id and check
+`StartSessionAsync` already applies. This narrows the "no reason field to explain an unusual entry"
+rationale above to apply only to `FinishedAt`, which `CorrectSessionAsync` still leaves free to be
+in the future in the same way it always could not (a finish is already bounded by `now` via
+`EnsureFinishInstantValid`, so this was never actually reachable) — no behaviour changes there.
+`StartedAt` no longer has a "legitimate, already-audited use case" carve-out: an operator correcting
+a mistaken future entry now corrects it to a past or present instant instead, since the future entry
+itself is what produces the stuck leaf.
+
 ## Consequences
 
 - `JobTrack.Web`'s `Browse` page exposes inline Start/Finish controls per leaf row, with an optional

@@ -463,6 +463,7 @@ internal sealed partial class JobQueries : IJobQueries
 				// whole job_node table (regression fixed alongside this call).
 				var readinessInputs = await _readinessQueryPort
 											.GetReadinessInputsForNodesAsync([.. rows.Select(row => row.Id)], cancellationToken).ConfigureAwait(false);
+				var readinessIndex = ReadinessIndex.Build(readinessInputs.NodesById, readinessInputs.Prerequisites);
 
 				var nodes = rows.OrderBy(row => spans[row.Id].Lft).Select(row => new JobSubtreeNodeResult {
 					Id = row.Id,
@@ -481,8 +482,7 @@ internal sealed partial class JobQueries : IJobQueries
 					HasSessionHistory = row.HasSessionHistory,
 					HasUnacknowledgedRequest = row.HasUnacknowledgedRequest,
 					BranchAchievement = row.BranchAchievement,
-					IsReady = ReadinessCalculator
-							  .IsReady(row.Id, readinessInputs.NodesById, readinessInputs.Prerequisites).IsReady,
+					IsReady = readinessIndex.IsReady(row.Id).IsReady,
 					HasUnexpandedChildren = row.HasUnexpandedChildren,
 					MatchesFilter = row.MatchesFilter,
 					SubtreeLft = spans[row.Id].Lft,

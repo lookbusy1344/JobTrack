@@ -4,6 +4,7 @@ using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using Abstractions;
 using Application;
 using Identity;
 using Microsoft.AspNetCore.Authentication;
@@ -778,6 +779,11 @@ public sealed class Program
 				BadHttpRequestException badHttpRequestException => badHttpRequestException.StatusCode,
 														 { InnerException: BadHttpRequestException innerBadHttpRequestException } =>
 															 innerBadHttpRequestException.StatusCode,
+				// A transient database failure (deadlock/serialization/busy, 2.2) that no page handler
+				// caught is a retryable 503, not a server fault -- the shared page-side counterpart of
+				// JobTrackApi's 503, so a busy database is never rendered as the caller's mistake.
+				TransientPersistenceException => StatusCodes.Status503ServiceUnavailable,
+														 { InnerException: TransientPersistenceException } => StatusCodes.Status503ServiceUnavailable,
 				_ => StatusCodes.Status500InternalServerError,
 			},
 		});

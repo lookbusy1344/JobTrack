@@ -25,7 +25,7 @@ internal static class WorkflowEmployeeEligibility
 
 		if (ownsJob || hasActiveSession) {
 			throw new InvariantViolationException(
-				"requester-role-assigned-work",
+				ConstraintIds.RequesterRoleAssignedWork,
 				$"Employee {targetId} cannot become a requester while they own a job or have an active work session.");
 		}
 	}

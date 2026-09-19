@@ -169,7 +169,7 @@ public sealed partial class BrowseModel
 				NodeId = nodeId,
 			}, cancellationToken);
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "requester-job-required") {
+		catch (InvariantViolationException ex) when (ex.ConstraintId == ConstraintIds.RequesterJobRequired) {
 			RequestContext = null;
 		}
 		catch (AuthorizationDeniedException) {

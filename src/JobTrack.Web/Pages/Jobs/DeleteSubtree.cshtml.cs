@@ -118,7 +118,7 @@ public sealed partial class DeleteSubtreeModel(
 			ErrorMessage = "That job node no longer exists.";
 			return Page();
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "subtree-delete-reason-required") {
+		catch (InvariantViolationException ex) when (ex.ConstraintId == ConstraintIds.SubtreeDeleteReasonRequired) {
 			ErrorMessage = "Deleting a subtree requires a reason.";
 			return Page();
 		}
@@ -175,7 +175,7 @@ public sealed partial class DeleteSubtreeModel(
 			ErrorMessage = "That job node no longer exists.";
 			return Page();
 		}
-		catch (InvariantViolationException ex) when (ex.ConstraintId == "leaf-closure-active-sessions") {
+		catch (InvariantViolationException ex) when (ex.ConstraintId == ConstraintIds.LeafClosureActiveSessions) {
 			ErrorMessage = "A session is still running somewhere in this subtree; pause or finish it before archiving.";
 			return Page();
 		}

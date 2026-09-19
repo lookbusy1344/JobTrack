@@ -89,7 +89,7 @@ public sealed class MoveModel(
 			// One sentence per rejected condition: a prerequisite edge left connecting an ancestor and
 			// a descendant is not a hierarchy cycle, and telling the mover to look at descendants sends
 			// them nowhere near the edge they actually have to remove.
-			ErrorMessage = ex.ConstraintId == "job-node-move-would-invalidate-prerequisite"
+			ErrorMessage = ex.ConstraintId == ConstraintIds.JobNodeMoveWouldInvalidatePrerequisite
 				? "This move would leave a prerequisite edge connecting an ancestor and a descendant. " +
 				  "Remove that prerequisite first, then move the node."
 				: "This move would create a cycle in the job hierarchy — the destination cannot be this node's own descendant.";

@@ -81,10 +81,13 @@ documents' own disagreement, not just spec-vs-plan).
   was implemented, reused uniformly for reads and writes rather than a separate read-only context
   type.
 - **Exceptions are the sole failure channel** (ADR 0019): usage errors throw framework exceptions
-  directly; the seven `JobTrackException` subtypes in `JobTrack.Abstractions`
+  directly; the `JobTrackException` subtypes in `JobTrack.Abstractions`
   (`EntityNotFoundException`, `AuthorizationDeniedException`, `ConcurrencyConflictException`,
   `PrerequisiteBlockedException`, `MissingRateException`, `InvariantViolationException`,
-  `UnknownStoredTimeZoneException`) cover every condition callers handle distinctly.
+  `UnknownStoredTimeZoneException`, `TransientPersistenceException`, and `PersistenceException`)
+  cover every condition callers handle distinctly. The application operation boundary wraps an
+  otherwise-untranslated provider exception in `PersistenceException`; provider-specific exception
+  types never cross `IJobTrackClient` (spec §13.2).
   `ITokenCommands.TryAuthenticateAsync` is the surface's one
   deliberate exception to "exceptions are the sole failure channel": a failed personal-access-token
   authentication attempt (bad token, revoked, expired) is an expected outcome on a hot external-API

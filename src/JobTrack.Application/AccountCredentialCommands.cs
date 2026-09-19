@@ -82,7 +82,7 @@ internal sealed class AccountCredentialCommands : IAccountCredentialCommands
 		ArgumentNullException.ThrowIfNull(request!.Credential);
 		EnsureNameAcceptable(request.Name);
 		if (!request.Credential.IsUserVerified) {
-			throw new InvariantViolationException("passkey-not-user-verified",
+			throw new InvariantViolationException(ConstraintIds.PasskeyNotUserVerified,
 				"A passkey must be user-verified before it can be enrolled.");
 		}
 
@@ -152,14 +152,14 @@ internal sealed class AccountCredentialCommands : IAccountCredentialCommands
 						   && credential.ClientDataJson.Length is > 0 and <= PasskeyPolicy.MaximumClientDataJsonByteLength;
 		if (!isAcceptable) {
 			throw new InvariantViolationException(
-				"passkey-credential-material-policy", "The verified passkey credential material is outside the supported bounds.");
+				ConstraintIds.PasskeyCredentialMaterialPolicy, "The verified passkey credential material is outside the supported bounds.");
 		}
 	}
 
 	private static void EnsureNameAcceptable(string name)
 	{
 		if (!PasskeyPolicy.IsNameAcceptable(name)) {
-			throw new InvariantViolationException("passkey-name-policy",
+			throw new InvariantViolationException(ConstraintIds.PasskeyNamePolicy,
 				$"A passkey name must be {PasskeyPolicy.MinimumNameLength}–{PasskeyPolicy.MaximumNameLength} characters.");
 		}
 	}

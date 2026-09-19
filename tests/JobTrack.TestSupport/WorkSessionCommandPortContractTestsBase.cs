@@ -718,6 +718,31 @@ public abstract partial class WorkSessionCommandPortContractTestsBase : IAsyncLi
 	}
 
 	[Fact]
+	public async Task Correcting_a_session_to_a_future_start_instant_throws_an_invariant_violation()
+	{
+		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();
+		var port = CreateSessionPort(database.ConnectionString);
+		var session = await port.StartSessionAsync(new() {
+			Context = ContextFor(workerId),
+			LeafWorkId = leafId,
+			WorkedByUserId = workerId,
+		});
+		var futureStart = SystemClock.Instance.GetCurrentInstant().Plus(Duration.FromHours(2));
+
+		var act = () => port.CorrectSessionAsync(new() {
+			Context = ContextFor(workerId),
+			SessionId = session.Id,
+			StartedAt = futureStart,
+			FinishedAt = null,
+			Reason = "Accidental future date",
+			Version = session.Version,
+		});
+
+		(await act.Should().ThrowAsync<InvariantViolationException>())
+			.Which.ConstraintId.Should().Be("work-session-start-in-future");
+	}
+
+	[Fact]
 	public async Task Correcting_a_session_to_an_invalid_interval_throws_an_invariant_violation()
 	{
 		var (_, _, workerId, leafId) = await SeedReadyLeafAsync();

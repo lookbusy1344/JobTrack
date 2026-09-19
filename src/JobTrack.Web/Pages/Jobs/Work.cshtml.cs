@@ -215,6 +215,11 @@ public sealed class WorkModel(
 			return Challenge();
 		}
 
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
@@ -224,10 +229,7 @@ public sealed class WorkModel(
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
-					Context = new() {
-						Actor = actor.Value,
-						CorrelationId = Guid.NewGuid(),
-					},
+					Context = context,
 					JobNodeId = new(LeafNodeId),
 					WorkedByUserId = actor.Value,
 					StartedAt = startedAtInstant,
@@ -239,6 +241,10 @@ public sealed class WorkModel(
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node does not exist.";
+		}
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
+			ErrorMessage = "Someone else started this job at the same moment. It is now In Progress -- try starting again.";
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);
@@ -263,6 +269,11 @@ public sealed class WorkModel(
 			return RedirectToWork();
 		}
 
+		var context = new CommandContext {
+			Actor = actor.Value,
+			CorrelationId = Guid.NewGuid(),
+		};
+
 		try {
 			var zone = await viewerTimeZoneResolver.ResolveAsync(actor.Value, cancellationToken);
 			if (!BackdateInstant.TryParseOptional(startedAt, zone, out var startedAtInstant)) {
@@ -272,10 +283,7 @@ public sealed class WorkModel(
 
 			_ = await jobTrackClient.Work.StartWorkAsync(
 				new() {
-					Context = new() {
-						Actor = actor.Value,
-						CorrelationId = Guid.NewGuid(),
-					},
+					Context = context,
 					JobNodeId = new(LeafNodeId),
 					WorkedByUserId = new(targetUserId),
 					StartedAt = startedAtInstant,
@@ -287,6 +295,10 @@ public sealed class WorkModel(
 		}
 		catch (EntityNotFoundException) {
 			ErrorMessage = "That job node or worker does not exist.";
+		}
+		catch (ConcurrencyConflictException ex) {
+			PageFailureLogging.LogConcurrencyConflict(logger, context.CorrelationId, nameof(WorkModel), ex);
+			ErrorMessage = "Someone else started this job at the same moment. It is now In Progress -- try starting again.";
 		}
 		catch (InvariantViolationException ex) {
 			ErrorMessage = WorkSessionFailureDisplay.Describe(ex);

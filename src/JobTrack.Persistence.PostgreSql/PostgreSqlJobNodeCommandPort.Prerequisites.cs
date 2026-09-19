@@ -48,23 +48,26 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 		}
 		catch (PostgresException ex) when (ex.SqlState == PrerequisiteCycleSqlState) {
 			throw new InvariantViolationException(
-				"job-prerequisite-would-cycle", "This prerequisite edge would create a cycle.", ex);
+				ConstraintIds.JobPrerequisiteWouldCycle, "This prerequisite edge would create a cycle.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PrerequisiteHierarchyEdgeSqlState) {
 			throw new InvariantViolationException(
-				"job-prerequisite-is-hierarchy-edge",
+				ConstraintIds.JobPrerequisiteIsHierarchyEdge,
 				"A prerequisite edge cannot connect nodes that are ancestor/descendant of each other.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation) {
 			throw new InvariantViolationException(
-				"job-prerequisite-already-exists", "This prerequisite edge already exists.", ex);
+				ConstraintIds.JobPrerequisiteAlreadyExists, "This prerequisite edge already exists.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.CheckViolation) {
-			throw new InvariantViolationException("job-prerequisite-not-self", "A job cannot require itself.", ex);
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteNotSelf, "A job cannot require itself.", ex);
 		}
-		catch (PostgresException ex) {
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
 			throw new InvariantViolationException(
-				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", ex);
+				ConstraintIds.JobPrerequisiteInvalid, "This prerequisite edge violates a structural invariant.", ex);
 		}
 	}
 
@@ -98,23 +101,26 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 		}
 		catch (PostgresException ex) when (ex.SqlState == PrerequisiteCycleSqlState) {
 			throw new InvariantViolationException(
-				"job-prerequisite-would-cycle", "This prerequisite edge would create a cycle.", ex);
+				ConstraintIds.JobPrerequisiteWouldCycle, "This prerequisite edge would create a cycle.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PrerequisiteHierarchyEdgeSqlState) {
 			throw new InvariantViolationException(
-				"job-prerequisite-is-hierarchy-edge",
+				ConstraintIds.JobPrerequisiteIsHierarchyEdge,
 				"A prerequisite edge cannot connect nodes that are ancestor/descendant of each other.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation) {
 			throw new InvariantViolationException(
-				"job-prerequisite-already-exists", "This prerequisite edge already exists.", ex);
+				ConstraintIds.JobPrerequisiteAlreadyExists, "This prerequisite edge already exists.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.CheckViolation) {
-			throw new InvariantViolationException("job-prerequisite-not-self", "A job cannot require itself.", ex);
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteNotSelf, "A job cannot require itself.", ex);
 		}
-		catch (PostgresException ex) {
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
 			throw new InvariantViolationException(
-				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", ex);
+				ConstraintIds.JobPrerequisiteInvalid, "This prerequisite edge violates a structural invariant.", ex);
 		}
 	}
 
@@ -167,7 +173,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 		var sessionAssignees = request.Nodes
 									  .Where(node => node.LeafWork is not null)
 									  .SelectMany(node => ImportedSessions(node.LeafWork!))
-									  .Select(session => (UserId: session.WorkedByUserId, ConstraintId: "work-session-target-not-eligible"));
+									  .Select(session => (UserId: session.WorkedByUserId, ConstraintId: ConstraintIds.WorkSessionTargetNotEligible));
 		var assignees = ownerAssignees.Concat(sessionAssignees)
 									  .GroupBy(assignee => assignee.UserId)
 									  .Select(group => group.First())
@@ -182,7 +188,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 		}
 
 		var created = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
-			transaction, ct => ImportSubtreeCoreAsync(context, writeOperations, request, now, ct), cancellationToken).ConfigureAwait(false);
+			transaction, writeOperations, ct => ImportSubtreeCoreAsync(context, writeOperations, request, now, ct), cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			Nodes = [
@@ -325,12 +331,12 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 			foreach (var session in sessions) {
 				if (session.StartedAt > now) {
 					throw new InvariantViolationException(
-						"work-session-start-in-future", "A session's start instant must not be in the future.");
+						ConstraintIds.WorkSessionStartInFuture, "A session's start instant must not be in the future.");
 				}
 
 				if (session.FinishedAt is Instant finishedAt && finishedAt > now) {
 					throw new InvariantViolationException(
-						"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+						ConstraintIds.WorkSessionFinishInFuture, "A session's finish instant must not be in the future.");
 				}
 			}
 
@@ -406,7 +412,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, actorRoles, actorId, dependentJobId, cancellationToken).ConfigureAwait(false);
 
 		if (requiredJobId == dependentJobId) {
-			throw new InvariantViolationException("job-prerequisite-not-self", "A job cannot require itself.");
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteNotSelf, "A job cannot require itself.");
 		}
 
 		var dependentAncestorIds = await JobNodeHierarchyQueries.GetAncestorIdsAsync(context, dependentJobId.Value, cancellationToken)
@@ -415,18 +421,18 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 															   .ConfigureAwait(false);
 		if (dependentAncestorIds.Contains(requiredJobId.Value) || requiredAncestorIds.Contains(dependentJobId.Value)) {
 			throw new InvariantViolationException(
-				"job-prerequisite-is-hierarchy-edge",
+				ConstraintIds.JobPrerequisiteIsHierarchyEdge,
 				"A prerequisite edge cannot connect nodes that are ancestor/descendant of each other.");
 		}
 
 		if (await context.Set<JobPrerequisiteEntity>().AsNoTracking()
 						 .AnyAsync(jp => jp.FromId == requiredJobId && jp.ToId == dependentJobId, cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException("job-prerequisite-already-exists", "This prerequisite edge already exists.");
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteAlreadyExists, "This prerequisite edge already exists.");
 		}
 
 		if (await JobNodeHierarchyQueries.PrerequisiteWouldCreateCycleAsync(
 				context, requiredJobId.Value, dependentJobId.Value, cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException("job-prerequisite-would-cycle", "This prerequisite edge would create a cycle.");
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteWouldCycle, "This prerequisite edge would create a cycle.");
 		}
 	}
 }

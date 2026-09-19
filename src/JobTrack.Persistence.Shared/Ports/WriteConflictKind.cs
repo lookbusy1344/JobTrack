@@ -36,8 +36,15 @@ internal enum WriteConflictKind
 
 	/// <summary>
 	///     An effective-range or session-interval overlap was rejected: PostgreSQL's GiST exclusion
-	///     constraints (or the deadlock its concurrent-interleaving path raises instead), SQLite's
-	///     equivalent immediate triggers.
+	///     constraints, SQLite's equivalent immediate triggers.
 	/// </summary>
 	RangeOverlap,
+
+	/// <summary>
+	///     A transient database condition rolled the write back -- a deadlock (40P01) or serialization
+	///     failure (40001) on PostgreSQL, a busy/locked database on SQLite (2.2). Not the caller's
+	///     mistake; the same write may succeed on retry, so a call site surfaces it as
+	///     <see cref="Abstractions.TransientPersistenceException" />, never as an invariant.
+	/// </summary>
+	Transient,
 }

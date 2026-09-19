@@ -12,7 +12,6 @@ using NodaTime;
 using Npgsql;
 using Shared;
 using Shared.Entities;
-using Shared.Ports;
 
 /// <summary>
 ///     PostgreSQL implementation of <see cref="IJobRequestCommandPort" /> (ADR 0033). One
@@ -33,14 +32,14 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 
 	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
-	private readonly IProviderWriteOperations writeOperations;
+	private readonly PostgreSqlWriteOperations writeOperations;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobRequestCommandPort(NpgsqlDataSource dataSource, IClock clock)
 	{
 		this.dataSource = dataSource;
 		this.clock = new(clock);
-		writeOperations = new PostgreSqlWriteOperations(dataSource);
+		writeOperations = new(dataSource);
 	}
 
 	/// <inheritdoc />
@@ -89,7 +88,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		_ = context.Add(node);
 
 		JobRequestEntity? jobRequest = null;
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken, ct => {
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken, ct => {
 			jobRequest = new() {
 				JobNodeId = node.Id,
 				RequesterUserId = request.Context.Actor,
@@ -155,11 +154,11 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		}
 		catch (PostgresException ex) when (ex.SqlState == CycleSqlState || ex.SqlState == PostgresErrorCodes.CheckViolation) {
 			throw new InvariantViolationException(
-				"job-node-move-would-cycle", "Moving this node under the requested parent would create a cycle.", ex);
+				ConstraintIds.JobNodeMoveWouldCycle, "Moving this node under the requested parent would create a cycle.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PrerequisiteEdgeAfterMoveSqlState) {
 			throw new InvariantViolationException(
-				"job-node-move-would-invalidate-prerequisite",
+				ConstraintIds.JobNodeMoveWouldInvalidatePrerequisite,
 				"Moving this node would leave a prerequisite edge connecting an ancestor and a descendant; remove the edge first.",
 				ex);
 		}
@@ -167,8 +166,11 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for job node {request.NodeId} did not match its current version.", ex);
 		}
-		catch (PostgresException ex) {
-			throw new InvariantViolationException("job-node-move-invalid", "This move violates a job-node structural invariant.", ex);
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
+			throw new InvariantViolationException(ConstraintIds.JobNodeMoveInvalid, "This move violates a job-node structural invariant.", ex);
 		}
 
 		var moved = await context.Set<JobNodeEntity>().AsNoTracking()
@@ -267,7 +269,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 
 		if (jobRequest.AcknowledgedAt is not null) {
 			throw new InvariantViolationException(
-				"request-already-acknowledged",
+				ConstraintIds.RequestAlreadyAcknowledged,
 				$"Job request {request.NodeId} has already been acknowledged.");
 		}
 
@@ -282,7 +284,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 				["acknowledged_by_user_id"] = request.Context.Actor.Value.ToString(CultureInfo.InvariantCulture),
 			});
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken).ConfigureAwait(false);
 
 		var node = await context.Set<JobNodeEntity>().AsNoTracking()
 								.FirstAsync(n => n.Id == request.NodeId, cancellationToken).ConfigureAwait(false);
@@ -334,7 +336,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 		};
 		_ = context.Add(note);
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken, ct => {
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken, ct => {
 			AuditEventWriter.Add(
 				context, request.Context.Actor, now, "add-request-note", "job_request_note", note.Id.Value,
 				request.Context.CorrelationId, null, null,

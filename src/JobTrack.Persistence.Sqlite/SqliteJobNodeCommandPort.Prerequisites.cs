@@ -42,9 +42,14 @@ internal sealed partial class SqliteJobNodeCommandPort
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
-		catch (DbUpdateException ex) when (FindSqliteException(ex) is SqliteException sqliteException) {
+		catch (DbUpdateException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (DbUpdateException ex) when (
+			writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity
+			&& FindSqliteException(ex) is SqliteException sqliteException) {
 			throw new InvariantViolationException(
-				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", sqliteException);
+				ConstraintIds.JobPrerequisiteInvalid, "This prerequisite edge violates a structural invariant.", sqliteException);
 		}
 	}
 
@@ -78,9 +83,14 @@ internal sealed partial class SqliteJobNodeCommandPort
 			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
-		catch (DbUpdateException ex) when (FindSqliteException(ex) is SqliteException sqliteException) {
+		catch (DbUpdateException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (DbUpdateException ex) when (
+			writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity
+			&& FindSqliteException(ex) is SqliteException sqliteException) {
 			throw new InvariantViolationException(
-				"job-prerequisite-invalid", "This prerequisite edge violates a structural invariant.", sqliteException);
+				ConstraintIds.JobPrerequisiteInvalid, "This prerequisite edge violates a structural invariant.", sqliteException);
 		}
 	}
 
@@ -135,7 +145,7 @@ internal sealed partial class SqliteJobNodeCommandPort
 		var sessionAssignees = request.Nodes
 									  .Where(node => node.LeafWork is not null)
 									  .SelectMany(node => ImportedSessions(node.LeafWork!))
-									  .Select(session => (UserId: session.WorkedByUserId, ConstraintId: "work-session-target-not-eligible"));
+									  .Select(session => (UserId: session.WorkedByUserId, ConstraintId: ConstraintIds.WorkSessionTargetNotEligible));
 		var assignees = ownerAssignees.Concat(sessionAssignees)
 									  .GroupBy(assignee => assignee.UserId)
 									  .Select(group => group.First())
@@ -150,7 +160,7 @@ internal sealed partial class SqliteJobNodeCommandPort
 		}
 
 		var created = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
-			transaction, ct => ImportSubtreeCoreAsync(context, writeOperations, request, now, ct), cancellationToken).ConfigureAwait(false);
+			transaction, writeOperations, ct => ImportSubtreeCoreAsync(context, writeOperations, request, now, ct), cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			Nodes = [
@@ -299,12 +309,12 @@ internal sealed partial class SqliteJobNodeCommandPort
 			foreach (var session in sessions) {
 				if (session.StartedAt > now) {
 					throw new InvariantViolationException(
-						"work-session-start-in-future", "A session's start instant must not be in the future.");
+						ConstraintIds.WorkSessionStartInFuture, "A session's start instant must not be in the future.");
 				}
 
 				if (session.FinishedAt is Instant finishedAt && finishedAt > now) {
 					throw new InvariantViolationException(
-						"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+						ConstraintIds.WorkSessionFinishInFuture, "A session's finish instant must not be in the future.");
 				}
 			}
 
@@ -379,7 +389,7 @@ internal sealed partial class SqliteJobNodeCommandPort
 		await AuthorizeOrThrowAsync(context, actorRoles, actorId, dependentJobId, cancellationToken).ConfigureAwait(false);
 
 		if (requiredJobId == dependentJobId) {
-			throw new InvariantViolationException("job-prerequisite-not-self", "A job cannot require itself.");
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteNotSelf, "A job cannot require itself.");
 		}
 
 		var dependentAncestorIds = await JobNodeHierarchyQueries.GetAncestorIdsAsync(context, dependentJobId.Value, cancellationToken)
@@ -388,18 +398,18 @@ internal sealed partial class SqliteJobNodeCommandPort
 															   .ConfigureAwait(false);
 		if (dependentAncestorIds.Contains(requiredJobId.Value) || requiredAncestorIds.Contains(dependentJobId.Value)) {
 			throw new InvariantViolationException(
-				"job-prerequisite-is-hierarchy-edge",
+				ConstraintIds.JobPrerequisiteIsHierarchyEdge,
 				"A prerequisite edge cannot connect nodes that are ancestor/descendant of each other.");
 		}
 
 		if (await context.Set<JobPrerequisiteEntity>().AsNoTracking()
 						 .AnyAsync(jp => jp.FromId == requiredJobId && jp.ToId == dependentJobId, cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException("job-prerequisite-already-exists", "This prerequisite edge already exists.");
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteAlreadyExists, "This prerequisite edge already exists.");
 		}
 
 		if (await JobNodeHierarchyQueries.PrerequisiteWouldCreateCycleAsync(
 				context, requiredJobId.Value, dependentJobId.Value, cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException("job-prerequisite-would-cycle", "This prerequisite edge would create a cycle.");
+			throw new InvariantViolationException(ConstraintIds.JobPrerequisiteWouldCycle, "This prerequisite edge would create a cycle.");
 		}
 	}
 }

@@ -115,6 +115,53 @@ public sealed class SqliteWorkSessionCommandPortTests()
 		(await ReadLeafStateAsync(unassigned.Id)).ActiveSessionCount.Should().Be(1);
 	}
 
+	/// <summary>
+	///     §2.1 of the 2026-09-18 fresh-eyes remediation, the SQLite twin. Two eligible actors (the
+	///     leaf's owner and a Job Manager, starting for two different workers) both press Start on the
+	///     same fresh <c>Waiting</c> leaf. SQLite's single-writer <c>BEGIN IMMEDIATE</c> serializes the
+	///     two: the second reads the leaf already advanced to <c>InProgress</c>, skips the redundant
+	///     achievement transition, and starts its own session -- multiple workers on one owned leaf is
+	///     supported (the "Start for…" disclosure). Both therefore commit, reaching the same end state
+	///     PostgreSQL reaches once its optimistic-concurrency loser retries. Neither may escape a raw
+	///     <c>DbUpdateConcurrencyException</c> (the 2.1 leak), asserted by
+	///     <see cref="TryStartWorkAsync" /> not catching it.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_first_starts_by_two_eligible_actors_on_the_same_waiting_leaf_both_land_under_serialization()
+	{
+		var (_, jobManagerId, ownerId, leafId) = await SeedReadyLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "sqlite.first-start-race.other", EmployeeRole.Worker);
+
+		var results = await Task.WhenAll(
+			TryStartWorkAsync(CreateSessionPort(ConnectionString), ownerId, ownerId, leafId),
+			TryStartWorkAsync(CreateSessionPort(ConnectionString), jobManagerId, otherWorkerId, leafId));
+
+		results.Should().AllSatisfy(succeeded => succeeded.Should().BeTrue());
+		(await ReadLeafStateAsync(leafId)).Should().Be(new LeafState(Achievement.InProgress, false, 2));
+	}
+
+	/// <summary>
+	///     Starts work through <see cref="IWorkSessionCommandPort.StartWorkAsync" /> (which advances a
+	///     <c>Waiting</c> leaf to <c>InProgress</c>), returning false on any domain rejection. A raw
+	///     <c>DbUpdateConcurrencyException</c> is deliberately not caught, so the 2.1 leak fails the
+	///     test rather than being miscounted as a clean loss.
+	/// </summary>
+	private static async Task<bool> TryStartWorkAsync(
+		IWorkSessionCommandPort port, AppUserId actorId, AppUserId targetWorkerId, JobNodeId leafId)
+	{
+		try {
+			_ = await port.StartWorkAsync(new() {
+				Context = ContextFor(actorId),
+				JobNodeId = leafId,
+				WorkedByUserId = targetWorkerId,
+			});
+			return true;
+		}
+		catch (JobTrackException) {
+			return false;
+		}
+	}
+
 	/// <summary>ADR 0045 plan §6 race matrix: "reopen-and-start vs archive" -- the two are mutually exclusive outcomes.</summary>
 	[Fact]
 	public async Task Concurrent_reopen_and_start_vs_archive_leaves_a_consistent_final_state()

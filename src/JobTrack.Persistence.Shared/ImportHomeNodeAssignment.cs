@@ -43,7 +43,7 @@ internal static class ImportHomeNodeAssignment
 		if (!await context.Set<JobNodeEntity>().AsNoTracking()
 						  .AnyAsync(child => child.ParentId == homeNodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"home-node-must-not-be-leaf", $"Job node {homeNodeId} is a leaf and cannot be set as a home node.");
+				ConstraintIds.HomeNodeMustNotBeLeaf, $"Job node {homeNodeId} is a leaf and cannot be set as a home node.");
 		}
 
 		var users = new List<AppUserEntity>(userIds.Count);
@@ -54,7 +54,7 @@ internal static class ImportHomeNodeAssignment
 							  && lockoutEnd > now;
 			if (!identityUser.IsEnabled || isLockedOut) {
 				throw new InvariantViolationException(
-					"home-node-target-not-active", $"Employee {userId} is disabled or locked and cannot receive a home node.");
+					ConstraintIds.HomeNodeTargetNotActive, $"Employee {userId} is disabled or locked and cannot receive a home node.");
 			}
 
 			var user = await context.Set<AppUserEntity>()

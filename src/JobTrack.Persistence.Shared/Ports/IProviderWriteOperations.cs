@@ -57,6 +57,14 @@ internal interface IProviderWriteOperations
 	WriteConflictKind ClassifyWriteConflict(Exception? ex);
 
 	/// <summary>
+	///     Classifies a provider write failure as an invariant violation, a retryable transient, or an
+	///     unknown fault. Unlike <see cref="ClassifyWriteConflict" />, this covers failures that are not
+	///     specific business conflicts, such as a SQLite foreign-key rejection or a PostgreSQL connection
+	///     failure.
+	/// </summary>
+	PersistenceFailure ClassifyWriteFailure(Exception? ex);
+
+	/// <summary>
 	///     The in-transaction prerequisite recheck (spec §6: "the start... command shall recheck
 	///     prerequisites inside their write transaction"), evaluated against what
 	///     <paramref name="context" />'s open transaction can see.

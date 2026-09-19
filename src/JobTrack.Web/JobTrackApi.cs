@@ -65,6 +65,7 @@ internal static partial class JobTrackApi
 	private const string ConcurrencyProblemType = "/problems/concurrency-conflict";
 	private const string ValidationProblemType = "/problems/validation";
 	private const string BlockedProblemType = "/problems/prerequisite-blocked";
+	private const string TransientProblemType = "/problems/transient-failure";
 	private const string MissingRateProblemType = "/problems/missing-rate";
 	private const string StoredTimeZoneRotProblemType = "/problems/stored-time-zone-not-recognized";
 
@@ -163,7 +164,8 @@ internal static partial class JobTrackApi
 			.ProducesProblem(StatusCodes.Status403Forbidden)
 			.ProducesProblem(StatusCodes.Status404NotFound)
 			.ProducesProblem(StatusCodes.Status409Conflict)
-			.ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+			.ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+			.ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
 	private static bool IsApiRequest(HttpRequest request) =>
 		request.Path.StartsWithSegments(ApiPathPrefix, StringComparison.OrdinalIgnoreCase);
@@ -237,6 +239,19 @@ internal static partial class JobTrackApi
 				"This action is blocked until its prerequisites are satisfied.",
 				BlockedProblemType);
 		}
+		catch (TransientPersistenceException ex) {
+			// A deadlock, serialization failure or busy database rolled the write back (2.2). It is
+			// retryable and not the caller's mistake, so it is a 503 with Retry-After, logged at Error
+			// with the provider detail underneath -- never a 409 invariant that would blame the caller.
+			LogTransientPersistence(
+				httpContext.RequestServices.GetRequiredService<ILogger<ApiTelemetryFilter>>(), correlationId, ex);
+			httpContext.Response.Headers.RetryAfter = "1";
+			return Problem(
+				StatusCodes.Status503ServiceUnavailable,
+				"Database busy",
+				"The database could not complete this write. Retry the request.",
+				TransientProblemType);
+		}
 		catch (MissingRateException ex) {
 			// The response deliberately names no node or session -- but a missing rate is a rate-table
 			// configuration gap, not caller error, and the underlying message (which node, which
@@ -295,6 +310,11 @@ internal static partial class JobTrackApi
 		Level = LogLevel.Warning,
 		Message = "api_concurrency_conflict correlation_id={CorrelationId}")]
 	private static partial void LogConcurrencyConflict(ILogger logger, Guid correlationId, Exception exception);
+
+	[LoggerMessage(
+		Level = LogLevel.Error,
+		Message = "api_transient_persistence_failure correlation_id={CorrelationId}")]
+	private static partial void LogTransientPersistence(ILogger logger, Guid correlationId, Exception exception);
 
 	[LoggerMessage(
 		Level = LogLevel.Warning,

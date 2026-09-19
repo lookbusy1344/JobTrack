@@ -616,7 +616,8 @@ public abstract class EmployeeCommandPortContractTestsBase : IAsyncLifetime
 			TargetUserId = workerId,
 		});
 
-		await act.Should().ThrowAsync<DbUpdateException>();
+		var exception = await act.Should().ThrowAsync<PersistenceException>();
+		exception.Which.InnerException.Should().BeOfType<DbUpdateException>();
 		(await CountPasskeysAsync(workerId)).Should().Be(1);
 		(await GetSecurityStampAsync(workerId)).Should().Be(stampBefore);
 	}

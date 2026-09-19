@@ -4,6 +4,62 @@ All notable changes to JobTrack are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 `MAJOR.MINOR.PATCH` release numbers.
 
+## [1.3.1] — 2026-09-19
+
+Fresh-eyes security review of the auth/authorization surface with v1.3.0's
+passkey feature in focus, plus a follow-on remediation of the persistence
+failure-classification gaps it surfaced. No high- or medium-severity issue
+remained open at release.
+
+### Security
+
+- Anonymous passkey option and assertion requests now use distinct rate-limit
+  key namespaces, both scoped to the remote address, closing a cross-origin
+  limit-sharing gap.
+- The in-process rate limiter's partition admission is atomic and evicts
+  bounded, so a denied request can no longer churn unrelated partitions and an
+  unseen caller is still admitted under capacity pressure.
+- Password login now performs exactly one verification per attempt — a
+  configured dummy hash is checked for unknown, disabled, or already-locked
+  accounts — closing a timing side-channel that distinguished those cases from
+  a live account with a wrong password. A lockout-tripping attempt is exempt,
+  since it has already verified a real password.
+- Password-change failures apply the shared account lockout ceiling and persist
+  lockout state and audit atomically with the failure, across both providers.
+- `/Account/ConfirmAccess`'s `returnUrl` is validated with the same
+  `IsLocalUrl` guard the redirects already apply before being reflected into
+  the form action and passkey URLs, closing a reflected-XSS and open-redirect
+  exposure.
+
+### Fixed
+
+- A concurrency conflict when two eligible actors start the same fresh
+  Waiting leaf at once no longer leaks a raw `DbUpdateConcurrencyException`
+  out of the library; the loser gets a `ConcurrencyConflictException` and the
+  Work page retries via PRG instead of a 500.
+- `CorrectSessionAsync` rejects a correction that sets `StartedAt` in the
+  future, matching the check `StartSessionAsync` already applies — previously
+  it could lock a leaf out of every ending command.
+- Provider write failures are classified as integrity, transient, or unknown
+  instead of every catch-all treating a database failure as an invariant
+  violation or a taken username. A deadlock, serialization failure, or busy
+  database now surfaces as a 503 with `Retry-After: 1` (API) or a "database is
+  busy, try again" page, instead of a false 409; a dropped connection, timeout,
+  or resource exhaustion propagates unwrapped instead of being misreported.
+  SQLite failures are classified by concrete result code rather than
+  `DbException.IsTransient`, which SQLite does not implement.
+
+### Changed
+
+- Every `lock` statement uses .NET 10's `System.Threading.Lock` type, with an
+  architecture guard covering C# and Razor to keep future lock targets on it.
+- Every `InvariantViolationException` constraint id is a named constant
+  (`ConstraintIds`) instead of an independently typed string literal at each
+  throw and comparison site, fixing one drifted duplicate id along the way.
+- The readiness index is built once per page instead of once per row,
+  improving subtree and Awaiting Progress query performance.
+- Updated NuGet dependencies (`Microsoft.NET.Test.Sdk`).
+
 ## [1.3.0] — 2026-09-15
 
 ### Added

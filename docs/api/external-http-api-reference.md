@@ -33,7 +33,7 @@ application/problem+json`) with a stable `type` URI you can branch on (`/problem
 `/problems/invariant-violation`, `/problems/prerequisite-blocked`,
 `/problems/authentication-required`, `/problems/request-too-large`, `/problems/rate-limited`,
 `/problems/missing-rate`, `/problems/stored-time-zone-not-recognized`,
-`/problems/rate-limit-store-unavailable`).
+`/problems/rate-limit-store-unavailable`, `/problems/transient-failure`).
 
 ## Operational limits
 
@@ -44,6 +44,9 @@ application/problem+json`) with a stable `type` URI you can branch on (`/problem
   body, rather than admitting unlimited traffic.
 - **Request body size** — capped (see `Program.cs`'s `MaxRequestBodyBytes`); an oversized body
   returns `413 Payload Too Large` with a `/problems/request-too-large` body.
+- **Transient database write failure** — a deadlock, serialization rollback, or SQLite busy/locked
+  database returns `503 Service Unavailable`, `Retry-After: 1`, and
+  `/problems/transient-failure`. The request was rolled back and may be retried unchanged.
 - **Timeouts** — every request runs under a default server-side timeout; cancellation propagates
   into every underlying `IJobTrackClient` call.
 - **Nested route identity** — a nested route's parent identifier is enforced, not decorative: a

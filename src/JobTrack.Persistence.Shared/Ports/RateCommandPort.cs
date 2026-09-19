@@ -59,9 +59,12 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"user-cost-rate-overlap", "This cost rate's effective range overlaps another for this employee.", ex);
+				ConstraintIds.UserCostRateOverlap, "This cost rate's effective range overlaps another for this employee.", ex);
 		}
 
 		return new() {
@@ -113,9 +116,12 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"node-rate-override-overlap", "This override's effective range overlaps another for this node and employee.", ex);
+				ConstraintIds.NodeRateOverrideOverlap, "This override's effective range overlaps another for this node and employee.", ex);
 		}
 
 		return new() {
@@ -169,9 +175,12 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for user cost rate {request.RateId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"user-cost-rate-overlap", "This cost rate's effective range overlaps another for this employee.", ex);
+				ConstraintIds.UserCostRateOverlap, "This cost rate's effective range overlaps another for this employee.", ex);
 		}
 
 		return new() {
@@ -229,9 +238,12 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for node rate override {request.OverrideId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"node-rate-override-overlap", "This override's effective range overlaps another for this node and employee.", ex);
+				ConstraintIds.NodeRateOverrideOverlap, "This override's effective range overlaps another for this node and employee.", ex);
 		}
 
 		return new() {
@@ -276,7 +288,7 @@ internal sealed class RateCommandPort(IProviderWriteOperations provider, IClock 
 
 		if (target.ParentId is null) {
 			throw new InvariantViolationException(
-				"node-rate-override-on-root", "A rate override cannot target the root node.");
+				ConstraintIds.NodeRateOverrideOnRoot, "A rate override cannot target the root node.");
 		}
 	}
 

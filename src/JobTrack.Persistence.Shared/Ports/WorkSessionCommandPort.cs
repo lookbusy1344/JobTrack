@@ -38,178 +38,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	private const string AutoClaimReason = "Automatically claimed on session start";
 
 	/// <inheritdoc />
-	public async Task<WorkSessionResult> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken = default)
-	{
-		await using var context = await provider.CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
-		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
-
-		if (!await context.Set<LeafWorkEntity>().AsNoTracking()
-						  .AnyAsync(lw => lw.JobNodeId == request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
-			throw new EntityNotFoundException($"Job node {request.LeafWorkId} has no LeafWork attached.");
-		}
-
-		var now = clock.GetCurrentInstant();
-		await AutoClaimUnassignedNodeAsync(context, request.Context, request.LeafWorkId, request.WorkedByUserId, now, cancellationToken)
-			.ConfigureAwait(false);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, provider, request.WorkedByUserId, now, cancellationToken)
-			.ConfigureAwait(false);
-
-		if (await LeafSessionClosure.IsClosedAsync(context, request.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException(
-				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).");
-		}
-
-		if (!await provider.IsLeafReadyAsync(context, request.LeafWorkId, null, cancellationToken).ConfigureAwait(false)) {
-			throw new PrerequisiteBlockedException($"Job node {request.LeafWorkId}'s prerequisites are not satisfied.");
-		}
-
-		var startedAt = request.StartedAt ?? now;
-		if (startedAt > now) {
-			throw new InvariantViolationException(
-				"work-session-start-in-future", "A session's start instant must not be in the future.");
-		}
-
-		if (await context.Set<WorkSessionEntity>().AsNoTracking().AnyAsync(
-				s => s.LeafWorkId == request.LeafWorkId && s.WorkedByUserId == request.WorkedByUserId && s.FinishedAt == null,
-				cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException(
-				"work-session-already-active", "This worker already has an active session for this leaf.");
-		}
-
-		var session = new WorkSessionEntity {
-			Id = default,
-			LeafWorkId = request.LeafWorkId,
-			WorkedByUserId = request.WorkedByUserId,
-			StartedAt = startedAt,
-			FinishedAt = null,
-			ChangedAt = now,
-			RowVersion = 1,
-		};
-		_ = context.Add(session);
-
-		try {
-			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-			AuditEventWriter.Add(
-				context, request.Context.Actor, now, "start-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
-				null, null,
-				new Dictionary<string, string?> {
-					["leaf_work_id"] = session.LeafWorkId.Value.ToString(CultureInfo.InvariantCulture),
-					["worked_by_user_id"] = session.WorkedByUserId.Value.ToString(CultureInfo.InvariantCulture),
-					["started_at"] = session.StartedAt.ToString(),
-				});
-			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-		}
-		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.UniquenessViolation) {
-			throw new InvariantViolationException(
-				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
-		}
-		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.LeafClosed) {
-			throw new InvariantViolationException(
-				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
-		}
-		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap) {
-			throw new InvariantViolationException(
-				"work-session-overlap", "This session would overlap another session for the same worker and leaf.", ex);
-		}
-
-		return ToResult(session);
-	}
+	public Task<WorkSessionResult> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken = default) =>
+		StartCoreAsync(request.Context, request.LeafWorkId, request.WorkedByUserId, request.StartedAt, false, false, cancellationToken);
 
 	/// <inheritdoc />
-	public async Task<WorkSessionResult> StartWorkAsync(StartWorkRequest request, CancellationToken cancellationToken = default)
-	{
-		await using var context = await provider.CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
-		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
-
-		var node = await context.Set<JobNodeEntity>().AsNoTracking()
-								.FirstOrDefaultAsync(n => n.Id == request.JobNodeId, cancellationToken).ConfigureAwait(false)
-				   ?? throw new EntityNotFoundException($"Job node {request.JobNodeId} does not exist.");
-		var now = clock.GetCurrentInstant();
-		await AutoClaimUnassignedNodeAsync(context, request.Context, request.JobNodeId, request.WorkedByUserId, now, cancellationToken)
-			.ConfigureAwait(false);
-		await AuthorizeOrThrowAsync(context, request.Context.Actor, request.JobNodeId, now, cancellationToken).ConfigureAwait(false);
-		await EnsureTargetWorkerEligibleAsync(context, provider, request.WorkedByUserId, now, cancellationToken)
-			.ConfigureAwait(false);
-
-		var leafWork = await context.Set<LeafWorkEntity>()
-									.FirstOrDefaultAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false);
-		leafWork ??= await LeafWorkAttachSupport.CreateAsync(
-			context, node, now, request.Context, null, null, cancellationToken).ConfigureAwait(false);
-
-		if (AchievementTransitions.IsCompletedState(leafWork.Achievement) || node.ArchivedAt is not null) {
-			throw new InvariantViolationException(
-				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).");
-		}
-
-		if (!await provider.IsLeafReadyAsync(context, request.JobNodeId, null, cancellationToken).ConfigureAwait(false)) {
-			throw new PrerequisiteBlockedException($"Job node {request.JobNodeId}'s prerequisites are not satisfied.");
-		}
-
-		var startedAt = request.StartedAt ?? now;
-		if (startedAt > now) {
-			throw new InvariantViolationException(
-				"work-session-start-in-future", "A session's start instant must not be in the future.");
-		}
-
-		if (await context.Set<WorkSessionEntity>().AsNoTracking().AnyAsync(
-				s => s.LeafWorkId == request.JobNodeId && s.WorkedByUserId == request.WorkedByUserId && s.FinishedAt == null,
-				cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException(
-				"work-session-already-active", "This worker already has an active session for this leaf.");
-		}
-
-		if (leafWork.Achievement == Achievement.Waiting) {
-			await LeafAchievementTransition.ApplyAsync(
-											   context, leafWork, Achievement.InProgress, request.Context.Actor, now, request.Context.CorrelationId,
-											   WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
-										   .ConfigureAwait(false);
-		}
-
-		var session = new WorkSessionEntity {
-			Id = default,
-			LeafWorkId = request.JobNodeId,
-			WorkedByUserId = request.WorkedByUserId,
-			StartedAt = startedAt,
-			FinishedAt = null,
-			ChangedAt = now,
-			RowVersion = 1,
-		};
-		_ = context.Add(session);
-
-		try {
-			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-			AuditEventWriter.Add(
-				context, request.Context.Actor, now, "start-work-session", "work_session", session.Id.Value, request.Context.CorrelationId,
-				null, null,
-				new Dictionary<string, string?> {
-					["leaf_work_id"] = session.LeafWorkId.Value.ToString(CultureInfo.InvariantCulture),
-					["worked_by_user_id"] = session.WorkedByUserId.Value.ToString(CultureInfo.InvariantCulture),
-					["started_at"] = session.StartedAt.ToString(),
-				});
-			_ = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-		}
-		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.UniquenessViolation) {
-			throw new InvariantViolationException(
-				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
-		}
-		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.LeafClosed) {
-			throw new InvariantViolationException(
-				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
-		}
-		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap) {
-			throw new InvariantViolationException(
-				"work-session-overlap", "This session would overlap another session for the same worker and leaf.", ex);
-		}
-
-		return ToResult(session);
-	}
+	public Task<WorkSessionResult> StartWorkAsync(StartWorkRequest request, CancellationToken cancellationToken = default) =>
+		StartCoreAsync(request.Context, request.JobNodeId, request.WorkedByUserId, request.StartedAt, true, true, cancellationToken);
 
 	/// <inheritdoc />
 	public async Task<WorkSessionResult> FinishSessionAsync(FinishSessionRequest request, CancellationToken cancellationToken = default)
@@ -227,12 +61,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		var finishedAt = request.FinishedAt ?? now;
 		if (finishedAt <= session.StartedAt) {
 			throw new InvariantViolationException(
-				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+				ConstraintIds.WorkSessionInvalidInterval, "A session's finish instant must be after its start instant.");
 		}
 
 		if (finishedAt > now) {
 			throw new InvariantViolationException(
-				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+				ConstraintIds.WorkSessionFinishInFuture, "A session's finish instant must not be in the future.");
 		}
 
 		session.FinishedAt = finishedAt;
@@ -278,12 +112,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		var finishedAt = request.FinishedAt ?? now;
 		if (finishedAt <= session.StartedAt) {
 			throw new InvariantViolationException(
-				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+				ConstraintIds.WorkSessionInvalidInterval, "A session's finish instant must be after its start instant.");
 		}
 
 		if (finishedAt > now) {
 			throw new InvariantViolationException(
-				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+				ConstraintIds.WorkSessionFinishInFuture, "A session's finish instant must not be in the future.");
 		}
 
 		session.FinishedAt = finishedAt;
@@ -343,15 +177,25 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		await AuthorizeOrThrowAsync(context, request.Context.Actor, session.LeafWorkId, now, cancellationToken).ConfigureAwait(false);
 		CheckVersionOrThrow(session.RowVersion, request.Version);
 
+		if (request.StartedAt > now) {
+			// ADR 0028 amendment (2026-09-19 remediation plan 2.10): a correction that leaves
+			// StartedAt in the future locks the leaf out of every ending command --
+			// EnsureFinishInstantValid rejects a finish at or before the start, and no finish can
+			// exceed now -- until someone corrects it back. Rejecting it here closes that dead end
+			// at the source instead of leaving it for the Work page to explain.
+			throw new InvariantViolationException(
+				ConstraintIds.WorkSessionStartInFuture, "A session's start instant must not be in the future.");
+		}
+
 		if (request.FinishedAt is Instant finishedAt && finishedAt <= request.StartedAt) {
 			throw new InvariantViolationException(
-				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+				ConstraintIds.WorkSessionInvalidInterval, "A session's finish instant must be after its start instant.");
 		}
 
 		if (request.FinishedAt is null
 			&& await LeafSessionClosure.IsClosedAsync(context, session.LeafWorkId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"work-session-leaf-closed",
+				ConstraintIds.WorkSessionLeafClosed,
 				"This correction would leave the session active on a closed leaf. Use \"Reopen and start session\" on the leaf's Work page instead.");
 		}
 
@@ -381,15 +225,18 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for work session {request.SessionId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.LeafClosed) {
 			throw new InvariantViolationException(
-				"work-session-leaf-closed",
+				ConstraintIds.WorkSessionLeafClosed,
 				"This correction would leave the session active on a closed leaf. Use \"Reopen and start session\" on the leaf's Work page instead.",
 				ex);
 		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap or WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"work-session-overlap", "This correction would overlap another session for the same worker and leaf.", ex);
+				ConstraintIds.WorkSessionOverlap, "This correction would overlap another session for the same worker and leaf.", ex);
 		}
 
 		return ToResult(session);
@@ -411,7 +258,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 
 		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, request.FinalAchievement)) {
 			throw new InvariantViolationException(
-				"achievement-transition-not-permitted", $"Cannot transition from {leafWork.Achievement} to {request.FinalAchievement}.");
+				ConstraintIds.AchievementTransitionNotPermitted, $"Cannot transition from {leafWork.Achievement} to {request.FinalAchievement}.");
 		}
 
 		var activeSessions = await LoadConfirmedActiveSessionsAsync(
@@ -470,9 +317,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			throw new ConcurrencyConflictException(
 				$"Expected version for job node {request.JobNodeId} or one of its active sessions did not match its current version.", ex);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.ActiveSessions) {
 			throw new InvariantViolationException(
-				"leaf-closure-active-sessions", "This leaf cannot transition to a terminal achievement while a session is active.", ex);
+				ConstraintIds.LeafClosureActiveSessions, "This leaf cannot transition to a terminal achievement while a session is active.", ex);
 		}
 
 		return new() {
@@ -578,12 +428,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 
 		if (!AchievementTransitions.IsPermitted(leafWork.Achievement, Achievement.Waiting)) {
 			throw new InvariantViolationException(
-				"achievement-transition-not-permitted", $"Cannot reopen from {leafWork.Achievement}.");
+				ConstraintIds.AchievementTransitionNotPermitted, $"Cannot reopen from {leafWork.Achievement}.");
 		}
 
 		if (node.ArchivedAt is not null) {
 			throw new InvariantViolationException(
-				"work-session-leaf-closed", "An archived node's leaf must be restored before it can be reopened.");
+				ConstraintIds.WorkSessionLeafClosed, "An archived node's leaf must be restored before it can be reopened.");
 		}
 
 		await AutoClaimUnassignedNodeAsync(context, request.Context, request.JobNodeId, request.WorkedByUserId, now, cancellationToken)
@@ -607,14 +457,14 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		var startedAt = request.StartedAt ?? now;
 		if (startedAt > now) {
 			throw new InvariantViolationException(
-				"work-session-start-in-future", "A session's start instant must not be in the future.");
+				ConstraintIds.WorkSessionStartInFuture, "A session's start instant must not be in the future.");
 		}
 
 		if (await context.Set<WorkSessionEntity>().AsNoTracking().AnyAsync(
 				s => s.LeafWorkId == request.JobNodeId && s.WorkedByUserId == request.WorkedByUserId && s.FinishedAt == null,
 				cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"work-session-already-active", "This worker already has an active session for this leaf.");
+				ConstraintIds.WorkSessionAlreadyActive, "This worker already has an active session for this leaf.");
 		}
 
 		await LeafAchievementTransition.ApplyAsync(
@@ -647,6 +497,93 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			Version = leafWork.RowVersion,
 			Session = ToResult(session),
 		};
+	}
+
+	/// <summary>
+	///     The shared body of <see cref="StartSessionAsync" /> and <see cref="StartWorkAsync" />: one
+	///     context/connection/transaction opening a new session on <paramref name="nodeId" /> for
+	///     <paramref name="workedByUserId" /> after auto-claim, authorization, target eligibility, the
+	///     leaf-closed and readiness gates, the future-start guard and the per-worker already-active
+	///     check. <paramref name="attachIfMissing" /> makes <see cref="StartWorkAsync" /> attach a
+	///     <c>LeafWork</c> on demand where <see cref="StartSessionAsync" /> requires one already present;
+	///     <paramref name="autoAdvance" /> makes it advance a <c>Waiting</c> leaf to <c>InProgress</c>.
+	///     That advance bumps <c>leaf_work.row_version</c>, so two concurrent first starts optimistically
+	///     conflict on it: the commit runs through <see cref="PersistNewSessionAsync" />, whose
+	///     <see cref="DbUpdateConcurrencyException" /> catch surfaces a
+	///     <see cref="ConcurrencyConflictException" /> to the loser rather than leaking the raw EF
+	///     exception (a retry then starts cleanly, since the leaf is now <c>InProgress</c> and multiple
+	///     workers may hold sessions on one owned leaf).
+	/// </summary>
+	private async Task<WorkSessionResult> StartCoreAsync(
+		CommandContext commandContext, JobNodeId nodeId, AppUserId workedByUserId, Instant? requestedStartedAt,
+		bool attachIfMissing, bool autoAdvance, CancellationToken cancellationToken)
+	{
+		await using var context = await provider.CreateOpenContextAsync(cancellationToken).ConfigureAwait(false);
+		await using var transaction = await provider.BeginWriteTransactionAsync(context, cancellationToken).ConfigureAwait(false);
+
+		var leafWork = await context.Set<LeafWorkEntity>()
+									.FirstOrDefaultAsync(lw => lw.JobNodeId == nodeId, cancellationToken).ConfigureAwait(false);
+		if (leafWork is null && !attachIfMissing) {
+			throw new EntityNotFoundException($"Job node {nodeId} has no LeafWork attached.");
+		}
+
+		var node = await context.Set<JobNodeEntity>().AsNoTracking()
+								.FirstOrDefaultAsync(n => n.Id == nodeId, cancellationToken).ConfigureAwait(false)
+				   ?? throw new EntityNotFoundException($"Job node {nodeId} does not exist.");
+
+		var now = clock.GetCurrentInstant();
+		await AutoClaimUnassignedNodeAsync(context, commandContext, nodeId, workedByUserId, now, cancellationToken).ConfigureAwait(false);
+		await AuthorizeOrThrowAsync(context, commandContext.Actor, nodeId, now, cancellationToken).ConfigureAwait(false);
+		await EnsureTargetWorkerEligibleAsync(context, provider, workedByUserId, now, cancellationToken).ConfigureAwait(false);
+
+		leafWork ??= await LeafWorkAttachSupport.CreateAsync(
+			context, node, now, commandContext, null, null, cancellationToken).ConfigureAwait(false);
+
+		if (AchievementTransitions.IsCompletedState(leafWork.Achievement) || node.ArchivedAt is not null) {
+			throw new InvariantViolationException(
+				ConstraintIds.WorkSessionLeafClosed, "This leaf is closed to new sessions (terminal achievement or archived).");
+		}
+
+		if (!await provider.IsLeafReadyAsync(context, nodeId, null, cancellationToken).ConfigureAwait(false)) {
+			throw new PrerequisiteBlockedException($"Job node {nodeId}'s prerequisites are not satisfied.");
+		}
+
+		var startedAt = requestedStartedAt ?? now;
+		if (startedAt > now) {
+			throw new InvariantViolationException(
+				ConstraintIds.WorkSessionStartInFuture, "A session's start instant must not be in the future.");
+		}
+
+		if (await context.Set<WorkSessionEntity>().AsNoTracking().AnyAsync(
+				s => s.LeafWorkId == nodeId && s.WorkedByUserId == workedByUserId && s.FinishedAt == null,
+				cancellationToken).ConfigureAwait(false)) {
+			throw new InvariantViolationException(
+				ConstraintIds.WorkSessionAlreadyActive, "This worker already has an active session for this leaf.");
+		}
+
+		var expectedLeafVersion = leafWork.RowVersion;
+		if (autoAdvance && leafWork.Achievement == Achievement.Waiting) {
+			await LeafAchievementTransition.ApplyAsync(
+											   context, leafWork, Achievement.InProgress, commandContext.Actor, now, commandContext.CorrelationId,
+											   WorkAuditReasons.AutoAdvancedOnSessionStart, cancellationToken)
+										   .ConfigureAwait(false);
+		}
+
+		var session = new WorkSessionEntity {
+			Id = default,
+			LeafWorkId = nodeId,
+			WorkedByUserId = workedByUserId,
+			StartedAt = startedAt,
+			FinishedAt = null,
+			ChangedAt = now,
+			RowVersion = 1,
+		};
+		_ = context.Add(session);
+
+		await PersistNewSessionAsync(context, transaction, session, commandContext, expectedLeafVersion, nodeId, now, cancellationToken)
+			.ConfigureAwait(false);
+
+		return ToResult(session);
 	}
 
 	/// <summary>
@@ -684,17 +621,20 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 			throw new ConcurrencyConflictException(
 				$"Expected version {expectedVersion} for job node {jobNodeId} did not match its current version.", ex);
 		}
+		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.UniquenessViolation) {
 			throw new InvariantViolationException(
-				"work-session-already-active", "This worker already has an active session for this leaf.", ex);
+				ConstraintIds.WorkSessionAlreadyActive, "This worker already has an active session for this leaf.", ex);
 		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.LeafClosed) {
 			throw new InvariantViolationException(
-				"work-session-leaf-closed", "This leaf is closed to new sessions (terminal achievement or archived).", ex);
+				ConstraintIds.WorkSessionLeafClosed, "This leaf is closed to new sessions (terminal achievement or archived).", ex);
 		}
 		catch (Exception ex) when (provider.ClassifyWriteConflict(ex) is WriteConflictKind.RangeOverlap) {
 			throw new InvariantViolationException(
-				"work-session-overlap", "This session would overlap another session for the same worker and leaf.", ex);
+				ConstraintIds.WorkSessionOverlap, "This session would overlap another session for the same worker and leaf.", ex);
 		}
 	}
 
@@ -782,7 +722,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		}
 
 		if (!await UnassignedNodeClaim.TryClaimAsync(context, nodeId, workedByUserId, cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException("job-node-already-claimed", $"Job node {nodeId} has already been claimed.");
+			throw new InvariantViolationException(ConstraintIds.JobNodeAlreadyClaimed, $"Job node {nodeId} has already been claimed.");
 		}
 
 		AuditEventWriter.Add(
@@ -832,12 +772,12 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 	{
 		if (activeSessions.Exists(s => finishedAt <= s.StartedAt)) {
 			throw new InvariantViolationException(
-				"work-session-invalid-interval", "A session's finish instant must be after its start instant.");
+				ConstraintIds.WorkSessionInvalidInterval, "A session's finish instant must be after its start instant.");
 		}
 
 		if (finishedAt > now) {
 			throw new InvariantViolationException(
-				"work-session-finish-in-future", "A session's finish instant must not be in the future.");
+				ConstraintIds.WorkSessionFinishInFuture, "A session's finish instant must not be in the future.");
 		}
 	}
 
@@ -908,7 +848,7 @@ internal sealed class WorkSessionCommandPort(IProviderWriteOperations provider, 
 		DbContext context, IProviderWriteOperations provider, AppUserId targetId, Instant now, CancellationToken cancellationToken)
 	{
 		await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
-			context, provider, targetId, now, "work-session-target-not-eligible", cancellationToken).ConfigureAwait(false);
+			context, provider, targetId, now, ConstraintIds.WorkSessionTargetNotEligible, cancellationToken).ConfigureAwait(false);
 	}
 
 	private static void CheckVersionOrThrow(long currentVersion, long expectedVersion)

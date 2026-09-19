@@ -11,7 +11,6 @@ using NodaTime;
 using Npgsql;
 using Shared;
 using Shared.Entities;
-using Shared.Ports;
 
 /// <summary>
 ///     PostgreSQL implementation of <see cref="IJobNodeCommandPort" /> (impl plan §7.3 slices 3-5:
@@ -40,7 +39,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	private readonly MicrosecondTruncatingClock clock;
 	private readonly NpgsqlDataSource dataSource;
 	private readonly NpgsqlDataSource historyDeletionDataSource;
-	private readonly IProviderWriteOperations writeOperations;
+	private readonly PostgreSqlWriteOperations writeOperations;
 
 	/// <summary>Creates the port over the given pooled <see cref="NpgsqlDataSource" />.</summary>
 	public PostgreSqlJobNodeCommandPort(NpgsqlDataSource dataSource, IClock clock)
@@ -53,7 +52,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		this.dataSource = dataSource;
 		this.historyDeletionDataSource = historyDeletionDataSource;
 		this.clock = new(clock);
-		writeOperations = new PostgreSqlWriteOperations(dataSource);
+		writeOperations = new(dataSource);
 	}
 
 	/// <inheritdoc />
@@ -90,7 +89,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			context, request.Context.Actor, now, "edit-job-node", "job_node", node.Id.Value,
 			request.Context.CorrelationId, null, before, SnapshotJobNode(node));
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken).ConfigureAwait(false);
 
 		return await JobNodeStructuralProjection.ToResultAsync(context, node, cancellationToken).ConfigureAwait(false);
 	}
@@ -132,11 +131,11 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 		catch (PostgresException ex) when (ex.SqlState == CycleSqlState || ex.SqlState == PostgresErrorCodes.CheckViolation) {
 			throw new InvariantViolationException(
-				"job-node-move-would-cycle", "Moving this node under the requested parent would create a cycle.", ex);
+				ConstraintIds.JobNodeMoveWouldCycle, "Moving this node under the requested parent would create a cycle.", ex);
 		}
 		catch (PostgresException ex) when (ex.SqlState == PrerequisiteEdgeAfterMoveSqlState) {
 			throw new InvariantViolationException(
-				"job-node-move-would-invalidate-prerequisite",
+				ConstraintIds.JobNodeMoveWouldInvalidatePrerequisite,
 				"Moving this node would leave a prerequisite edge connecting an ancestor and a descendant; remove the edge first.",
 				ex);
 		}
@@ -144,8 +143,11 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			throw new ConcurrencyConflictException(
 				$"Expected version {request.Version} for job node {request.NodeId} did not match its current version.", ex);
 		}
-		catch (PostgresException ex) {
-			throw new InvariantViolationException("job-node-move-invalid", "This move violates a job-node structural invariant.", ex);
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Transient) {
+			throw new TransientPersistenceException(ex);
+		}
+		catch (PostgresException ex) when (writeOperations.ClassifyWriteFailure(ex) is PersistenceFailure.Integrity) {
+			throw new InvariantViolationException(ConstraintIds.JobNodeMoveInvalid, "This move violates a job-node structural invariant.", ex);
 		}
 
 		var moved = await context.Set<JobNodeEntity>().AsNoTracking()
@@ -174,7 +176,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		if (!await UnassignedNodeClaim.TryClaimAsync(context, request.NodeId, request.Context.Actor, cancellationToken)
 									  .ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"job-node-already-claimed", $"Job node {request.NodeId} has already been claimed.");
+				ConstraintIds.JobNodeAlreadyClaimed, $"Job node {request.NodeId} has already been claimed.");
 		}
 
 		var claimed = await context.Set<JobNodeEntity>().AsNoTracking()
@@ -205,7 +207,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		// active; the deferred trigger below is the race backstop.
 		if (await LeafSessionClosure.HasActiveSessionAsync(context, request.NodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"leaf-closure-active-sessions", "This leaf cannot be archived while a session is active on it.");
+				ConstraintIds.LeafClosureActiveSessions, "This leaf cannot be archived while a session is active on it.");
 		}
 
 		var wasArchivedAt = node.ArchivedAt;
@@ -223,11 +225,11 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			});
 
 		try {
-			await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+			await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken).ConfigureAwait(false);
 		}
 		catch (InvariantViolationException ex) when (FindActiveSessionsViolation(ex.InnerException) is not null) {
 			throw new InvariantViolationException(
-				"leaf-closure-active-sessions", "This leaf cannot be archived while a session is active on it.", ex.InnerException!);
+				ConstraintIds.LeafClosureActiveSessions, "This leaf cannot be archived while a session is active on it.", ex.InnerException!);
 		}
 
 		return await JobNodeStructuralProjection.ToResultAsync(context, node, cancellationToken).ConfigureAwait(false);
@@ -246,20 +248,20 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		CheckVersionOrThrow(node.RowVersion, request.Version);
 
 		if (node.ParentId is null) {
-			throw new InvariantViolationException("job-node-is-root-cannot-delete", "The root job node cannot be deleted.");
+			throw new InvariantViolationException(ConstraintIds.JobNodeIsRootCannotDelete, "The root job node cannot be deleted.");
 		}
 
 		if (await context.Set<JobNodeEntity>().AsNoTracking()
 						 .AnyAsync(c => c.ParentId == request.NodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"job-node-has-children-cannot-delete",
+				ConstraintIds.JobNodeHasChildrenCannotDelete,
 				"A node with children cannot be deleted; delete or move its children first.");
 		}
 
 		if (await context.Set<JobPrerequisiteEntity>().AsNoTracking()
 						 .AnyAsync(jp => jp.FromId == request.NodeId || jp.ToId == request.NodeId, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"job-node-has-prerequisites-cannot-delete",
+				ConstraintIds.JobNodeHasPrerequisitesCannotDelete,
 				"A node with a prerequisite edge cannot be deleted; remove the edge(s) first.");
 		}
 
@@ -295,7 +297,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 				if (string.IsNullOrWhiteSpace(request.Reason)) {
 					throw new InvariantViolationException(
-						"job-node-delete-worked-leaf-reason-required",
+						ConstraintIds.JobNodeDeleteWorkedLeafReasonRequired,
 						"Deleting a leaf with worked session history requires a reason.");
 				}
 
@@ -323,7 +325,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		_ = context.Remove(node);
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitForDeleteAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitForDeleteAsync(context, transaction, writeOperations, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <inheritdoc />
@@ -331,7 +333,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	{
 		if (string.IsNullOrWhiteSpace(request.Reason)) {
 			throw new InvariantViolationException(
-				"subtree-delete-reason-required", "Deleting a subtree requires a reason.");
+				ConstraintIds.SubtreeDeleteReasonRequired, "Deleting a subtree requires a reason.");
 		}
 
 		await using var context = CreateHistoryDeletionContext();
@@ -351,7 +353,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		CheckVersionOrThrow(node.RowVersion, request.Version);
 
 		if (node.ParentId is null) {
-			throw new InvariantViolationException("job-node-is-root-cannot-delete", "The root job node cannot be deleted.");
+			throw new InvariantViolationException(ConstraintIds.JobNodeIsRootCannotDelete, "The root job node cannot be deleted.");
 		}
 
 		// Recomputed here rather than trusted from whatever the confirmation screen measured earlier,
@@ -359,13 +361,14 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		var impact = await SubtreeImpactComputation.ComputeAsync(context, request.RootId, cancellationToken).ConfigureAwait(false);
 		if (impact.BlockingHoldingAreas.Count > 0) {
 			throw new InvariantViolationException(
-				"subtree-delete-holding-area-anchored",
+				ConstraintIds.SubtreeDeleteHoldingAreaAnchored,
 				"A request holding area is anchored inside this subtree; re-anchor or deactivate it first: " +
 				string.Join(", ", impact.BlockingHoldingAreas.Select(h => h.Name)));
 		}
 
 		return await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
 			transaction,
+			writeOperations,
 			async ct => {
 				_ = await DeleteSubtreeHistoryAsync(
 					context, request, now, SubtreeAuditSnapshot.Create(impact), ct).ConfigureAwait(false);
@@ -421,7 +424,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 												  .AnyAsync(s => leafWorkIds.Contains(s.LeafWorkId) && s.FinishedAt == null, cancellationToken)
 												  .ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"leaf-closure-active-sessions", "This subtree cannot be archived while a session is active within it.");
+				ConstraintIds.LeafClosureActiveSessions, "This subtree cannot be archived while a session is active within it.");
 		}
 
 		var toArchive = await context.Set<JobNodeEntity>()
@@ -446,7 +449,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 				["newly_archived_ids"] = string.Join(",", toArchive.Select(n => n.Id.Value)),
 			});
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, cancellationToken).ConfigureAwait(false);
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitAsync(context, transaction, writeOperations, cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			NodeCount = rows.Count,
@@ -468,14 +471,14 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		if (await context.Set<LeafWorkEntity>().AsNoTracking()
 						 .AnyAsync(lw => lw.JobNodeId == request.JobNodeId, cancellationToken).ConfigureAwait(false)) {
-			throw new InvariantViolationException("leaf-work-already-attached", "This node already has LeafWork attached.");
+			throw new InvariantViolationException(ConstraintIds.LeafWorkAlreadyAttached, "This node already has LeafWork attached.");
 		}
 
 		var leafWork = await LeafWorkAttachSupport.CreateAsync(
 			context, node, now, request.Context, request.PartialCriteria, request.FullCriteria,
 			cancellationToken).ConfigureAwait(false);
 
-		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitForLeafWorkAttachAsync(context, transaction, cancellationToken)
+		await JobNodeWriteExceptionTranslation.SaveChangesAndCommitForLeafWorkAttachAsync(context, transaction, writeOperations, cancellationToken)
 											  .ConfigureAwait(false);
 
 		return ToLeafWorkResult(leafWork);
@@ -494,13 +497,13 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		CheckVersionOrThrow(branch.RowVersion, request.Version);
 
 		if (branch.ParentId is null) {
-			throw new InvariantViolationException("job-node-is-root-cannot-decompose", "The root job node cannot be decomposed.");
+			throw new InvariantViolationException(ConstraintIds.JobNodeIsRootCannotDecompose, "The root job node cannot be decomposed.");
 		}
 
 		if (await context.Set<JobNodeEntity>().AsNoTracking()
 						 .AnyAsync(c => c.ParentId == branch.Id, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"job-node-has-children-cannot-decompose", "A node with children cannot be decomposed.");
+				ConstraintIds.JobNodeHasChildrenCannotDecompose, "A node with children cannot be decomposed.");
 		}
 
 		var oldLeafWork = await context.Set<LeafWorkEntity>()
@@ -508,7 +511,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		if (oldLeafWork is null) {
 			if (request.NewChildren.Count == 0) {
 				throw new InvariantViolationException(
-					"job-node-decompose-requires-a-child",
+					ConstraintIds.JobNodeDecomposeRequiresAChild,
 					"A leaf with no recorded work needs at least one new child to decompose into.");
 			}
 		} else if (string.IsNullOrWhiteSpace(request.ExistingWorkDescription)) {
@@ -526,7 +529,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		}
 
 		var (existingWorkChild, newChildren) = await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
-			transaction, ct => DecomposeAsync(context, branch, oldLeafWork, request, now, ct), cancellationToken).ConfigureAwait(false);
+			transaction, writeOperations, ct => DecomposeAsync(context, branch, oldLeafWork, request, now, ct), cancellationToken).ConfigureAwait(false);
 
 		return new() {
 			BranchId = branch.Id,
@@ -666,7 +669,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 		if (request.BeginWork is CreateJobNodeWorkSpec eligibilityCheck) {
 			await WorkflowEmployeeEligibility.EnsureMayBeAssignedWorkAsync(
 												 context, writeOperations, eligibilityCheck.WorkedByUserId, now,
-												 "work-session-target-not-eligible", cancellationToken)
+												 ConstraintIds.WorkSessionTargetNotEligible, cancellationToken)
 											 .ConfigureAwait(false);
 		}
 
@@ -693,6 +696,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 
 		return await JobNodeWriteExceptionTranslation.RunAndCommitAsync(
 			transaction,
+			writeOperations,
 			async ct => {
 				_ = await context.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -864,7 +868,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 	{
 		if (node.ParentId is null && requestedOwnerUserId is null) {
 			throw new InvariantViolationException(
-				"job-node-root-owner-required", "The permanent root's owner cannot be null.");
+				ConstraintIds.JobNodeRootOwnerRequired, "The permanent root's owner cannot be null.");
 		}
 	}
 

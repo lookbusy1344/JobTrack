@@ -112,6 +112,51 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 	}
 
 	/// <summary>
+	///     §2.1 of the 2026-09-18 fresh-eyes remediation: two eligible actors (the leaf's owner and a
+	///     Job Manager) both press Start on the same fresh <c>Waiting</c> leaf. Both read
+	///     <c>leaf_work</c> at version 1 and advance it to <c>InProgress</c>; the loser's row-level
+	///     optimistic-concurrency check on <c>leaf_work.row_version</c> must surface a
+	///     <see cref="JobTrackException" /> (a <see cref="ConcurrencyConflictException" />), never a raw
+	///     <c>DbUpdateConcurrencyException</c>. Exactly one session lands and the leaf is
+	///     <c>InProgress</c> at version 2.
+	/// </summary>
+	[Fact]
+	public async Task Concurrent_first_starts_by_two_eligible_actors_on_the_same_waiting_leaf_allow_exactly_one_to_succeed()
+	{
+		var (_, jobManagerId, ownerId, leafId) = await SeedReadyLeafAsync();
+		var otherWorkerId = await SeedEmployeeAsync("Other Worker", "pg.first-start-race.other", EmployeeRole.Worker);
+
+		var results = await Task.WhenAll(
+			TryStartWorkAsync(CreateSessionPort(ConnectionString), ownerId, ownerId, leafId),
+			TryStartWorkAsync(CreateSessionPort(ConnectionString), jobManagerId, otherWorkerId, leafId));
+
+		results.Count(succeeded => succeeded).Should().Be(1);
+		(await ReadLeafStateAsync(leafId)).Should().Be(new LeafState(Achievement.InProgress, false, 1));
+	}
+
+	/// <summary>
+	///     Starts work through <see cref="IWorkSessionCommandPort.StartWorkAsync" /> (which advances a
+	///     <c>Waiting</c> leaf to <c>InProgress</c>), returning false on any domain rejection. A raw
+	///     <c>DbUpdateConcurrencyException</c> is deliberately not caught, so the 2.1 leak fails the
+	///     test rather than being miscounted as a clean loss.
+	/// </summary>
+	private static async Task<bool> TryStartWorkAsync(
+		IWorkSessionCommandPort port, AppUserId actorId, AppUserId targetWorkerId, JobNodeId leafId)
+	{
+		try {
+			_ = await port.StartWorkAsync(new() {
+				Context = ContextFor(actorId),
+				JobNodeId = leafId,
+				WorkedByUserId = targetWorkerId,
+			});
+			return true;
+		}
+		catch (JobTrackException) {
+			return false;
+		}
+	}
+
+	/// <summary>
 	///     ADR 0048: on an unassigned leaf, the loser of the race can surface either exception depending
 	///     on interleaving -- the conditional claim losing after passing a stale "unassigned" read
 	///     (<see cref="InvariantViolationException" />, "job-node-already-claimed"), or a fresh read

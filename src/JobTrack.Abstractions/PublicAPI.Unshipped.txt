@@ -22,3 +22,87 @@ static JobTrack.Abstractions.PasskeyPolicy.Normalize(string! name) -> string!
 JobTrack.Abstractions.PasskeyTransports
 static JobTrack.Abstractions.PasskeyTransports.Serialize(System.Collections.Generic.IReadOnlyList<string!>? transports) -> string?
 static JobTrack.Abstractions.PasskeyTransports.Parse(string? stored) -> string![]!
+JobTrack.Abstractions.PersistenceException
+JobTrack.Abstractions.PersistenceException.PersistenceException() -> void
+JobTrack.Abstractions.PersistenceException.PersistenceException(System.Exception! innerException) -> void
+JobTrack.Abstractions.PersistenceException.PersistenceException(string! message, System.Exception! innerException) -> void
+JobTrack.Abstractions.TransientPersistenceException
+JobTrack.Abstractions.TransientPersistenceException.TransientPersistenceException() -> void
+JobTrack.Abstractions.TransientPersistenceException.TransientPersistenceException(System.Exception! innerException) -> void
+JobTrack.Abstractions.TransientPersistenceException.TransientPersistenceException(string! message, System.Exception! innerException) -> void
+JobTrack.Abstractions.ConstraintIds
+const JobTrack.Abstractions.ConstraintIds.AccountCurrentPasswordIncorrect = "account-current-password-incorrect" -> string!
+const JobTrack.Abstractions.ConstraintIds.AccountDisabled = "account-disabled" -> string!
+const JobTrack.Abstractions.ConstraintIds.AccountLockedOut = "account-locked-out" -> string!
+const JobTrack.Abstractions.ConstraintIds.AccountNewPasswordPolicy = "account-new-password-policy" -> string!
+const JobTrack.Abstractions.ConstraintIds.AchievementTransitionNotPermitted = "achievement-transition-not-permitted" -> string!
+const JobTrack.Abstractions.ConstraintIds.EmployeeUsernameAlreadyTaken = "employee-username-already-taken" -> string!
+const JobTrack.Abstractions.ConstraintIds.HierarchyMissingNode = "hierarchy.missing-node" -> string!
+const JobTrack.Abstractions.ConstraintIds.HierarchyNodeHasBothChildrenAndLeafWork = "hierarchy.node-has-both-children-and-leaf-work" -> string!
+const JobTrack.Abstractions.ConstraintIds.HierarchyRootHasLeafWork = "hierarchy.root-has-leaf-work" -> string!
+const JobTrack.Abstractions.ConstraintIds.HierarchySelfParent = "hierarchy.self-parent" -> string!
+const JobTrack.Abstractions.ConstraintIds.HomeNodeMustNotBeLeaf = "home-node-must-not-be-leaf" -> string!
+const JobTrack.Abstractions.ConstraintIds.HomeNodeTargetNotActive = "home-node-target-not-active" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeDuplicateLocalId = "import-subtree-duplicate-local-id" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeEmpty = "import-subtree-empty" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeInvalidWorkAchievement = "import-subtree-invalid-work-achievement" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeInvalidWorkInterval = "import-subtree-invalid-work-interval" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeParentCycle = "import-subtree-parent-cycle" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeUnfinishedCompletedWork = "import-subtree-unfinished-completed-work" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeUnknownParentLocalId = "import-subtree-unknown-parent-local-id" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeUnknownPrerequisiteLocalId = "import-subtree-unknown-prerequisite-local-id" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeWorkBlockedByPrerequisite = "import-subtree-work-blocked-by-prerequisite" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeWorkOnBranch = "import-subtree-work-on-branch" -> string!
+const JobTrack.Abstractions.ConstraintIds.ImportSubtreeWorkPrecedesPrerequisite = "import-subtree-work-precedes-prerequisite" -> string!
+const JobTrack.Abstractions.ConstraintIds.InstallationAlreadyInitialised = "installation-already-initialised" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeAlreadyClaimed = "job-node-already-claimed" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeDecomposeRequiresAChild = "job-node-decompose-requires-a-child" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeDeleteWorkedLeafReasonRequired = "job-node-delete-worked-leaf-reason-required" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeHasChildrenCannotAttachLeafWork = "job-node-has-children-cannot-attach-leaf-work" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeHasChildrenCannotDecompose = "job-node-has-children-cannot-decompose" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeHasChildrenCannotDelete = "job-node-has-children-cannot-delete" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeHasPrerequisitesCannotDelete = "job-node-has-prerequisites-cannot-delete" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeHoldingAreaAnchored = "job-node-holding-area-anchored" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeIsRootCannotAttachLeafWork = "job-node-is-root-cannot-attach-leaf-work" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeIsRootCannotDecompose = "job-node-is-root-cannot-decompose" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeIsRootCannotDelete = "job-node-is-root-cannot-delete" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeMoveInvalid = "job-node-move-invalid" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeMoveWouldCycle = "job-node-move-would-cycle" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeMoveWouldInvalidatePrerequisite = "job-node-move-would-invalidate-prerequisite" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeNotDeletable = "job-node-not-deletable" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeRootOwnerRequired = "job-node-root-owner-required" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobNodeWriteRejected = "job-node-write-rejected" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobPrerequisiteAlreadyExists = "job-prerequisite-already-exists" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobPrerequisiteInvalid = "job-prerequisite-invalid" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobPrerequisiteIsHierarchyEdge = "job-prerequisite-is-hierarchy-edge" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobPrerequisiteNotSelf = "job-prerequisite-not-self" -> string!
+const JobTrack.Abstractions.ConstraintIds.JobPrerequisiteWouldCycle = "job-prerequisite-would-cycle" -> string!
+const JobTrack.Abstractions.ConstraintIds.LeafClosureActiveSessions = "leaf-closure-active-sessions" -> string!
+const JobTrack.Abstractions.ConstraintIds.LeafWorkAlreadyAttached = "leaf-work-already-attached" -> string!
+const JobTrack.Abstractions.ConstraintIds.NodeRateOverrideOnRoot = "node-rate-override-on-root" -> string!
+const JobTrack.Abstractions.ConstraintIds.NodeRateOverrideOverlap = "node-rate-override-overlap" -> string!
+const JobTrack.Abstractions.ConstraintIds.PasskeyCredentialMaterialPolicy = "passkey-credential-material-policy" -> string!
+const JobTrack.Abstractions.ConstraintIds.PasskeyMaxCount = "passkey-max-count" -> string!
+const JobTrack.Abstractions.ConstraintIds.PasskeyNameDuplicate = "passkey-name-duplicate" -> string!
+const JobTrack.Abstractions.ConstraintIds.PasskeyNamePolicy = "passkey-name-policy" -> string!
+const JobTrack.Abstractions.ConstraintIds.PasskeyNotUserVerified = "passkey-not-user-verified" -> string!
+const JobTrack.Abstractions.ConstraintIds.PersonalAccessTokenExpiryNotInFuture = "personal-access-token-expiry-not-in-future" -> string!
+const JobTrack.Abstractions.ConstraintIds.PersonalAccessTokenExpiryTooLong = "personal-access-token-expiry-too-long" -> string!
+const JobTrack.Abstractions.ConstraintIds.RequestAlreadyAcknowledged = "request-already-acknowledged" -> string!
+const JobTrack.Abstractions.ConstraintIds.RequesterJobRequired = "requester-job-required" -> string!
+const JobTrack.Abstractions.ConstraintIds.RequesterRoleAssignedWork = "requester-role-assigned-work" -> string!
+const JobTrack.Abstractions.ConstraintIds.ScheduleExceptionAlreadyExists = "schedule-exception-already-exists" -> string!
+const JobTrack.Abstractions.ConstraintIds.ScheduleExceptionPricedAdditiveOverlap = "schedule-exception-priced-additive-overlap" -> string!
+const JobTrack.Abstractions.ConstraintIds.ScheduleVersionOverlap = "schedule-version-overlap" -> string!
+const JobTrack.Abstractions.ConstraintIds.SubtreeDeleteHoldingAreaAnchored = "subtree-delete-holding-area-anchored" -> string!
+const JobTrack.Abstractions.ConstraintIds.SubtreeDeleteReasonRequired = "subtree-delete-reason-required" -> string!
+const JobTrack.Abstractions.ConstraintIds.TwoFactorKeyMissing = "two-factor-key-missing" -> string!
+const JobTrack.Abstractions.ConstraintIds.UserCostRateOverlap = "user-cost-rate-overlap" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionAlreadyActive = "work-session-already-active" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionFinishInFuture = "work-session-finish-in-future" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionInvalidInterval = "work-session-invalid-interval" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionLeafClosed = "work-session-leaf-closed" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionOverlap = "work-session-overlap" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionSameUserLeafOverlap = "work-session.same-user-leaf-overlap" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionStartInFuture = "work-session-start-in-future" -> string!
+const JobTrack.Abstractions.ConstraintIds.WorkSessionTargetNotEligible = "work-session-target-not-eligible" -> string!

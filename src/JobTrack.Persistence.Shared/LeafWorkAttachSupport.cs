@@ -27,13 +27,13 @@ internal static class LeafWorkAttachSupport
 	{
 		if (node.ParentId is null) {
 			throw new InvariantViolationException(
-				"job-node-is-root-cannot-attach-leaf-work", "The root job node cannot hold LeafWork.");
+				ConstraintIds.JobNodeIsRootCannotAttachLeafWork, "The root job node cannot hold LeafWork.");
 		}
 
 		if (await context.Set<JobNodeEntity>().AsNoTracking()
 						 .AnyAsync(c => c.ParentId == node.Id, cancellationToken).ConfigureAwait(false)) {
 			throw new InvariantViolationException(
-				"job-node-has-children-cannot-attach-leaf-work", "A node with children cannot hold LeafWork.");
+				ConstraintIds.JobNodeHasChildrenCannotAttachLeafWork, "A node with children cannot hold LeafWork.");
 		}
 
 		var leafWork = new LeafWorkEntity {

@@ -58,6 +58,14 @@ public interface IWorkCommands
 	///     names a worker who is disabled, locked, or holds no eligible workflow role (<c>ConstraintId</c>
 	///     <c>"work-session-target-not-eligible"</c>, ADR 0044 Stage 6).
 	/// </exception>
+	/// <exception cref="ConcurrencyConflictException">
+	///     Two eligible actors started the same freshly-<see cref="Achievement.Waiting" /> leaf at once:
+	///     both advanced it to <see cref="Achievement.InProgress" /> from the same version and the loser's
+	///     optimistic-concurrency check on <c>leaf_work</c> failed (2.1 of the 2026-09-18 fresh-eyes
+	///     remediation). The loser retries cleanly -- the leaf is now <see cref="Achievement.InProgress" />
+	///     and multiple workers may hold sessions on one owned leaf -- so this is a retryable conflict,
+	///     not a domain block, and never a raw provider exception.
+	/// </exception>
 	/// <exception cref="PrerequisiteBlockedException">The leaf's prerequisites are not satisfied (spec §6).</exception>
 	Task<WorkSessionResult> StartWorkAsync(StartWorkRequest request, CancellationToken cancellationToken = default);
 

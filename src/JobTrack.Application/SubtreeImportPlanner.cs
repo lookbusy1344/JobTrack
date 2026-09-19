@@ -25,28 +25,28 @@ internal static class SubtreeImportPlanner
 	public static EquatableArray<ImportSubtreeNodeSpec> BuildCreationOrder(EquatableArray<ImportSubtreeNodeSpec> nodes)
 	{
 		if (nodes.Count == 0) {
-			throw new InvariantViolationException("import-subtree-empty", "The import batch contains no nodes.");
+			throw new InvariantViolationException(ConstraintIds.ImportSubtreeEmpty, "The import batch contains no nodes.");
 		}
 
 		var byLocalId = new Dictionary<long, ImportSubtreeNodeSpec>(nodes.Count);
 		foreach (var node in nodes) {
 			if (!byLocalId.TryAdd(node.LocalId, node)) {
 				throw new InvariantViolationException(
-					"import-subtree-duplicate-local-id", $"Duplicate node local id {node.LocalId} in the import batch.");
+					ConstraintIds.ImportSubtreeDuplicateLocalId, $"Duplicate node local id {node.LocalId} in the import batch.");
 			}
 		}
 
 		foreach (var node in nodes) {
 			if (node.ParentLocalId is long parentLocalId && !byLocalId.ContainsKey(parentLocalId)) {
 				throw new InvariantViolationException(
-					"import-subtree-unknown-parent-local-id",
+					ConstraintIds.ImportSubtreeUnknownParentLocalId,
 					$"Node {node.LocalId} references unknown parent local id {parentLocalId}.");
 			}
 
 			foreach (var prerequisiteLocalId in node.PrerequisiteLocalIds) {
 				if (!byLocalId.ContainsKey(prerequisiteLocalId)) {
 					throw new InvariantViolationException(
-						"import-subtree-unknown-prerequisite-local-id",
+						ConstraintIds.ImportSubtreeUnknownPrerequisiteLocalId,
 						$"Node {node.LocalId} references unknown prerequisite local id {prerequisiteLocalId}.");
 				}
 			}
@@ -78,7 +78,7 @@ internal static class SubtreeImportPlanner
 
 		if (ordered.Count != nodes.Count) {
 			throw new InvariantViolationException(
-				"import-subtree-parent-cycle", "The import batch's parent references form a cycle.");
+				ConstraintIds.ImportSubtreeParentCycle, "The import batch's parent references form a cycle.");
 		}
 
 		ValidateLeafWork(ordered, childrenByParent);
@@ -125,7 +125,7 @@ internal static class SubtreeImportPlanner
 			foreach (var requiredLocalId in EffectivePrerequisiteLocalIds(node, byLocalId)) {
 				if (!achieved[requiredLocalId]) {
 					throw new InvariantViolationException(
-						"import-subtree-work-blocked-by-prerequisite",
+						ConstraintIds.ImportSubtreeWorkBlockedByPrerequisite,
 						$"Node {node.LocalId} records work, but its prerequisite {requiredLocalId} does not succeed in this batch.");
 				}
 
@@ -134,7 +134,7 @@ internal static class SubtreeImportPlanner
 				var earliestStart = Sessions(node.LeafWork!).Min(session => session.StartedAt);
 				if (earliestStart < requiredFinish) {
 					throw new InvariantViolationException(
-						"import-subtree-work-precedes-prerequisite",
+						ConstraintIds.ImportSubtreeWorkPrecedesPrerequisite,
 						$"Node {node.LocalId}'s work starts at {earliestStart}, before its prerequisite "
 						+ $"{requiredLocalId} finished at {requiredFinish}.");
 				}
@@ -153,28 +153,28 @@ internal static class SubtreeImportPlanner
 	{
 		if (childrenByParent.ContainsKey(node.LocalId)) {
 			throw new InvariantViolationException(
-				"import-subtree-work-on-branch",
+				ConstraintIds.ImportSubtreeWorkOnBranch,
 				$"Node {node.LocalId} has children in this batch, so it cannot hold LeafWork.");
 		}
 
 		if (work.Achievement is not (Achievement.InProgress or Achievement.Success or Achievement.Cancelled
 			or Achievement.Unsuccessful)) {
 			throw new InvariantViolationException(
-				"import-subtree-invalid-work-achievement",
+				ConstraintIds.ImportSubtreeInvalidWorkAchievement,
 				$"Node {node.LocalId} records work, so its achievement cannot be {work.Achievement}.");
 		}
 
 		foreach (var session in Sessions(work)) {
 			if (session.FinishedAt is Instant finishedAt && finishedAt <= session.StartedAt) {
 				throw new InvariantViolationException(
-					"import-subtree-invalid-work-interval",
+					ConstraintIds.ImportSubtreeInvalidWorkInterval,
 					$"Node {node.LocalId}'s work finishes at {finishedAt}, which is not after its start at {session.StartedAt}.");
 			}
 		}
 
 		if (AchievementTransitions.IsCompletedState(work.Achievement) && Sessions(work).Any(session => session.FinishedAt is null)) {
 			throw new InvariantViolationException(
-				"import-subtree-unfinished-completed-work",
+				ConstraintIds.ImportSubtreeUnfinishedCompletedWork,
 				$"Node {node.LocalId} reaches {work.Achievement} but its session never finishes.");
 		}
 	}

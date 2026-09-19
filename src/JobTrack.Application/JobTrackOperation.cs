@@ -1,5 +1,6 @@
 namespace JobTrack.Application;
 
+using System.Data.Common;
 using System.Diagnostics;
 using Abstractions;
 
@@ -42,6 +43,18 @@ internal static class JobTrackOperation
 				_ = activity?.SetStatus(ActivityStatusCode.Ok);
 				return result;
 			}
+			catch (OperationCanceledException exception) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw;
+			}
+			catch (JobTrackException exception) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw;
+			}
+			catch (Exception exception) when (ContainsProviderException(exception)) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw new PersistenceException(exception);
+			}
 			catch (Exception exception) {
 				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
 				throw;
@@ -56,11 +69,34 @@ internal static class JobTrackOperation
 				await action().ConfigureAwait(false);
 				_ = activity?.SetStatus(ActivityStatusCode.Ok);
 			}
+			catch (OperationCanceledException exception) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw;
+			}
+			catch (JobTrackException exception) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw;
+			}
+			catch (Exception exception) when (ContainsProviderException(exception)) {
+				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+				throw new PersistenceException(exception);
+			}
 			catch (Exception exception) {
 				_ = activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
 				throw;
 			}
 		}
+	}
+
+	private static bool ContainsProviderException(Exception exception)
+	{
+		for (var current = exception; current is not null; current = current.InnerException) {
+			if (current is DbException) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static Activity? Start(string operation, CommandContext? context, Func<Activity, Activity>? enrich) => context is null
