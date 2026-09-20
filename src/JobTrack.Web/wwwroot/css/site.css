@@ -1457,6 +1457,7 @@ fieldset legend {
 /* An in-row state flag beside the name (currently: archived). Smaller than the kind glyph, muted,
    and always paired with visually-hidden text, since it carries a fact rather than decoration. */
 .jt-tree-flag {
+    flex: 0 0 auto;
     width: 0.9375rem;
     height: 0.9375rem;
     margin-left: var(--jt-space-1);
