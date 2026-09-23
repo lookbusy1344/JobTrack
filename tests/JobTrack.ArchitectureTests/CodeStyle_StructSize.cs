@@ -31,7 +31,7 @@ using TestSupport;
 ///         domain's core interval primitive, or a zero-allocation <c>foreach</c> enumerator — carries
 ///         <see cref="LargeStructAttribute" /> (<c>JobTrack.Abstractions.CodeStyle</c>) with its own reviewed
 ///         justification, the same "earns its place only by review" rule
-///         <c>MutableConstantTableArchitectureTests</c> applies to its own allowlist, just attached to
+///         <c>CodeStyle_MutableConstantTable</c> applies to its own allowlist, just attached to
 ///         the type instead of listed in this file.
 ///     </para>
 ///     Razor-compiled types are classes, not structs, so <c>.cshtml</c> needs no separate coverage.

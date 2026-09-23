@@ -802,7 +802,9 @@ public sealed class WorkModel(
 			Achievement.Success => "completed",
 			Achievement.Cancelled => "cancelled",
 			Achievement.Unsuccessful => "marked unsuccessful",
-			_ => throw new ArgumentOutOfRangeException(nameof(achievement), achievement, "Not a valid completion outcome."),
+			Achievement.None or Achievement.Waiting or Achievement.InProgress =>
+				throw new ArgumentOutOfRangeException(nameof(achievement), achievement, "Not a valid completion outcome."),
+			_ => throw new ArgumentOutOfRangeException(nameof(achievement), achievement, null),
 		};
 
 		return finishedSessionCount switch {

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NodaTime;
 using Program = Program;
 
 internal sealed class TestWebApplicationFactory(
@@ -15,7 +16,8 @@ internal sealed class TestWebApplicationFactory(
 	bool enablePasskeys = false,
 	ILoginAttemptRateLimiter? loginAttemptRateLimiter = null,
 	IPasswordHasher<JobTrackIdentityUser>? passwordHasher = null,
-	IJobTrackClient? jobTrackClient = null) : WebApplicationFactory<Program>
+	IJobTrackClient? jobTrackClient = null,
+	IClock? clock = null) : WebApplicationFactory<Program>
 {
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
@@ -49,6 +51,13 @@ internal sealed class TestWebApplicationFactory(
 			_ = builder.ConfigureTestServices(services => {
 				services.RemoveAll<IJobTrackClient>();
 				_ = services.AddSingleton(jobTrackClient);
+			});
+		}
+
+		if (clock is not null) {
+			_ = builder.ConfigureTestServices(services => {
+				services.RemoveAll<IClock>();
+				_ = services.AddSingleton(clock);
 			});
 		}
 	}

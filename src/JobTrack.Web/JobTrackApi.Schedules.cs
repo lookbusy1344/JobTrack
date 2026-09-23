@@ -211,7 +211,8 @@ internal static partial class JobTrackApi
 		IsoDayOfWeek.Friday => DayOfWeek.Friday,
 		IsoDayOfWeek.Saturday => DayOfWeek.Saturday,
 		IsoDayOfWeek.Sunday => DayOfWeek.Sunday,
-		_ => throw new ArgumentOutOfRangeException(nameof(day), day, "A weekly interval must specify a real day."),
+		IsoDayOfWeek.None => throw new ArgumentOutOfRangeException(nameof(day), day, "A weekly interval must specify a real day."),
+		_ => throw new ArgumentOutOfRangeException(nameof(day), day, null),
 	};
 
 	private static void MapScheduleEndpoints(this RouteGroupBuilder api)

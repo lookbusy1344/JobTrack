@@ -23,7 +23,8 @@ using NodaTime.TimeZones;
 public sealed class IndexModel(
 	IJobTrackClient jobTrackClient,
 	UserManager<JobTrackIdentityUser> userManager,
-	IViewerTimeZoneResolver viewerTimeZoneResolver)
+	IViewerTimeZoneResolver viewerTimeZoneResolver,
+	IClock clock)
 	: PageModel
 {
 	private const int MaxWeeklyIntervalSlots = 10;
@@ -71,6 +72,7 @@ public sealed class IndexModel(
 		}
 
 		await LoadAsync(actor.Value, UserId.HasValue ? new(UserId.Value) : actor.Value, cancellationToken);
+		VersionInput.EffectiveStart = ToDateOnly(clock.GetCurrentInstant().InZone(ViewerZone).Date);
 		return Page();
 	}
 
@@ -263,10 +265,10 @@ public sealed class IndexModel(
 
 	private static LocalDate ToLocalDate(DateOnly date) => new(date.Year, date.Month, date.Day);
 
+	private static DateOnly ToDateOnly(LocalDate date) => new(date.Year, date.Month, date.Day);
+
 	public sealed class AddVersionInput
 	{
-		public AddVersionInput() => EffectiveStart = DateOnly.FromDateTime(DateTime.Today);
-
 		[Required]
 		[Display(Name = "Effective start")]
 		public DateOnly EffectiveStart { get; set; }

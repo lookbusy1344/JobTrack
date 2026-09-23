@@ -167,7 +167,8 @@ public sealed class ProviderIntegrationTests
 	{
 		DbConnection connection = provider switch {
 			SchemaProvider.Sqlite => new SqliteConnection(connectionString),
-			_ => throw new ArgumentOutOfRangeException(nameof(provider)),
+			SchemaProvider.PostgreSql => throw new ArgumentOutOfRangeException(nameof(provider), provider, "This test helper is Sqlite-only."),
+			_ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
 		};
 		await using var ownedConnection = connection;
 		await connection.OpenAsync();
@@ -182,7 +183,8 @@ public sealed class ProviderIntegrationTests
 	{
 		DbConnection connection = provider switch {
 			SchemaProvider.Sqlite => new SqliteConnection(connectionString),
-			_ => throw new ArgumentOutOfRangeException(nameof(provider)),
+			SchemaProvider.PostgreSql => throw new ArgumentOutOfRangeException(nameof(provider), provider, "This test helper is Sqlite-only."),
+			_ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
 		};
 		await using var ownedConnection = connection;
 		await connection.OpenAsync();

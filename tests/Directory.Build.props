@@ -1,0 +1,14 @@
+<Project>
+
+    <!-- MSBuild stops at the first Directory.Build.props found walking up, so the solution-wide one
+         must be imported explicitly rather than inherited. -->
+    <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props"/>
+
+    <!-- The BannedSymbols.txt clock ban targets the domain-boundary invariant ("No timestamp
+         without an explicit zone"); it doesn't apply to test infrastructure, which legitimately
+         uses the wall clock for polling deadlines and fixture timestamps. -->
+    <ItemGroup>
+        <AdditionalFiles Remove="$(MSBuildThisFileDirectory)../BannedSymbols.txt"/>
+    </ItemGroup>
+
+</Project>

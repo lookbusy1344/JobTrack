@@ -111,17 +111,25 @@ public sealed partial class ScheduleTests : IAsyncLifetime, IDisposable
 	}
 
 	[Fact]
-	public async Task The_schedule_page_defaults_the_effective_start_to_today_and_uses_human_friendly_field_labels()
+	public async Task The_schedule_page_defaults_the_effective_start_to_today_in_the_viewers_time_zone()
 	{
-		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(database.ConnectionString, KnownPassword, "schedule.labels");
-		var authCookie = await client.SignInAsync("schedule.labels");
+		const string viewerTimeZone = "America/Los_Angeles";
+		var clock = new AdjustableClock(Instant.FromUtc(2026, 1, 1, 0, 30));
+		var workerId = await IdentityTestSupport.SeedSqliteEmployeeAsync(
+			database.ConnectionString, KnownPassword, "schedule.labels", ianaTimeZone: viewerTimeZone);
+		using var fixedClockFactory = new TestWebApplicationFactory(database.ConnectionString, clock: clock);
+		using var fixedClockClient = fixedClockFactory.CreateClient(new() {
+			AllowAutoRedirect = false,
+			HandleCookies = false,
+		});
+		var authCookie = await fixedClockClient.SignInAsync("schedule.labels");
 
-		var response = await client.GetAuthenticatedAsync($"/Rota/Index?userId={workerId.Value}", authCookie);
+		var response = await fixedClockClient.GetAuthenticatedAsync($"/Rota/Index?userId={workerId.Value}", authCookie);
 		var body = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.Should().Be(HttpStatusCode.OK);
 		body.Should().Contain(
-			$"id=\"VersionInput_EffectiveStart\" name=\"VersionInput.EffectiveStart\" value=\"{DateOnly.FromDateTime(DateTime.Today):yyyy-MM-dd}\"");
+			"id=\"VersionInput_EffectiveStart\" name=\"VersionInput.EffectiveStart\" value=\"2025-12-31\"");
 		body.Should().Contain(">Effective start</label>");
 		body.Should().Contain(">Effective end (leave blank if still current)</label>");
 		body.Should().Contain(">IANA time zone</label>");

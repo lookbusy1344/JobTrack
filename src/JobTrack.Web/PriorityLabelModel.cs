@@ -31,6 +31,7 @@ public sealed class PriorityLabelModel
 		Priority.Medium => "Medium",
 		Priority.High => "High",
 		Priority.Urgent => "Urgent",
+		Priority.Unspecified => throw new ArgumentOutOfRangeException(nameof(priority), priority, "A persisted node's priority is never Unspecified."),
 		_ => throw new ArgumentOutOfRangeException(nameof(priority), priority, null),
 	};
 
@@ -39,6 +40,7 @@ public sealed class PriorityLabelModel
 		Priority.Medium => "Med",
 		Priority.High => "High",
 		Priority.Urgent => "Urgt",
+		Priority.Unspecified => throw new ArgumentOutOfRangeException(nameof(priority), priority, "A persisted node's priority is never Unspecified."),
 		_ => throw new ArgumentOutOfRangeException(nameof(priority), priority, null),
 	};
 }
