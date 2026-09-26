@@ -22,7 +22,7 @@
     <!-- Browser automation for plan §8.5/8.7 responsive, keyboard, and accessibility evidence
          (fix-plan §2.5). Requires a one-time `playwright install` browser-binary download outside
          this repo's usual `dotnet restore` (docs/operations/browser-testing.md). -->
-    <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
     <!-- Automated accessibility scan (fix-plan §2.5 "as a supplement, not the only acceptance
          evidence"); bundles axe-core, so no separate script fetch is needed at test time. -->
     <PackageVersion Include="Deque.AxeCore.Playwright" Version="4.13.0" />
