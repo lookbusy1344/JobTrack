@@ -33,12 +33,6 @@
           "Microsoft.EntityFrameworkCore": "10.0.12"
         }
       },
-      "Microsoft.CodeAnalysis.BannedApiAnalyzers": {
-        "type": "Direct",
-        "requested": "[5.6.0, )",
-        "resolved": "5.6.0",
-        "contentHash": "Kcobt3pnOdO0A+6CKiMHZdTEluJpsfxiV20axtZdmfBQnDmiWTKPJADlgAfdTuKNAnVarrkJa0UEGwuOo91muw=="
-      },
       "Microsoft.EntityFrameworkCore": {
         "type": "Direct",
         "requested": "[10.0.12, )",
@@ -97,9 +91,9 @@
       },
       "NodaTime": {
         "type": "Direct",
-        "requested": "[3.3.4, )",
-        "resolved": "3.3.4",
-        "contentHash": "iLaEeOFjWHVibXmHa8WOMTkZdxvzTH6b7qNYts7cBmSfttCDenguHvEJsuAQGBDPV4LSA+7c0nyt4A0AR6z6zQ=="
+        "requested": "[3.3.5, )",
+        "resolved": "3.3.5",
+        "contentHash": "0qtGKHOYhQGCeUItP4RN8KJktsKD9j/B4IqmoecUL+ymReq69O71qEpZY6x0aQPZa5KDLXY41aEOOHZ9T6Uqgw=="
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Direct",
