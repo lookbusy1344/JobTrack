@@ -304,6 +304,41 @@ public sealed partial class SecurityTests : IAsyncLifetime, IDisposable
 		body.Should().NotContain(Convert.ToBase64String([1, 2, 3, 4]).TrimEnd('=').Replace('+', '-').Replace('/', '_'));
 	}
 
+	[Fact]
+	public async Task Removing_a_passkey_asks_for_confirmation_before_posting()
+	{
+		var appUserId = await SeedUserAsync("remove.confirm");
+		var authCookie = await SignInAsync("remove.confirm");
+		await SeedPasskeyAsync(appUserId, "Work MacBook", [1, 2, 3, 4]);
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/Security");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+
+		var button = RemovePasskeyButtonPattern().Match(body);
+		button.Success.Should().BeTrue();
+		button.Value.Should().Contain("data-jt-confirm=\"Remove the passkey Work MacBook? You will no longer be able to sign in with it.\"");
+	}
+
+	[Fact]
+	public async Task The_setup_confirmation_code_field_opts_out_of_one_time_code_autofill()
+	{
+		_ = await SeedUserAsync("otp.autofill");
+		var authCookie = await SignInAsync("otp.autofill");
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, "/Account/Security");
+		request.Headers.Add("Cookie", authCookie);
+		var response = await client.SendAsync(request);
+		var body = await response.Content.ReadAsStringAsync();
+
+		// Safari's AutoFill focuses an autocomplete="one-time-code" field on load, stealing focus from
+		// the passkey name field. The code comes from the authenticator being set up, so nothing can fill it.
+		var input = ConfirmCodeInputPattern().Match(body);
+		input.Success.Should().BeTrue();
+		input.Value.Should().Contain("autocomplete=\"off\"");
+	}
+
 	private async Task<string> SignInAsync(string userName)
 	{
 		var (antiforgeryCookie, token) = await GetFormAsync("/Account/Login");
@@ -428,6 +463,12 @@ public sealed partial class SecurityTests : IAsyncLifetime, IDisposable
 
 	[GeneratedRegex("Enter this key manually: <code>(?<key>[^<]+)</code>")]
 	private static partial Regex AuthenticatorKeyPattern();
+
+	[GeneratedRegex("<input[^>]*name=\"Confirm\\.Code\"[^>]*>")]
+	private static partial Regex ConfirmCodeInputPattern();
+
+	[GeneratedRegex("<form[^>]*handler=RemovePasskey[^>]*>.*?<button[^>]*>", RegexOptions.Singleline)]
+	private static partial Regex RemovePasskeyButtonPattern();
 
 	private static string GenerateTotpCode(string base32Secret, DateTimeOffset timestamp)
 	{

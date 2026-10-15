@@ -16,8 +16,8 @@ public sealed class BlockingReaderCommandInterceptor(Func<string, bool> shouldBl
 	private readonly Lock _transactionsLock = new();
 	private int _hasBlocked;
 
-	/// <summary>Completes when the matching command has reached the interceptor.</summary>
-	public Task CommandReached => _commandReached.Task;
+	/// <summary>Completes when the matching command has reached the interceptor; faults with <see cref="TimeoutException"/> after <paramref name="timeout"/>.</summary>
+	public Task WaitForCommandReachedAsync(TimeSpan timeout) => _commandReached.Task.WaitAsync(timeout);
 
 	/// <summary>The transaction attached to each intercepted reader command, in execution order.</summary>
 	public IReadOnlyList<DbTransaction?> Transactions

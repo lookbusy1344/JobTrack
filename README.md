@@ -125,13 +125,11 @@ A short test script, aiming to complete in about 20 seconds, is used for pre-com
 
 ## Status
 
-**Current release: v1.3.1** (2026-09-19) — a security-review remediation: closes a rate-limit
-origin-scoping gap and a partition-eviction gap on passkey requests, equalizes password-login
-verification work to remove a timing side-channel, enforces lockout consistently on password
-changes, and fixes a reflected-XSS/open-redirect exposure on `/Account/ConfirmAccess`. Also
-classifies provider write failures as integrity/transient/unknown so a deadlock or busy database
-surfaces as a 503 instead of a false invariant violation, and fixes a work-session start race and a
-future-dated correction bug. Full history: [CHANGELOG.md](CHANGELOG.md).
+**Current release: v1.3.2** (2026-10-15) — a maintenance release: fixes Safari stealing focus
+from passkey creation on `/Account/Security`, confirms passkey removal, tidies the passkey table,
+and defaults the rota page's start date in the viewer's own time zone. Adds build-time bans on
+direct system-clock reads and pins switch exhaustiveness and unawaited tasks to errors. Updates
+ASP.NET Core and EF Core to 10.0.13. Full history: [CHANGELOG.md](CHANGELOG.md).
 
 **Release-ready.** All four delivery gates — database, reusable library, web application, and release — have formal, source-controlled acceptance records
 ([ADR 0025](docs/decisions/0025-m3-database-gate-acceptance.md),

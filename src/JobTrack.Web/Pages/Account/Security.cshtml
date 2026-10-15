@@ -52,31 +52,38 @@
 	<div class="jt-table-block">
 		<table class="table">
 			<thead>
-			@* Reflow policy (docs/design-language.md): a phone keeps what the row is (Name) and its type;
-			   the creation timestamp returns at md. Credential ID, AAGUID, key, and counter are never shown. *@
+			@* Reflow policy (docs/design-language.md): a phone keeps what the row is (Name), the rename
+			   field, and the remove action; the creation timestamp and type return at md. Credential ID,
+			   AAGUID, key, and counter are never shown. *@
 			<tr>
-				<th class="col-8 col-md-4">Name</th>
+				<th class="col-4 col-md-3">Name</th>
 				<th class="jt-col-secondary col-md-3 d-none d-md-table-cell">Added</th>
 				<th class="jt-col-secondary col-md-2 d-none d-md-table-cell">Type</th>
-				<th class="col-4 col-md-3">Actions</th>
+				<th class="col-6 col-md-3">Edit name</th>
+				<th class="col-2 col-md-1"><span class="visually-hidden">Actions</span></th>
 			</tr>
 			</thead>
 			<tbody>
 			@foreach (var passkey in Model.Passkeys) {
 				<tr>
-					<td class="col-8 col-md-4">@passkey.Name</td>
+					<td class="col-4 col-md-3">@passkey.Name</td>
 					<td class="jt-col-secondary col-md-3 d-none d-md-table-cell">@InstantDisplay.Format(Instant.FromDateTimeOffset(passkey.CreatedAt), Model.ViewerZone)</td>
 					<td class="jt-col-secondary col-md-2 d-none d-md-table-cell">@PasskeyTypeHint(passkey)</td>
-					<td class="col-4 col-md-3">
-						<form method="post" asp-page-handler="RenamePasskey" class="inline-form">
+					<td class="col-6 col-md-3">
+						<form method="post" asp-page-handler="RenamePasskey">
 							<input type="hidden" name="credentialRef" value="@Model.ProtectCredentialRef(passkey.CredentialId)"/>
-							<input type="text" name="newName" value="@passkey.Name" class="form-control" aria-label="New name for @passkey.Name"
-							       maxlength="100"/>
-							<button type="submit" class="btn btn-outline-secondary btn-sm">Rename</button>
+							<div class="input-group input-group-sm">
+								<input type="text" name="newName" value="@passkey.Name" class="form-control" aria-label="New name for @passkey.Name"
+								       maxlength="100"/>
+								<button type="submit" class="btn btn-outline-secondary">Rename</button>
+							</div>
 						</form>
+					</td>
+					<td class="col-2 col-md-1">
 						<form method="post" asp-page-handler="RemovePasskey" class="inline-form">
 							<input type="hidden" name="credentialRef" value="@Model.ProtectCredentialRef(passkey.CredentialId)"/>
-							<button type="submit" class="jt-icon-button jt-icon-button--danger" title="Remove passkey">
+							<button type="submit" class="jt-icon-button jt-icon-button--danger" title="Remove passkey"
+							        data-jt-confirm="Remove the passkey @passkey.Name? You will no longer be able to sign in with it.">
 								<svg class="jt-icon-summary-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
 									<use href="#jt-icon-remove"></use>
 								</svg>
@@ -126,7 +133,7 @@
 	<form method="post" asp-page-handler="Confirm" class="jt-form-card">
 		<div class="form-group">
 			<label asp-for="Confirm.Code"></label>
-			<input asp-for="Confirm.Code" class="form-control" inputmode="numeric" autocomplete="one-time-code"/>
+			<input asp-for="Confirm.Code" class="form-control" inputmode="numeric" autocomplete="off"/>
 			<span asp-validation-for="Confirm.Code" class="text-danger"></span>
 		</div>
 		<button type="submit" class="btn btn-primary">Enable</button>

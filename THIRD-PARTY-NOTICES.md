@@ -34,20 +34,20 @@ notice to travel with the font files, and forbids selling the font by itself.
 
 | Package | Version | License |
 | --- | --- | --- |
-| Microsoft.AspNetCore.DataProtection | 10.0.10 | MIT |
-| Microsoft.AspNetCore.DataProtection.EntityFrameworkCore | 10.0.10 | MIT |
-| Microsoft.AspNetCore.OpenApi | 10.0.10 | MIT |
-| Microsoft.Data.Sqlite | 10.0.10 | MIT |
-| Microsoft.EntityFrameworkCore | 10.0.10 | MIT |
-| Microsoft.EntityFrameworkCore.Relational | 10.0.10 | MIT |
-| Microsoft.EntityFrameworkCore.Sqlite | 10.0.10 | MIT |
-| Microsoft.Extensions.Identity.Core | 10.0.10 | MIT |
-| Microsoft.OpenApi | 2.10.0 | MIT |
-| NodaTime | 3.3.3 | Apache-2.0 |
+| Microsoft.AspNetCore.DataProtection | 10.0.13 | MIT |
+| Microsoft.AspNetCore.DataProtection.EntityFrameworkCore | 10.0.13 | MIT |
+| Microsoft.AspNetCore.OpenApi | 10.0.13 | MIT |
+| Microsoft.Data.Sqlite | 10.0.13 | MIT |
+| Microsoft.EntityFrameworkCore | 10.0.13 | MIT |
+| Microsoft.EntityFrameworkCore.Relational | 10.0.13 | MIT |
+| Microsoft.EntityFrameworkCore.Sqlite | 10.0.13 | MIT |
+| Microsoft.Extensions.Identity.Core | 10.0.13 | MIT |
+| Microsoft.OpenApi | 2.12.2 | MIT |
+| NodaTime | 3.3.5 | Apache-2.0 |
 | Npgsql | 10.0.3 | PostgreSQL |
 | Npgsql.EntityFrameworkCore.PostgreSQL | 10.0.3 | PostgreSQL |
 | Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime | 10.0.3 | PostgreSQL |
-| QRCoder | 1.8.0 | MIT |
+| QRCoder | 1.8.1 | MIT |
 | SQLitePCLRaw.bundle_e_sqlite3 | 3.0.5 | Apache-2.0 |
 
 MIT, BSD-3-Clause and the PostgreSQL License are permissive and GPL-compatible.
@@ -63,11 +63,12 @@ Corresponding Source.
 
 | Package | Version | License |
 | --- | --- | --- |
-| lookbusy1344.RecordValueAnalyser | 1.3.1 | MIT |
+| lookbusy1344.RecordValueAnalyser | 1.4.0 | MIT |
+| Microsoft.CodeAnalysis.BannedApiAnalyzers | 5.6.0 | MIT |
 | Microsoft.CodeAnalysis.PublicApiAnalyzers | 5.6.0 | MIT |
-| Microsoft.SourceLink.GitHub | 10.0.301 | MIT |
-| Microsoft.VisualStudio.Threading.Analyzers | 18.7.23 | MIT |
-| Roslynator.Analyzers | 4.15.0 | Apache-2.0 |
+| Microsoft.SourceLink.GitHub | 10.0.402 | MIT |
+| Microsoft.VisualStudio.Threading.Analyzers | 18.12.1 | MIT |
+| Roslynator.Analyzers | 5.0.1 | Apache-2.0 |
 
 ## Test-time only
 
@@ -75,17 +76,17 @@ Not redistributed.
 
 | Package | Version | License |
 | --- | --- | --- |
-| AwesomeAssertions | 9.5.0 | Apache-2.0 |
-| coverlet.collector | 10.0.1 | MIT |
-| Deque.AxeCore.Playwright | 4.12.0 | MIT (bundles axe-core, MPL-2.0) |
-| FsCheck | 3.3.4 | BSD-3-Clause |
-| FsCheck.Xunit | 3.3.4 | BSD-3-Clause |
-| Microsoft.AspNetCore.Mvc.Testing | 10.0.10 | MIT |
+| AwesomeAssertions | 9.6.0 | Apache-2.0 |
+| coverlet.collector | 10.1.0 | MIT |
+| Deque.AxeCore.Playwright | 4.13.0 | MIT (bundles axe-core, MPL-2.0) |
+| FsCheck | 3.4.0 | BSD-3-Clause |
+| FsCheck.Xunit | 3.4.0 | BSD-3-Clause |
+| Microsoft.AspNetCore.Mvc.Testing | 10.0.13 | MIT |
 | Microsoft.CodeAnalysis.CSharp | 5.6.0 | MIT |
-| Microsoft.NET.Test.Sdk | 18.8.1 | MIT |
-| Microsoft.Playwright | 1.61.0 | MIT |
+| Microsoft.NET.Test.Sdk | 18.11.0 | MIT |
+| Microsoft.Playwright | 1.63.0 | MIT |
 | xunit | 2.9.3 | Apache-2.0 |
-| xunit.runner.visualstudio | 3.1.5 | Apache-2.0 |
+| xunit.runner.visualstudio | 4.0.1 | Apache-2.0 |
 
 `Deque.AxeCore.Playwright` embeds axe-core, which is MPL-2.0. MPL-2.0 is
 GPL-compatible via its "Secondary Licenses" mechanism, and is file-level

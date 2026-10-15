@@ -1,0 +1,7 @@
+// System clock access bypasses Noda Time and the viewer's own IANA zone (CLAUDE.md "No timestamp
+// without an explicit zone"; DateTimeOffset is boundary-only, parsed via BackdateInstant).
+P:System.DateTime.Now;Use NodaTime's IClock, not the system clock, for any point-in-time value.
+P:System.DateTime.UtcNow;Use NodaTime's IClock, not the system clock, for any point-in-time value.
+P:System.DateTime.Today;Use NodaTime's IClock, not the system clock, for any point-in-time value.
+P:System.DateTimeOffset.Now;DateTimeOffset is boundary-only here -- parse/format via BackdateInstant/InstantDisplay, never read the system clock directly.
+P:System.DateTimeOffset.UtcNow;DateTimeOffset is boundary-only here -- parse/format via BackdateInstant/InstantDisplay, never read the system clock directly.

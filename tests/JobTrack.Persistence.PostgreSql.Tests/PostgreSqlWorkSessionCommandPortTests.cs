@@ -387,7 +387,7 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 		var achievementPort = CreateAchievementPortWithInterceptor(ConnectionString, interceptor);
 
 		var reopenTask = TrySetAchievementAsync(achievementPort, jobManagerId, requiredLeafId, Achievement.Waiting, 3);
-		await interceptor.CommandReached.WaitAsync(AsyncCoordinationTimeout);
+		await interceptor.WaitForCommandReachedAsync(AsyncCoordinationTimeout);
 
 		var dependentStartTask = TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, workerId, dependent.Id);
 		_ = await Task.WhenAny(dependentStartTask, Task.Delay(ConcurrentWriterProbe));
@@ -420,7 +420,7 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 		var achievementPort = CreateAchievementPortWithInterceptor(ConnectionString, interceptor);
 
 		var reopenTask = TrySetAchievementAsync(achievementPort, jobManagerId, requiredLeafId, Achievement.Waiting, 3);
-		await interceptor.CommandReached.WaitAsync(AsyncCoordinationTimeout);
+		await interceptor.WaitForCommandReachedAsync(AsyncCoordinationTimeout);
 
 		var dependentStarted = await TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, workerId, dependent.Id);
 

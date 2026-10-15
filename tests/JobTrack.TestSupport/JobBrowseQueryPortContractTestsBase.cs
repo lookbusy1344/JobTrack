@@ -550,7 +550,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 
 		var fetchTask = browsePort.GetSubtreeAsync(
 			branchId, JobSubtreeLimits.HardMaxDepth, OwnershipFilter.All, JobArchiveFilter.All);
-		await interceptor.CommandReached.WaitAsync(AsyncCoordinationTimeout);
+		await interceptor.WaitForCommandReachedAsync(AsyncCoordinationTimeout);
 		var transitionRequest = new SetAchievementRequest {
 			Context = ContextFor(tree.JobManagerId),
 			JobNodeId = tree.PlumbingLeafId,

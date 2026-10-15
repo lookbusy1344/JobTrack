@@ -4,6 +4,40 @@ All notable changes to JobTrack are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 `MAJOR.MINOR.PATCH` release numbers.
 
+## [1.3.2] — 2026-10-15
+
+Maintenance release: passkey and two-factor UI fixes on `/Account/Security`,
+a viewer-zone fix on the rota page, stricter build-time guards, and
+dependency updates.
+
+### Fixed
+
+- Safari no longer moves focus to the two-factor setup code field when
+  `/Account/Security` loads, which pulled focus away from passkey creation.
+  The field opts out of one-time-code autofill.
+- Removing a passkey asks for confirmation before it posts.
+- The passkey table gives renaming its own column, so the rename field, its
+  button and the remove button no longer wrap onto separate lines.
+- The rota page's "add schedule version" form defaults its start date to today
+  in the viewer's own time zone instead of the server's local date.
+- The Browse tree's blocked-row flag icon keeps a fixed size instead of
+  shrinking with the row's content.
+
+### Changed
+
+- Direct system-clock reads (`DateTime.Now`/`UtcNow`/`Today`,
+  `DateTimeOffset.Now`/`UtcNow`) are banned outside tests through
+  `Microsoft.CodeAnalysis.BannedApiAnalyzers`; time comes from Noda Time's
+  `IClock`.
+- Non-exhaustive switch expressions and unawaited tasks (CS4014) are pinned
+  to build errors, independent of `TreatWarningsAsErrors`.
+- The constant-table architecture guard is renamed
+  `CodeStyle_NoStaticReadonlyMutableTable`, matching the other `CodeStyle_`
+  guards.
+- Dependencies updated: ASP.NET Core and EF Core 10.0.13, Microsoft.OpenApi
+  2.12.2, NodaTime 3.3.5, QRCoder 1.8.1, and analyzer and test packages.
+  `THIRD-PARTY-NOTICES.md` matches `Directory.Packages.props` again.
+
 ## [1.3.1] — 2026-09-19
 
 Fresh-eyes security review of the auth/authorization surface with v1.3.0's
