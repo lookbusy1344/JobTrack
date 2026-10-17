@@ -4,9 +4,9 @@
     "net10.0": {
       "lookbusy1344.RecordValueAnalyser": {
         "type": "Direct",
-        "requested": "[1.4.0, )",
-        "resolved": "1.4.0",
-        "contentHash": "fZ878H9YKpJ5+SLMGYqqli0sTkjemH31qr6YQ6JP6MBYyepF7GnJ2o5597qL0HbMRYoADPwDLPja8G+GDiy+cw=="
+        "requested": "[1.4.1, )",
+        "resolved": "1.4.1",
+        "contentHash": "ZTlaCJH89WX6eOb8CqUMxfh2MZ0C5cZfCpNeNQwPyKJk3SQZ6cH9TEsnQyvmO9iAG1zOmrb/BqS8X8A5xpNixA=="
       },
       "Microsoft.AspNetCore.DataProtection": {
         "type": "Direct",
