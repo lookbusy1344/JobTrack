@@ -63,9 +63,9 @@
       },
       "NodaTime": {
         "type": "Direct",
-        "requested": "[3.3.5, )",
-        "resolved": "3.3.5",
-        "contentHash": "0qtGKHOYhQGCeUItP4RN8KJktsKD9j/B4IqmoecUL+ymReq69O71qEpZY6x0aQPZa5KDLXY41aEOOHZ9T6Uqgw=="
+        "requested": "[3.3.6, )",
+        "resolved": "3.3.6",
+        "contentHash": "vAjAdOvqu5hqgDVgzJxFPhSVy4EM5/tmSHJn/k0lLDIn4637OReqJgvR49fzFzj+5uZfebdJEFbI6LOLazWXog=="
       },
       "Roslynator.Analyzers": {
         "type": "Direct",
@@ -245,14 +245,14 @@
           "JobTrack.Abstractions": "[1.3.2, )",
           "JobTrack.Domain": "[1.3.2, )",
           "Microsoft.Extensions.Identity.Core": "[10.0.13, )",
-          "NodaTime": "[3.3.5, )"
+          "NodaTime": "[3.3.6, )"
         }
       },
       "jobtrack.domain": {
         "type": "Project",
         "dependencies": {
           "JobTrack.Abstractions": "[1.3.2, )",
-          "NodaTime": "[3.3.5, )"
+          "NodaTime": "[3.3.6, )"
         }
       },
       "Microsoft.Extensions.Identity.Core": {
