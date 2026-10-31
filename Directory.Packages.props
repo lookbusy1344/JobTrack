@@ -46,7 +46,7 @@
   </ItemGroup>
   <ItemGroup Label="Database providers">
     <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.14" />
     <!-- Microsoft.Data.Sqlite 10.0.9 pulls the deprecated, vulnerable
          SQLitePCLRaw.lib.e_sqlite3 2.1.11 (GHSA-2m69-gcr7-jv3q) transitively;
          pin the bundle to the version that depends on its SourceGear.sqlite3
