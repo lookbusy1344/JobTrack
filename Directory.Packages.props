@@ -61,7 +61,7 @@
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.3" />
   </ItemGroup>
   <ItemGroup Label="Packaging (impl plan §7.5 - source link)">
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.402" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.403" />
   </ItemGroup>
   <ItemGroup Label="ASP.NET Core host extensions">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
