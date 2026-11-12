@@ -71,8 +71,8 @@ Two images come out of one `Dockerfile.postgresql`, sharing a single build stage
 
 | Target | Base | Runs |
 | --- | --- | --- |
-| `serve` (default) | `aspnet:10.0-noble-chiseled` | `JobTrack.Web` only. No shell, no package manager, non-root, nothing else in the image. |
-| `provision` | `aspnet:10.0-noble` + `postgresql-client` | `JobTrack.Database`, `JobTrack.AdminCli`, and `provision.sh`. Executed as a transient Cloud Run job, then deleted. |
+| `serve` (default) | `aspnet:11.0-resolute-chiseled` | `JobTrack.Web` only. No shell, no package manager, non-root, nothing else in the image. |
+| `provision` | `aspnet:11.0-resolute` + `postgresql-client` | `JobTrack.Database`, `JobTrack.AdminCli`, and `provision.sh`. Executed as a transient Cloud Run job, then deleted. |
 
 Splitting them keeps the internet-facing service on the hardened base while the provisioning path
 gets the shell, `psql`, and stdin plumbing it needs — the request-serving image ships neither the

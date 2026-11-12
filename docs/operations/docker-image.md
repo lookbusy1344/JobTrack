@@ -53,7 +53,7 @@ docker build -f Dockerfile -t jobtrack-web ..
 parent) ignores everything by default and re-includes only `.editorconfig` and `JobTrack/`, so
 sibling monorepo projects never enter the context.
 
-The image is ~213MB, on a 131MB `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled` base.
+The image is ~213MB, on a 131MB `mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled` base.
 
 ### Base image
 

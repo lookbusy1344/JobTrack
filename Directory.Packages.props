@@ -12,14 +12,14 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
   </ItemGroup>
   <ItemGroup Label="Test infrastructure">
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
-    <PackageVersion Include="FsCheck" Version="3.4.0" />
-    <PackageVersion Include="FsCheck.Xunit" Version="3.4.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
+    <PackageVersion Include="FsCheck" Version="3.6.0" />
+    <PackageVersion Include="FsCheck.Xunit" Version="3.6.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0" />
     <!-- Browser automation for plan §8.5/8.7 responsive, keyboard, and accessibility evidence
          (fix-plan §2.5). Requires a one-time `playwright install` browser-binary download outside
          this repo's usual `dotnet restore` (docs/operations/browser-testing.md). -->
@@ -33,12 +33,12 @@
          IPasswordHasher<T> in the bootstrap command (ADR 0005) and as JobTrack.Identity's store
          abstractions (ADR 0022). JobTrack.Identity separately takes EF Core + provider
          PackageReferences (ADR 0022) without a FrameworkReference to Microsoft.AspNetCore.App. -->
-    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="11.0.0" />
     <!-- Microsoft.AspNetCore.DataProtection: encrypts the TOTP shared secret at rest
          (authenticator_key_protected, ADR 0037). A standalone NuGet package, not a
          FrameworkReference — available to JobTrack.Identity without the ASP.NET Core shared
          framework, consistent with ADR 0022's constraint. -->
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection" Version="11.0.0" />
     <!-- Microsoft.AspNetCore.DataProtection.EntityFrameworkCore: the multi-instance PostgreSQL key
          repository (ADR 0066 Stage 2, docs/plans/2026-07-26-multi-instance-web-deployment-plan.md
          §2.2). A standalone NuGet package like its non-EF sibling above. -->
@@ -56,16 +56,16 @@
   <ItemGroup Label="EF Core (impl plan §7.4, ADR 0010)">
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime" Version="10.0.3" />
   </ItemGroup>
   <ItemGroup Label="Packaging (impl plan §7.5 - source link)">
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.403" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.100" />
   </ItemGroup>
   <ItemGroup Label="ASP.NET Core host extensions">
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.11.0" />
   </ItemGroup>
   <ItemGroup Label="Two-factor enrolment (ADR 0037)">
     <!-- Offline QR image rendering for the authenticator-app enrolment page; no network calls. -->

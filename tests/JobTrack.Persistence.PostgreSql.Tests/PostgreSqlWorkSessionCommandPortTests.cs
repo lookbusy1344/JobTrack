@@ -390,8 +390,7 @@ public sealed class PostgreSqlWorkSessionCommandPortTests()
 		await interceptor.WaitForCommandReachedAsync(AsyncCoordinationTimeout);
 
 		var dependentStartTask = TryStartSessionForAsync(CreateSessionPort(ConnectionString), jobManagerId, workerId, dependent.Id);
-		_ = await Task.WhenAny(dependentStartTask, Task.Delay(ConcurrentWriterProbe));
-		dependentStartTask.IsCompleted.Should().BeFalse("the dependent's readiness recheck must block on the reopen's held advisory lock");
+		(await dependentStartTask.CompletesWithinAsync(ConcurrentWriterProbe)).Should().BeFalse("the dependent's readiness recheck must block on the reopen's held advisory lock");
 
 		interceptor.Release();
 		var reopened = await reopenTask;

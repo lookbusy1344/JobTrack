@@ -41,12 +41,17 @@ public sealed class MoneyTests
 	[Fact]
 	public void Rounding_to_pennies_rounds_a_non_midpoint_value_normally() => new Money(1.006m).RoundToPennies().Should().Be(new(1.01m));
 
+	/// <summary>Decimal literals: a <see cref="double" /> such as 0.015 is not a midpoint once converted.</summary>
+	public static TheoryData<decimal, decimal> PennyMidpoints => new() {
+		{ 0.005m, 0.00m },
+		{ 0.015m, 0.02m },
+		{ 0.025m, 0.02m },
+	};
+
 	[Theory]
-	[InlineData(0.005, 0.00)]
-	[InlineData(0.015, 0.02)]
-	[InlineData(0.025, 0.02)]
-	public void Rounding_to_pennies_breaks_a_midpoint_to_the_nearest_even_penny(double amount, double expected) =>
-		new Money((decimal)amount).RoundToPennies().Should().Be(new((decimal)expected));
+	[MemberData(nameof(PennyMidpoints))]
+	public void Rounding_to_pennies_breaks_a_midpoint_to_the_nearest_even_penny(decimal amount, decimal expected) =>
+		new Money(amount).RoundToPennies().Should().Be(new(expected));
 
 	[Fact]
 	public void Formatting_renders_sterling_with_two_decimal_places() => new Money(234.5m).ToString().Should().Be("£234.50");
@@ -55,12 +60,16 @@ public sealed class MoneyTests
 	public void Formatting_keeps_the_pennies_just_below_a_thousand_pounds() =>
 		new Money(999.99m).ToString().Should().Be("£999.99");
 
+	public static TheoryData<decimal, string> AmountsFromAThousandPounds => new() {
+		{ 1000m, "£1,000" },
+		{ 1055.76m, "£1,056" },
+		{ 2055.4m, "£2,055" },
+	};
+
 	[Theory]
-	[InlineData(1000, "£1,000")]
-	[InlineData(1055.76, "£1,056")]
-	[InlineData(2055.4, "£2,055")]
-	public void Formatting_drops_the_pennies_from_a_thousand_pounds_up(double amount, string expected) =>
-		new Money((decimal)amount).ToString().Should().Be(expected);
+	[MemberData(nameof(AmountsFromAThousandPounds))]
+	public void Formatting_drops_the_pennies_from_a_thousand_pounds_up(decimal amount, string expected) =>
+		new Money(amount).ToString().Should().Be(expected);
 
 	[Fact]
 	public void Formatting_honours_an_explicit_numeric_format() =>

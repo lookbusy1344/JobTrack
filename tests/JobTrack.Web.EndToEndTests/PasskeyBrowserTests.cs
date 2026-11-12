@@ -18,6 +18,9 @@ public abstract class PasskeyBrowserTestsBase
 	private const int DesktopWidth = 1280;
 	private const int DesktopHeight = 800;
 
+	/// <summary>How long a click may take to raise its confirmation dialog.</summary>
+	private static readonly TimeSpan ConfirmationTimeout = TimeSpan.FromSeconds(15);
+
 	private readonly BrowserFixture fixture;
 
 	protected PasskeyBrowserTestsBase(BrowserFixture fixture) => this.fixture = fixture;
@@ -143,7 +146,9 @@ public abstract class PasskeyBrowserTestsBase
 		await SignInFreshWorkerAsync(page);
 		await EnrolPasskeyAsync(page, "Doomed key");
 
+		var confirmation = AnswerNextConfirmationAsync(page, accept: true);
 		await page.Locator("button[title='Remove passkey']").First.ClickAsync();
+		(await confirmation).Should().Be("Remove the passkey Doomed key? You will no longer be able to sign in with it.");
 
 		// The remove POST redirects back to /Account/Security (same URL), so wait on the empty-state copy
 		// the reload renders rather than a URL change.
@@ -152,6 +157,26 @@ public abstract class PasskeyBrowserTestsBase
 		});
 		// The server removed its row; the credential can linger on the device side (authenticator).
 		_ = authenticator;
+	}
+
+	[Fact]
+	public async Task Dismissing_the_removal_confirmation_keeps_the_passkey()
+	{
+		await using var context = await fixture.NewContextAsync(DesktopWidth, DesktopHeight);
+		var page = await context.NewPageAsync();
+		_ = await PasskeyVirtualAuthenticator.AttachAsync(context, page);
+
+		await SignInFreshWorkerAsync(page);
+		await EnrolPasskeyAsync(page, "Kept key");
+
+		var confirmation = AnswerNextConfirmationAsync(page, accept: false);
+		await page.Locator("button[title='Remove passkey']").First.ClickAsync();
+		_ = await confirmation;
+
+		// Reload so the assertion reads the server's state, not the page left in place by the dismissal.
+		_ = await page.ReloadAsync();
+		(await page.GetByText("Remove passkey Kept key").CountAsync()).Should().Be(1, "the passkey's row is still listed");
+		(await page.GetByText("You have no passkeys.").CountAsync()).Should().Be(0);
 	}
 
 	[Fact]
@@ -241,6 +266,27 @@ public abstract class PasskeyBrowserTestsBase
 		await page.GetByText(name).First.WaitForAsync(new() {
 			Timeout = 15000,
 		});
+	}
+
+	/// <summary>
+	///     Answers the next <c>window.confirm</c> (site.js <c>data-jt-confirm</c>) and yields its message.
+	///     Playwright dismisses an unhandled dialog, which silently cancels the confirmed action.
+	/// </summary>
+	private static Task<string> AnswerNextConfirmationAsync(IPage page, bool accept)
+	{
+		var message = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+		void Answer(object? sender, IDialog dialog)
+		{
+			page.Dialog -= Answer;
+			var answered = accept ? dialog.AcceptAsync() : dialog.DismissAsync();
+			_ = answered.ContinueWith(
+				task => task.IsFaulted ? message.TrySetException(task.Exception.InnerExceptions) : message.TrySetResult(dialog.Message),
+				TaskScheduler.Default);
+		}
+
+		page.Dialog += Answer;
+		return message.Task.WaitAsync(ConfirmationTimeout);
 	}
 
 	private static async Task SignOutAsync(IPage page)

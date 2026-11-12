@@ -252,8 +252,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 			Priority = Priority.Medium,
 		});
 
-		var firstCompleted = await Task.WhenAny(assignment, Task.Delay(RowLockObservationTimeout));
-		firstCompleted.Should().NotBe(assignment, "owner eligibility must wait for the target account's role lock");
+		(await assignment.CompletesWithinAsync(RowLockObservationTimeout)).Should().BeFalse("owner eligibility must wait for the target account's role lock");
 
 		await using (var grantCommand = roleConnection.CreateCommand()) {
 			grantCommand.Transaction = roleTransaction;
@@ -268,8 +267,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 
 		await roleTransaction.CommitAsync();
 
-		var completed = await Task.WhenAny(assignment, Task.Delay(RowLockObservationTimeout));
-		completed.Should().Be(assignment);
+		(await assignment.CompletesWithinAsync(RowLockObservationTimeout)).Should().BeTrue();
 		assignment.IsFaulted.Should().BeTrue();
 		assignment.Exception!.InnerExceptions.Should().ContainSingle()
 				  .Which.Should().BeOfType<InvariantViolationException>()
@@ -305,8 +303,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 			},
 		});
 
-		var firstCompleted = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
-		firstCompleted.Should().NotBe(creation, "begin-work eligibility must wait for the target account's role lock");
+		(await creation.CompletesWithinAsync(RowLockObservationTimeout)).Should().BeFalse("begin-work eligibility must wait for the target account's role lock");
 
 		await using (var grantCommand = roleConnection.CreateCommand()) {
 			grantCommand.Transaction = roleTransaction;
@@ -321,8 +318,7 @@ public sealed class PostgreSqlJobNodeCommandPortTests()
 
 		await roleTransaction.CommitAsync();
 
-		var completed = await Task.WhenAny(creation, Task.Delay(RowLockObservationTimeout));
-		completed.Should().Be(creation);
+		(await creation.CompletesWithinAsync(RowLockObservationTimeout)).Should().BeTrue();
 		creation.IsFaulted.Should().BeTrue();
 		creation.Exception!.InnerExceptions.Should().ContainSingle()
 				.Which.Should().BeOfType<InvariantViolationException>()

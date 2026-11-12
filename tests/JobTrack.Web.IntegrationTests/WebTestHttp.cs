@@ -62,7 +62,7 @@ internal static partial class WebTestHttp
 		var body = await response.Content.ReadAsStringAsync();
 		var antiforgeryCookie = FindSetCookie(response, "Antiforgery")
 								?? throw new InvalidOperationException("No antiforgery cookie in token response.");
-		var token = JsonDocument.Parse(body).RootElement.GetProperty("token").GetString()
+		var token = JsonElement.Parse(body).GetProperty("token").GetString()
 					?? throw new InvalidOperationException("No antiforgery token in token response.");
 
 		return (ExtractCookiePair(antiforgeryCookie), token);

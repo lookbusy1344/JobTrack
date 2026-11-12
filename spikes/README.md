@@ -40,5 +40,5 @@ cd dst-spike && dotnet run
 cd ../cost-sweep-spike && dotnet run
 ```
 
-Both are plain console apps (`net10.0`), pinned to their own package versions independently of the
+Both are plain console apps (`net11.0`), pinned to their own package versions independently of the
 solution's central package management — see `Directory.Build.props` in this directory.

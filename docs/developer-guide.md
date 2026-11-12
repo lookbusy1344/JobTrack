@@ -6,7 +6,7 @@ commit gate; [`architecture-overview.md`](architecture-overview.md) is the file-
 
 ## Requirements
 
-- .NET SDK `10.0.400` or later within the same feature band (pinned in `global.json`).
+- .NET SDK `11.0.100` or later within the same feature band (pinned in `global.json`).
 - PostgreSQL, for the primary provider and its test suites — this project expects a local instance
   reachable at the Unix socket `/tmp:5432` (no Docker setup is provided). On macOS via Homebrew:
 
@@ -110,6 +110,19 @@ dotnet format JobTrack.slnx --verify-no-changes
 dotnet test tests/JobTrack.Persistence.PostgreSql.Tests --filter "FullyQualifiedName~TheClassYouChanged"
 ```
 
+`scripts/pre-commit.sh` runs the first four steps (as `scripts/commit-gate.sh`: restore, build,
+format check, fast core suite) when the pending change touches JobTrack code. It works in jj (files
+changed in `@`) and plain Git (files changed against `HEAD`). jj has no commit hooks; the agent
+`PreToolUse` hooks in `.claude/settings.json` and `.codex/hooks.json` run it on `jj commit` and
+`jj squash`. For plain Git, link it as the monorepo's hook — it skips changes outside `JobTrack/`:
+
+```bash
+ln -sf ../../JobTrack/scripts/pre-commit.sh ../.git/hooks/pre-commit
+```
+
+Before a push, `scripts/pre-push.sh` formats (whitespace) and checks the newest unpushed revision
+that touches `JobTrack/`; `--full` checks each such revision in its own `jj run` checkout.
+
 The full solution suite is for occasional use — once at the end of a multi-stage plan, or before
 a commit that closes out a substantial piece of work — not for every commit, since it takes
 several minutes:
@@ -154,6 +167,11 @@ The 20-second budget is informational by default: a warning if exceeded, but the
 0, since a commit gate must never fail just because the machine running it is briefly loaded. Pass
 `--strict` for a CI-style mode that exits non-zero on a real overrun; the interactive commit gate in
 `CLAUDE.md` uses the default informational mode.
+
+Each project also runs under a hang guard: 30 seconds per fast project, 60 per `--longer` project.
+`FAST_TEST_TIMEOUT_SECONDS` and `LONGER_TEST_TIMEOUT_SECONDS` override them. The GitHub workflow
+(`.github/workflows/jobtrack.yml`) sets the fast guard to 120 seconds, since hosted runners take
+over 30 seconds on the SQLite suite.
 
 For a broader check before a commit (under 80 seconds), add `--longer` (or `-l`):
 
@@ -256,7 +274,7 @@ Playwright browser binaries installed once per machine:
 
 ```bash
 dotnet build tests/JobTrack.Web.EndToEndTests/JobTrack.Web.EndToEndTests.csproj
-pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install chromium firefox webkit
+pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net11.0/playwright.ps1 install chromium firefox webkit
 ```
 
 ## Running on a development server

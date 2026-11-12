@@ -32,7 +32,7 @@ API and driver) -- it does **not** download the browser binary itself. Before
 
 ```bash
 dotnet build tests/JobTrack.Web.EndToEndTests/JobTrack.Web.EndToEndTests.csproj
-pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install chromium firefox webkit
+pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net11.0/playwright.ps1 install chromium firefox webkit
 ```
 
 Firefox and WebKit are only exercised by `CrossBrowserCompatibilityTests` (plan §8.7 browser

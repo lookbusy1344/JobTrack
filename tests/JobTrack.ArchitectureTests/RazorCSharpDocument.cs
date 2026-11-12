@@ -18,7 +18,7 @@ internal sealed class RazorCSharpDocument
 		RazorProjectFileSystem.Empty);
 
 	private static readonly MethodInfo GetCSharpDocumentMethod =
-		typeof(RazorCodeDocument).GetMethod("GetCSharpDocument", BindingFlags.Instance | BindingFlags.NonPublic)
+		typeof(RazorCodeDocument).GetMethod("GetCSharpDocument", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(bool)])
 		?? throw new InvalidOperationException("The selected Razor compiler does not expose its generated C# document.");
 
 	private readonly Microsoft.AspNetCore.Razor.Language.RazorCSharpDocument generated;
@@ -41,7 +41,9 @@ internal sealed class RazorCSharpDocument
 			RazorFileKind.Legacy,
 			ImmutableArray<RazorSourceDocument>.Empty,
 			null);
-		var generated = GetCSharpDocumentMethod.Invoke(codeDocument, null) as Microsoft.AspNetCore.Razor.Language.RazorCSharpDocument
+		// GetCSharpDocument(bool declarationDocument): false selects the implementation document, which
+		// holds the authored method bodies and their source mappings.
+		var generated = GetCSharpDocumentMethod.Invoke(codeDocument, [false]) as Microsoft.AspNetCore.Razor.Language.RazorCSharpDocument
 						?? throw new InvalidOperationException("The Razor compiler did not produce a generated C# document.");
 
 		return new(generated);

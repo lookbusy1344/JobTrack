@@ -92,7 +92,7 @@ public sealed partial class CancellationPropagationTests : IAsyncLifetime, IDisp
 		// TaskCompletionSource.Task is designed to be awaited from a context other than the one
 		// that completes it -- VSTHRD003 does not special-case this well-known pattern.
 #pragma warning disable VSTHRD003
-		var observed = await Task.WhenAny(hook.Observed.Task, Task.Delay(TimeSpan.FromSeconds(5))) == hook.Observed.Task;
+		var observed = await hook.Observed.Task.CompletesWithinAsync(TimeSpan.FromSeconds(5));
 #pragma warning restore VSTHRD003
 		observed.Should().BeTrue("the library call must observe the same cancellation as the HTTP request, not run to completion regardless");
 	}
@@ -119,7 +119,7 @@ public sealed partial class CancellationPropagationTests : IAsyncLifetime, IDisp
 		// TaskCompletionSource.Task is designed to be awaited from a context other than the one
 		// that completes it -- VSTHRD003 does not special-case this well-known pattern.
 #pragma warning disable VSTHRD003
-		var observed = await Task.WhenAny(hook.Observed.Task, Task.Delay(TimeSpan.FromSeconds(5))) == hook.Observed.Task;
+		var observed = await hook.Observed.Task.CompletesWithinAsync(TimeSpan.FromSeconds(5));
 #pragma warning restore VSTHRD003
 		observed.Should().BeTrue("the library call must observe the same cancellation as the HTTP request, not run to completion regardless");
 	}

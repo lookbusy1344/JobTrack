@@ -16,7 +16,7 @@
 #
 #   --target serve      (default) chiseled, non-root, JobTrack.Web only — no shell, no CLI, no
 #                       package manager. This is what serves requests.
-#   --target provision  aspnet:10.0-noble + postgresql-client, running docker/provision.sh:
+#   --target provision  aspnet:11.0-resolute + postgresql-client, running docker/provision.sh:
 #                       schema deploy, login roles, and the three accounts. The deployment script
 #                       deletes this privileged Cloud Run job immediately after it completes.
 #
@@ -32,9 +32,9 @@
 # Base images are pinned by manifest-list digest: builds remain reproducible while --platform still
 # selects the correct architecture. Updating .NET is an explicit reviewed change that updates these
 # three digests, rebuilds both targets, and reruns the vulnerability gate in the deployment script.
-ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0@sha256:e1fc6e423f543119c406d24e2e687d67c569f18f04a37a8b0005d80ad0dcee80
-ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:f1126d438ccc359f51cc6d4701a8deae513856cf10f5fe645d29ea6403dcac6b
-ARG DOTNET_ASPNET_CHISELED_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:70d6f993bf715a031f027832a19cfb7f894df66c8b5eb40be0aaee820ad5d119
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:11.0@sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea
+ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:11.0-resolute@sha256:bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242
+ARG DOTNET_ASPNET_CHISELED_IMAGE=mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled@sha256:fc0ee12f9ea79bde6cda88c7a34e5467fe383dbb62276be0ec13e5e9cc1654ac
 
 # ---- build stage -----------------------------------------------------------
 FROM ${DOTNET_SDK_IMAGE} AS build

@@ -39,8 +39,9 @@ else
 fi
 
 readonly FAST_CORE_SLNF="JobTrack.FastCore.slnf"
-readonly FAST_TEST_TIMEOUT_SECONDS=30
-readonly LONGER_TEST_TIMEOUT_SECONDS=60
+# Per-project hang guards. CI overrides them for slower hosted runners.
+readonly FAST_TEST_TIMEOUT_SECONDS="${FAST_TEST_TIMEOUT_SECONDS:-30}"
+readonly LONGER_TEST_TIMEOUT_SECONDS="${LONGER_TEST_TIMEOUT_SECONDS:-60}"
 readonly BUILD_TIMEOUT_SECONDS=120
 readonly FAST_BUDGET_SECONDS=20
 readonly LONGER_BUDGET_SECONDS=80

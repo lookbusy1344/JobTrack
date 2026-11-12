@@ -42,7 +42,7 @@
 # port at all.
 
 # ---- build stage -----------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 # The build stage never gets .git (only .editorconfig and JobTrack/ are copied below), so
@@ -185,7 +185,7 @@ RUN mkdir -p /appdata/keys \
 # manager. It ships no ICU and so defaults to DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true — fine
 # here, as the codebase uses CultureInfo.InvariantCulture exclusively and Noda Time's TZDB data is
 # bundled in NodaTime.TimeZones rather than relying on system ICU/tzdata.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled AS runtime
 WORKDIR /app
 
 COPY --from=build /app/web ./web

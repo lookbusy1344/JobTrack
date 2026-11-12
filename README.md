@@ -8,7 +8,7 @@ A hierarchical job-tracking system with dynamic, historically-accurate costing.
 
 ## Introduction
 
-This is a recreation of my original project running on SQL Server and .NET 4.8, now rebuilt from scratch on PostgreSQL (or SQLite) and .NET 10, and packaged as a docker image for easy deployment.
+This is a recreation of my original project running on SQL Server and .NET 4.8, now rebuilt from scratch on PostgreSQL (or SQLite) and .NET 11, and packaged as a docker image for easy deployment.
 
 The app has 2 unusual features:
 
@@ -24,7 +24,7 @@ Two database backends are supported:
 
 ## Overview
 
-- **Stack:** .NET 10, C# 14, EF Core 10, Noda Time, ASP.NET Core Identity, Postgres/SQLite.
+- **Stack:** .NET 11, C# 15, EF Core 10, Noda Time, ASP.NET Core Identity, Postgres/SQLite.
 - **Shape:** a database and a reusable library, with three clients over them — see [Architecture](#architecture).
 - **Two databases, one behaviour:** PostgreSQL is the production backend; SQLite is a fully
   conforming second provider for embedded and demo use, held equivalent by a shared contract-test suite.

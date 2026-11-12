@@ -9,7 +9,7 @@ public sealed partial class DockerImageArchitectureTests
 	/// <summary>Cloud Run runs amd64; <c>Dockerfile.postgresql</c> derives this RID from TARGETARCH.</summary>
 	private const string PublishedRuntimeIdentifier = "linux-x64";
 
-	private const string TargetFrameworkMoniker = "net10.0";
+	private const string TargetFrameworkMoniker = "net11.0";
 
 	private const string PackagesLockFileName = "packages.lock.json";
 
@@ -42,9 +42,9 @@ public sealed partial class DockerImageArchitectureTests
 	{
 		var dockerfile = File.ReadAllText(Path.Combine(SolutionRoot, "Dockerfile.postgresql"));
 
-		dockerfile.Should().Contain("mcr.microsoft.com/dotnet/sdk:10.0@sha256:");
-		dockerfile.Should().Contain("mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:");
-		dockerfile.Should().Contain("mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:");
+		dockerfile.Should().Contain("mcr.microsoft.com/dotnet/sdk:11.0@sha256:");
+		dockerfile.Should().Contain("mcr.microsoft.com/dotnet/aspnet:11.0-resolute@sha256:");
+		dockerfile.Should().Contain("mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled@sha256:");
 		dockerfile.Should().Contain("Microsoft.Web.LibraryManager.Cli --version 3.0.114");
 		dockerfile.Should().Contain("sha256sum --check docker/libman.sha256");
 		dockerfile.Should().Contain("dotnet restore src/JobTrack.Web/JobTrack.Web.csproj --locked-mode");

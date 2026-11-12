@@ -1,5 +1,5 @@
 # For command-line and ASP.NET apps, and UI combined
-# 23 Sep 2026
+# 11 Nov 2026
 
 # Remove the line below if you want to inherit .editorconfig settings from higher directories
 root = true
@@ -315,6 +315,24 @@ dotnet_diagnostic.CS8524.severity = error
 dotnet_diagnostic.CS8846.severity = error
 dotnet_diagnostic.CS8510.severity = error
 dotnet_diagnostic.CS8847.severity = error
+
+
+# ---------------------------------------------------------------------
+# .NET 11 analyzer escalations
+# ---------------------------------------------------------------------
+
+# AsParallel() in foreach runs sequentially.
+dotnet_diagnostic.CA1876.severity = error
+
+# Non-cancellable Task.Delay in Task.WhenAny leaks the timer.
+dotnet_diagnostic.CA2027.severity = error
+
+# New rules default to suggestion. Category lines are ignored when a project sets
+# AnalysisMode, and CA1517 is Maintainability, so set each rule by ID.
+dotnet_diagnostic.CA1517.severity = warning
+dotnet_diagnostic.CA1830.severity = warning
+dotnet_diagnostic.CA1877.severity = warning
+dotnet_diagnostic.CA2026.severity = warning
 
 
 # =====================================================================

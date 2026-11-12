@@ -18,7 +18,7 @@ These ship inside the deployed application, and so form part of the
 | Component | Version | License | AGPLv3 compatibility |
 | --- | --- | --- | --- |
 | Bootstrap | 5.3.8 | MIT | Compatible |
-| Mulish (Fontsource) | 5.2.8 | SIL Open Font License 1.1 | Compatible (aggregation) |
+| Mulish (Fontsource) | 5.3.0 | SIL Open Font License 1.1 | Compatible (aggregation) |
 
 Bootstrap: Copyright (c) 2011-2025 The Bootstrap Authors. Licensed under MIT
 (<https://github.com/twbs/bootstrap/blob/main/LICENSE>).

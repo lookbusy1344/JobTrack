@@ -563,7 +563,7 @@ public abstract class JobBrowseQueryPortContractTestsBase : IAsyncLifetime
 		if (Provider == SchemaProvider.PostgreSql) {
 			var transitionTask = achievementPort.SetAchievementAsync(transitionRequest);
 			try {
-				_ = await Task.WhenAny(transitionTask, Task.Delay(ConcurrentWriterProbe));
+				_ = await transitionTask.CompletesWithinAsync(ConcurrentWriterProbe);
 			}
 			finally {
 				interceptor.Release();

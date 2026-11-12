@@ -15,7 +15,7 @@
     },
     {
       "provider": "jsdelivr",
-      "library": "@fontsource/mulish@5.2.8",
+      "library": "@fontsource/mulish@5.3.0",
       "destination": "wwwroot/lib/mulish/",
       "files": [
         "files/mulish-latin-400-normal.woff2",
