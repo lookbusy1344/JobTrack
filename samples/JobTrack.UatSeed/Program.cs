@@ -131,6 +131,8 @@ internal static class Program
 				case "--job-manager-username" when i + 1 < arguments.Length:
 					jobManagerUserName = arguments[++i];
 					break;
+				default:
+					return null;
 			}
 		}
 

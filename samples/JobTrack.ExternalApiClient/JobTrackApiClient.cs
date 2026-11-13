@@ -267,6 +267,7 @@ public sealed class JobTrackApiClient : IDisposable
 		var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 		var detail = TryParseProblemDetail(body) ?? response.ReasonPhrase ?? "Request failed.";
 
+#pragma warning disable IDE0072 // HttpStatusCode is an open framework enum; every other status maps to the base exception
 		throw response.StatusCode switch {
 			HttpStatusCode.Unauthorized => new JobTrackApiUnauthorizedException(detail),
 			HttpStatusCode.Forbidden => new JobTrackApiForbiddenException(detail),
@@ -274,6 +275,7 @@ public sealed class JobTrackApiClient : IDisposable
 			HttpStatusCode.Conflict => new JobTrackApiConflictException(detail),
 			_ => new JobTrackApiException(response.StatusCode, detail),
 		};
+#pragma warning restore IDE0072
 	}
 
 	private static string? TryParseProblemDetail(string body)
