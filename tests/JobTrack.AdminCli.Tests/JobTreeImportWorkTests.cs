@@ -25,7 +25,7 @@ public sealed class JobTreeImportWorkTests
 		var work = Resolve("2 days");
 
 		work.Should().NotBeNull();
-		work!.StartedAt.Should().Be(ImportedAt - Duration.FromDays(2));
+		work.StartedAt.Should().Be(ImportedAt - Duration.FromDays(2));
 		work.FinishedAt.Should().BeNull();
 		work.Achievement.Should().Be(Achievement.InProgress);
 		work.WorkedByUserId.Should().Be(Worker);
@@ -37,7 +37,7 @@ public sealed class JobTreeImportWorkTests
 		var work = Resolve("2 days", "1 day");
 
 		work.Should().NotBeNull();
-		work!.StartedAt.Should().Be(ImportedAt - Duration.FromDays(2));
+		work.StartedAt.Should().Be(ImportedAt - Duration.FromDays(2));
 		work.FinishedAt.Should().Be(ImportedAt - Duration.FromDays(1));
 		work.Achievement.Should().Be(Achievement.Success);
 	}
@@ -77,7 +77,7 @@ public sealed class JobTreeImportWorkTests
 		var work = Resolve(start: "2026-07-10T09:00:00Z", end: "2026-07-10T17:30:00Z");
 
 		work.Should().NotBeNull();
-		work!.StartedAt.Should().Be(Instant.FromUtc(2026, 7, 10, 9, 0, 0));
+		work.StartedAt.Should().Be(Instant.FromUtc(2026, 7, 10, 9, 0, 0));
 		work.FinishedAt.Should().Be(Instant.FromUtc(2026, 7, 10, 17, 30, 0));
 		work.Achievement.Should().Be(Achievement.Success);
 	}

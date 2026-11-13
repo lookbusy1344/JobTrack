@@ -352,7 +352,7 @@ public sealed class JobTreeImportCommandTests
 			})).Single();
 			surveySession.StartedAt.Should().BeInRange(before - Duration.FromDays(3), after - Duration.FromDays(3));
 			surveySession.FinishedAt.Should().NotBeNull();
-			surveySession.FinishedAt!.Value.Should().BeInRange(before - Duration.FromDays(2), after - Duration.FromDays(2));
+			surveySession.FinishedAt.Value.Should().BeInRange(before - Duration.FromDays(2), after - Duration.FromDays(2));
 
 			var digSession = (await client.Query.GetLeafSessionsAsync(new() {
 				Context = context,

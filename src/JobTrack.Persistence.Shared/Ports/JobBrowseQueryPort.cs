@@ -102,7 +102,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		JobNodeId rootId, int maxDepth, OwnershipFilter ownership, JobArchiveFilter archiveFilter,
 		CancellationToken cancellationToken = default)
 	{
-		if (maxDepth < 0 || maxDepth > JobSubtreeLimits.HardMaxDepth) {
+		if (maxDepth is < 0 or > JobSubtreeLimits.HardMaxDepth) {
 			throw new ArgumentOutOfRangeException(
 				nameof(maxDepth), maxDepth, $"Subtree depth must be between 0 and {JobSubtreeLimits.HardMaxDepth}.");
 		}
@@ -274,7 +274,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 		var paged = limit.HasValue ? ordered.Take(limit.Value) : ordered;
 		var rows = await paged.ToListAsync(cancellationToken).ConfigureAwait(false);
 
-		return rows.Select(r => new JobNodeSummaryResult {
+		return [.. rows.Select(r => new JobNodeSummaryResult {
 			Id = r.Id,
 			ParentId = r.ParentId,
 			Kind = JobNodeStructuralResults.DeriveKind(r.ParentId, r.HasChildren),
@@ -285,7 +285,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 			HasChildren = r.HasChildren,
 			HasLeafWork = r.Achievement is not null,
 			Achievement = r.Achievement,
-		}).ToList();
+		})];
 	}
 
 	private static async Task<List<JobNodeSubtreeRow>> LoadSubtreeRowsAsync(
@@ -333,7 +333,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 			keepById[row.Id] = matchesById[row.Id] || descendantMatches || row.Id == rootId;
 		}
 
-		return shaped
+		return [.. shaped
 			   .Where(r => keepById[r.Id])
 			   .OrderBy(r => r.Id.Value)
 			   .Select(r => new JobNodeSubtreeRow {
@@ -354,8 +354,7 @@ internal sealed class JobBrowseQueryPort(IJobBrowseProviderOperations provider) 
 				   HasUnacknowledgedRequest = r.HasUnacknowledgedRequest,
 				   HasUnexpandedChildren = r.HasChildren && !expandedById[r.Id],
 				   MatchesFilter = matchesById[r.Id],
-			   })
-			   .ToList();
+			   })];
 	}
 
 	private static bool MatchesFilter(AppUserId? ownerUserId, Instant? archivedAt, OwnershipFilter ownership, JobArchiveFilter archiveFilter)

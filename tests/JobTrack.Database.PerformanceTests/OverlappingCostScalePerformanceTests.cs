@@ -137,12 +137,12 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		var seed = await PerformanceScaleGenerator.SeedOverlappingCostScaleAsync(connection, BaseInstant, includeHeavyWorker: true);
 		seed.HeavyWorkerId.Should().NotBeNull();
 		seed.HeavyWorkerBranchId.Should().NotBeNull();
-		await GrantCostViewerRoleAsync(connection, seed.HeavyWorkerId!.Value);
+		await GrantCostViewerRoleAsync(connection, seed.HeavyWorkerId.Value);
 
 		var port = new PostgreSqlCostQueryPort(new NpgsqlDataSourceBuilder(database.ConnectionString).UseNodaTime().Build(), SystemClock.Instance);
 		var costQueries = new CostQueries(port);
 		var context = new CommandContext {
-			Actor = new(seed.HeavyWorkerId!.Value),
+			Actor = new(seed.HeavyWorkerId.Value),
 			CorrelationId = Guid.NewGuid(),
 		};
 		var asOf = Instant.FromDateTimeOffset(seed.AsOf);
@@ -151,7 +151,7 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		var result = await costQueries.GetHierarchyTotalsAsync(
 			new() {
 				Context = context,
-				NodeId = new(seed.HeavyWorkerBranchId!.Value),
+				NodeId = new(seed.HeavyWorkerBranchId.Value),
 				AsOf = asOf,
 			});
 		stopwatch.Stop();
@@ -170,7 +170,7 @@ public sealed class OverlappingCostScalePerformanceTests : IAsyncLifetime
 		var detailsResult = await costQueries.GetCostDetailsAsync(
 			new() {
 				Context = context,
-				NodeId = new(seed.HeavyWorkerBranchId!.Value),
+				NodeId = new(seed.HeavyWorkerBranchId.Value),
 				AsOf = asOf,
 			});
 		output.WriteLine($"Heavy worker (5,000 sessions) cost details trace: {detailsResult.Trace.Count} segments");

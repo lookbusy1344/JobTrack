@@ -98,7 +98,7 @@ public class PicoArgs(IEnumerable<string> args, bool recogniseEquals = true)
 		ValidatePossibleParams(options);
 		CheckFinished();
 
-		var result = new List<string>(4);
+		List<string> result = [];
 		while (true) {
 			var s = GetParamInternal(options); // Internal call, because we have already validated the options
 			if (s == null) {

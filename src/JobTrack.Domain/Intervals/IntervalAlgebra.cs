@@ -49,9 +49,7 @@ public static class IntervalAlgebra
 			return [];
 		}
 
-		var merged = new List<WorkInterval>(sorted.Length) {
-			sorted[0],
-		};
+		List<WorkInterval> merged = [with(sorted.Length), sorted[0]];
 		foreach (var current in sorted.AsSpan(1)) {
 			var last = merged[^1];
 			if (current.Start > last.End) {

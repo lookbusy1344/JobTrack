@@ -125,7 +125,7 @@ public sealed class TokenCommandsTests
 		});
 
 		authenticated.Should().NotBeNull();
-		authenticated!.UserId.Should().Be(WorkerId);
+		authenticated.UserId.Should().Be(WorkerId);
 	}
 
 	[Fact]

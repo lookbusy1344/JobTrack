@@ -116,7 +116,7 @@ public sealed class LoginAttemptRateLimiter : IDisposable, ILoginAttemptRateLimi
 	private sealed class BoundedWindowCache(int capacity)
 	{
 		private readonly Queue<string> insertionOrder = new();
-		private readonly Dictionary<string, WindowState> windows = new(StringComparer.Ordinal);
+		private readonly Dictionary<string, WindowState> windows = [with(StringComparer.Ordinal)];
 
 		public void Add(string key, WindowState state)
 		{

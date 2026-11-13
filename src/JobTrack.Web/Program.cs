@@ -588,7 +588,7 @@ public sealed class Program
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rateLimitMaxPartitionCount, RateLimitMaxPartitionCountConfigKey);
 
 		var rateLimitingStore = builder.Configuration[RateLimitingStoreConfigKey];
-		if (rateLimitingStore is not null && rateLimitingStore != RateLimitingStoreInProcess && rateLimitingStore != RateLimitingStorePostgreSql) {
+		if (rateLimitingStore is not null and not RateLimitingStoreInProcess and not RateLimitingStorePostgreSql) {
 			throw new InvalidOperationException(
 				$"{RateLimitingStoreConfigKey} must be '{RateLimitingStoreInProcess}' or '{RateLimitingStorePostgreSql}' if set.");
 		}
@@ -661,8 +661,8 @@ public sealed class Program
 	{
 		var dataProtectionStore = builder.Configuration[DataProtectionStoreConfigKey];
 		if (dataProtectionStore is not null
-			&& dataProtectionStore != DataProtectionStoreFileSystem
-			&& dataProtectionStore != DataProtectionStorePostgreSql) {
+			and not DataProtectionStoreFileSystem
+			and not DataProtectionStorePostgreSql) {
 			throw new InvalidOperationException(
 				$"{DataProtectionStoreConfigKey} must be '{DataProtectionStoreFileSystem}' or '{DataProtectionStorePostgreSql}' if set.");
 		}
@@ -731,8 +731,8 @@ public sealed class Program
 	{
 		var deploymentTopology = builder.Configuration[DeploymentTopologyConfigKey];
 		if (deploymentTopology is not null
-			&& deploymentTopology != DeploymentTopologySingleInstance
-			&& deploymentTopology != DeploymentTopologyMultiInstance) {
+			and not DeploymentTopologySingleInstance
+			and not DeploymentTopologyMultiInstance) {
 			throw new InvalidOperationException(
 				$"{DeploymentTopologyConfigKey} must be '{DeploymentTopologySingleInstance}' or '{DeploymentTopologyMultiInstance}' if set.");
 		}

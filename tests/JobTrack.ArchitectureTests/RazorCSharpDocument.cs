@@ -1,6 +1,5 @@
 namespace JobTrack.ArchitectureTests;
 
-using System.Collections.Immutable;
 using System.Reflection;
 using Microsoft.AspNetCore.Razor.Language;
 using Microsoft.CodeAnalysis;
@@ -39,7 +38,7 @@ internal sealed class RazorCSharpDocument
 		var codeDocument = ProjectEngine.Process(
 			sourceDocument,
 			RazorFileKind.Legacy,
-			ImmutableArray<RazorSourceDocument>.Empty,
+			[],
 			null);
 		// GetCSharpDocument(bool declarationDocument): false selects the implementation document, which
 		// holds the authored method bodies and their source mappings.

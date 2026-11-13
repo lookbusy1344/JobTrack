@@ -45,7 +45,7 @@ public sealed class JobTrackUserStorePasskeyTests : IAsyncLifetime
 
 		var owner = await WithStoreAsync(store => store.FindByPasskeyIdAsync(credentialId, CancellationToken.None));
 		owner.Should().NotBeNull();
-		owner!.Id.Should().Be(user.Id);
+		owner.Id.Should().Be(user.Id);
 	}
 
 	[Fact]
@@ -74,7 +74,7 @@ public sealed class JobTrackUserStorePasskeyTests : IAsyncLifetime
 
 		var reloaded = await WithStoreAsync(store => store.FindPasskeyAsync(user, credentialId, CancellationToken.None));
 		reloaded.Should().NotBeNull();
-		reloaded!.CredentialId.Should().Equal(credentialId);
+		reloaded.CredentialId.Should().Equal(credentialId);
 		reloaded.PublicKey.Should().Equal(40, 41, 42);
 		reloaded.CreatedAt.Should().Be(createdAt);
 		reloaded.SignCount.Should().Be(7);
@@ -298,9 +298,9 @@ public sealed class JobTrackUserStorePasskeyTests : IAsyncLifetime
 		var byNumericId = await WithStoreAsync(store => store.FindByIdAsync(user.Id.ToString(CultureInfo.InvariantCulture), CancellationToken.None));
 
 		byHandle.Should().NotBeNull();
-		byHandle!.Id.Should().Be(user.Id);
+		byHandle.Id.Should().Be(user.Id);
 		byNumericId.Should().NotBeNull();
-		byNumericId!.Id.Should().Be(user.Id);
+		byNumericId.Id.Should().Be(user.Id);
 	}
 
 	[Fact]

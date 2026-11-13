@@ -167,7 +167,7 @@ public abstract class RequestsBrowserTestsBase
 
 		titleBox.Should().NotBeNull();
 		handBox.Should().NotBeNull();
-		(handBox!.X + handBox.Width).Should().BeLessThanOrEqualTo(titleBox!.X,
+		(handBox.X + handBox.Width).Should().BeLessThanOrEqualTo(titleBox.X,
 			"the same leading stop-hand convention as Browse places blocked state before the title");
 		(await title.Locator("..").GetByText("Blocked by a prerequisite.", new() {
 			Exact = true,

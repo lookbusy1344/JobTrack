@@ -135,7 +135,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 
 		var pillBox = await activePill.BoundingBoxAsync();
 		pillBox.Should().NotBeNull();
-		pillBox!.Height.Should().BeLessThanOrEqualTo(MaximumSingleLinePillHeightPixels,
+		pillBox.Height.Should().BeLessThanOrEqualTo(MaximumSingleLinePillHeightPixels,
 			$"the active-count pill must stay a single line at {width}x{height}, not wrap its glyph or digit");
 
 		var tableWidth = await WidthAsync(table);
@@ -202,7 +202,7 @@ public abstract class AwaitingProgressBrowserTestsBase
 	{
 		var box = await element.BoundingBoxAsync();
 		box.Should().NotBeNull();
-		return box!.Width;
+		return box.Width;
 	}
 }
 

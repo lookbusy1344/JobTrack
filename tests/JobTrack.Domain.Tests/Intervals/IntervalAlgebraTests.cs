@@ -257,8 +257,8 @@ public sealed class IntervalAlgebraTests
 		public void Resolving_a_five_year_daily_schedule_against_five_years_of_daily_exceptions_stays_fast()
 		{
 			const int days = 5 * 365;
-			var scheduled = new List<WorkInterval>(days);
-			var exceptions = new List<WorkInterval>(days);
+			List<WorkInterval> scheduled = [with(days)];
+			List<WorkInterval> exceptions = [with(days)];
 			for (var day = 0; day < days; ++day) {
 				var dayStart = Instant.FromUtc(2021, 1, 1, 0, 0) + Duration.FromDays(day);
 				scheduled.Add(new(dayStart, dayStart + Duration.FromHours(23) + Duration.FromMinutes(59) + Duration.FromSeconds(59)));

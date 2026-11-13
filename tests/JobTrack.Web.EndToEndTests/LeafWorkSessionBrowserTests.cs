@@ -283,7 +283,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		notice.Should().NotBeNull("the blocked notice must be rendered for a leaf whose prerequisite is unfinished");
 		pill.Should().NotBeNull("the active-session pill must be rendered for a leaf with work in flight");
 
-		var gap = pill!.Y - (notice!.Y + notice.Height);
+		var gap = pill.Y - (notice.Y + notice.Height);
 		gap.Should().BeInRange(MinimumStackedGapPixels, MaximumStackedGapPixels,
 			"a notice and the pill below it are separated by one spacing step -- neither touching nor a double line");
 	}
@@ -359,7 +359,7 @@ public abstract class LeafWorkSessionBrowserTestsBase
 		notice.Should().NotBeNull("an archived leaf explains why no session can start here");
 		writeUp.Should().NotBeNull("every state that has no ending section still gets the standalone write-up form");
 
-		var gap = writeUp!.Y - (notice!.Y + notice.Height);
+		var gap = writeUp.Y - (notice.Y + notice.Height);
 		gap.Should().BeInRange(MinimumStackedGapPixels, MaximumStackedGapPixels,
 			"the notice's own bottom margin collapses with the write-up form's top margin into a single spacing step");
 	}

@@ -16,7 +16,7 @@ internal static class PasskeyCredentialJson
 		using var reader = new StreamReader(request.Body, Encoding.UTF8, false, leaveOpen: true);
 		var buffer = new char[PasskeyPolicy.MaximumCredentialJsonByteLength + 1];
 		var count = await reader.ReadBlockAsync(buffer, cancellationToken);
-		if (count == 0 || count > PasskeyPolicy.MaximumCredentialJsonByteLength) {
+		if (count is 0 or > PasskeyPolicy.MaximumCredentialJsonByteLength) {
 			return null;
 		}
 

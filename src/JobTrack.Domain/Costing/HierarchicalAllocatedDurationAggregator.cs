@@ -60,7 +60,7 @@ public static class HierarchicalAllocatedDurationAggregator
 		ArgumentNullException.ThrowIfNull(nodesById);
 		ArgumentNullException.ThrowIfNull(leafDurations);
 
-		var totals = new Dictionary<JobNodeId, AllocatedDuration>(rootIds.Count);
+		Dictionary<JobNodeId, AllocatedDuration> totals = [with(rootIds.Count)];
 		foreach (var rootId in rootIds) {
 			if (nodesById.ContainsKey(rootId)) {
 				totals[rootId] = AllocatedDuration.Zero;

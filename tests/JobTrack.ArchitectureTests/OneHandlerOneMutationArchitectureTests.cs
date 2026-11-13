@@ -56,7 +56,7 @@ public sealed partial class OneHandlerOneMutationArchitectureTests
 	///     plan §2.5 an entry may only ever cover authentication-attempt audit or composition mechanics,
 	///     never a business workflow.
 	/// </summary>
-	private static readonly FrozenSet<string> HandlerAllowlist = FrozenSet<string>.Empty;
+	private static readonly FrozenSet<string> HandlerAllowlist = [];
 
 	/// <summary>
 	///     The facade interfaces documenting composites, paired with their concrete handlers. This

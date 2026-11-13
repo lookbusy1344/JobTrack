@@ -51,7 +51,7 @@ public sealed class EmergencyTwoFactorResetTests
 
 			var reloaded = await userManager.FindByNameAsync("ada.reset-2fa");
 			reloaded.Should().NotBeNull();
-			reloaded!.TwoFactorEnabled.Should().BeFalse();
+			reloaded.TwoFactorEnabled.Should().BeFalse();
 			reloaded.AuthenticatorKeyProtected.Should().BeNull();
 			reloaded.SecurityStamp.Should().NotBe(stampBefore);
 
@@ -95,7 +95,7 @@ public sealed class EmergencyTwoFactorResetTests
 
 			var reloaded = await userManager.FindByNameAsync("ada.reset-2fa");
 			reloaded.Should().NotBeNull();
-			reloaded!.TwoFactorEnabled.Should().BeFalse();
+			reloaded.TwoFactorEnabled.Should().BeFalse();
 			reloaded.AuthenticatorKeyProtected.Should().BeNull();
 			reloaded.SecurityStamp.Should().NotBe(stampBefore);
 
@@ -188,8 +188,8 @@ public sealed class EmergencyTwoFactorResetTests
 			exitCode.Should().Be(0);
 			var reloaded = await userManager.FindByNameAsync("ada.locked-2fa");
 			reloaded.Should().NotBeNull();
-			(await userManager.IsLockedOutAsync(reloaded!)).Should().BeFalse("an emergency reset must leave the account able to sign in");
-			reloaded!.LockoutEnd.Should().BeNull();
+			(await userManager.IsLockedOutAsync(reloaded)).Should().BeFalse("an emergency reset must leave the account able to sign in");
+			reloaded.LockoutEnd.Should().BeNull();
 			reloaded.AccessFailedCount.Should().Be(0);
 		}
 		finally {
@@ -224,8 +224,8 @@ public sealed class EmergencyTwoFactorResetTests
 			exitCode.Should().Be(0);
 			var reloaded = await userManager.FindByNameAsync("ada.locked-2fa");
 			reloaded.Should().NotBeNull();
-			(await userManager.IsLockedOutAsync(reloaded!)).Should().BeFalse("an emergency reset must leave the account able to sign in");
-			reloaded!.LockoutEnd.Should().BeNull();
+			(await userManager.IsLockedOutAsync(reloaded)).Should().BeFalse("an emergency reset must leave the account able to sign in");
+			reloaded.LockoutEnd.Should().BeNull();
 			reloaded.AccessFailedCount.Should().Be(0);
 		}
 		finally {

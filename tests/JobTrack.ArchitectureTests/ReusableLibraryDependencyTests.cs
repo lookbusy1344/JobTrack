@@ -13,7 +13,7 @@ public sealed class ReusableLibraryDependencyTests
 {
 	private static readonly FrozenDictionary<string, FrozenSet<string>> AllowedProjectReferences =
 		new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal) {
-			["JobTrack.Abstractions"] = FrozenSet<string>.Empty,
+			["JobTrack.Abstractions"] = [],
 			["JobTrack.Domain"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions"], StringComparer.Ordinal),
 			["JobTrack.Application"] = FrozenSet.ToFrozenSet(["JobTrack.Abstractions", "JobTrack.Domain"], StringComparer.Ordinal),
 			// Shared hosts the provider-neutral port implementations both providers derive from, so it

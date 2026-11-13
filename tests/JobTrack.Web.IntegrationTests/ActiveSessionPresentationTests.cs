@@ -54,7 +54,7 @@ public sealed class ActiveSessionPresentationTests
 		var presentation = ActiveSessionPresentation.Derive(sessions, Viewer);
 
 		presentation.ViewerSession.Should().NotBeNull();
-		presentation.ViewerSession!.WorkedByUserId.Should().Be(Viewer);
+		presentation.ViewerSession.WorkedByUserId.Should().Be(Viewer);
 		presentation.OtherSessions.Should().HaveCount(2);
 		presentation.OtherSessions.Select(s => s.WorkedByUserId).Should().BeEquivalentTo([Alice, Bob]);
 		presentation.Count.Should().Be(3);

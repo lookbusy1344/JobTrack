@@ -61,12 +61,11 @@ internal static class SystemThreadingLockGuard
 	private const string SystemThreadingLockType = "global::System.Threading.Lock";
 
 	private static readonly IReadOnlyList<MetadataReference> PlatformReferences =
-		((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")
+		[.. ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")
 		 ?? throw new InvalidOperationException("The runtime did not expose its trusted platform assemblies."))
 		.Split(Path.PathSeparator)
 		.Distinct(StringComparer.Ordinal)
-		.Select(static path => MetadataReference.CreateFromFile(path))
-		.ToArray();
+		.Select(static path => MetadataReference.CreateFromFile(path))];
 
 	private static readonly SyntaxTree ImplicitUsings = CSharpSyntaxTree.ParseText(
 		"global using System.Threading;",
@@ -87,12 +86,11 @@ internal static class SystemThreadingLockGuard
 			PlatformReferences);
 		var semanticModel = compilation.GetSemanticModel(root.SyntaxTree);
 
-		return root.DescendantNodes()
+		return [.. root.DescendantNodes()
 				   .OfType<LockStatementSyntax>()
 				   .Where(statement => semanticModel.GetTypeInfo(statement.Expression).Type?.ToDisplayString(
 					   SymbolDisplayFormat.FullyQualifiedFormat) != SystemThreadingLockType)
-				   .Select(statement => Describe(fileName, OriginalLine(statement, razorDocument)))
-				   .ToArray();
+				   .Select(statement => Describe(fileName, OriginalLine(statement, razorDocument)))];
 	}
 
 	private static int OriginalLine(LockStatementSyntax statement, RazorCSharpDocument? razorDocument) =>

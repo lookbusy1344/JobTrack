@@ -28,7 +28,7 @@ internal static class SubtreeImportPlanner
 			throw new InvariantViolationException(ConstraintIds.ImportSubtreeEmpty, "The import batch contains no nodes.");
 		}
 
-		var byLocalId = new Dictionary<long, ImportSubtreeNodeSpec>(nodes.Count);
+		Dictionary<long, ImportSubtreeNodeSpec> byLocalId = [with(nodes.Count)];
 		foreach (var node in nodes) {
 			if (!byLocalId.TryAdd(node.LocalId, node)) {
 				throw new InvariantViolationException(
@@ -57,8 +57,8 @@ internal static class SubtreeImportPlanner
 							   .GroupBy(n => n.ParentLocalId!.Value)
 							   .ToDictionary(g => g.Key, g => (IReadOnlyList<ImportSubtreeNodeSpec>)[.. g]);
 
-		var ordered = new List<ImportSubtreeNodeSpec>(nodes.Count);
-		var visited = new HashSet<long>(nodes.Count);
+		List<ImportSubtreeNodeSpec> ordered = [with(nodes.Count)];
+		HashSet<long> visited = [with(nodes.Count)];
 		var frontier = new Queue<ImportSubtreeNodeSpec>(nodes.Where(n => n.ParentLocalId is null));
 
 		while (frontier.Count > 0) {
@@ -190,8 +190,8 @@ internal static class SubtreeImportPlanner
 		IReadOnlyList<ImportSubtreeNodeSpec> ordered,
 		IReadOnlyDictionary<long, IReadOnlyList<ImportSubtreeNodeSpec>> childrenByParent)
 	{
-		var achieved = new Dictionary<long, bool>(ordered.Count);
-		var latestFinish = new Dictionary<long, Instant?>(ordered.Count);
+		Dictionary<long, bool> achieved = [with(ordered.Count)];
+		Dictionary<long, Instant?> latestFinish = [with(ordered.Count)];
 
 		for (var i = ordered.Count - 1; i >= 0; --i) {
 			var node = ordered[i];

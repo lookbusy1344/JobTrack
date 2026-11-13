@@ -35,7 +35,7 @@ public static class PasskeyAuthenticationSetup
 		// AddIdentityCore does not register it, so wire the framework default explicitly.
 		services.TryAddScoped<IPasskeyHandler<JobTrackIdentityUser>, PasskeyHandler<JobTrackIdentityUser>>();
 
-		var allowedOrigins = new HashSet<string>(options.Origins, StringComparer.Ordinal);
+		HashSet<string> allowedOrigins = [with(StringComparer.Ordinal), .. options.Origins];
 		_ = services.Configure<IdentityPasskeyOptions>(passkey => {
 			passkey.ServerDomain = options.ServerDomain;
 			passkey.ResidentKeyRequirement = ResidentKeyRequired;

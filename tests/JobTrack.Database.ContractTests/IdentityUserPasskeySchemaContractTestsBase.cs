@@ -115,25 +115,25 @@ public abstract class IdentityUserPasskeySchemaContractTestsBase : IAsyncLifetim
 		var userId = await SeedIdentityUserAsync(connection, "bounded");
 		var credentialId = field == "credential-id"
 			? new byte[PasskeyPolicy.MaximumCredentialIdByteLength + 1]
-			: new byte[] {
+			: [
 				1,
-			};
+			];
 		var publicKey = field == "public-key"
 			? new byte[PasskeyPolicy.MaximumPublicKeyByteLength + 1]
-			: new byte[] {
+			: [
 				1,
-			};
+			];
 		var transports = field == "transports" ? new string('x', PasskeyPolicy.MaximumTransportsLength + 1) : null;
 		var attestation = field == "attestation"
 			? new byte[PasskeyPolicy.MaximumAttestationObjectByteLength + 1]
-			: new byte[] {
+			: [
 				1,
-			};
+			];
 		var clientData = field == "client-data"
 			? new byte[PasskeyPolicy.MaximumClientDataJsonByteLength + 1]
-			: new byte[] {
+			: [
 				1,
-			};
+			];
 
 		var act = async () => await InsertPasskeyAsync(
 			connection, userId, credentialId, "Bounded", "BOUNDED", publicKey: publicKey,

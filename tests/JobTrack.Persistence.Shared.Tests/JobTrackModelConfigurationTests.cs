@@ -38,7 +38,7 @@ public sealed class JobTrackModelConfigurationTests
 			using (context) {
 				var entity = context.Model.FindEntityType(entityType);
 				entity.Should().NotBeNull();
-				entity!.GetTableName().Should().Be(expectedTableName);
+				entity.GetTableName().Should().Be(expectedTableName);
 			}
 		}
 	}
@@ -329,7 +329,7 @@ public sealed class JobTrackModelConfigurationTests
 	{
 		var entity = context.Model.FindEntityType(typeof(TEntity));
 		entity.Should().NotBeNull();
-		entity!.GetProperties().Select(p => p.GetColumnName()).Should().BeEquivalentTo(expectedColumns);
+		entity.GetProperties().Select(p => p.GetColumnName()).Should().BeEquivalentTo(expectedColumns);
 	}
 
 	private static IProperty GetProperty<TEntity>(DbContext context, string propertyName)

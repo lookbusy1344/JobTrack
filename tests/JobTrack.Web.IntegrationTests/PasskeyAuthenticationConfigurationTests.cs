@@ -165,7 +165,7 @@ public sealed class PasskeyAuthenticationConfigurationTests
 		var validateOrigin = options.ValidateOrigin;
 		validateOrigin.Should().NotBeNull();
 
-		var allowed = await validateOrigin!(Context("https://jobs.example.com"));
+		var allowed = await validateOrigin(Context("https://jobs.example.com"));
 		var rejected = await validateOrigin(Context("https://evil.example.org"));
 		var crossOrigin = await validateOrigin(Context("https://jobs.example.com", true));
 

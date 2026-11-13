@@ -58,7 +58,7 @@ public sealed class ChangePasswordModel(
 				new() {
 					ActorUserId = user.AppUserId,
 					IdentityUserId = user.Id,
-					Username = user.UserName!,
+					Username = user.UserName,
 					CurrentPassword = Input.CurrentPassword,
 					NewPassword = Input.NewPassword,
 					CorrelationId = Guid.NewGuid(),

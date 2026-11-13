@@ -241,7 +241,7 @@ public sealed partial class CancellationPropagationTests : IAsyncLifetime, IDisp
 		public static TInterface Wrap(TInterface inner, CancellationHook hook)
 		{
 			var created = Create<TInterface, CancellationObservingProxy<TInterface>>();
-			var proxy = (CancellationObservingProxy<TInterface>)(object)created!;
+			var proxy = (CancellationObservingProxy<TInterface>)(object)created;
 			proxy._inner = inner;
 			proxy._hook = hook;
 			return created;

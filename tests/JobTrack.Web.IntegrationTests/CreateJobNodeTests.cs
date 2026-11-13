@@ -420,7 +420,7 @@ public sealed partial class CreateJobNodeTests : IAsyncLifetime, IDisposable
 
 		var created = await FindChildNodeAsync(rootId, "DST gap needed-start child");
 		created.NeededStart.Should().Be(CivilTimeResolver.ToInstant(new(2024, 3, 10, 2, 30, 0), newYork));
-		created.NeededStart!.Value.InZone(newYork).LocalDateTime.Should().Be(new(2024, 3, 10, 3, 30, 0));
+		created.NeededStart.Value.InZone(newYork).LocalDateTime.Should().Be(new(2024, 3, 10, 3, 30, 0));
 	}
 
 	private async Task<JobNodeResult> FindChildNodeAsync(JobNodeId parentId, string description)

@@ -198,8 +198,8 @@ internal sealed partial class SqliteJobNodeCommandPort
 		SqliteJobTrackDbContext context, IProviderWriteOperations writeOperations, ImportSubtreeRequest request, Instant now,
 		CancellationToken cancellationToken)
 	{
-		var createdByLocalId = new Dictionary<long, JobNodeEntity>(request.Nodes.Count);
-		var created = new List<(long LocalId, JobNodeEntity Entity)>(request.Nodes.Count);
+		Dictionary<long, JobNodeEntity> createdByLocalId = [with(request.Nodes.Count)];
+		List<(long LocalId, JobNodeEntity Entity)> created = [with(request.Nodes.Count)];
 
 		foreach (var spec in request.Nodes) {
 			var parentId = spec.ParentLocalId.HasValue ? createdByLocalId[spec.ParentLocalId.Value].Id : request.ParentId;

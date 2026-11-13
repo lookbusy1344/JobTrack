@@ -242,7 +242,7 @@ public sealed class CostEngineTests
 
 		var inOrder = CostEngine.Calculate(RootId, allocations, nodes, scheduled, [], [], [], new HourlyRate(60m));
 		var reversed = CostEngine.Calculate(
-			RootId, allocations, nodes, scheduled.Reverse().ToArray(), [], [], [], new HourlyRate(60m));
+			RootId, allocations, nodes, [.. scheduled.Reverse()], [], [], [], new HourlyRate(60m));
 		var overlapping = CostEngine.Calculate(
 			RootId, allocations, nodes, [new(At(9), At(14)), new(At(11), At(17)), new(At(20), At(22))], [], [], [],
 			new HourlyRate(60m));
@@ -255,9 +255,9 @@ public sealed class CostEngineTests
 
 	private static CostScenario BuildDailyExceptionScenario(int days)
 	{
-		var sessions = new List<CostableSession>(days);
-		var workingIntervals = new List<WorkInterval>(days);
-		var exceptions = new List<ScheduleExceptionEntry>(days);
+		List<CostableSession> sessions = [with(days)];
+		List<WorkInterval> workingIntervals = [with(days)];
+		List<ScheduleExceptionEntry> exceptions = [with(days)];
 		for (var day = 0; day < days; ++day) {
 			var dayStart = Instant.FromUtc(2021, 1, 1, 0, 0) + Duration.FromDays(day);
 			sessions.Add(new(new(day + 1), LeafId, new(dayStart + Duration.FromHours(9), dayStart + Duration.FromHours(10))));

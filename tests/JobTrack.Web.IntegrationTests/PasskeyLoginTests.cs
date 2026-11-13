@@ -302,7 +302,7 @@ public sealed partial class PasskeyLoginTests : IAsyncLifetime, IDisposable
 
 	private sealed class OnePermitBackstopRateLimiter : ILoginAttemptRateLimiter
 	{
-		private readonly ConcurrentDictionary<string, byte> consumedBackstops = new(StringComparer.Ordinal);
+		private readonly ConcurrentDictionary<string, byte> consumedBackstops = [with(StringComparer.Ordinal)];
 
 		public ValueTask<RateLimitOutcome> TryAcquireAsync(
 			string partitionKey,

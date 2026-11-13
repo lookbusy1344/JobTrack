@@ -83,7 +83,7 @@ public sealed class ActiveSessionSummaryModel
 		get
 		{
 			var presentation = ActiveSessionPresentation.Derive(ActiveSessions, ViewerId);
-			var ordered = new List<ActiveWorkerEntry>(presentation.Count);
+			List<ActiveWorkerEntry> ordered = [with(presentation.Count)];
 			if (presentation.ViewerSession is not null) {
 				ordered.Add(new(presentation.ViewerSession, "You", true));
 			}

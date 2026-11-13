@@ -43,7 +43,7 @@ public sealed class InstallationCommandsTests
 		await sut.BootstrapAdministratorAsync(request);
 
 		port.LastRequest.Should().NotBeNull();
-		port.LastRequest!.PasswordHash.Should().NotBe(request.Password);
+		port.LastRequest.PasswordHash.Should().NotBe(request.Password);
 		port.LastRequest.PasswordHash.Should().NotBeNullOrWhiteSpace();
 	}
 

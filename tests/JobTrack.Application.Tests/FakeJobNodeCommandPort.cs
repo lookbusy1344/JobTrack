@@ -67,7 +67,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 						 .Skip(filter.Offset)
 						 .Take(filter.Limit)
 						 .ToList();
-		var pageIds = new HashSet<JobNodeId>(page.Select(node => node.Id));
+		HashSet<JobNodeId> pageIds = [.. page.Select(node => node.Id)];
 
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
 		foreach (var node in _nodes.Values) {
@@ -170,7 +170,7 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		JobNodeId rootId, int maxDepth, OwnershipFilter ownership, JobArchiveFilter archiveFilter,
 		CancellationToken cancellationToken = default)
 	{
-		if (maxDepth < 0 || maxDepth > JobSubtreeLimits.HardMaxDepth) {
+		if (maxDepth is < 0 or > JobSubtreeLimits.HardMaxDepth) {
 			throw new ArgumentOutOfRangeException(
 				nameof(maxDepth), maxDepth, $"Subtree depth must be between 0 and {JobSubtreeLimits.HardMaxDepth}.");
 		}
@@ -688,8 +688,8 @@ internal sealed class FakeJobNodeCommandPort : IJobNodeCommandPort, IReadinessQu
 		_ = GetExisting(request.ParentId);
 		AuthorizeOrThrow(request.Context.Actor, request.ParentId);
 
-		var createdByLocalId = new Dictionary<long, JobNodeId>(request.Nodes.Count);
-		var created = new List<ImportedJobNode>(request.Nodes.Count);
+		Dictionary<long, JobNodeId> createdByLocalId = [with(request.Nodes.Count)];
+		List<ImportedJobNode> created = [with(request.Nodes.Count)];
 
 		foreach (var spec in request.Nodes) {
 			var parentId = spec.ParentLocalId.HasValue ? createdByLocalId[spec.ParentLocalId.Value] : request.ParentId;

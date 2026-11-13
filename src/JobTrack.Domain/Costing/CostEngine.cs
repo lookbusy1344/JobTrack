@@ -103,7 +103,7 @@ public static class CostEngine
 			segmentSessionIds!.Add(allocation.SessionId);
 		}
 
-		var activeSessionsBySegment = new Dictionary<WorkInterval, EquatableArray<WorkSessionId>>(sessionIdsBySegment.Count);
+		Dictionary<WorkInterval, EquatableArray<WorkSessionId>> activeSessionsBySegment = [with(sessionIdsBySegment.Count)];
 		foreach (var (segment, segmentSessionIds) in sessionIdsBySegment) {
 			segmentSessionIds.Sort(static (left, right) => left.Value.CompareTo(right.Value));
 			activeSessionsBySegment[segment] = EquatableArray.CopyOf(segmentSessionIds);
@@ -173,7 +173,7 @@ public static class CostEngine
 
 		var exposedTrace = trace;
 		if (narrowedSessionsBySegment.Count > 0) {
-			var exposedEntries = new List<CostSegmentTrace>(trace.Length);
+			List<CostSegmentTrace> exposedEntries = [with(trace.Length)];
 			foreach (var entry in trace) {
 				if (!exactCosts.ContainsKey(entry.NodeId)) {
 					continue;

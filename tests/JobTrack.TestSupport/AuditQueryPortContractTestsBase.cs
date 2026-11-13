@@ -325,7 +325,7 @@ public abstract class AuditQueryPortContractTestsBase : IAsyncLifetime
 		var auditorId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Rosalind Franklin", "rosalind.franklin.audit", EmployeeRole.Auditor);
 		var actorId = await DatabaseContractTestSupport.SeedEmployeeAsync(database, CreateConnection, PrepareConnectionAsync, "Margaret Hamilton", "margaret.hamilton.audit", EmployeeRole.Worker);
 
-		var entityIds = new List<long>(count);
+		List<long> entityIds = [with(count)];
 		for (var index = 0; index < count; ++index) {
 			var entityId = entityIdAt(index);
 			entityIds.Add(entityId);

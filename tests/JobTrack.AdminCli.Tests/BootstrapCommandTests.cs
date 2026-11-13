@@ -30,7 +30,7 @@ public sealed class BootstrapCommandTests
 		console.Prompts.Should().ContainInOrder(
 			"Administrator display name: ", "IANA time zone [Europe/London]: ", "Username [os-user]: ", "Password: ", "Confirm password: ");
 		installationCommands.ReceivedRequest.Should().NotBeNull();
-		installationCommands.ReceivedRequest!.DisplayName.Should().Be("Ada Lovelace");
+		installationCommands.ReceivedRequest.DisplayName.Should().Be("Ada Lovelace");
 		installationCommands.ReceivedRequest.IanaTimeZone.Should().Be("Europe/Paris");
 		installationCommands.ReceivedRequest.DefaultHourlyRate.Should().Be(new HourlyRate(20m));
 		installationCommands.ReceivedRequest.UserName.Should().Be("ada.lovelace");

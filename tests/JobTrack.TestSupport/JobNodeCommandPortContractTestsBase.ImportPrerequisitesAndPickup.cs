@@ -697,7 +697,7 @@ public abstract partial class JobNodeCommandPortContractTestsBase
 		var committedHomeNodeIds = results.Select(r => r.Nodes.Single(n => n.LocalId == 1).JobNodeId.Value).ToArray();
 		var homeNodeId = await ReadHomeNodeIdAsync(workerId);
 		homeNodeId.Should().NotBeNull();
-		committedHomeNodeIds.Should().Contain(homeNodeId!.Value);
+		committedHomeNodeIds.Should().Contain(homeNodeId.Value);
 	}
 
 	private Task<ImportSubtreeResult> ImportWithHomeNodeAsync(JobNodeId rootId, AppUserId actorId, AppUserId targetId) =>

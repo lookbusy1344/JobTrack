@@ -79,7 +79,7 @@ public static class HierarchicalCostAggregator
 		ArgumentNullException.ThrowIfNull(nodesById);
 		ArgumentNullException.ThrowIfNull(leafCosts);
 
-		var totals = new Dictionary<JobNodeId, decimal>(rootIds.Count);
+		Dictionary<JobNodeId, decimal> totals = [with(rootIds.Count)];
 		foreach (var rootId in rootIds) {
 			if (nodesById.ContainsKey(rootId)) {
 				totals[rootId] = 0m;

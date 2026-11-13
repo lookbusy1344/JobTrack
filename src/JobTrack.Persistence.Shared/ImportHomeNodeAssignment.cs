@@ -46,7 +46,7 @@ internal static class ImportHomeNodeAssignment
 				ConstraintIds.HomeNodeMustNotBeLeaf, $"Job node {homeNodeId} is a leaf and cannot be set as a home node.");
 		}
 
-		var users = new List<AppUserEntity>(userIds.Count);
+		List<AppUserEntity> users = [with(userIds.Count)];
 		foreach (var userId in userIds.OrderBy(id => id.Value)) {
 			var identityUser = await IdentityUserWriteLock.AcquireAsync(context, provider, userId, cancellationToken).ConfigureAwait(false);
 			var isLockedOut = identityUser.LockoutEnabled

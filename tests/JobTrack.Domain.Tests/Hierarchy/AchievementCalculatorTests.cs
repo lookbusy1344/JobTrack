@@ -126,7 +126,7 @@ public sealed class AchievementCalculatorTests
 	public void A_deep_linear_chain_is_evaluated_without_stack_overflow()
 	{
 		const int depth = 50_000;
-		var nodes = new Dictionary<JobNodeId, HierarchyNode>(depth + 1);
+		Dictionary<JobNodeId, HierarchyNode> nodes = [with(depth + 1)];
 
 		var leafId = new JobNodeId(depth);
 		nodes[leafId] = Leaf(leafId, new(depth - 1), Achievement.Success);

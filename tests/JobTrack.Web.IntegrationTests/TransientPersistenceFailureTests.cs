@@ -209,7 +209,7 @@ public sealed class TransientPersistenceFailureTests : IAsyncLifetime, IDisposab
 		public static TInterface Wrap(TInterface inner, FaultHook hook)
 		{
 			var created = Create<TInterface, FaultInjectingProxy<TInterface>>();
-			var proxy = (FaultInjectingProxy<TInterface>)(object)created!;
+			var proxy = (FaultInjectingProxy<TInterface>)(object)created;
 			proxy._inner = inner;
 			proxy._hook = hook;
 			return created;

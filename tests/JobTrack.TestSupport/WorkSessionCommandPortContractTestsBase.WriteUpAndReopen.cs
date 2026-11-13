@@ -66,7 +66,7 @@ public abstract partial class WorkSessionCommandPortContractTestsBase
 
 		result.WriteUpChanged.Should().BeTrue();
 		result.Node.Should().NotBeNull();
-		result.Node!.WriteUp.Should().Be("All done");
+		result.Node.WriteUp.Should().Be("All done");
 		result.Node.Version.Should().Be(2);
 	}
 

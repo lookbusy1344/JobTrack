@@ -48,20 +48,20 @@ public sealed class SqliteIdentityUserPasskeySchemaTests()
 		AddParameter(command, "@identityUserId", identityUserId);
 		AddParameter(command, "@name", name);
 		AddParameter(command, "@normalizedName", normalizedName);
-		AddParameter(command, "@publicKey", publicKey ?? new byte[] {
+		AddParameter(command, "@publicKey", publicKey ?? [
 			10, 20, 30,
-		});
+		]);
 		AddParameter(command, "@createdAt", DateTimeOffset.UtcNow.UtcDateTime.Ticks - DateTime.UnixEpoch.Ticks);
 		AddParameter(command, "@signCount", signCount);
 		AddParameter(command, "@transports", transports ?? (object)DBNull.Value);
 		AddParameter(command, "@isUserVerified", isUserVerified ? 1 : 0);
 		AddParameter(command, "@aaguid", aaguid ?? (object)DBNull.Value);
-		AddParameter(command, "@attestationObject", attestationObject ?? new byte[] {
+		AddParameter(command, "@attestationObject", attestationObject ?? [
 			1,
-		});
-		AddParameter(command, "@clientDataJson", clientDataJson ?? new byte[] {
+		]);
+		AddParameter(command, "@clientDataJson", clientDataJson ?? [
 			1,
-		});
+		]);
 		_ = await command.ExecuteNonQueryAsync();
 	}
 }

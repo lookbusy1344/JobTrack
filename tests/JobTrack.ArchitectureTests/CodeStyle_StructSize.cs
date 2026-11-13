@@ -100,7 +100,7 @@ public sealed class CodeStyle_StructSize
 
 		ValueTypeSizeGuard.FindViolations([assemblyName])
 						  .Should().Contain(violation =>
-							  violation.Contains(nameof(GenericInlineWrapper<ThirtyTwoByteStruct>), StringComparison.Ordinal)
+							  violation.Contains(nameof(GenericInlineWrapper<>), StringComparison.Ordinal)
 							  && violation.Contains("32 bytes", StringComparison.Ordinal));
 	}
 
@@ -268,7 +268,7 @@ internal static class ValueTypeSizeGuard
 
 	public static readonly FrozenSet<string> ProductionAssemblyNames = Directory
 																	   .EnumerateFiles(Path.Combine(RepositoryPaths.SolutionRoot(), "src"), "*.csproj", SearchOption.AllDirectories)
-																	   .Select(static path => Path.GetFileNameWithoutExtension(path)!)
+																	   .Select(static path => Path.GetFileNameWithoutExtension(path))
 																	   .ToFrozenSet(StringComparer.Ordinal);
 
 	private static readonly MethodInfo SizeOfMethod =
@@ -304,15 +304,14 @@ internal static class ValueTypeSizeGuard
 		var metadataReader = peReader.GetMetadataReader();
 		var typeSpecificationCount = metadataReader.GetTableRowCount(TableIndex.TypeSpec);
 
-		return Enumerable.Range(1, typeSpecificationCount)
+		return [.. Enumerable.Range(1, typeSpecificationCount)
 						 .Select(MetadataTokens.TypeSpecificationHandle)
 						 .Select(handle => ResolveClosedTypeSpecification(assembly.ManifestModule, MetadataTokens.GetToken(handle)))
 						 .Where(static type => type is not null)
 						 .Cast<Type>()
 						 .SelectMany(ContainedTypes)
 						 .Where(static type => type.IsConstructedGenericType && !type.ContainsGenericParameters)
-						 .Where(type => includedAssemblyNames.Contains(type.GetGenericTypeDefinition().Assembly.GetName().Name!))
-						 .ToArray();
+						 .Where(type => includedAssemblyNames.Contains(type.GetGenericTypeDefinition().Assembly.GetName().Name!))];
 	}
 
 	private static Type? ResolveClosedTypeSpecification(Module module, int metadataToken)

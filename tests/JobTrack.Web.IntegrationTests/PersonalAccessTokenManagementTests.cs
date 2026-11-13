@@ -102,11 +102,11 @@ public sealed partial class PersonalAccessTokenManagementTests : IAsyncLifetime,
 
 		var issueResponse = await PostIssueAsync(authCookie, "laptop", 30);
 		issueResponse.Headers.CacheControl.Should().NotBeNull();
-		issueResponse.Headers.CacheControl!.NoStore.Should().BeTrue();
+		issueResponse.Headers.CacheControl.NoStore.Should().BeTrue();
 
 		var revealResponse = await FollowRedirectAsync(issueResponse, authCookie);
 		revealResponse.Headers.CacheControl.Should().NotBeNull();
-		revealResponse.Headers.CacheControl!.NoStore.Should().BeTrue();
+		revealResponse.Headers.CacheControl.NoStore.Should().BeTrue();
 	}
 
 	[Fact]

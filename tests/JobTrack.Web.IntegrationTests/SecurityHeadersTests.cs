@@ -84,7 +84,7 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 		var response = await client.GetAsync("/Account/Login");
 
 		response.Headers.CacheControl.Should().NotBeNull();
-		response.Headers.CacheControl!.NoStore.Should().BeTrue();
+		response.Headers.CacheControl.NoStore.Should().BeTrue();
 		response.Headers.CacheControl.NoCache.Should().BeTrue();
 		response.Headers.Pragma.Should().ContainSingle(value => value.Name == "no-cache");
 	}
@@ -132,7 +132,7 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 		var response = await client.SendAsync(request);
 
 		response.Headers.CacheControl.Should().NotBeNull();
-		response.Headers.CacheControl!.NoStore.Should().BeTrue();
+		response.Headers.CacheControl.NoStore.Should().BeTrue();
 	}
 
 	/// <summary>
@@ -150,7 +150,7 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 
 		response.Headers.Contains("Set-Cookie").Should().BeFalse();
 		response.Headers.CacheControl.Should().NotBeNull();
-		response.Headers.CacheControl!.NoStore.Should().BeTrue();
+		response.Headers.CacheControl.NoStore.Should().BeTrue();
 	}
 
 	[Fact]
@@ -159,7 +159,7 @@ public sealed class SecurityHeadersTests : IAsyncLifetime, IDisposable
 		var response = await client.GetAsync("/favicon.ico");
 
 		response.Headers.CacheControl.Should().NotBeNull();
-		response.Headers.CacheControl!.NoStore.Should().BeFalse();
+		response.Headers.CacheControl.NoStore.Should().BeFalse();
 	}
 
 	[Fact]

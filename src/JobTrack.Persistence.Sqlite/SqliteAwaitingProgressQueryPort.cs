@@ -72,7 +72,7 @@ internal static class AwaitingProgressQueryAssembly
 			};
 		}
 
-		var candidateIds = new HashSet<JobNodeId>(candidates.Select(candidate => candidate.Id));
+		HashSet<JobNodeId> candidateIds = [.. candidates.Select(candidate => candidate.Id)];
 		var nodesById = new Dictionary<JobNodeId, HierarchyNode>();
 		foreach (var candidate in candidates) {
 			nodesById[candidate.Id] = new(candidate.Id, candidate.ParentId, [], candidate.Achievement);

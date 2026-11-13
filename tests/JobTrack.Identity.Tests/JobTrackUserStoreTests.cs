@@ -44,7 +44,7 @@ public sealed class JobTrackUserStoreTests : IAsyncLifetime
 		user.Id.Should().BePositive();
 		var reloaded = await WithStoreAsync(store => store.FindByNameAsync("ADA", CancellationToken.None));
 		reloaded.Should().NotBeNull();
-		reloaded!.UserName.Should().Be("ada");
+		reloaded.UserName.Should().Be("ada");
 		reloaded.AppUserId.Should().Be(appUserId);
 	}
 

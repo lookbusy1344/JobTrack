@@ -342,9 +342,7 @@ internal static class MethodLengthGuard
 			? constructor.Initializer.DescendantTokens()
 			: [];
 
-		return bodyTokens.Concat(initializerTokens)
-						 .Where(static token => !token.IsKind(SyntaxKind.OpenBraceToken) && !token.IsKind(SyntaxKind.CloseBraceToken))
-						 .ToArray();
+		return [.. bodyTokens.Concat(initializerTokens).Where(static token => !token.IsKind(SyntaxKind.OpenBraceToken) && !token.IsKind(SyntaxKind.CloseBraceToken))];
 	}
 
 	private static IEnumerable<int> LinesOccupiedBy(SyntaxToken token)

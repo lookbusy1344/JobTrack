@@ -74,11 +74,11 @@ public sealed class WriteContentionPerformanceTests : IAsyncLifetime
 			seedConnection, new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), includeHeavyWorker: true);
 		seed.HeavyWorkerId.Should().NotBeNull();
 		seed.HeavyWorkerBranchId.Should().NotBeNull();
-		var heavyWorkerId = seed.HeavyWorkerId!.Value;
+		var heavyWorkerId = seed.HeavyWorkerId.Value;
 		// A freshly inserted, never-worked leaf under the heavy worker's own branch: the two racing
 		// inserts below must be the only sessions on it, isolating this leaf's own exclusion-constraint
 		// check from the branch's other 5,000 pre-seeded sessions on sibling leaves.
-		var freshLeafId = await InsertNodeAsync(seedConnection, heavyWorkerId, seed.HeavyWorkerBranchId!.Value);
+		var freshLeafId = await InsertNodeAsync(seedConnection, heavyWorkerId, seed.HeavyWorkerBranchId.Value);
 		await InsertLeafWorkAsync(seedConnection, freshLeafId);
 
 		await using var connectionA = await OpenExistingConnectionAsync();

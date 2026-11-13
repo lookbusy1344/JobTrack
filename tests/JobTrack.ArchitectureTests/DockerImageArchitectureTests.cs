@@ -428,7 +428,7 @@ public sealed partial class DockerImageArchitectureTests
 
 		line.Should().NotBeNull($"{name} must be assigned exactly once at the top of the deployment script");
 
-		return line![prefix.Length..].Trim('"');
+		return line[prefix.Length..].Trim('"');
 	}
 
 	[Fact]

@@ -90,7 +90,7 @@ public sealed record SetScheduleCommandOptions
 	private static EquatableArray<IsoDayOfWeek> ParseDays(string daysRaw)
 	{
 		var names = daysRaw.Split(',', StringSplitOptions.TrimEntries);
-		var days = new List<IsoDayOfWeek>(names.Length);
+		List<IsoDayOfWeek> days = [with(names.Length)];
 
 		foreach (var name in names) {
 			if (!ScheduleDayNames.TryParse(name, out var day)) {

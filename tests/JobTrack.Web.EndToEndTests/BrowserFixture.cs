@@ -479,7 +479,7 @@ public abstract class BrowserFixture : IAsyncLifetime, IDisposable
 			},
 			JobNodeId = leafId,
 		});
-		var workerDisplayNames = new List<string>(workerCount);
+		List<string> workerDisplayNames = [with(workerCount)];
 		for (var index = 0; index < workerCount; ++index) {
 			var displayName = $"Active Worker {index + 1}";
 			var employee = await seedClient.Employees.CreateEmployeeAsync(new() {

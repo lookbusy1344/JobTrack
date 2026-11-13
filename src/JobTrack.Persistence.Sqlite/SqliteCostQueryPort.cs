@@ -249,7 +249,7 @@ internal static class CostQueryAssembly
 		var workerIds = new List<AppUserId>();
 		if (perWorkerEarliestStarts.Count > 0) {
 			bounds = new(perWorkerEarliestStarts.Min(row => row.EarliestStart), asOf);
-			workerIds = perWorkerEarliestStarts.Select(row => row.WorkerId).ToList();
+			workerIds = [.. perWorkerEarliestStarts.Select(row => row.WorkerId)];
 			var sessions = await context.Set<WorkSessionEntity>().AsNoTracking()
 										.Where(s => workerIds.Contains(s.WorkedByUserId)
 													&& s.StartedAt < bounds.End && (s.FinishedAt == null || s.FinishedAt > bounds.Start))
@@ -367,7 +367,7 @@ internal static class CostQueryAssembly
 	private static async Task ExtendAncestryAsync(
 		DbContext context, SubtreeLoad subtree, IReadOnlyList<WorkerCostInputs> workers, CancellationToken cancellationToken)
 	{
-		var missingIds = new HashSet<JobNodeId>(subtree.ExistingRootIds);
+		HashSet<JobNodeId> missingIds = [.. subtree.ExistingRootIds];
 		foreach (var session in workers.SelectMany(worker => worker.Sessions)) {
 			if (!subtree.NodesById.ContainsKey(session.NodeId)) {
 				_ = missingIds.Add(session.NodeId);

@@ -147,13 +147,12 @@ public sealed partial class BrowseModel
 			return [];
 		}
 
-		return stored.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+		return [.. stored.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
 					 .Select(value => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0)
 					 .Where(value => value > 0)
 					 .Select(value => new JobNodeId(value))
 					 .Distinct()
-					 .Take(RecentNodeCap)
-					 .ToArray();
+					 .Take(RecentNodeCap)];
 	}
 
 	private void WriteRecentNodeIds(IEnumerable<JobNodeId> nodeIds) =>
@@ -184,7 +183,7 @@ public sealed partial class BrowseModel
 		// batched active-session lookup must cover every leaf the subtree fetch returned, not only
 		// Children -- still one call, never per-row (JobNodeSummaryResult's own "no per-row N+1" rule).
 		var leafIds = IsSearch
-			? Children.Where(c => !c.HasChildren).Select(c => c.Id).ToArray()
+			? [.. Children.Where(c => !c.HasChildren).Select(c => c.Id)]
 			: Subtree?.Nodes.Where(n => !n.HasChildren).Select(n => n.Id).ToArray() ?? [];
 		if (leafIds.Length == 0) {
 			ActiveSessionsByLeaf = new Dictionary<JobNodeId, EquatableArray<WorkSessionResult>>();

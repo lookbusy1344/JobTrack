@@ -152,7 +152,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 
 			await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 		}
-		catch (PostgresException ex) when (ex.SqlState == CycleSqlState || ex.SqlState == PostgresErrorCodes.CheckViolation) {
+		catch (PostgresException ex) when (ex.SqlState is CycleSqlState or PostgresErrorCodes.CheckViolation) {
 			throw new InvariantViolationException(
 				ConstraintIds.JobNodeMoveWouldCycle, "Moving this node under the requested parent would create a cycle.", ex);
 		}

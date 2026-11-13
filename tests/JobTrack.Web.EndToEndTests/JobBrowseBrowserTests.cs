@@ -220,7 +220,7 @@ public abstract class JobBrowseBrowserTestsBase
 		var viewport = await page.Locator("meta[name=viewport]").GetAttributeAsync("content");
 
 		viewport.Should().NotBeNull();
-		viewport!.Should().NotContain("user-scalable", "disabling zoom fails WCAG 1.4.4");
+		viewport.Should().NotContain("user-scalable", "disabling zoom fails WCAG 1.4.4");
 		viewport.Should().NotContain("maximum-scale", "capping the scale factor fails WCAG 1.4.4");
 		viewport.Should().NotContain("minimum-scale", "pinning the scale floor is the same defect from the other side");
 	}
@@ -708,10 +708,10 @@ public abstract class JobBrowseBrowserTestsBase
 		second.Should().NotBeNull();
 
 		if (expectedStacked) {
-			second!.Y.Should().BeGreaterThan(first!.Y + first.Height,
+			second.Y.Should().BeGreaterThan(first.Y + first.Height,
 				"Bootstrap col-12 groups should stack with a gutter at phone width");
 		} else {
-			Math.Abs(second!.Y - first!.Y).Should().BeLessThanOrEqualTo(MaximumColumnAlignmentDifferencePixels,
+			Math.Abs(second.Y - first.Y).Should().BeLessThanOrEqualTo(MaximumColumnAlignmentDifferencePixels,
 				"Bootstrap col-md-6 groups should share one row at desktop width");
 			Math.Abs(second.Width - first.Width).Should().BeLessThanOrEqualTo(MaximumColumnAlignmentDifferencePixels,
 				"the inherited-blocker groups should split the row equally");
@@ -849,7 +849,7 @@ public abstract class JobBrowseBrowserTestsBase
 
 		var pillBox = await activePill.BoundingBoxAsync();
 		pillBox.Should().NotBeNull();
-		pillBox!.Height.Should().BeLessThanOrEqualTo(MaximumSingleLinePillHeightPixels,
+		pillBox.Height.Should().BeLessThanOrEqualTo(MaximumSingleLinePillHeightPixels,
 			$"the active-count pill must stay a single line at {width}x{height}, not wrap its glyph or digit");
 
 		var table = page.Locator(".jt-browse-children-table");
@@ -1212,7 +1212,7 @@ public abstract class JobBrowseBrowserTestsBase
 	{
 		var box = await row.BoundingBoxAsync();
 		box.Should().NotBeNull();
-		return box!.Height;
+		return box.Height;
 	}
 
 	/// <summary>
@@ -1267,7 +1267,7 @@ public abstract class JobBrowseBrowserTestsBase
 	{
 		var box = await column.BoundingBoxAsync();
 		box.Should().NotBeNull();
-		return box!.Width;
+		return box.Width;
 	}
 
 	private static async Task<double> FontSizeAsync(ILocator element) =>

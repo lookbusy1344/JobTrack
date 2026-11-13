@@ -16,9 +16,9 @@ public static class ScheduleExceptionResolver
 	/// </summary>
 	public static IReadOnlyList<WorkInterval> Apply(IEnumerable<WorkInterval> scheduledIntervals, IEnumerable<ScheduleExceptionEntry> exceptions)
 	{
-		var materialized = exceptions is IReadOnlyCollection<ScheduleExceptionEntry> collection ? collection : exceptions.ToList();
+		var materialized = exceptions is IReadOnlyCollection<ScheduleExceptionEntry> collection ? collection : [.. exceptions];
 
-		var additive = new List<WorkInterval>(scheduledIntervals);
+		List<WorkInterval> additive = [.. scheduledIntervals];
 		var subtractive = new List<WorkInterval>();
 		foreach (var exception in materialized) {
 			switch (exception.Effect) {

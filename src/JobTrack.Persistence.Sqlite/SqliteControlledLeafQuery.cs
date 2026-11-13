@@ -35,9 +35,7 @@ internal static class SqliteControlledLeafQuery
 				   FROM ancestors
 				   WHERE owner_user_id = @actorId
 				   """;
-		var parameters = new List<object>(leafIds.Count + 1) {
-			new SqliteParameter("@actorId", actorId),
-		};
+		List<object> parameters = [with(leafIds.Count + 1), new SqliteParameter("@actorId", actorId)];
 		parameters.AddRange(leafIds.Select((leafId, index) => new SqliteParameter(leafIdParameters[index], leafId)));
 
 		return await context.Database.SqlQueryRaw<long>(sql, [.. parameters])

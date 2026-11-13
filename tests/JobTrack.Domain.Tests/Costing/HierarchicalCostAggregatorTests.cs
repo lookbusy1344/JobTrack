@@ -171,7 +171,7 @@ public sealed class HierarchicalCostAggregatorTests
 	public void Summing_subtree_totals_walks_a_deep_chain_without_stack_overflow()
 	{
 		const int depth = 50_000;
-		var nodes = new Dictionary<JobNodeId, HierarchyNode>(depth + 1);
+		Dictionary<JobNodeId, HierarchyNode> nodes = [with(depth + 1)];
 
 		var leafId = new JobNodeId(depth);
 		nodes[leafId] = Leaf(leafId, new(depth - 1));
@@ -195,7 +195,7 @@ public sealed class HierarchicalCostAggregatorTests
 	public void A_deep_linear_chain_is_aggregated_without_stack_overflow()
 	{
 		const int depth = 50_000;
-		var nodes = new Dictionary<JobNodeId, HierarchyNode>(depth + 1);
+		Dictionary<JobNodeId, HierarchyNode> nodes = [with(depth + 1)];
 
 		var leafId = new JobNodeId(depth);
 		nodes[leafId] = Leaf(leafId, new(depth - 1));

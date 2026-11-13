@@ -207,7 +207,7 @@ public sealed partial class AccountFlowTests : IAsyncLifetime, IDisposable
 
 		response.StatusCode.Should().Be(HttpStatusCode.Redirect);
 		response.Headers.Location.Should().NotBeNull();
-		response.Headers.Location!.OriginalString.Should().Contain("/Account/ChangePassword");
+		response.Headers.Location.OriginalString.Should().Contain("/Account/ChangePassword");
 	}
 
 	[Fact]

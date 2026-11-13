@@ -879,7 +879,7 @@ public sealed partial class JobQueriesTests
 
 		clock.ReadCount.Should().Be(1);
 		costQueries.LastBulkRequest.Should().NotBeNull();
-		costQueries.LastBulkRequest!.AsOf.Should().Be(operationInstant);
+		costQueries.LastBulkRequest.AsOf.Should().Be(operationInstant);
 	}
 
 	[Fact]

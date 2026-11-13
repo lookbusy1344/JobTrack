@@ -55,9 +55,9 @@ public sealed partial class EmergencyPasswordResetTests
 
 			var reloaded = await userManager.FindByNameAsync("ada.reset");
 			reloaded.Should().NotBeNull();
-			(await userManager.CheckPasswordAsync(reloaded!, temporaryPassword)).Should().BeTrue();
-			(await userManager.CheckPasswordAsync(reloaded!, KnownPassword)).Should().BeFalse();
-			reloaded!.RequiresPasswordChange.Should().BeTrue();
+			(await userManager.CheckPasswordAsync(reloaded, temporaryPassword)).Should().BeTrue();
+			(await userManager.CheckPasswordAsync(reloaded, KnownPassword)).Should().BeFalse();
+			reloaded.RequiresPasswordChange.Should().BeTrue();
 			reloaded.SecurityStamp.Should().NotBe(stampBefore);
 
 			var auditRow = await GetLatestAuditEventAsync(database.ConnectionString, SchemaProvider.Sqlite, identityUserId);
@@ -102,9 +102,9 @@ public sealed partial class EmergencyPasswordResetTests
 
 			var reloaded = await userManager.FindByNameAsync("ada.reset");
 			reloaded.Should().NotBeNull();
-			(await userManager.CheckPasswordAsync(reloaded!, temporaryPassword)).Should().BeTrue();
-			(await userManager.CheckPasswordAsync(reloaded!, KnownPassword)).Should().BeFalse();
-			reloaded!.RequiresPasswordChange.Should().BeTrue();
+			(await userManager.CheckPasswordAsync(reloaded, temporaryPassword)).Should().BeTrue();
+			(await userManager.CheckPasswordAsync(reloaded, KnownPassword)).Should().BeFalse();
+			reloaded.RequiresPasswordChange.Should().BeTrue();
 			reloaded.SecurityStamp.Should().NotBe(stampBefore);
 
 			var auditRow = await GetLatestAuditEventAsync(database.ConnectionString, SchemaProvider.PostgreSql, identityUserId);
@@ -200,8 +200,8 @@ public sealed partial class EmergencyPasswordResetTests
 			exitCode.Should().Be(0);
 			var reloaded = await userManager.FindByNameAsync("ada.locked");
 			reloaded.Should().NotBeNull();
-			(await userManager.IsLockedOutAsync(reloaded!)).Should().BeFalse("an emergency reset must leave the account able to sign in");
-			reloaded!.LockoutEnd.Should().BeNull();
+			(await userManager.IsLockedOutAsync(reloaded)).Should().BeFalse("an emergency reset must leave the account able to sign in");
+			reloaded.LockoutEnd.Should().BeNull();
 			reloaded.AccessFailedCount.Should().Be(0);
 		}
 		finally {
@@ -237,8 +237,8 @@ public sealed partial class EmergencyPasswordResetTests
 			exitCode.Should().Be(0);
 			var reloaded = await userManager.FindByNameAsync("ada.locked");
 			reloaded.Should().NotBeNull();
-			(await userManager.IsLockedOutAsync(reloaded!)).Should().BeFalse("an emergency reset must leave the account able to sign in");
-			reloaded!.LockoutEnd.Should().BeNull();
+			(await userManager.IsLockedOutAsync(reloaded)).Should().BeFalse("an emergency reset must leave the account able to sign in");
+			reloaded.LockoutEnd.Should().BeNull();
 			reloaded.AccessFailedCount.Should().Be(0);
 		}
 		finally {

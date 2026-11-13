@@ -236,7 +236,7 @@ internal static class CostQueryAssembly
 		var workerIds = new List<AppUserId>();
 		if (perWorkerEarliestStarts.Count > 0) {
 			bounds = new(perWorkerEarliestStarts.Min(row => row.EarliestStart), asOf);
-			workerIds = perWorkerEarliestStarts.Select(row => new AppUserId(row.WorkerId)).ToList();
+			workerIds = [.. perWorkerEarliestStarts.Select(row => new AppUserId(row.WorkerId))];
 
 			// 2026-07-25 scalability-follow-up plan §2.5: a schedule version's own EffectiveStart/End
 			// are civil LocalDates in its own IanaTimeZone, not directly comparable to the Instant-based
@@ -370,7 +370,7 @@ internal static class CostQueryAssembly
 	private static async Task<long[]> ExtendAncestryAsync(
 		DbContext context, SubtreeLoad subtree, IReadOnlyList<WorkerCostInputs> workers, CancellationToken cancellationToken)
 	{
-		var missingIds = new HashSet<JobNodeId>(subtree.ExistingRootIds);
+		HashSet<JobNodeId> missingIds = [.. subtree.ExistingRootIds];
 		foreach (var session in workers.SelectMany(worker => worker.Sessions)) {
 			if (!subtree.NodesById.ContainsKey(session.NodeId)) {
 				_ = missingIds.Add(session.NodeId);

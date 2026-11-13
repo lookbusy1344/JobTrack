@@ -40,7 +40,7 @@ public sealed class CostSegmentPartitionerPropertyTests
 		var (sessions, nodes) = Scenario(starts, lengths);
 
 		var forwards = CostSegmentPartitioner.Partition(sessions, [Bounds], nodes, [], [], Bounds);
-		var backwards = CostSegmentPartitioner.Partition(sessions.Reverse().ToArray(), [Bounds], nodes, [], [], Bounds);
+		var backwards = CostSegmentPartitioner.Partition([.. sessions.Reverse()], [Bounds], nodes, [], [], Bounds);
 
 		Canonical(forwards).Should().Equal(Canonical(backwards));
 	}
@@ -71,7 +71,7 @@ public sealed class CostSegmentPartitionerPropertyTests
 		var working = DisjointWorkingIntervals();
 
 		var inOrder = CostSegmentPartitioner.Partition(sessions, working, nodes, [], [], Bounds);
-		var reversed = CostSegmentPartitioner.Partition(sessions, working.Reverse().ToArray(), nodes, [], [], Bounds);
+		var reversed = CostSegmentPartitioner.Partition(sessions, [.. working.Reverse()], nodes, [], [], Bounds);
 
 		Canonical(inOrder).Should().Equal(Canonical(reversed));
 	}
@@ -92,7 +92,7 @@ public sealed class CostSegmentPartitionerPropertyTests
 		];
 
 		var inOrder = CostSegmentPartitioner.Partition(sessions, overlapping, nodes, [], [], Bounds);
-		var reversed = CostSegmentPartitioner.Partition(sessions, overlapping.Reverse().ToArray(), nodes, [], [], Bounds);
+		var reversed = CostSegmentPartitioner.Partition(sessions, [.. overlapping.Reverse()], nodes, [], [], Bounds);
 
 		Canonical(inOrder).Should().Equal(Canonical(reversed));
 	}

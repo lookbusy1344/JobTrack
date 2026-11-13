@@ -34,7 +34,7 @@ public sealed class RequestCommandsTests
 		});
 
 		port.LastSubmitRequest.Should().NotBeNull();
-		port.LastSubmitRequest!.Context.Actor.Should().Be(RequesterId);
+		port.LastSubmitRequest.Context.Actor.Should().Be(RequesterId);
 		result.Description.Should().Be("Please schedule this work.");
 	}
 
@@ -71,8 +71,8 @@ public sealed class RequestCommandsTests
 		});
 
 		port.LastMoveRequest.Should().NotBeNull();
-		port.LastMoveRequest!.NodeId.Should().Be(nodeId);
-		port.LastMoveRequest!.NewParentId.Should().Be(newParentId);
+		port.LastMoveRequest.NodeId.Should().Be(nodeId);
+		port.LastMoveRequest.NewParentId.Should().Be(newParentId);
 		result.Id.Should().Be(nodeId);
 		result.ParentId.Should().Be(newParentId);
 	}
