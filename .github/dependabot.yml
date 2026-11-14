@@ -9,6 +9,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Npgsql.EntityFrameworkCore.PostgreSQL 10.x requires EF Core < 11, and its 11.0 line is
+    # still prerelease. Remove these once a stable Npgsql EF Core 11 provider ships.
+    ignore:
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        versions: [">= 11.0.0"]
+      - dependency-name: "Microsoft.AspNetCore.DataProtection.EntityFrameworkCore"
+        versions: [">= 11.0.0"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -73,7 +73,7 @@ jobs:
         run: dotnet build JobTrack.slnx --no-restore
 
       - name: Install Playwright browsers
-        run: pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium firefox webkit
+        run: pwsh tests/JobTrack.Web.EndToEndTests/bin/Debug/net11.0/playwright.ps1 install --with-deps chromium firefox webkit
 
       - name: Full test suite
         # -m:1: dotnet test's default per-project parallelism assumes a dev machine's core count.
