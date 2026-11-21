@@ -45,7 +45,7 @@ public static class EmergencyPasskeyReset
 
 		await using var transaction = await identityContext.Database.BeginTransactionAsync(cancellationToken);
 
-		var removedCount = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+		var removedCount = await identityContext.Database.ExecuteSqlAsync(
 			$"DELETE FROM identity_user_passkey WHERE identity_user_id = {user.Id};", cancellationToken);
 
 		user.SecurityStamp = Guid.NewGuid().ToString("N");
@@ -66,23 +66,23 @@ public static class EmergencyPasskeyReset
 		// recorded (ADR 0071 §9): the audit row carries actor/target/correlation only.
 		if (provider == AdminCliProvider.Sqlite) {
 			var occurredAtTicks = clock.GetCurrentInstant().ToUnixTimeTicks();
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"""
 				 INSERT INTO audit_event (occurred_at, actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({occurredAtTicks}, {user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
 				 """,
 				cancellationToken);
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"UPDATE personal_access_token SET revoked_at = {occurredAtTicks} WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
 				cancellationToken);
 		} else {
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"""
 				 INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
 				 """,
 				cancellationToken);
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"UPDATE personal_access_token SET revoked_at = now() WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
 				cancellationToken);
 		}

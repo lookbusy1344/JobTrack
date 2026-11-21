@@ -10,7 +10,7 @@ internal static class PrerequisiteReadinessSerialization
 	public static async Task AcquireAsync(
 		DbContext context, JobNodeId requiredJobId, CancellationToken cancellationToken)
 	{
-		_ = await context.Database.ExecuteSqlInterpolatedAsync(
+		_ = await context.Database.ExecuteSqlAsync(
 			$"SELECT pg_advisory_xact_lock(jobtrack_leaf_session_closure_lock_key({requiredJobId.Value}));",
 			cancellationToken).ConfigureAwait(false);
 	}

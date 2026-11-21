@@ -31,7 +31,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 			// a precise, fast-failing category for every one of these invariants; the catches below
 			// are a backstop for the rare case where a concurrent write beats this transaction to
 			// the same invariant between the check above and this insert.
-			_ = await context.Database.ExecuteSqlInterpolatedAsync(
+			_ = await context.Database.ExecuteSqlAsync(
 				$"SELECT add_job_prerequisite({request.RequiredJobId.Value}, {request.DependentJobId.Value});",
 				cancellationToken).ConfigureAwait(false);
 
@@ -83,7 +83,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort
 				await ValidatePrerequisiteEdgeAsync(
 						context, request.Context.Actor, edge.RequiredJobId, edge.DependentJobId, now, cancellationToken)
 					.ConfigureAwait(false);
-				_ = await context.Database.ExecuteSqlInterpolatedAsync(
+				_ = await context.Database.ExecuteSqlAsync(
 					$"SELECT add_job_prerequisite({edge.RequiredJobId.Value}, {edge.DependentJobId.Value});",
 					cancellationToken).ConfigureAwait(false);
 

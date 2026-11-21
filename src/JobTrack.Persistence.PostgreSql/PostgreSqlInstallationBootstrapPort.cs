@@ -38,7 +38,7 @@ internal sealed class PostgreSqlInstallationBootstrapPort : IInstallationBootstr
 		await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
 		// ADR 0012/0015: acquire the fixed bootstrap advisory lock before any read of the marker.
-		_ = await context.Database.ExecuteSqlInterpolatedAsync(
+		_ = await context.Database.ExecuteSqlAsync(
 			$"SELECT pg_advisory_xact_lock(hashtext({PostgreSqlLockKeys.Bootstrap}));", cancellationToken).ConfigureAwait(false);
 
 		if (await context.Set<InitialisedMarkerEntity>().AnyAsync(cancellationToken).ConfigureAwait(false)) {

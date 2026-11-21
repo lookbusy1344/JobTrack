@@ -135,7 +135,7 @@ internal sealed class PostgreSqlJobRequestCommandPort : IJobRequestCommandPort
 			// the cycle check, no-LeafWork-parent check, and prerequisite ancestor/descendant
 			// re-check all live in the database, not here -- only the authorization predicate
 			// differs from the ordinary structural move (ADR 0033, plan §5).
-			_ = await context.Database.ExecuteSqlInterpolatedAsync(
+			_ = await context.Database.ExecuteSqlAsync(
 				$"SELECT move_job_node({request.NodeId.Value}, {request.NewParentId.Value}, {request.Version});",
 				cancellationToken).ConfigureAwait(false);
 

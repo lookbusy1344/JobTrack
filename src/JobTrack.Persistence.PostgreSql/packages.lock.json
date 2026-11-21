@@ -50,12 +50,12 @@
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL.NodaTime": {
         "type": "Direct",
-        "requested": "[10.0.3, )",
-        "resolved": "10.0.3",
-        "contentHash": "V84fTKMoEBsi5bAKVWrLDWimGqC6Dhn7ioBtoTpsfjpRmTcpv7FqhSqlqREO+6sHFH2sSXEZHEPWJTPsuKhfjA==",
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "soeDsgJb4PSeHIzcWKonP+BkMZ+yYD8FYmARHtk+oBOBsQ3VAjqvc+N3mzr5Fc7L25BJDJegKJdcwAKCYEYvBw==",
         "dependencies": {
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.3",
-          "Npgsql.NodaTime": "10.0.3"
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "11.0.0",
+          "Npgsql.NodaTime": "11.0.0"
         }
       },
       "Roslynator.Analyzers": {
@@ -150,11 +150,11 @@
       },
       "Npgsql.NodaTime": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "6ba1CM/zAoI7bTuBV7cFhTR3qqUsY5FqqqNoOh7dHoFHcyEEpIsMui3mC3Swyc+oyAJG0Zf8DCiXPnAf+sW09A==",
+        "resolved": "11.0.0",
+        "contentHash": "uWtA8F4G9SmbdNes4GuxwQ70v4xT3Q4aGXiYCjtNUPJUI4jMXpzV9DYBSUDw5vCHr6W+HABg2Pw+37GM/0/lPg==",
         "dependencies": {
-          "NodaTime": "3.2.2",
-          "Npgsql": "10.0.3"
+          "NodaTime": "3.3.7",
+          "Npgsql": "11.0.0"
         }
       },
       "System.IO.Hashing": {
@@ -187,7 +187,7 @@
           "JobTrack.Abstractions": "[1.3.2, )",
           "JobTrack.Application": "[1.3.2, )",
           "Microsoft.EntityFrameworkCore": "[11.0.0, )",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.14, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[11.0.0, )",
           "NodaTime": "[3.3.7, )"
         }
       },
@@ -205,13 +205,13 @@
       },
       "Microsoft.EntityFrameworkCore.Relational": {
         "type": "CentralTransitive",
-        "requested": "[10.0.14, )",
-        "resolved": "10.0.14",
-        "contentHash": "Ut0kgtfoKX9QElQVEXSEAgdQc79jISWStVWSOhfPDDHNSKMwFzSXG3gtdYFTAbsBoV+8NtXdVaj4xwdqeky8UA==",
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "yGS+J269mYUl8V17rHWaeFDySoUnGdiugIzszlNZr0F2+JirFatQyw2s2He92wyYIuy/Y3Yv3QLdq/HdTSj7cA==",
         "dependencies": {
-          "Microsoft.EntityFrameworkCore": "10.0.14",
-          "Microsoft.Extensions.Caching.Memory": "10.0.14",
-          "Microsoft.Extensions.Logging": "10.0.14"
+          "Microsoft.EntityFrameworkCore": "[11.0.0, 12.0.0-a)",
+          "Microsoft.Extensions.Caching.Memory": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
         }
       },
       "Microsoft.Extensions.Identity.Core": {
@@ -233,9 +233,9 @@
       },
       "Npgsql": {
         "type": "CentralTransitive",
-        "requested": "[10.0.3, )",
-        "resolved": "10.0.3",
-        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w=="
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "ozQ8GJcEAiW6XSKz2RUpdJDvM4l380BdHx/MRB7QJHL2cTH/0js7f/cisCaYMrZvVUj4/HIW80UjXxI+ikQQzQ=="
       }
     },
     "net11.0/linux-x64": {}

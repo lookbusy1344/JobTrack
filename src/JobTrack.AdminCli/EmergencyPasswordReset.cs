@@ -82,7 +82,7 @@ public static class EmergencyPasswordReset
 		// entity mapping entirely.
 		if (provider == AdminCliProvider.Sqlite) {
 			var occurredAtTicks = clock.GetCurrentInstant().ToUnixTimeTicks();
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"""
 				 INSERT INTO audit_event (occurred_at, actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({occurredAtTicks}, {user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
@@ -90,17 +90,17 @@ public static class EmergencyPasswordReset
 				cancellationToken);
 			// ADR 0029: emergency password reset is the same credential-sensitivity class as an
 			// administrator-driven reset -- it must revoke every live personal access token too.
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"UPDATE personal_access_token SET revoked_at = {occurredAtTicks} WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
 				cancellationToken);
 		} else {
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"""
 				 INSERT INTO audit_event (actor_user_id, operation, entity_type, entity_id, correlation_id, reason)
 				 VALUES ({user.AppUserId.Value}, {AuditOperation}, {AuditEntityType}, {user.Id}, {correlationId}, {AuditReason});
 				 """,
 				cancellationToken);
-			_ = await identityContext.Database.ExecuteSqlInterpolatedAsync(
+			_ = await identityContext.Database.ExecuteSqlAsync(
 				$"UPDATE personal_access_token SET revoked_at = now() WHERE app_user_id = {user.AppUserId.Value} AND revoked_at IS NULL;",
 				cancellationToken);
 		}

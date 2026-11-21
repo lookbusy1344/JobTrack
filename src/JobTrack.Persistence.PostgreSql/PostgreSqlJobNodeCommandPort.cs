@@ -112,7 +112,7 @@ internal sealed partial class PostgreSqlJobNodeCommandPort : IJobNodeCommandPort
 			// The expected-version compare-and-swap, cycle check (deferred to commit, schema
 			// version 0005), and self-parent check all live inside move_job_node/its schema, not
 			// here (schema version 0016) -- see impl plan §7.4.
-			_ = await context.Database.ExecuteSqlInterpolatedAsync(
+			_ = await context.Database.ExecuteSqlAsync(
 				$"SELECT move_job_node({request.NodeId.Value}, {request.NewParentId.Value}, {request.Version});",
 				cancellationToken).ConfigureAwait(false);
 

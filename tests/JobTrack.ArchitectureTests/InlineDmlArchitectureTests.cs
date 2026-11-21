@@ -20,32 +20,32 @@ public sealed class InlineDmlArchitectureTests
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlInstallationBootstrapPort.cs"),
 			"BootstrapAsync",
-			"ExecuteSqlInterpolatedAsync",
+			"ExecuteSqlAsync",
 			"pg_advisory_xact_lock"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.cs"),
 			"MoveAsync",
-			"ExecuteSqlInterpolatedAsync",
+			"ExecuteSqlAsync",
 			"move_job_node"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.Prerequisites.cs"),
 			"AddPrerequisiteAsync",
-			"ExecuteSqlInterpolatedAsync",
+			"ExecuteSqlAsync",
 			"add_job_prerequisite"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobNodeCommandPort.Prerequisites.cs"),
 			"AddPrerequisitesAsync",
-			"ExecuteSqlInterpolatedAsync",
+			"ExecuteSqlAsync",
 			"add_job_prerequisite"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlJobRequestCommandPort.cs"),
 			"MoveAsync",
-			"ExecuteSqlInterpolatedAsync",
+			"ExecuteSqlAsync",
 			"move_job_node"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PrerequisiteReadinessSerialization.cs"),
 			"AcquireAsync",
-			"ExecuteSqlInterpolatedAsync",
+			"ExecuteSqlAsync",
 			"pg_advisory_xact_lock"),
 		new(
 			Path.Combine("src", "JobTrack.Persistence.Sqlite", "SqliteDbContextFactory.cs"),
@@ -60,12 +60,12 @@ public sealed class InlineDmlArchitectureTests
 		new(
 			Path.Combine("src", "JobTrack.Persistence.PostgreSql", "PostgreSqlIdentityUserFunctions.cs"),
 			"TouchConcurrencyStampAsync",
-			"ExecuteSqlInterpolatedAsync",
+			"ExecuteSqlAsync",
 			"identity_user_touch_concurrency_stamp"),
 	];
 
 	private static readonly FrozenSet<string> RawSqlMethods = FrozenSet.ToFrozenSet(
-		["ExecuteSqlInterpolatedAsync", "ExecuteSqlRaw", "ExecuteSqlRawAsync"], StringComparer.Ordinal);
+		["ExecuteSql", "ExecuteSqlAsync", "ExecuteSqlInterpolated", "ExecuteSqlInterpolatedAsync", "ExecuteSqlRaw", "ExecuteSqlRawAsync"], StringComparer.Ordinal);
 
 	/// <summary>
 	///     Every reviewed raw-SQL <em>read</em>: the recursive <c>WITH RECURSIVE</c> hierarchy walks EF

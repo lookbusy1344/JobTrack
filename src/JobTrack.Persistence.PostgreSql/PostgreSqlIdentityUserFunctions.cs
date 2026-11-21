@@ -15,7 +15,7 @@ internal static class PostgreSqlIdentityUserFunctions
 {
 	public static async Task TouchConcurrencyStampAsync(DbContext context, AppUserId appUserId, CancellationToken cancellationToken) =>
 		_ = await context.Database
-						 .ExecuteSqlInterpolatedAsync(
+						 .ExecuteSqlAsync(
 							 $"SELECT identity_user_touch_concurrency_stamp({appUserId.Value})", cancellationToken)
 						 .ConfigureAwait(false);
 }
